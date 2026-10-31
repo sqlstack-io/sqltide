@@ -4,6 +4,7 @@
 
 mod analysis;
 mod artifacts;
+mod graph;
 mod polyglot;
 mod sql_scan;
 
@@ -56,6 +57,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_model_header, module)?)?;
     analysis::register(module)?;
     artifacts::register(module)?;
+    graph::register(module)?;
     polyglot::register(module)?;
     sql_scan::register(module)
 }

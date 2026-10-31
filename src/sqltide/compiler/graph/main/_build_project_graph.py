@@ -1,41 +1,11 @@
 """Build one typed graph from a compiled logical project."""
 
-from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey
-from sqltide.compiler.graph._helpers.lineage import (
-    build_lineage_downstream_edges,
-    build_lineage_upstream_edges,
-    validate_model_reference_scope,
-    validate_pipeline_mode_boundaries,
-    validate_terminal_views,
-)
-from sqltide.compiler.graph._helpers.ordering import topologically_order_logical_keys
-from sqltide.compiler.graph.models import DependencyEdge, ProjectGraph
+from sqltide.compiler.compile.models import CompiledProject
+from sqltide.compiler.graph._helpers.lineage import build_project_graph
+from sqltide.compiler.graph.models import ProjectGraph
 
 
 def build_project_graph_from_compiled_project(*, project: CompiledProject) -> ProjectGraph:
     """Build and validate one immutable typed logical graph."""
 
-    upstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]] = (
-        build_lineage_upstream_edges(project=project)
-    )
-    downstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]] = (
-        build_lineage_downstream_edges(upstream_edges_by_key=upstream_edges_by_key)
-    )
-    validate_pipeline_mode_boundaries(
-        project=project,
-        upstream_edges_by_key=upstream_edges_by_key,
-    )
-    validate_model_reference_scope(project=project)
-    validate_terminal_views(
-        project=project,
-        downstream_edges_by_key=downstream_edges_by_key,
-    )
-    return ProjectGraph(
-        project=project,
-        upstream_edges_by_key=upstream_edges_by_key,
-        downstream_edges_by_key=downstream_edges_by_key,
-        ordered_keys=topologically_order_logical_keys(
-            upstream_edges_by_key=upstream_edges_by_key,
-            downstream_edges_by_key=downstream_edges_by_key,
-        ),
-    )
+    return build_project_graph(project=project)
