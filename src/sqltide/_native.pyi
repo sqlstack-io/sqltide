@@ -118,6 +118,22 @@ type _NativeSpec = tuple[
 def classify_object_changes(
     comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
 ) -> list[tuple[str, str | None, str | None]]: ...
+def audit_readiness(
+    observation: tuple[
+        str,
+        bool,
+        bool,
+        int | None,
+        int | None,
+        bool,
+        tuple[int, int, int, int, bool, float | None] | None,
+        float | None,
+        str | None,
+        int | None,
+    ],
+    thresholds: tuple[float, float],
+) -> tuple[str, int | None, float | None, list[str]]: ...
+def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
     def __init__(

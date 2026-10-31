@@ -359,6 +359,10 @@ name = "sqltide-compile"
 version = "0.42.0"
 
 [[package]]
+name = "sqltide-executor"
+version = "0.42.0"
+
+[[package]]
 name = "sqltide-json"
 version = "0.42.0"
 
@@ -378,6 +382,7 @@ dependencies = [
  "pythonize",
  "serde",
  "sqltide-compile",
+ "sqltide-executor",
  "sqltide-json",
  "sqltide-planner",
  "sqltide-sqlanalysis",

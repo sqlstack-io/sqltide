@@ -1,5 +1,6 @@
 """Build audit decisions from adapter readiness observations."""
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapter.models import (
@@ -103,29 +104,38 @@ def _build_root_audit_result(
     observation: AdapterReadinessRootObservation,
     thresholds: DeploymentReadinessThresholds,
 ) -> RootAuditResult:
-    row_delta: int | None = None
-    row_ratio: float | None = None
-    if observation.active_row_count is not None and observation.staged_row_count is not None:
-        row_delta = observation.staged_row_count - observation.active_row_count
-        row_ratio = (
-            None
-            if observation.active_row_count == 0
-            else observation.staged_row_count / observation.active_row_count
-        )
     replay_lineage_mode: ReplayLineageMode | None = _replay_lineage_mode(
         observation.replay_boundary_mode
     )
     offset_summary: OffsetCatchupSummary | None = _offset_summary(observation.offset_summary)
     scalar_summary: ScalarCatchupSummary | None = _scalar_summary(observation.scalar_summary)
-    warnings: tuple[str, ...] = _build_root_warnings(
-        root_key=root_key,
-        active_exists=root_request.active_exists,
-        active_row_count=observation.active_row_count,
-        staged_row_count=observation.staged_row_count,
-        row_ratio=row_ratio,
-        replay_source_name=observation.replay_source_name,
-        replay_source_row_count=observation.replay_source_row_count,
-        minimum_staged_row_ratio=thresholds.minimum_staged_row_ratio,
+    assessment: str
+    row_delta: int | None
+    row_ratio: float | None
+    warnings: list[str]
+    assessment, row_delta, row_ratio, warnings = _native.audit_readiness(
+        (
+            root_key.name,
+            observation.staged_exists,
+            root_request.active_exists,
+            observation.active_row_count,
+            observation.staged_row_count,
+            replay_lineage_mode == ReplayLineageMode.OFFSETS,
+            None
+            if offset_summary is None
+            else (
+                offset_summary.active_partition_count,
+                offset_summary.partitions_compared,
+                offset_summary.missing_staged_partition_count,
+                offset_summary.missing_freshness_partition_count,
+                offset_summary.lag_boundary_column is not None,
+                offset_summary.max_lag_seconds,
+            ),
+            None if scalar_summary is None else scalar_summary.lag_seconds,
+            observation.replay_source_name,
+            observation.replay_source_row_count,
+        ),
+        (thresholds.maximum_lag_seconds, thresholds.minimum_staged_row_ratio),
     )
     return RootAuditResult(
         root_key=root_key,
@@ -143,20 +153,11 @@ def _build_root_audit_result(
         staged_row_count=observation.staged_row_count,
         row_delta=row_delta,
         row_ratio=row_ratio,
-        assessment=_build_root_assessment(
-            staged_exists=observation.staged_exists,
-            active_exists=root_request.active_exists,
-            active_row_count=observation.active_row_count,
-            staged_row_count=observation.staged_row_count,
-            replay_lineage_mode=replay_lineage_mode,
-            offset_summary=offset_summary,
-            scalar_summary=scalar_summary,
-            thresholds=thresholds,
-        ),
+        assessment=AuditAssessment(assessment),
         replay_lineage_mode=replay_lineage_mode,
         offset_catchup_summary=offset_summary,
         scalar_catchup_summary=scalar_summary,
-        warnings=warnings,
+        warnings=tuple(warnings),
     )
 
 
@@ -208,109 +209,3 @@ def _scalar_summary(
         staged_max_value=summary.staged_max_value,
         lag_seconds=summary.lag_seconds,
     )
-
-
-def _build_root_assessment(
-    *,
-    staged_exists: bool,
-    active_exists: bool,
-    active_row_count: int | None,
-    staged_row_count: int | None,
-    replay_lineage_mode: ReplayLineageMode | None,
-    offset_summary: OffsetCatchupSummary | None,
-    scalar_summary: ScalarCatchupSummary | None,
-    thresholds: DeploymentReadinessThresholds,
-) -> AuditAssessment:
-    if not staged_exists:
-        return AuditAssessment.CAUTION
-    if staged_row_count == 0:
-        if active_exists and active_row_count is not None and active_row_count > 0:
-            return AuditAssessment.NOT_READY
-        return AuditAssessment.CAUTION
-    if not active_exists:
-        return AuditAssessment.READY
-    if replay_lineage_mode == ReplayLineageMode.OFFSETS:
-        return _offset_assessment(
-            active_exists=active_exists,
-            active_row_count=active_row_count,
-            staged_row_count=staged_row_count,
-            offset_summary=offset_summary,
-            thresholds=thresholds,
-        )
-    if scalar_summary is None or scalar_summary.lag_seconds is None:
-        return AuditAssessment.CAUTION
-    if scalar_summary.lag_seconds > thresholds.maximum_lag_seconds:
-        return AuditAssessment.NOT_READY
-    return _row_ratio_assessment(
-        active_row_count=active_row_count,
-        staged_row_count=staged_row_count,
-        minimum_staged_row_ratio=thresholds.minimum_staged_row_ratio,
-    )
-
-
-def _offset_assessment(
-    *,
-    active_exists: bool,
-    active_row_count: int | None,
-    staged_row_count: int | None,
-    offset_summary: OffsetCatchupSummary | None,
-    thresholds: DeploymentReadinessThresholds,
-) -> AuditAssessment:
-    if offset_summary is None:
-        return AuditAssessment.CAUTION
-    if active_exists and offset_summary.partitions_compared < offset_summary.active_partition_count:
-        return AuditAssessment.CAUTION
-    if active_exists and offset_summary.missing_staged_partition_count > 0:
-        return AuditAssessment.CAUTION
-    if offset_summary.missing_freshness_partition_count > 0:
-        return AuditAssessment.CAUTION
-    if offset_summary.lag_boundary_column is None or offset_summary.max_lag_seconds is None:
-        return AuditAssessment.CAUTION
-    if offset_summary.max_lag_seconds > thresholds.maximum_lag_seconds:
-        return AuditAssessment.NOT_READY
-    return _row_ratio_assessment(
-        active_row_count=active_row_count,
-        staged_row_count=staged_row_count,
-        minimum_staged_row_ratio=thresholds.minimum_staged_row_ratio,
-    )
-
-
-def _row_ratio_assessment(
-    *,
-    active_row_count: int | None,
-    staged_row_count: int | None,
-    minimum_staged_row_ratio: float,
-) -> AuditAssessment:
-    if (
-        active_row_count is not None
-        and staged_row_count is not None
-        and active_row_count > 0
-        and staged_row_count < active_row_count * minimum_staged_row_ratio
-    ):
-        return AuditAssessment.CAUTION
-    return AuditAssessment.READY
-
-
-def _build_root_warnings(
-    *,
-    root_key: ObjectKey,
-    active_exists: bool,
-    active_row_count: int | None,
-    staged_row_count: int | None,
-    row_ratio: float | None,
-    replay_source_name: str | None,
-    replay_source_row_count: int | None,
-    minimum_staged_row_ratio: float,
-) -> tuple[str, ...]:
-    warnings: list[str] = []
-    if replay_source_name is not None and replay_source_row_count == 0:
-        warnings.append(f"replay source {replay_source_name} is empty")
-    if (
-        active_exists
-        and active_row_count is not None
-        and staged_row_count is not None
-        and row_ratio is not None
-        and row_ratio < minimum_staged_row_ratio
-    ):
-        warnings.append(f"staged row count is far below active row count for {root_key.name}")
-    return tuple(warnings)
