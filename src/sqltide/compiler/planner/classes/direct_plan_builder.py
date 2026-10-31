@@ -345,10 +345,15 @@ class DirectPlanBuilder:
         propagated_by_root: dict[LogicalResourceKey, list[LogicalResourceKey]] = {}
         model_key: LogicalResourceKey
         postgres_source_names: frozenset[str] = self._postgres_source_names()
+        root_by_key: dict[LogicalResourceKey, LogicalResourceKey] = {}
         for model_key in self._execution_scope:
+            parent_key: LogicalResourceKey | None = self._driving_parent_by_key.get(model_key)
+            root_by_key[model_key] = (
+                root_by_key[parent_key] if parent_key in self._executed_keys else model_key
+            )
             if not isinstance(self._model_by_key[model_key], CompiledTableModel):
                 continue
-            root_key: LogicalResourceKey = self._replay_root_key(model_key=model_key)
+            root_key: LogicalResourceKey = root_by_key[model_key]
             driving_parent_key: LogicalResourceKey | None = self._driving_parent_by_key.get(
                 root_key
             )
@@ -472,14 +477,6 @@ class DirectPlanBuilder:
             )
             if key.name in target_names
         )
-
-    def _replay_root_key(self, *, model_key: LogicalResourceKey) -> LogicalResourceKey:
-        current_key: LogicalResourceKey = model_key
-        while True:
-            parent_key: LogicalResourceKey | None = self._driving_parent_by_key.get(current_key)
-            if parent_key is None or parent_key not in self._executed_keys:
-                return current_key
-            current_key = parent_key
 
     def _replay_boundary_mode(self, *, model_key: LogicalResourceKey) -> ReplayLineageMode:
         replay_lineage_mode: ReplayLineageMode | None = self._replay_lineage_mode_by_key.get(
