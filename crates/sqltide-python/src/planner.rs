@@ -8,6 +8,9 @@ use sqltide_planner::desired::{
     CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectKind, ObjectType, ReplayMode,
     ReplayPolicy, ReplayRule,
 };
+use sqltide_planner::diff::{
+    Classification, Column, Comparison, Differ, Kafka, Settings, Spec, Storage,
+};
 use sqltide_planner::rebuild::{
     ChangeType, ObjectChange, RebuildSubtree, SchemaChangeKind, SeedCompatibility, rebuild_subtrees,
 };
@@ -47,6 +50,116 @@ type SubtreeResult = (
     Option<&'static str>,
     Option<i64>,
 );
+
+/// `(kind, [(name, type, default)], texts, order by, settings)`, where the texts are the
+/// engine, partition, and TTL of a table; the broker list, topic, consumer group, and format of a
+/// Kafka table; the source, target, and query of a materialized view; or a view's query.
+type SpecArgument = (
+    String,
+    Vec<(String, String, Option<String>)>,
+    Vec<Option<String>>,
+    Vec<String>,
+    Option<Vec<(String, String)>>,
+);
+
+fn spec(argument: SpecArgument) -> PyResult<Spec> {
+    let (kind, columns, texts, order_by, settings) = argument;
+    let columns: Vec<Column> = columns
+        .into_iter()
+        .map(|(name, type_sql, default)| Column {
+            name,
+            type_sql,
+            default,
+        })
+        .collect();
+    let settings: Settings = settings.map(|entries| entries.into_iter().collect());
+    let invalid = || PyValueError::new_err(format!("Invalid {kind} spec"));
+    let required = |text: Option<String>| text.ok_or_else(invalid);
+    let mut texts = texts.into_iter();
+    let mut next = || texts.next().ok_or_else(invalid);
+    Ok(match kind.as_str() {
+        "table" => Spec::Table {
+            columns,
+            storage: Storage {
+                engine: required(next()?)?,
+                order_by,
+                partition_by: next()?,
+                ttl: next()?,
+                settings,
+            },
+        },
+        "kafka_table" => Spec::KafkaTable {
+            columns,
+            kafka: Kafka {
+                broker_list: required(next()?)?,
+                topic: required(next()?)?,
+                consumer_group: required(next()?)?,
+                format: required(next()?)?,
+                settings,
+            },
+        },
+        "materialized_view" => Spec::MaterializedView {
+            source: required(next()?)?,
+            target: required(next()?)?,
+            query: required(next()?)?,
+        },
+        "view" => Spec::View {
+            query: required(next()?)?,
+        },
+        _ => return Err(PyValueError::new_err(format!("Unknown spec kind '{kind}'"))),
+    })
+}
+
+/// `(change type, schema change kind, seed compatibility)`.
+type ClassificationResult = (&'static str, Option<&'static str>, Option<&'static str>);
+
+fn classification_result(classification: Classification) -> ClassificationResult {
+    let difference = classification.column_difference;
+    (
+        match classification.change_type {
+            ChangeType::Create => "create",
+            ChangeType::Rebuild => "rebuild",
+            ChangeType::Replace => "replace",
+            ChangeType::NoOp => "no_op",
+        },
+        difference.map(|difference| match difference.schema_change_kind() {
+            SchemaChangeKind::NonBreaking => "non_breaking",
+            SchemaChangeKind::Breaking => "breaking",
+        }),
+        difference.map(|difference| match difference.seed_compatibility() {
+            SeedCompatibility::Seedable => "seedable",
+            SeedCompatibility::NonSeedable => "non_seedable",
+        }),
+    )
+}
+
+/// Classify `(desired spec, actual spec | None, forced)` comparisons as
+/// `(change type, schema change kind, seed compatibility)`. A type that cannot be normalized
+/// raises `ValueError`.
+#[pyfunction]
+fn classify_object_changes(
+    py: Python<'_>,
+    comparisons: Vec<(SpecArgument, Option<SpecArgument>, bool)>,
+) -> PyResult<Vec<ClassificationResult>> {
+    let comparisons: Vec<Comparison> = comparisons
+        .into_iter()
+        .map(|(desired, actual, forced)| {
+            Ok(Comparison {
+                desired: spec(desired)?,
+                actual: actual.map(spec).transpose()?,
+                forced,
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    py.detach(|| Differ::new().classify_all(&comparisons))
+        .map(|classifications| {
+            classifications
+                .into_iter()
+                .map(classification_result)
+                .collect()
+        })
+        .map_err(|error| PyValueError::new_err(error.message))
+}
 
 fn replay_mode(text: &str) -> PyResult<ReplayMode> {
     match text {
@@ -271,5 +384,6 @@ impl PyDesiredGraph {
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(classify_object_changes, module)?)?;
     module.add_class::<PyDesiredGraph>()
 }

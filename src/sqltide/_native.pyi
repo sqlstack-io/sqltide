@@ -107,6 +107,18 @@ def build_project_graph(
     allowed_cross_pipeline_references: list[tuple[str, str]],
 ) -> tuple[list[int], list[list[tuple[int, str]]], list[list[tuple[int, int]]], list[int]]: ...
 
+type _NativeSpec = tuple[
+    str,
+    list[tuple[str, str, str | None]],
+    list[str | None],
+    list[str],
+    list[tuple[str, str]] | None,
+]
+
+def classify_object_changes(
+    comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
+) -> list[tuple[str, str | None, str | None]]: ...
+
 class DesiredGraph:
     def __init__(
         self,
