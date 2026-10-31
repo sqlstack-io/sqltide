@@ -2,9 +2,18 @@
 
 import sqltide._native as _native
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_TABLE
-from sqltide.compiler.compile.models import DesiredMaterializedView, DesiredState, ObjectKey
+from sqltide.compiler.compile.models import (
+    DesiredKafkaTable,
+    DesiredMaterializedView,
+    DesiredState,
+    DesiredTable,
+    ObjectKey,
+)
+from sqltide.compiler.compile.types import DesiredObjectType
+from sqltide.compiler.discovery.models import ReplayOnChangePolicy, ReplayOnChangeRule
 from sqltide.compiler.graph.exceptions import GraphInputError
 from sqltide.compiler.graph.models import NativeDesiredGraph
+from sqltide.compiler.graph.types import NativeDesiredObject, NativeReplayPolicy
 from sqltide.compiler.pipeline.types import DesiredObject
 
 
@@ -13,7 +22,7 @@ def build_desired_reverse_deps(
 ) -> dict[ObjectKey, tuple[ObjectKey, ...]]:
     """Build downstream desired-object keys by upstream key."""
 
-    graph: NativeDesiredGraph = _graph(desired_state)
+    graph: NativeDesiredGraph = build_native_desired_graph(desired_state)
     return {
         graph.keys[upstream]: _keys(graph=graph, indices=downstream)
         for upstream, downstream in graph.native.reverse_deps()
@@ -25,7 +34,7 @@ def order_desired_keys(
 ) -> tuple[ObjectKey, ...]:
     """Order included desired-object keys stably or reject a cycle."""
 
-    graph: NativeDesiredGraph = _graph(desired_state)
+    graph: NativeDesiredGraph = build_native_desired_graph(desired_state)
     included: set[int] = {
         graph.index_by_key[key] for key in included_keys if key in graph.index_by_key
     }
@@ -41,7 +50,7 @@ def collect_desired_descendant_keys(
 ) -> tuple[ObjectKey, ...]:
     """Collect one desired-object downstream closure in dependency order."""
 
-    graph: NativeDesiredGraph = _graph(desired_state)
+    graph: NativeDesiredGraph = build_native_desired_graph(desired_state)
     root: int | None = graph.index_by_key.get(root_key)
     if root is None:
         return ()
@@ -60,7 +69,7 @@ def find_nearest_replay_anchor_key(
 ) -> ObjectKey:
     """Find the nearest eligible table through realized driving dependencies only."""
 
-    graph: NativeDesiredGraph = _graph(desired_state)
+    graph: NativeDesiredGraph = build_native_desired_graph(desired_state)
     root: int | None = graph.index_by_key.get(root_key)
     if root is None:
         return root_key
@@ -71,7 +80,9 @@ def find_nearest_replay_anchor_key(
     return graph.keys[anchor]
 
 
-def _graph(desired_state: DesiredState) -> NativeDesiredGraph:
+def build_native_desired_graph(desired_state: DesiredState) -> NativeDesiredGraph:
+    """Intern every key `desired_state` names and build the native graph over them."""
+
     keys: tuple[ObjectKey, ...] = tuple(dict.fromkeys(_named_keys(desired_state)))
     index_by_key: dict[ObjectKey, int] = {key: index for index, key in enumerate(keys)}
     return NativeDesiredGraph(
@@ -102,13 +113,42 @@ def _named_keys(desired_state: DesiredState) -> list[ObjectKey]:
 
 def _native_object(
     *, object_: DesiredObject, index_by_key: dict[ObjectKey, int]
-) -> tuple[int, list[int], int | None]:
-    source: int | None = (
-        index_by_key[_table_key(object_.source_table_name)]
-        if isinstance(object_, DesiredMaterializedView)
-        else None
+) -> NativeDesiredObject:
+    deps: list[int] = [index_by_key[key] for key in object_.deps]
+    if isinstance(object_, DesiredMaterializedView):
+        return (
+            index_by_key[object_.key],
+            deps,
+            str(DesiredObjectType.MATERIALIZED_VIEW),
+            index_by_key[_table_key(object_.source_table_name)],
+            object_.target_table_name,
+            None,
+        )
+    if isinstance(object_, DesiredTable):
+        return (
+            index_by_key[object_.key],
+            deps,
+            str(DesiredObjectType.TABLE),
+            None,
+            None,
+            _replay_policy(object_.replay_on_change),
+        )
+    kind: DesiredObjectType = (
+        DesiredObjectType.KAFKA_TABLE
+        if isinstance(object_, DesiredKafkaTable)
+        else DesiredObjectType.VIEW
     )
-    return (index_by_key[object_.key], [index_by_key[key] for key in object_.deps], source)
+    return (index_by_key[object_.key], deps, str(kind), None, None, None)
+
+
+def _replay_policy(policy: ReplayOnChangePolicy | None) -> NativeReplayPolicy | None:
+    if policy is None:
+        return None
+    return (_replay_rule(policy.breaking), _replay_rule(policy.non_breaking))
+
+
+def _replay_rule(rule: ReplayOnChangeRule | None) -> tuple[str, int | None] | None:
+    return None if rule is None else (str(rule.mode), rule.lookback_seconds)
 
 
 def _keys(*, graph: NativeDesiredGraph, indices: list[int]) -> tuple[ObjectKey, ...]:

@@ -111,10 +111,23 @@ class DesiredGraph:
     def __init__(
         self,
         keys: list[tuple[str, str]],
-        objects: list[tuple[int, list[int], int | None]],
+        objects: list[
+            tuple[
+                int,
+                list[int],
+                str,
+                int | None,
+                str | None,
+                tuple[tuple[str, int | None] | None, tuple[str, int | None] | None] | None,
+            ]
+        ],
         replay_anchors: list[int],
     ) -> None: ...
     def reverse_deps(self) -> list[tuple[int, list[int]]]: ...
     def order(self, included: set[int]) -> list[int]: ...
     def descendants(self, root: int) -> list[int]: ...
+    def rebuild_subtrees(
+        self,
+        changes: list[tuple[int, str, bool, str | None, str | None, str | None]],
+    ) -> list[tuple[int, list[int], int, bool, str, bool, str | None, str | None, int | None]]: ...
     def nearest_replay_anchor(self, root: int, allow_root: bool, root_name: str) -> int: ...

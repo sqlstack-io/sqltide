@@ -35,13 +35,58 @@ pub struct KeyInfo {
     pub name: String,
 }
 
+/// How a change replays: everything, or a bounded window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReplayMode {
+    Full,
+    Bounded,
+}
+
+impl ReplayMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Bounded => "bounded",
+        }
+    }
+}
+
+/// One authored replay rule: its mode and optional lookback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayRule {
+    pub mode: ReplayMode,
+    pub lookback_seconds: Option<i64>,
+}
+
+/// A table's authored replay policy for breaking and non-breaking schema changes.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ReplayPolicy {
+    pub breaking: Option<ReplayRule>,
+    pub non_breaking: Option<ReplayRule>,
+}
+
+/// What kind of desired object this is, independent of its key's type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ObjectKind {
+    KafkaTable,
+    /// A managed table and its replay policy, if authored.
+    Table(Option<ReplayPolicy>),
+    /// A materialized view, with the key index of `table:<source>` in no database and the
+    /// target table name.
+    MaterializedView {
+        source: usize,
+        target: String,
+    },
+    View,
+}
+
 /// One desired object by key index.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DesiredObject {
     pub key: usize,
     pub deps: Vec<usize>,
-    /// For a materialized view, the key index of `table:<source table name>` in no database.
-    pub materialized_view_source: Option<usize>,
+    pub kind: ObjectKind,
 }
 
 /// A dependency cycle among the named keys.
@@ -97,6 +142,24 @@ impl DesiredGraph {
             reverse_deps,
             replay_anchors: replay_anchors.iter().copied().collect(),
         }
+    }
+
+    /// The sort identity of one key.
+    #[must_use]
+    pub fn key(&self, key: usize) -> &KeyInfo {
+        &self.keys[key]
+    }
+
+    /// How many keys are interned.
+    #[must_use]
+    pub fn key_count(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Every desired object, in desired order.
+    #[must_use]
+    pub fn objects(&self) -> &[DesiredObject] {
+        &self.objects
     }
 
     /// Downstream object keys of `key`, sorted by `(type, name)`.
@@ -215,7 +278,7 @@ impl DesiredGraph {
                 return Ok(current);
             };
             let object: &DesiredObject = &self.objects[position];
-            if let Some(source) = object.materialized_view_source {
+            if let ObjectKind::MaterializedView { source, .. } = object.kind {
                 current = source;
                 continue;
             }
@@ -254,7 +317,12 @@ mod tests {
         DesiredObject {
             key,
             deps: deps.to_vec(),
-            materialized_view_source: source,
+            kind: source.map_or(ObjectKind::Table(None), |source| {
+                ObjectKind::MaterializedView {
+                    source,
+                    target: "enriched".to_owned(),
+                }
+            }),
         }
     }
 

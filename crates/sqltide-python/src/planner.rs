@@ -4,7 +4,151 @@ use std::collections::HashSet;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use sqltide_planner::desired::{CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectType};
+use sqltide_planner::desired::{
+    CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectKind, ObjectType, ReplayMode,
+    ReplayPolicy, ReplayRule,
+};
+use sqltide_planner::rebuild::{
+    ChangeType, ObjectChange, RebuildSubtree, SchemaChangeKind, SeedCompatibility, rebuild_subtrees,
+};
+
+/// `(mode, lookback seconds)`.
+type RuleArgument = (String, Option<i64>);
+/// `(key, deps, kind, materialized view source key, materialized view target,
+/// (breaking rule, non-breaking rule) for a table with an authored policy)`.
+type ObjectArgument = (
+    usize,
+    Vec<usize>,
+    String,
+    Option<usize>,
+    Option<String>,
+    Option<(Option<RuleArgument>, Option<RuleArgument>)>,
+);
+/// `(key, change type, force full refresh, forced start time, schema change kind, seed
+/// compatibility)`.
+type ChangeArgument = (
+    usize,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+/// `(root, affected, upstream boundary, replay required, execution mode, forced full refresh,
+/// forced start time, configured backfill mode, execution lookback seconds)`.
+type SubtreeResult = (
+    usize,
+    Vec<usize>,
+    usize,
+    bool,
+    &'static str,
+    bool,
+    Option<String>,
+    Option<&'static str>,
+    Option<i64>,
+);
+
+fn replay_mode(text: &str) -> PyResult<ReplayMode> {
+    match text {
+        "full" => Ok(ReplayMode::Full),
+        "bounded" => Ok(ReplayMode::Bounded),
+        other => Err(PyValueError::new_err(format!(
+            "Unknown replay mode '{other}'"
+        ))),
+    }
+}
+
+fn replay_rule(rule: Option<RuleArgument>) -> PyResult<Option<ReplayRule>> {
+    rule.map(|(mode, lookback_seconds)| {
+        Ok(ReplayRule {
+            mode: replay_mode(&mode)?,
+            lookback_seconds,
+        })
+    })
+    .transpose()
+}
+
+fn object_kind(
+    kind: &str,
+    source: Option<usize>,
+    target: Option<String>,
+    policy: Option<(Option<RuleArgument>, Option<RuleArgument>)>,
+) -> PyResult<ObjectKind> {
+    match (kind, source, target) {
+        ("kafka_table", _, _) => Ok(ObjectKind::KafkaTable),
+        ("view", _, _) => Ok(ObjectKind::View),
+        ("table", _, _) => Ok(ObjectKind::Table(
+            policy
+                .map(|(breaking, non_breaking)| {
+                    Ok::<_, PyErr>(ReplayPolicy {
+                        breaking: replay_rule(breaking)?,
+                        non_breaking: replay_rule(non_breaking)?,
+                    })
+                })
+                .transpose()?,
+        )),
+        ("materialized_view", Some(source), Some(target)) => {
+            Ok(ObjectKind::MaterializedView { source, target })
+        }
+        (other, _, _) => Err(PyValueError::new_err(format!(
+            "Invalid desired object kind '{other}'"
+        ))),
+    }
+}
+
+fn object_change(change: ChangeArgument) -> PyResult<ObjectChange> {
+    let (key, change_type, force_full_refresh, forced_start_time, schema, seed) = change;
+    Ok(ObjectChange {
+        key,
+        change_type: match change_type.as_str() {
+            "create" => ChangeType::Create,
+            "rebuild" => ChangeType::Rebuild,
+            "replace" => ChangeType::Replace,
+            "no_op" => ChangeType::NoOp,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown change type '{other}'"
+                )));
+            }
+        },
+        force_full_refresh,
+        forced_start_time,
+        schema_change_kind: match schema.as_deref() {
+            None => None,
+            Some("non_breaking") => Some(SchemaChangeKind::NonBreaking),
+            Some("breaking") => Some(SchemaChangeKind::Breaking),
+            Some(other) => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown schema change '{other}'"
+                )));
+            }
+        },
+        seed_compatibility: match seed.as_deref() {
+            None => None,
+            Some("seedable") => Some(SeedCompatibility::Seedable),
+            Some("non_seedable") => Some(SeedCompatibility::NonSeedable),
+            Some(other) => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown seed compatibility '{other}'"
+                )));
+            }
+        },
+    })
+}
+
+fn subtree_result(subtree: RebuildSubtree) -> SubtreeResult {
+    (
+        subtree.root,
+        subtree.affected,
+        subtree.upstream_boundary,
+        subtree.replay_required,
+        subtree.execution_mode.as_str(),
+        subtree.forced_full_refresh,
+        subtree.forced_start_time,
+        subtree.configured_backfill_mode.map(ReplayMode::as_str),
+        subtree.execution_lookback_seconds,
+    )
+}
 
 fn object_type(text: &str) -> PyResult<ObjectType> {
     match text {
@@ -30,12 +174,11 @@ struct PyDesiredGraph {
 
 #[pymethods]
 impl PyDesiredGraph {
-    /// `keys` holds `(object type, name)` per index; `objects` holds
-    /// `(key, deps, materialized view source key | None)`.
+    /// `keys` holds `(object type, name)` per index; see [`ObjectArgument`] for `objects`.
     #[new]
     fn new(
         keys: Vec<(String, String)>,
-        objects: Vec<(usize, Vec<usize>, Option<usize>)>,
+        objects: Vec<ObjectArgument>,
         replay_anchors: Vec<usize>,
     ) -> PyResult<Self> {
         let keys: Vec<KeyInfo> = keys
@@ -49,7 +192,7 @@ impl PyDesiredGraph {
             .collect::<PyResult<_>>()?;
         let count: usize = keys.len();
         let in_range = |index: &usize| *index < count;
-        if !objects.iter().all(|(key, deps, source)| {
+        if !objects.iter().all(|(key, deps, _, source, _, _)| {
             in_range(key) && deps.iter().all(in_range) && source.as_ref().is_none_or(in_range)
         }) || !replay_anchors.iter().all(in_range)
         {
@@ -59,12 +202,14 @@ impl PyDesiredGraph {
         }
         let objects: Vec<DesiredObject> = objects
             .into_iter()
-            .map(|(key, deps, materialized_view_source)| DesiredObject {
-                key,
-                deps,
-                materialized_view_source,
+            .map(|(key, deps, kind, source, target, policy)| {
+                Ok(DesiredObject {
+                    key,
+                    deps,
+                    kind: object_kind(&kind, source, target, policy)?,
+                })
             })
-            .collect();
+            .collect::<PyResult<_>>()?;
         Ok(Self {
             graph: DesiredGraph::new(keys, objects, &replay_anchors),
         })
@@ -87,6 +232,29 @@ impl PyDesiredGraph {
     /// `root` and its downstream objects in dependency order. A cycle raises `ValueError`.
     fn descendants(&self, py: Python<'_>, root: usize) -> PyResult<Vec<usize>> {
         py.detach(|| self.graph.descendants(root)).map_err(cycle)
+    }
+
+    /// The rebuild subtrees `changes` require. A cycle raises `ValueError`.
+    fn rebuild_subtrees(
+        &self,
+        py: Python<'_>,
+        changes: Vec<ChangeArgument>,
+    ) -> PyResult<Vec<SubtreeResult>> {
+        let changes: Vec<ObjectChange> = changes
+            .into_iter()
+            .map(object_change)
+            .collect::<PyResult<_>>()?;
+        if changes
+            .iter()
+            .any(|change| change.key >= self.graph.key_count())
+        {
+            return Err(PyValueError::new_err(
+                "Desired graph key index out of range",
+            ));
+        }
+        py.detach(|| rebuild_subtrees(&self.graph, &changes))
+            .map(|subtrees| subtrees.into_iter().map(subtree_result).collect())
+            .map_err(cycle)
     }
 
     /// The nearest upstream replay anchor for `root`. A cycle raises `ValueError`.
