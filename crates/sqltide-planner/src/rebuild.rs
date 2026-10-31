@@ -116,7 +116,13 @@ pub fn rebuild_subtrees(
             ObjectType::KafkaTable | ObjectType::View => false,
         }
     };
-    let mut candidates: Vec<RebuildSubtree> = Vec::new();
+    // In an acyclic graph a root below another candidate has a strictly smaller closure, so it
+    // sorts later and is always covered: only the candidates no other candidate reaches are
+    // retained, and only their closures are collected. A cyclic graph or one with duplicate keys
+    // collects every candidate's closure in change order so the first cycle reported matches.
+    // Anchor walks run for every candidate in change order either way.
+    let acyclic: bool = graph.is_acyclic();
+    let mut candidates: Vec<Candidate<'_>> = Vec::new();
     for change in changes {
         if !matches!(change.change_type, ChangeType::Create | ChangeType::Rebuild)
             || graph.key(change.key).object_type == ObjectType::KafkaTable
@@ -124,11 +130,35 @@ pub fn rebuild_subtrees(
         {
             continue;
         }
-        let policy: Option<ReplayPolicy> = policy_by_key.get(&change.key).copied().flatten();
-        candidates.push(candidate(graph, change, policy)?);
+        let affected: Vec<usize> = if acyclic {
+            Vec::new()
+        } else {
+            graph.descendants(change.key)?
+        };
+        candidates.push(Candidate {
+            change,
+            policy: policy_by_key.get(&change.key).copied().flatten(),
+            affected,
+            upstream_boundary: graph.nearest_replay_anchor(
+                change.key,
+                false,
+                &graph.key(change.key).name,
+            )?,
+        });
+    }
+    if acyclic {
+        let roots: Vec<usize> = candidates
+            .iter()
+            .map(|candidate| candidate.change.key)
+            .collect();
+        let below: Vec<bool> = graph.below(&roots);
+        candidates.retain(|candidate| !below[candidate.change.key]);
+        for candidate in &mut candidates {
+            candidate.affected = graph.descendants(candidate.change.key)?;
+        }
     }
     candidates.sort_by(|left, right| {
-        let (left_key, right_key) = (graph.key(left.root), graph.key(right.root));
+        let (left_key, right_key) = (graph.key(left.change.key), graph.key(right.change.key));
         right
             .affected
             .len()
@@ -138,21 +168,33 @@ pub fn rebuild_subtrees(
     });
     let mut covered: HashSet<usize> = HashSet::new();
     let mut retained: Vec<RebuildSubtree> = Vec::new();
-    for subtree in candidates {
-        if covered.contains(&subtree.root) {
+    for candidate in candidates {
+        if covered.contains(&candidate.change.key) {
             continue;
         }
+        let subtree: RebuildSubtree = subtree(graph, candidate);
         covered.extend(subtree.affected.iter().copied());
         retained.push(subtree);
     }
     Ok(retained)
 }
 
-fn candidate(
-    graph: &DesiredGraph,
-    change: &ObjectChange,
+/// One changed root before its subtree is chosen.
+struct Candidate<'a> {
+    change: &'a ObjectChange,
     policy: Option<ReplayPolicy>,
-) -> Result<RebuildSubtree, CycleError> {
+    affected: Vec<usize>,
+    upstream_boundary: usize,
+}
+
+fn subtree(graph: &DesiredGraph, candidate: Candidate<'_>) -> RebuildSubtree {
+    let Candidate {
+        change,
+        policy,
+        affected,
+        upstream_boundary,
+        ..
+    } = candidate;
     let (execution_mode, configured_backfill_mode, execution_lookback_seconds) =
         if change.force_full_refresh {
             (ExecutionMode::Full, Some(ReplayMode::Full), None)
@@ -161,10 +203,7 @@ fn candidate(
         } else {
             execution_policy(change, policy)
         };
-    let affected: Vec<usize> = graph.descendants(change.key)?;
-    let upstream_boundary: usize =
-        graph.nearest_replay_anchor(change.key, false, &graph.key(change.key).name)?;
-    Ok(RebuildSubtree {
+    RebuildSubtree {
         root: change.key,
         affected,
         upstream_boundary,
@@ -178,7 +217,7 @@ fn candidate(
         },
         configured_backfill_mode,
         execution_lookback_seconds,
-    })
+    }
 }
 
 fn default_mode(change: &ObjectChange) -> ExecutionMode {

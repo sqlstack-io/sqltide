@@ -108,6 +108,8 @@ impl std::error::Error for CycleError {}
 pub struct DesiredGraph {
     keys: Vec<KeyInfo>,
     objects: Vec<DesiredObject>,
+    /// For each key, the position of its first object, if it is an object.
+    first_object: Vec<Option<usize>>,
     /// For each key, the position of its last object, if it is an object.
     last_object: Vec<Option<usize>>,
     /// For each key, downstream object keys sorted by `(type, name)`, one per dependency entry.
@@ -121,9 +123,11 @@ impl DesiredGraph {
     /// Panics when an object, dependency, source, or anchor index is not below `keys.len()`.
     #[must_use]
     pub fn new(keys: Vec<KeyInfo>, objects: Vec<DesiredObject>, replay_anchors: &[usize]) -> Self {
+        let mut first_object: Vec<Option<usize>> = vec![None; keys.len()];
         let mut last_object: Vec<Option<usize>> = vec![None; keys.len()];
         let mut reverse_deps: Vec<Vec<usize>> = vec![Vec::new(); keys.len()];
         for (position, object) in objects.iter().enumerate() {
+            first_object[object.key].get_or_insert(position);
             last_object[object.key] = Some(position);
             for &dep in &object.deps {
                 reverse_deps[dep].push(object.key);
@@ -138,6 +142,7 @@ impl DesiredGraph {
         Self {
             keys,
             objects,
+            first_object,
             last_object,
             reverse_deps,
             replay_anchors: replay_anchors.iter().copied().collect(),
@@ -185,13 +190,13 @@ impl DesiredGraph {
     ///
     /// Returns [`CycleError`] naming the unordered keys, in first-object order.
     pub fn order(&self, included: &HashSet<usize>) -> Result<Vec<usize>, CycleError> {
-        let mut first_seen: HashSet<usize> = HashSet::new();
-        let members: Vec<usize> = self
-            .objects
+        let mut members: Vec<usize> = included
             .iter()
-            .map(|object| object.key)
-            .filter(|key| included.contains(key) && first_seen.insert(*key))
+            .copied()
+            .filter(|&key| self.first_object.get(key).copied().flatten().is_some())
             .collect();
+        members.sort_unstable_by_key(|&key| self.first_object[key]);
+        let first_seen: HashSet<usize> = members.iter().copied().collect();
         let mut indegree: HashMap<usize, i64> = HashMap::with_capacity(members.len());
         for &key in &members {
             let object: &DesiredObject = &self.objects[self.last_object[key].unwrap_or_default()];
@@ -238,6 +243,36 @@ impl DesiredGraph {
         Err(CycleError {
             message: format!("Dependency cycle detected involving: {}", names.join(", ")),
         })
+    }
+
+    /// Whether every key has one object and all objects can be ordered, so no descendant
+    /// closure holds a cycle. Duplicate objects count only the last one's dependencies when
+    /// ordering, so a closure can then fail while the whole graph orders.
+    #[must_use]
+    pub fn is_acyclic(&self) -> bool {
+        if self.first_object != self.last_object {
+            return false;
+        }
+        let objects: HashSet<usize> = self.objects.iter().map(|object| object.key).collect();
+        self.order(&objects).is_ok()
+    }
+
+    /// For each key, whether it is a strict descendant of an object in `roots`.
+    #[must_use]
+    pub fn below(&self, roots: &[usize]) -> Vec<bool> {
+        let mut below: Vec<bool> = vec![false; self.keys.len()];
+        let mut stack: Vec<usize> = roots
+            .iter()
+            .filter(|&&root| self.last_object[root].is_some())
+            .flat_map(|&root| self.reverse_deps[root].iter().copied())
+            .collect();
+        while let Some(current) = stack.pop() {
+            if !below[current] {
+                below[current] = true;
+                stack.extend(&self.reverse_deps[current]);
+            }
+        }
+        below
     }
 
     /// `root` and every object downstream of it, in dependency order; empty when `root` is not
