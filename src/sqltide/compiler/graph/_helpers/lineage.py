@@ -1,5 +1,6 @@
 """Apache-2.0: SQLBuild compiler/graph/_helpers/lineage.py@7e3b2f854f05."""
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledProject,
@@ -9,136 +10,111 @@ from sqltide.compiler.compile.models import (
     ParsedRef,
 )
 from sqltide.compiler.discovery.models import TransformStep, ViewStep
-from sqltide.compiler.discovery.types import ModelReferenceScope, RefType
+from sqltide.compiler.discovery.types import ModelReferenceScope
 from sqltide.compiler.graph.exceptions import GraphInputError
-from sqltide.compiler.graph.models import DependencyEdge
+from sqltide.compiler.graph.models import DependencyEdge, ProjectGraph
 from sqltide.compiler.graph.types import DependencyEdgeType
 from sqltide.compiler.sql_analysis.models import SqlSourceSpan
 from sqltide.diagnostics.models import SourceLocation
 
+_EDGE_TYPES: dict[str, DependencyEdgeType] = {member.value: member for member in DependencyEdgeType}
 
-def build_lineage_upstream_edges(
-    *, project: CompiledProject
-) -> dict[LogicalResourceKey, tuple[DependencyEdge, ...]]:
-    """Build typed upstream edges for every logical source and model."""
 
-    key_by_name: dict[str, LogicalResourceKey] = {
-        resource.key.name: resource.key for resource in (*project.sources, *project.models)
-    }
-    upstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]] = {
-        source.key: () for source in project.sources
-    }
-    model: CompiledModel
-    for model in project.models:
-        upstream_edges_by_key[model.key] = _model_upstream_edges(
-            model=model,
-            key_by_name=key_by_name,
+def build_project_graph(*, project: CompiledProject) -> ProjectGraph:
+    """Build, validate, and order one typed logical graph natively."""
+
+    try:
+        key_inputs, upstream, downstream, ordered = _native.build_project_graph(
+            [source.key.name for source in project.sources],
+            [_graph_model(model) for model in project.models],
+            [
+                (pipeline.pipeline.name, str(pipeline.pipeline.mode))
+                for pipeline in project.pipelines
+            ],
+            project.model_reference_scope != ModelReferenceScope.PROJECT,
+            [
+                (reference.upstream_pipeline, reference.downstream_pipeline)
+                for reference in project.allowed_cross_pipeline_references
+            ],
         )
-    return upstream_edges_by_key
-
-
-def build_lineage_downstream_edges(
-    *, upstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]]
-) -> dict[LogicalResourceKey, tuple[DependencyEdge, ...]]:
-    """Invert typed upstream edges while preserving deterministic ordering."""
-
-    downstream_lists_by_key: dict[LogicalResourceKey, list[DependencyEdge]] = {
-        key: [] for key in upstream_edges_by_key
-    }
-    edges: tuple[DependencyEdge, ...]
-    for edges in upstream_edges_by_key.values():
-        edge: DependencyEdge
-        for edge in edges:
-            downstream_lists_by_key.setdefault(edge.upstream_key, []).append(edge)
-    return {
-        key: tuple(sorted(edges, key=_downstream_edge_sort_key))
-        for key, edges in downstream_lists_by_key.items()
-    }
-
-
-def validate_terminal_views(
-    *,
-    project: CompiledProject,
-    downstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]],
-) -> None:
-    """Reject every authored view that has a downstream logical model edge."""
-
-    model: CompiledModel
-    for model in project.models:
-        if not isinstance(model, CompiledViewModel):
-            continue
-        downstream_edges: tuple[DependencyEdge, ...] = downstream_edges_by_key[model.key]
-        if downstream_edges:
-            downstream_names: str = ", ".join(edge.downstream_key.name for edge in downstream_edges)
-            raise GraphInputError(
-                f"View model '{model.key.name}' must be terminal; referenced by downstream "
-                f"model(s): {downstream_names}"
-            )
-
-
-def validate_pipeline_mode_boundaries(
-    *,
-    project: CompiledProject,
-    upstream_edges_by_key: dict[LogicalResourceKey, tuple[DependencyEdge, ...]],
-) -> None:
-    """Reject model relationships crossing direct and virtual pipelines."""
-
-    model_by_key: dict[LogicalResourceKey, CompiledModel] = {
-        model.key: model for model in project.models
-    }
-    mode_by_pipeline: dict[str, str] = {
-        pipeline.pipeline.name: str(pipeline.pipeline.mode) for pipeline in project.pipelines
-    }
-    downstream_model: CompiledModel
-    for downstream_model in project.models:
-        edge: DependencyEdge
-        for edge in upstream_edges_by_key[downstream_model.key]:
-            upstream_model: CompiledModel | None = model_by_key.get(edge.upstream_key)
-            if upstream_model is None:
-                continue
-            upstream_mode: str | None = mode_by_pipeline.get(upstream_model.pipeline_name)
-            downstream_mode: str | None = mode_by_pipeline.get(downstream_model.pipeline_name)
-            if upstream_mode is None or downstream_mode is None:
-                continue
-            if upstream_mode == downstream_mode:
-                continue
-            raise GraphInputError(
-                f"Pipeline '{downstream_model.pipeline_name}' is {downstream_mode} but model "
-                f"'{downstream_model.key.name}' references model '{upstream_model.key.name}' "
-                f"in {upstream_mode} pipeline '{upstream_model.pipeline_name}'. Relations "
-                "between direct and virtual pipelines are not allowed."
-            )
-
-
-def validate_model_reference_scope(*, project: CompiledProject) -> None:
-    """Reject model edges crossing pipeline ownership when the project requires isolation."""
-
-    if project.model_reference_scope == ModelReferenceScope.PROJECT:
-        return
-    model_by_name: dict[str, CompiledModel] = {model.key.name: model for model in project.models}
-    allowed_pairs: frozenset[tuple[str, str]] = frozenset(
-        (reference.upstream_pipeline, reference.downstream_pipeline)
-        for reference in project.allowed_cross_pipeline_references
+    except ValueError as error:
+        raise _graph_input_error(project=project, error=error) from None
+    input_keys: tuple[LogicalResourceKey, ...] = (
+        *(source.key for source in project.sources),
+        *(model.key for model in project.models),
     )
-    downstream_model: CompiledModel
-    for downstream_model in project.models:
-        parsed_ref: ParsedRef
-        for parsed_ref in downstream_model.parsed_refs:
-            upstream_model: CompiledModel | None = model_by_name.get(parsed_ref.name)
-            if (
-                upstream_model is None
-                or upstream_model.pipeline_name == downstream_model.pipeline_name
-                or (upstream_model.pipeline_name, downstream_model.pipeline_name) in allowed_pairs
-            ):
-                continue
-            raise GraphInputError(
-                f"Model '{downstream_model.key.name}' in pipeline "
-                f"'{downstream_model.pipeline_name}' references model "
-                f"'{upstream_model.key.name}' in pipeline '{upstream_model.pipeline_name}', but "
-                "dependencies.model_reference_scope is 'pipeline' and no directional "
-                "allowed_cross_pipeline_references entry permits this edge.",
-                location=_reference_location(model=downstream_model, parsed_ref=parsed_ref),
-            )
+    keys: tuple[LogicalResourceKey, ...] = tuple(input_keys[index] for index in key_inputs)
+    upstream_edges: list[tuple[DependencyEdge, ...]] = [
+        _upstream_edges(keys=keys, downstream_key=key, edges=edges)
+        for key, edges in zip(keys, upstream, strict=True)
+    ]
+    downstream_edges: list[tuple[DependencyEdge, ...]] = [
+        _downstream_edges(upstream_edges=upstream_edges, edges=edges) for edges in downstream
+    ]
+    return ProjectGraph(
+        project=project,
+        upstream_edges_by_key=dict(zip(keys, upstream_edges, strict=True)),
+        downstream_edges_by_key=dict(zip(keys, downstream_edges, strict=True)),
+        ordered_keys=tuple(keys[position] for position in ordered),
+    )
+
+
+def _graph_model(
+    model: CompiledModel,
+) -> tuple[str, str, str, str | None, list[tuple[str, str | None]]]:
+    return (
+        model.key.name,
+        model.pipeline_name,
+        _model_kind(model),
+        model.transform.source if isinstance(model, CompiledTableModel) else None,
+        [_graph_ref(parsed_ref) for parsed_ref in model.parsed_refs],
+    )
+
+
+def _graph_ref(parsed_ref: ParsedRef) -> tuple[str, str | None]:
+    return (parsed_ref.name, None if parsed_ref.ref_type is None else str(parsed_ref.ref_type))
+
+
+def _graph_input_error(*, project: CompiledProject, error: ValueError) -> GraphInputError:
+    message, reference = error.args
+    if reference is None:
+        return GraphInputError(message)
+    model_index, reference_index = reference
+    model: CompiledModel = project.models[model_index]
+    return GraphInputError(
+        message,
+        location=_reference_location(model=model, parsed_ref=model.parsed_refs[reference_index]),
+    )
+
+
+def _upstream_edges(
+    *,
+    keys: tuple[LogicalResourceKey, ...],
+    downstream_key: LogicalResourceKey,
+    edges: list[tuple[int, str]],
+) -> tuple[DependencyEdge, ...]:
+    return tuple(
+        DependencyEdge(
+            upstream_key=keys[upstream_position],
+            downstream_key=downstream_key,
+            edge_type=_EDGE_TYPES[edge_type],
+        )
+        for upstream_position, edge_type in edges
+    )
+
+
+def _downstream_edges(
+    *, upstream_edges: list[tuple[DependencyEdge, ...]], edges: list[tuple[int, int]]
+) -> tuple[DependencyEdge, ...]:
+    return tuple(upstream_edges[position][index] for position, index in edges)
+
+
+def _model_kind(model: CompiledModel) -> str:
+    if isinstance(model, CompiledTableModel):
+        return "table"
+    if isinstance(model, CompiledViewModel):
+        return "view"
+    return "unsupported"
 
 
 def _reference_location(*, model: CompiledModel, parsed_ref: ParsedRef) -> SourceLocation | None:
@@ -159,64 +135,4 @@ def _reference_location(*, model: CompiledModel, parsed_ref: ParsedRef) -> Sourc
         end_column=(
             step.source_column + span.end_column - 1 if span.end_line == 1 else span.end_column
         ),
-    )
-
-
-def _model_upstream_edges(
-    *,
-    model: CompiledModel,
-    key_by_name: dict[str, LogicalResourceKey],
-) -> tuple[DependencyEdge, ...]:
-    edge_by_upstream_key: dict[LogicalResourceKey, DependencyEdge] = {}
-    parsed_ref: ParsedRef
-    for parsed_ref in model.parsed_refs:
-        upstream_key: LogicalResourceKey | None = key_by_name.get(parsed_ref.name)
-        if upstream_key is None:
-            raise GraphInputError(
-                f"Model '{model.key.name}' references unknown logical resource '{parsed_ref.name}'"
-            )
-        edge: DependencyEdge = DependencyEdge(
-            upstream_key=upstream_key,
-            downstream_key=model.key,
-            edge_type=_edge_type(model=model, parsed_ref=parsed_ref),
-        )
-        existing_edge: DependencyEdge | None = edge_by_upstream_key.get(upstream_key)
-        if existing_edge is not None and existing_edge.edge_type != edge.edge_type:
-            raise GraphInputError(
-                f"Model '{model.key.name}' declares conflicting reference types for "
-                f"'{parsed_ref.name}'"
-            )
-        edge_by_upstream_key[upstream_key] = edge
-    return tuple(sorted(edge_by_upstream_key.values(), key=_upstream_edge_sort_key))
-
-
-def _edge_type(*, model: CompiledModel, parsed_ref: ParsedRef) -> DependencyEdgeType:
-    if isinstance(model, CompiledViewModel):
-        return DependencyEdgeType.REFERENCE
-    if not isinstance(model, CompiledTableModel):
-        raise GraphInputError(f"Model '{model.key.name}' has an unsupported compiled kind")
-    if parsed_ref.name == model.transform.source:
-        return DependencyEdgeType.DRIVING_INPUT
-    if parsed_ref.ref_type == RefType.REFERENCE:
-        return DependencyEdgeType.REFERENCE
-    if parsed_ref.ref_type == RefType.MUTABLE:
-        return DependencyEdgeType.MUTABLE_REFERENCE
-    raise GraphInputError(
-        f"Model '{model.key.name}' has an untyped side reference to '{parsed_ref.name}'"
-    )
-
-
-def _upstream_edge_sort_key(edge: DependencyEdge) -> tuple[str, str, str]:
-    return (
-        str(edge.upstream_key.resource_type),
-        edge.upstream_key.name,
-        str(edge.edge_type),
-    )
-
-
-def _downstream_edge_sort_key(edge: DependencyEdge) -> tuple[str, str, str]:
-    return (
-        str(edge.downstream_key.resource_type),
-        edge.downstream_key.name,
-        str(edge.edge_type),
     )
