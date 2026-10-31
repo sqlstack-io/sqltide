@@ -10,10 +10,10 @@ from sqltide.cli.compile._helpers.paths import (
     source_resource_path,
     static_test_path,
 )
-from sqltide.cli.compile._helpers.publication import _staged_path
+from sqltide.cli.compile._helpers.publication import _stage_artifacts
 from sqltide.cli.compile._helpers.static_artifacts import _validate_unique_paths
 from sqltide.cli.compile.exceptions import CompileArtifactError
-from sqltide.cli.compile.models import StaticArtifactFile
+from sqltide.cli.compile.models import StaticArtifactFile, StaticCompileArtifacts
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.sql_analysis.main._validate_query import validate_query
 from sqltide.compiler.testing._helpers.comparison import render_comparison_query
@@ -205,11 +205,17 @@ def test_given_crafted_relative_path_when_staging_then_enforces_root_containment
     test_case: UnsafeArtifactPathTestCase,
     tmp_path: Path,
 ) -> None:
+    artifacts: StaticCompileArtifacts = StaticCompileArtifacts(
+        compiled_files=(
+            StaticArtifactFile(relative_path=Path(test_case.unsafe_name), contents="SELECT 1\n"),
+        ),
+        manifest_json="{}\n",
+        dag_json="{}\n",
+    )
+
     with pytest.raises(CompileArtifactError, match=test_case.expected_error_fragment):
-        _staged_path(
-            staging_root=tmp_path / "staging",
-            relative_path=Path(test_case.unsafe_name),
-        )
+        _stage_artifacts(artifacts=artifacts, staging_root=tmp_path / "staging")
+    assert not (tmp_path / "escaped.sql").exists()
 
 
 @pytest.mark.parametrize(

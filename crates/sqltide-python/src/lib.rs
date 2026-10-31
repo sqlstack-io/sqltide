@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod analysis;
+mod artifacts;
 mod polyglot;
 mod sql_scan;
 
@@ -54,6 +55,7 @@ fn value_object<'py>(py: Python<'py>, value: &HeaderValue) -> PyResult<Bound<'py
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_model_header, module)?)?;
     analysis::register(module)?;
+    artifacts::register(module)?;
     polyglot::register(module)?;
     sql_scan::register(module)
 }

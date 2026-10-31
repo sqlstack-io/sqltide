@@ -1,9 +1,9 @@
 """SQLTide-native deterministic manifest construction."""
 
-import json
 from pathlib import Path
 from typing import cast
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterManagedSource, AdapterTable, AdapterView
 from sqltide.cli.compile._helpers.paths import (
     audit_path,
@@ -85,7 +85,7 @@ def build_manifest_json(
             for test_case in analysis.compiled_project.test_cases
         },
     }
-    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    return _native.json_dumps(payload, 2, True) + "\n"
 
 
 def _pipeline_entry(*, pipeline: CompiledPipeline, analysis: CompileAnalysis) -> dict[str, object]:

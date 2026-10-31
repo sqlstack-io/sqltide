@@ -20,6 +20,8 @@ polyglot-sql.workspace = true
 pyo3.workspace = true
 pythonize.workspace = true
 serde.workspace = true
+sqltide-compile.workspace = true
+sqltide-json.workspace = true
 sqltide-sqlanalysis.workspace = true
 sqltide-sqltext.workspace = true
 

@@ -1,7 +1,6 @@
 """Apache-2.0: SQLBuild compiler/dag/_helpers/artifact.py@7e3b2f854f05."""
 
-import json
-
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.dag.models import DagArtifact, DagEdge, DagNode
 from sqltide.compiler.dag.types import DagCheckEdgeType, DagNodeType
@@ -61,7 +60,7 @@ def format_dag_artifact(*, artifact: DagArtifact) -> str:
             {"id": node.id, "name": node.name, "type": node.node_type} for node in artifact.nodes
         ),
     }
-    return json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    return _native.json_dumps(payload, 2, True) + "\n"
 
 
 def _lineage_edges(graph: ProjectGraph) -> list[DagEdge]:
