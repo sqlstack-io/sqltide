@@ -4,13 +4,12 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
-from sqltide.adapter.models import AdapterManagedSource, AdapterTable, AdapterView
+from sqltide.adapter.models import AdapterTable
 from sqltide.cli.compile._helpers.paths import (
     audit_path,
-    model_ordinary_view_path,
     model_query_path,
-    model_table_path,
-    model_view_path,
+    model_resource_path,
+    resource_kind,
     source_resource_path,
     static_test_path,
 )
@@ -44,7 +43,7 @@ def build_manifest_json(
         "artifacts": (
             "manifest.json",
             "sqltide_dag.json",
-            *(file.relative_path.as_posix() for file in compiled_files),
+            *(file.relative_path for file in compiled_files),
         ),
         "audits": {
             _audit_identity(audit): _audit_entry(audit=audit, analysis=analysis)
@@ -133,12 +132,12 @@ def _source_entry(*, source: CompiledSource, analysis: CompileAnalysis) -> dict[
         "ttl": None if landing_table is None else landing_table.ttl,
         "resources": tuple(
             {
-                "kind": _resource_kind(resource),
+                "kind": resource_kind(resource),
                 "name": resource.name,
                 "path": source_resource_path(
                     source_name=source.key.name,
                     resource_name=resource.name,
-                ).as_posix(),
+                ),
             }
             for resource in resources
         ),
@@ -176,14 +175,18 @@ def _model_entry(*, model: CompiledModel, analysis: CompileAnalysis) -> dict[str
         "pipeline": model.pipeline_name,
         "query_path": model_query_path(
             pipeline_name=model.pipeline_name, model_name=model.key.name
-        ).as_posix(),
+        ),
         "refs": tuple(model.refs),
         "relation_name": analysis.realized_project.relation_name_by_logical_key[model.key],
         "resources": tuple(
             {
-                "kind": _resource_kind(resource),
+                "kind": resource_kind(resource),
                 "name": resource.name,
-                "path": _model_resource_path(model=model, resource=resource).as_posix(),
+                "path": model_resource_path(
+                    pipeline_name=model.pipeline_name,
+                    model_name=model.key.name,
+                    resource=resource,
+                ),
             }
             for resource in resources
         ),
@@ -244,7 +247,7 @@ def _audit_entry(*, audit: LoadedSqlAudit, analysis: CompileAnalysis) -> dict[st
         "path": audit_path(
             audit=audit,
             project_dir=analysis.discovered_inputs.project_dir,
-        ).as_posix(),
+        ),
         "referenced_models": tuple(audit.referenced_model_names),
         "severity": audit.severity,
     }
@@ -254,29 +257,9 @@ def _test_entry(*, test_case: SqlTestCase, analysis: CompileAnalysis) -> dict[st
     return {
         "file": _project_relative_path(path=test_case.file_path, analysis=analysis),
         "name": _test_identity(test_case),
-        "path": static_test_path(test_case=test_case).as_posix(),
+        "path": static_test_path(test_case=test_case),
         "targets": tuple(target.target_model_name for target in test_case.target_cases),
     }
-
-
-def _model_resource_path(*, model: CompiledModel, resource: AdapterResource) -> Path:
-    if isinstance(resource, AdapterTable):
-        return model_table_path(pipeline_name=model.pipeline_name, model_name=model.key.name)
-    if isinstance(resource, AdapterView):
-        return model_ordinary_view_path(
-            pipeline_name=model.pipeline_name, model_name=model.key.name
-        )
-    return model_view_path(pipeline_name=model.pipeline_name, model_name=model.key.name)
-
-
-def _resource_kind(resource: AdapterResource) -> str:
-    if isinstance(resource, AdapterManagedSource):
-        return "managed_source"
-    if isinstance(resource, AdapterTable):
-        return "table"
-    if isinstance(resource, AdapterView):
-        return "view"
-    return "materialized_view"
 
 
 def _project_relative_path(*, path: Path, analysis: CompileAnalysis) -> str:

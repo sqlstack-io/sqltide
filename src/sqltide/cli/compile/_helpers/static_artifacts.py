@@ -1,12 +1,6 @@
 """Build one complete deterministic static compile target in memory."""
 
-from pathlib import Path
-
-from sqltide.adapter.models import (
-    AdapterManagedSource,
-    AdapterTable,
-    AdapterView,
-)
+from sqltide.adapter.models import AdapterManagedSource
 from sqltide.cli.compile._helpers.content import (
     normalized_sql,
     static_test_sql,
@@ -14,10 +8,8 @@ from sqltide.cli.compile._helpers.content import (
 from sqltide.cli.compile._helpers.manifest import build_manifest_json
 from sqltide.cli.compile._helpers.paths import (
     audit_path,
-    model_ordinary_view_path,
     model_query_path,
-    model_table_path,
-    model_view_path,
+    model_resource_path,
     source_resource_path,
     static_test_path,
 )
@@ -50,7 +42,7 @@ def build_static_compile_artifacts(*, analysis: CompileAnalysis) -> StaticCompil
     compiled_files.extend(_model_files(analysis=analysis, rendered_by_key=rendered_by_key))
     compiled_files.extend(_audit_and_test_files(analysis=analysis))
     ordered_files: tuple[StaticArtifactFile, ...] = tuple(
-        sorted(compiled_files, key=lambda file: file.relative_path.as_posix())
+        sorted(compiled_files, key=lambda file: file.relative_path)
     )
     _validate_unique_paths(files=ordered_files)
     return StaticCompileArtifacts(
@@ -146,7 +138,11 @@ def _model_files(
         for resource, sql in rendered_by_key[model.key]:
             files.append(
                 StaticArtifactFile(
-                    relative_path=_model_resource_path(model=model, resource=resource),
+                    relative_path=model_resource_path(
+                        pipeline_name=model.pipeline_name,
+                        model_name=model.key.name,
+                        resource=resource,
+                    ),
                     contents=sql,
                 )
             )
@@ -177,16 +173,6 @@ def _audit_and_test_files(*, analysis: CompileAnalysis) -> list[StaticArtifactFi
     return files
 
 
-def _model_resource_path(*, model: CompiledModel, resource: AdapterResource) -> Path:
-    if isinstance(resource, AdapterTable):
-        return model_table_path(pipeline_name=model.pipeline_name, model_name=model.key.name)
-    if isinstance(resource, AdapterView):
-        return model_ordinary_view_path(
-            pipeline_name=model.pipeline_name, model_name=model.key.name
-        )
-    return model_view_path(pipeline_name=model.pipeline_name, model_name=model.key.name)
-
-
 def _pipeline_database(*, analysis: CompileAnalysis, pipeline: CompiledPipeline) -> str:
     if pipeline.project is not None and pipeline.project.default_database is not None:
         return pipeline.project.default_database
@@ -194,11 +180,11 @@ def _pipeline_database(*, analysis: CompileAnalysis, pipeline: CompiledPipeline)
 
 
 def _validate_unique_paths(*, files: tuple[StaticArtifactFile, ...]) -> None:
-    seen_paths: set[Path] = set()
+    seen_paths: set[str] = set()
     file: StaticArtifactFile
     for file in files:
         if file.relative_path in seen_paths:
             raise CompileArtifactError(
-                f"Multiple compile artifacts resolve to '{file.relative_path.as_posix()}'"
+                f"Multiple compile artifacts resolve to '{file.relative_path}'"
             )
         seen_paths.add(file.relative_path)
