@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.48.0](https://github.com/sqlstack-io/sqltide/compare/v0.47.0...v0.48.0) (2026-10-31)
+
+
+### Features
+
+* build compile artifact paths in Rust ([#279](https://github.com/sqlstack-io/sqltide/issues/279)) ([f42a0c9](https://github.com/sqlstack-io/sqltide/commit/f42a0c969a4b0a375743e4ec99d854156c5e9bdb))
+
 ## [0.47.0](https://github.com/sqlstack-io/sqltide/compare/v0.46.0...v0.47.0) (2026-10-31)
 
 
