@@ -66,9 +66,7 @@ def test_given_compiled_sql_test_when_resolving_artifact_path_then_uses_target_c
         ),
     )
 
-    assert static_test_path(test_case=test_case_model).as_posix() == (
-        test_case.expected_static_path
-    )
+    assert static_test_path(test_case=test_case_model) == (test_case.expected_static_path)
     assert runtime_test_path(test_case=test_case_model).as_posix() == (
         test_case.expected_runtime_path
     )
@@ -104,7 +102,7 @@ def test_given_named_audit_when_resolving_artifact_path_then_mirrors_authored_su
         name=test_case.audit_name,
     )
 
-    assert audit_path(audit=audit, project_dir=Path(test_case.project_dir)).as_posix() == (
+    assert audit_path(audit=audit, project_dir=Path(test_case.project_dir)) == (
         test_case.expected_path
     )
 
@@ -207,7 +205,7 @@ def test_given_crafted_relative_path_when_staging_then_enforces_root_containment
 ) -> None:
     artifacts: StaticCompileArtifacts = StaticCompileArtifacts(
         compiled_files=(
-            StaticArtifactFile(relative_path=Path(test_case.unsafe_name), contents="SELECT 1\n"),
+            StaticArtifactFile(relative_path=test_case.unsafe_name, contents="SELECT 1\n"),
         ),
         manifest_json="{}\n",
         dag_json="{}\n",
@@ -232,7 +230,7 @@ def test_given_crafted_relative_path_when_staging_then_enforces_root_containment
 def test_given_duplicate_static_paths_when_validating_then_rejects_collision(
     test_case: DuplicateArtifactPathTestCase,
 ) -> None:
-    duplicate_path: Path = Path(test_case.duplicate_path)
+    duplicate_path: str = test_case.duplicate_path
     files: tuple[StaticArtifactFile, ...] = (
         StaticArtifactFile(relative_path=duplicate_path, contents="SELECT 1\n"),
         StaticArtifactFile(relative_path=duplicate_path, contents="SELECT 2\n"),

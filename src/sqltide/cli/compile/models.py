@@ -1,14 +1,13 @@
 """Immutable compile artifact models."""
 
 from dataclasses import dataclass
-from pathlib import Path
 
 
 @dataclass(frozen=True)
 class StaticArtifactFile:
     """One target-relative deterministic static artifact."""
 
-    relative_path: Path
+    relative_path: str
     contents: str
 
 

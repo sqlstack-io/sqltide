@@ -50,7 +50,7 @@ def _stage_artifacts(*, artifacts: StaticCompileArtifacts, staging_root: Path) -
         _native.stage_artifact_files(
             staging_root,
             [
-                (str(artifact_file.relative_path), artifact_file.contents)
+                (artifact_file.relative_path, artifact_file.contents)
                 for artifact_file in artifacts.compiled_files
             ],
         )

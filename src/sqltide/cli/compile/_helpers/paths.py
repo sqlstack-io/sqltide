@@ -1,107 +1,68 @@
 """Central path contract for static and runtime target artifacts."""
 
+from collections.abc import Callable
 from pathlib import Path
 
-from sqltide.cli.compile.constants import (
-    ARTIFACT_PATH_SEPARATORS,
-    UNSAFE_ARTIFACT_PATH_SEGMENTS,
-)
+import sqltide._native as _native
+from sqltide.adapter.models import AdapterManagedSource, AdapterTable, AdapterView
 from sqltide.cli.compile.exceptions import CompileArtifactError
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
+from sqltide.compiler.pipeline.types import AdapterResource
 from sqltide.compiler.testing.models import SqlTestCase
 
 
-def model_query_path(*, pipeline_name: str, model_name: str) -> Path:
-    return Path(
-        "compiled",
-        "models",
-        _safe_segment(value=pipeline_name, kind="pipeline"),
-        f"{_safe_segment(value=model_name, kind='model')}.sql",
+def model_query_path(*, pipeline_name: str, model_name: str) -> str:
+    return _artifact_path(lambda: _native.artifact_model_query_path(pipeline_name, model_name))
+
+
+def model_resource_path(*, pipeline_name: str, model_name: str, resource: AdapterResource) -> str:
+    return _artifact_path(
+        lambda: _native.artifact_model_resource_path(
+            pipeline_name, model_name, resource_kind(resource)
+        )
     )
 
 
-def source_resource_path(*, source_name: str, resource_name: str) -> Path:
-    return Path(
-        "compiled",
-        "resources",
-        "sources",
-        _safe_segment(value=source_name, kind="source"),
-        f"{_safe_segment(value=resource_name, kind='adapter resource')}.sql",
-    )
+def source_resource_path(*, source_name: str, resource_name: str) -> str:
+    return _artifact_path(lambda: _native.artifact_source_resource_path(source_name, resource_name))
 
 
-def model_table_path(*, pipeline_name: str, model_name: str) -> Path:
-    return Path(
-        "compiled",
-        "resources",
-        "models",
-        _safe_segment(value=pipeline_name, kind="pipeline"),
-        f"{_safe_segment(value=model_name, kind='model')}.table.sql",
-    )
-
-
-def model_view_path(*, pipeline_name: str, model_name: str) -> Path:
-    return Path(
-        "compiled",
-        "resources",
-        "models",
-        _safe_segment(value=pipeline_name, kind="pipeline"),
-        f"{_safe_segment(value=model_name, kind='model')}.mv.sql",
-    )
-
-
-def model_ordinary_view_path(*, pipeline_name: str, model_name: str) -> Path:
-    return Path(
-        "compiled",
-        "resources",
-        "models",
-        _safe_segment(value=pipeline_name, kind="pipeline"),
-        f"{_safe_segment(value=model_name, kind='model')}.view.sql",
-    )
-
-
-def audit_path(*, audit: LoadedSqlAudit, project_dir: Path) -> Path:
-    relative_file_path: Path = _audit_relative_path(
+def audit_path(*, audit: LoadedSqlAudit, project_dir: Path) -> str:
+    relative_file: str = _audit_relative_path(
         file_path=audit.file_path,
         project_dir=project_dir,
-    )
-    suffix: str = "" if audit.name is None else f"__{_safe_segment(value=audit.name, kind='audit')}"
-    return Path(
-        "compiled",
-        "audits",
-        relative_file_path.parent,
-        f"{_safe_segment(value=relative_file_path.stem, kind='audit file')}{suffix}.sql",
-    )
+    ).as_posix()
+    return _artifact_path(lambda: _native.artifact_audit_path(relative_file, audit.name))
 
 
-def static_test_path(*, test_case: SqlTestCase) -> Path:
-    test_name: str = _safe_segment(
-        value=test_case.name or test_case.file_path.stem,
-        kind="SQL test",
-    )
-    return Path("compiled", "tests", _test_folder(test_case=test_case), f"{test_name}.sql")
-
-
-def _test_folder(*, test_case: SqlTestCase) -> Path:
-    target_names: tuple[str, ...] = tuple(
-        sorted(
-            {
-                _safe_segment(value=target.target_model_name, kind="test target")
-                for target in test_case.target_cases
-            }
+def static_test_path(*, test_case: SqlTestCase) -> str:
+    return _artifact_path(
+        lambda: _native.artifact_test_path(
+            test_case.name or test_case.file_path.stem,
+            [target.target_model_name for target in test_case.target_cases],
         )
     )
-    if not target_names:
-        return Path(
-            _safe_segment(value=test_case.name or test_case.file_path.stem, kind="SQL test")
-        )
-    if len(target_names) == 1:
-        return Path(target_names[0])
-    return Path("_chain_", "__".join(target_names))
 
 
 def runtime_test_path(*, test_case: SqlTestCase) -> Path:
-    return Path("run", *static_test_path(test_case=test_case).parts[1:])
+    return Path("run", *Path(static_test_path(test_case=test_case)).parts[1:])
+
+
+def resource_kind(resource: AdapterResource) -> str:
+    if isinstance(resource, AdapterManagedSource):
+        return "managed_source"
+    if isinstance(resource, AdapterTable):
+        return "table"
+    if isinstance(resource, AdapterView):
+        return "view"
+    return "materialized_view"
+
+
+def _artifact_path(build: Callable[[], str]) -> str:
+    try:
+        return build()
+    except ValueError as error:
+        raise CompileArtifactError(str(error)) from None
 
 
 def _audit_relative_path(*, file_path: Path, project_dir: Path) -> Path:
@@ -117,15 +78,3 @@ def _audit_relative_path(*, file_path: Path, project_dir: Path) -> Path:
             raise CompileArtifactError(
                 f"Audit file '{file_path}' is outside project root '{project_dir}'"
             ) from error
-
-
-def _safe_segment(*, value: str, kind: str) -> str:
-    candidate: Path = Path(value)
-    if (
-        not value
-        or candidate.is_absolute()
-        or value in UNSAFE_ARTIFACT_PATH_SEGMENTS
-        or any(separator in value for separator in ARTIFACT_PATH_SEPARATORS)
-    ):
-        raise CompileArtifactError(f"Unsafe {kind} artifact path segment '{value}'")
-    return value

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use pyo3::exceptions::{PyRecursionError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
+use sqltide_compile::paths::{self, ModelResource, UnsafeSegment};
 use sqltide_compile::staging::{StagingError, stage_files};
 use sqltide_json::{
     JsonDialect, JsonEmitError, JsonInteger, JsonKey, JsonValue, StdlibJsonOptions, dumps,
@@ -136,8 +137,65 @@ fn stage_artifact_files(
         })
 }
 
+fn unsafe_segment(error: UnsafeSegment) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+/// `compiled/models/<pipeline>/<model>.sql`. An unsafe name raises `ValueError`.
+#[pyfunction]
+fn artifact_model_query_path(pipeline: &str, model: &str) -> PyResult<String> {
+    paths::model_query_path(pipeline, model).map_err(unsafe_segment)
+}
+
+/// The model resource file for a manifest resource kind: `table`, `view`, or
+/// `materialized_view`. An unsafe name raises `ValueError`.
+#[pyfunction]
+fn artifact_model_resource_path(
+    pipeline: &str,
+    model: &str,
+    resource_kind: &str,
+) -> PyResult<String> {
+    let resource: ModelResource = match resource_kind {
+        "table" => ModelResource::Table,
+        "view" => ModelResource::View,
+        "materialized_view" => ModelResource::MaterializedView,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown model resource kind '{other}'"
+            )));
+        }
+    };
+    paths::model_resource_path(pipeline, model, resource).map_err(unsafe_segment)
+}
+
+/// `compiled/resources/sources/<source>/<resource>.sql`. An unsafe name raises `ValueError`.
+#[pyfunction]
+fn artifact_source_resource_path(source: &str, resource: &str) -> PyResult<String> {
+    paths::source_resource_path(source, resource).map_err(unsafe_segment)
+}
+
+/// The compiled audit path for a file relative to the audits folder. An unsafe name raises
+/// `ValueError`.
+#[pyfunction]
+#[pyo3(signature = (relative_file, name = None))]
+fn artifact_audit_path(relative_file: &str, name: Option<&str>) -> PyResult<String> {
+    paths::audit_path(relative_file, name).map_err(unsafe_segment)
+}
+
+/// The static SQL-test path for a test name and its target models. An unsafe name raises
+/// `ValueError`.
+#[pyfunction]
+fn artifact_test_path(name: &str, target_names: Vec<String>) -> PyResult<String> {
+    paths::static_test_path(name, target_names.iter().map(String::as_str)).map_err(unsafe_segment)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(json_dumps, module)?)?;
     module.add_function(wrap_pyfunction!(stage_artifact_files, module)?)?;
+    module.add_function(wrap_pyfunction!(artifact_model_query_path, module)?)?;
+    module.add_function(wrap_pyfunction!(artifact_model_resource_path, module)?)?;
+    module.add_function(wrap_pyfunction!(artifact_source_resource_path, module)?)?;
+    module.add_function(wrap_pyfunction!(artifact_audit_path, module)?)?;
+    module.add_function(wrap_pyfunction!(artifact_test_path, module)?)?;
     Ok(())
 }
