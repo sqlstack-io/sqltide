@@ -1,0 +1,1431 @@
+{
+  "project": "e2e_kafka_timestamp_project",
+  "scenarios": {
+    "deploy_drifted": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": "non_breaking",
+            "seed_compatibility": "seedable"
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "tbl__orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "mv__orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_events",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -10,6 +10,7 @@",
+              "     _replay_timestamp Nullable(DateTime64(3)),",
+              "     kafka_header_keys Array(String),",
+              "     kafka_header_values Array(String),",
+              "-    kafka_landed_at DateTime64(3)",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              " ) ENGINE = MergeTree()",
+              " ORDER BY (_replay_partition, _replay_offset)"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "name": "raw__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -4,4 +4,3 @@",
+              "     _replay_landed_at DateTime64(3)",
+              " ) ENGINE = MergeTree()",
+              " ORDER BY (order_id, _replay_timestamp)",
+              "-SETTINGS index_granularity = 1024"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "name": "tbl__orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_empty": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "tbl__orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "mv__orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,4 @@",
+              "+CREATE TABLE analytics.kafka__order_events (",
+              "+    message String",
+              "+) ENGINE = Kafka",
+              "+SETTINGS kafka_broker_list = 'kafka:9092', kafka_topic_list = 'source.order_events.created', kafka_group_name = 'streambuild_e2e_kafka_timestamp_project_test_order_events_analytics', kafka_format = 'JSONAsString'"
+            ],
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "name": "kafka__order_events",
+            "object_type": "kafka table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_events",
+              "+TO analytics.raw__order_events AS",
+              "+SELECT",
+              "+  _key AS kafka_key,",
+              "+  message AS kafka_value,",
+              "+  _topic AS kafka_topic,",
+              "+  _partition AS kafka_partition,",
+              "+  _offset AS kafka_offset,",
+              "+  _timestamp_ms AS kafka_timestamp,",
+              "+  _partition AS _replay_partition,",
+              "+  _offset AS _replay_offset,",
+              "+  _timestamp_ms AS _replay_timestamp,",
+              "+  _headers.name AS kafka_header_keys,",
+              "+  _headers.value AS kafka_header_values,",
+              "+  now64(3) AS kafka_landed_at,",
+              "+  now64(3) AS _replay_landed_at",
+              "+FROM analytics.kafka__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_events",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,7 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__orders",
+              "+TO analytics.tbl__orders AS",
+              "+SELECT",
+              "+  JSONExtractString(kafka_value, 'order_id')::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.raw__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,16 @@",
+              "+CREATE TABLE analytics.raw__order_events (",
+              "+    kafka_key String,",
+              "+    kafka_value String,",
+              "+    kafka_topic String,",
+              "+    kafka_partition Int32,",
+              "+    kafka_offset Int64,",
+              "+    kafka_timestamp Nullable(DateTime64(3)),",
+              "+    _replay_partition Int32,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp Nullable(DateTime64(3)),",
+              "+    kafka_header_keys Array(String),",
+              "+    kafka_header_values Array(String),",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (_replay_partition, _replay_offset)"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "name": "raw__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE TABLE analytics.tbl__orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id, _replay_timestamp)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "name": "tbl__orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_full_refresh_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "tbl__orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "mv__orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": "full",
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": true,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "name": "raw__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "name": "tbl__orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_settled": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [],
+        "rebuild_subtrees": [],
+        "sql_diffs": [],
+        "steps": [],
+        "warnings": []
+      }
+    },
+    "deploy_start_time_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "tbl__orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "orders",
+            "physical_name": "mv__orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,4 @@",
+              "+CREATE TABLE analytics.kafka__order_events (",
+              "+    message String",
+              "+) ENGINE = Kafka",
+              "+SETTINGS kafka_broker_list = 'kafka:9092', kafka_topic_list = 'source.order_events.created', kafka_group_name = 'streambuild_e2e_kafka_timestamp_project_test_order_events_analytics', kafka_format = 'JSONAsString'"
+            ],
+            "key": {
+              "database": null,
+              "name": "kafka__order_events",
+              "object_type": "kafka_table"
+            },
+            "name": "kafka__order_events",
+            "object_type": "kafka table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_events",
+              "+TO analytics.raw__order_events AS",
+              "+SELECT",
+              "+  _key AS kafka_key,",
+              "+  message AS kafka_value,",
+              "+  _topic AS kafka_topic,",
+              "+  _partition AS kafka_partition,",
+              "+  _offset AS kafka_offset,",
+              "+  _timestamp_ms AS kafka_timestamp,",
+              "+  _partition AS _replay_partition,",
+              "+  _offset AS _replay_offset,",
+              "+  _timestamp_ms AS _replay_timestamp,",
+              "+  _headers.name AS kafka_header_keys,",
+              "+  _headers.value AS kafka_header_values,",
+              "+  now64(3) AS kafka_landed_at,",
+              "+  now64(3) AS _replay_landed_at",
+              "+FROM analytics.kafka__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_events",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,7 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__orders",
+              "+TO analytics.tbl__orders AS",
+              "+SELECT",
+              "+  JSONExtractString(kafka_value, 'order_id')::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.raw__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,16 @@",
+              "+CREATE TABLE analytics.raw__order_events (",
+              "+    kafka_key String,",
+              "+    kafka_value String,",
+              "+    kafka_topic String,",
+              "+    kafka_partition Int32,",
+              "+    kafka_offset Int64,",
+              "+    kafka_timestamp Nullable(DateTime64(3)),",
+              "+    _replay_partition Int32,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp Nullable(DateTime64(3)),",
+              "+    kafka_header_keys Array(String),",
+              "+    kafka_header_values Array(String),",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (_replay_partition, _replay_offset)"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__order_events",
+              "object_type": "table"
+            },
+            "name": "raw__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE TABLE analytics.tbl__orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id, _replay_timestamp)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "name": "tbl__orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "direct_empty_all_models": {
+      "plan": {
+        "creation_operations": [
+          {
+            "action": "create",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__orders",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__orders",
+            "resource_kind": "materialized_view"
+          }
+        ],
+        "database": "analytics",
+        "effective_start_time": null,
+        "entries": [
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "is_replay_root": true,
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__orders",
+              "mv__orders"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "b1ec85d7573fb968ff49246b36119b9fe0f9a6e601291e7a5cf0d636fcfe1090",
+              "current_sql": "SELECT\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"order_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          }
+        ],
+        "execution_scope": [
+          {
+            "name": "orders",
+            "resource_type": "model"
+          }
+        ],
+        "prerequisite_execution_scope": [],
+        "prerequisite_scope": [
+          {
+            "framework_managed": true,
+            "key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "present": false,
+            "relation_names": [
+              "raw__order_events"
+            ]
+          }
+        ],
+        "replay_roots": [
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "driving_input_relation_name": "raw__order_events",
+            "driving_input_replay_columns": {
+              "cursor": "_replay_cursor",
+              "landed_at": "_replay_landed_at",
+              "offset": "_replay_offset",
+              "partition": "_replay_partition",
+              "timestamp": "_replay_timestamp"
+            },
+            "has_aggregate_semantics": false,
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "propagated_model_keys": [
+              {
+                "name": "orders",
+                "resource_type": "model"
+              }
+            ],
+            "replay_boundary_mode": "timestamp",
+            "replay_settings": []
+          }
+        ],
+        "selection_mode": "all_models",
+        "source_drift_selections": [],
+        "teardown_operations": [
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__orders",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__orders",
+            "resource_kind": "table"
+          }
+        ],
+        "user_scope": [],
+        "warnings": []
+      }
+    },
+    "direct_settled_all_models": {
+      "plan": {
+        "creation_operations": [
+          {
+            "action": "create",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__orders",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__orders",
+            "resource_kind": "materialized_view"
+          }
+        ],
+        "database": "analytics",
+        "effective_start_time": null,
+        "entries": [
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "is_replay_root": true,
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__orders",
+              "mv__orders"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "b1ec85d7573fb968ff49246b36119b9fe0f9a6e601291e7a5cf0d636fcfe1090",
+              "current_sql": "SELECT\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"order_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          }
+        ],
+        "execution_scope": [
+          {
+            "name": "orders",
+            "resource_type": "model"
+          }
+        ],
+        "prerequisite_execution_scope": [],
+        "prerequisite_scope": [
+          {
+            "framework_managed": true,
+            "key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "present": true,
+            "relation_names": [
+              "raw__order_events"
+            ]
+          }
+        ],
+        "replay_roots": [
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "source"
+            },
+            "driving_input_relation_name": "raw__order_events",
+            "driving_input_replay_columns": {
+              "cursor": "_replay_cursor",
+              "landed_at": "_replay_landed_at",
+              "offset": "_replay_offset",
+              "partition": "_replay_partition",
+              "timestamp": "_replay_timestamp"
+            },
+            "has_aggregate_semantics": false,
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "propagated_model_keys": [
+              {
+                "name": "orders",
+                "resource_type": "model"
+              }
+            ],
+            "replay_boundary_mode": "timestamp",
+            "replay_settings": []
+          }
+        ],
+        "selection_mode": "all_models",
+        "source_drift_selections": [],
+        "teardown_operations": [
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__orders",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "orders",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__orders",
+            "resource_kind": "table"
+          }
+        ],
+        "user_scope": [],
+        "warnings": []
+      }
+    }
+  }
+}

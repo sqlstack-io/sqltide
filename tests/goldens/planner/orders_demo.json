@@ -1,0 +1,3216 @@
+{
+  "project": "orders_demo",
+  "scenarios": {
+    "deploy_drifted": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "schema_change_kind": "non_breaking",
+            "seed_compatibility": "seedable"
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "tbl__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "mv__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "tbl__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "mv__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "tbl__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "mv__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "logical_model_name": "commerce_kpis",
+            "physical_name": "view__commerce_kpis__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__commerce_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__commerce_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_event_facts",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_event_facts",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "view__commerce_kpis",
+                "object_type": "view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__commerce_event_stream",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -10,7 +10,8 @@",
+              "     _replay_timestamp Nullable(DateTime64(3)),",
+              "     kafka_header_keys Array(String),",
+              "     kafka_header_values Array(String),",
+              "-    kafka_landed_at DateTime64(3)",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              " ) ENGINE = MergeTree()",
+              " ORDER BY (_replay_partition, _replay_offset)",
+              " TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "name": "raw__commerce_event_stream",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -20,4 +20,3 @@",
+              " ORDER BY (event_id, _replay_partition, _replay_offset)",
+              " PARTITION BY toYYYYMM(_replay_landed_at)",
+              " TTL _replay_landed_at + INTERVAL 7 DAY",
+              "-SETTINGS index_granularity = 1024"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "name": "tbl__commerce_events",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_view",
+            "phase": "plan",
+            "physical_name": "view__commerce_kpis__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-view-view__commerce_kpis",
+            "target_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__commerce_events",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_empty": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "tbl__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "mv__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "tbl__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "mv__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "tbl__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "mv__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "logical_model_name": "commerce_kpis",
+            "physical_name": "view__commerce_kpis__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__commerce_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__commerce_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_event_facts",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_event_facts",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "view__commerce_kpis",
+                "object_type": "view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,4 @@",
+              "+CREATE TABLE analytics.kafka__commerce_event_stream (",
+              "+    message String",
+              "+) ENGINE = Kafka",
+              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_analytics', kafka_format = 'JSONAsString'"
+            ],
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "name": "kafka__commerce_event_stream",
+            "object_type": "kafka table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__commerce_event_stream",
+              "+TO analytics.raw__commerce_event_stream AS",
+              "+SELECT",
+              "+  _key AS kafka_key,",
+              "+  message AS kafka_value,",
+              "+  _topic AS kafka_topic,",
+              "+  _partition AS kafka_partition,",
+              "+  _offset AS kafka_offset,",
+              "+  _timestamp_ms AS kafka_timestamp,",
+              "+  _partition AS _replay_partition,",
+              "+  _offset AS _replay_offset,",
+              "+  _timestamp_ms AS _replay_timestamp,",
+              "+  _headers.name AS kafka_header_keys,",
+              "+  _headers.value AS kafka_header_values,",
+              "+  now64(3) AS kafka_landed_at,",
+              "+  now64(3) AS _replay_landed_at",
+              "+FROM analytics.kafka__commerce_event_stream"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__commerce_event_stream",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,21 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__commerce_events",
+              "+TO analytics.tbl__commerce_events AS",
+              "+SELECT",
+              "+  JSONExtractString(kafka_value, 'event_id')::String AS event_id,",
+              "+  JSONExtractString(kafka_value, 'event_type')::String AS event_type,",
+              "+  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,",
+              "+  JSONExtractString(kafka_value, 'order_id')::String AS order_id,",
+              "+  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,",
+              "+  JSONExtractString(kafka_value, 'product')::String AS product,",
+              "+  JSONExtractString(kafka_value, 'category')::String AS category,",
+              "+  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,",
+              "+  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,",
+              "+  JSONExtractString(kafka_value, 'currency')::String AS currency,",
+              "+  JSONExtractString(kafka_value, 'status')::String AS status,",
+              "+  JSONExtractString(kafka_value, 'region_code')::String AS region_code,",
+              "+  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.raw__commerce_event_stream"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__commerce_events",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_event_facts",
+              "+TO analytics.tbl__order_event_facts AS",
+              "+SELECT",
+              "+  event_id::String AS event_id,",
+              "+  order_id::String AS order_id,",
+              "+  category::String AS category,",
+              "+  currency::String AS currency,",
+              "+  region_code::String AS region_code,",
+              "+  region_name::String AS region_name,",
+              "+  event_at::DateTime64(3) AS event_at,",
+              "+  toDate(event_at)::Date AS event_day,",
+              "+  1::UInt64 AS event_count,",
+              "+  toUInt64(status = 'created')::UInt64 AS order_count,",
+              "+  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,",
+              "+  toUInt64(status = 'refunded')::UInt64 AS refund_count,",
+              "+  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,",
+              "+  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.tbl__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_event_facts",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_events",
+              "+TO analytics.tbl__order_events AS",
+              "+SELECT",
+              "+  event_id::String AS event_id,",
+              "+  event_type::String AS event_type,",
+              "+  schema_version::UInt16 AS schema_version,",
+              "+  order_id::String AS order_id,",
+              "+  customer_id::String AS customer_id,",
+              "+  product::String AS product,",
+              "+  category::String AS category,",
+              "+  quantity::UInt32 AS quantity,",
+              "+  unit_price_cents::UInt32 AS unit_price_cents,",
+              "+    currency::String AS currency,",
+              "+    status::String AS status,",
+              "+    region_code::String AS region_code,",
+              "+    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,",
+              "+  event_at::DateTime64(3) AS event_at,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.tbl__commerce_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_events",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE TABLE analytics.raw__commerce_event_stream (",
+              "+    kafka_key String,",
+              "+    kafka_value String,",
+              "+    kafka_topic String,",
+              "+    kafka_partition Int32,",
+              "+    kafka_offset Int64,",
+              "+    kafka_timestamp Nullable(DateTime64(3)),",
+              "+    _replay_partition Int32,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp Nullable(DateTime64(3)),",
+              "+    kafka_header_keys Array(String),",
+              "+    kafka_header_values Array(String),",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (_replay_partition, _replay_offset)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "name": "raw__commerce_event_stream",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE TABLE analytics.tbl__commerce_events (",
+              "+    event_id String,",
+              "+    event_type String,",
+              "+    schema_version UInt16,",
+              "+    order_id String,",
+              "+    customer_id String,",
+              "+    product String,",
+              "+    category String,",
+              "+    quantity UInt32,",
+              "+    unit_price_cents UInt32,",
+              "+    currency String,",
+              "+    status String,",
+              "+    region_code String,",
+              "+    event_at DateTime64(3),",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (event_id, _replay_partition, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "name": "tbl__commerce_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,23 @@",
+              "+CREATE TABLE analytics.tbl__order_event_facts (",
+              "+    event_id String,",
+              "+    order_id String,",
+              "+    category String,",
+              "+    currency String,",
+              "+    region_code String,",
+              "+    region_name String,",
+              "+    event_at DateTime64(3),",
+              "+    event_day Date,",
+              "+    event_count UInt64,",
+              "+    order_count UInt64,",
+              "+    cancellation_count UInt64,",
+              "+    refund_count UInt64,",
+              "+    units_ordered UInt64,",
+              "+    gross_revenue_cents UInt64,",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (event_id, _replay_partition, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "name": "tbl__order_event_facts",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,23 @@",
+              "+CREATE TABLE analytics.tbl__order_events (",
+              "+    event_id String,",
+              "+    event_type String,",
+              "+    schema_version UInt16,",
+              "+    order_id String,",
+              "+    customer_id String,",
+              "+    product String,",
+              "+    category String,",
+              "+    quantity UInt32,",
+              "+    unit_price_cents UInt32,",
+              "+    currency String,",
+              "+    status String,",
+              "+    region_code String,",
+              "+    region_name String,",
+              "+    event_at DateTime64(3),",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id, event_at, event_id, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "name": "tbl__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,49 @@",
+              "+CREATE VIEW analytics.view__commerce_kpis AS",
+              "+SELECT",
+              "+  event_day::Date AS event_day,",
+              "+  currency::String AS currency,",
+              "+  region_code::String AS region_code,",
+              "+  region_name::String AS region_name,",
+              "+  category::String AS category,",
+              "+  event_count::UInt64 AS event_count,",
+              "+  order_count::UInt64 AS order_count,",
+              "+  cancellation_count::UInt64 AS cancellation_count,",
+              "+  refund_count::UInt64 AS refund_count,",
+              "+  units_ordered::UInt64 AS units_ordered,",
+              "+  gross_revenue_cents::UInt64 AS gross_revenue_cents,",
+              "+  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,",
+              "+  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,",
+              "+  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,",
+              "+  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate",
+              "+FROM (",
+              "+  SELECT",
+              "+    event_day,",
+              "+    currency,",
+              "+    region_code,",
+              "+    region_name,",
+              "+    category,",
+              "+    sum(event_count)::UInt64 AS event_count,",
+              "+    sum(order_count)::UInt64 AS order_count,",
+              "+    sum(cancellation_count)::UInt64 AS cancellation_count,",
+              "+    sum(refund_count)::UInt64 AS refund_count,",
+              "+    sum(units_ordered)::UInt64 AS units_ordered,",
+              "+    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents",
+              "+  FROM (",
+              "+    SELECT",
+              "+      event_id,",
+              "+      argMax(event_day, _replay_offset) AS event_day,",
+              "+      argMax(currency, _replay_offset) AS currency,",
+              "+      argMax(region_code, _replay_offset) AS region_code,",
+              "+      argMax(region_name, _replay_offset) AS region_name,",
+              "+      argMax(category, _replay_offset) AS category,",
+              "+      argMax(event_count, _replay_offset) AS event_count,",
+              "+      argMax(order_count, _replay_offset) AS order_count,",
+              "+      argMax(cancellation_count, _replay_offset) AS cancellation_count,",
+              "+      argMax(refund_count, _replay_offset) AS refund_count,",
+              "+      argMax(units_ordered, _replay_offset) AS units_ordered,",
+              "+      argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents",
+              "+    FROM analytics.tbl__order_event_facts",
+              "+    GROUP BY event_id",
+              "+  )",
+              "+  GROUP BY event_day, currency, region_code, region_name, category",
+              "+)"
+            ],
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "name": "view__commerce_kpis",
+            "object_type": "view"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_view",
+            "phase": "plan",
+            "physical_name": "view__commerce_kpis__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-view-view__commerce_kpis",
+            "target_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__commerce_events",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_full_refresh_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "tbl__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "mv__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "tbl__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "mv__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "tbl__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "mv__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "logical_model_name": "commerce_kpis",
+            "physical_name": "view__commerce_kpis__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__commerce_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__commerce_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_event_facts",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_event_facts",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "view__commerce_kpis",
+                "object_type": "view"
+              }
+            ],
+            "configured_backfill_mode": "full",
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": true,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "name": "raw__commerce_event_stream",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "name": "tbl__commerce_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "name": "tbl__order_event_facts",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "name": "tbl__order_events",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_view",
+            "phase": "plan",
+            "physical_name": "view__commerce_kpis__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-view-view__commerce_kpis",
+            "target_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__commerce_events",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_settled": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [],
+        "rebuild_subtrees": [],
+        "sql_diffs": [],
+        "steps": [],
+        "warnings": []
+      }
+    },
+    "deploy_start_time_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "tbl__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "commerce_events",
+            "physical_name": "mv__commerce_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "tbl__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_events",
+            "physical_name": "mv__order_events__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "tbl__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "order_event_facts",
+            "physical_name": "mv__order_event_facts__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "logical_model_name": "commerce_kpis",
+            "physical_name": "view__commerce_kpis__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__commerce_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__commerce_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_events",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_events",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "tbl__order_event_facts",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__order_event_facts",
+                "object_type": "materialized_view"
+              },
+              {
+                "database": null,
+                "name": "view__commerce_kpis",
+                "object_type": "view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,4 @@",
+              "+CREATE TABLE analytics.kafka__commerce_event_stream (",
+              "+    message String",
+              "+) ENGINE = Kafka",
+              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_analytics', kafka_format = 'JSONAsString'"
+            ],
+            "key": {
+              "database": null,
+              "name": "kafka__commerce_event_stream",
+              "object_type": "kafka_table"
+            },
+            "name": "kafka__commerce_event_stream",
+            "object_type": "kafka table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__commerce_event_stream",
+              "+TO analytics.raw__commerce_event_stream AS",
+              "+SELECT",
+              "+  _key AS kafka_key,",
+              "+  message AS kafka_value,",
+              "+  _topic AS kafka_topic,",
+              "+  _partition AS kafka_partition,",
+              "+  _offset AS kafka_offset,",
+              "+  _timestamp_ms AS kafka_timestamp,",
+              "+  _partition AS _replay_partition,",
+              "+  _offset AS _replay_offset,",
+              "+  _timestamp_ms AS _replay_timestamp,",
+              "+  _headers.name AS kafka_header_keys,",
+              "+  _headers.value AS kafka_header_values,",
+              "+  now64(3) AS kafka_landed_at,",
+              "+  now64(3) AS _replay_landed_at",
+              "+FROM analytics.kafka__commerce_event_stream"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__commerce_event_stream",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__commerce_event_stream",
+            "object_type": "materialized view"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,21 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__commerce_events",
+              "+TO analytics.tbl__commerce_events AS",
+              "+SELECT",
+              "+  JSONExtractString(kafka_value, 'event_id')::String AS event_id,",
+              "+  JSONExtractString(kafka_value, 'event_type')::String AS event_type,",
+              "+  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,",
+              "+  JSONExtractString(kafka_value, 'order_id')::String AS order_id,",
+              "+  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,",
+              "+  JSONExtractString(kafka_value, 'product')::String AS product,",
+              "+  JSONExtractString(kafka_value, 'category')::String AS category,",
+              "+  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,",
+              "+  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,",
+              "+  JSONExtractString(kafka_value, 'currency')::String AS currency,",
+              "+  JSONExtractString(kafka_value, 'status')::String AS status,",
+              "+  JSONExtractString(kafka_value, 'region_code')::String AS region_code,",
+              "+  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.raw__commerce_event_stream"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__commerce_events",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_event_facts",
+              "+TO analytics.tbl__order_event_facts AS",
+              "+SELECT",
+              "+  event_id::String AS event_id,",
+              "+  order_id::String AS order_id,",
+              "+  category::String AS category,",
+              "+  currency::String AS currency,",
+              "+  region_code::String AS region_code,",
+              "+  region_name::String AS region_name,",
+              "+  event_at::DateTime64(3) AS event_at,",
+              "+  toDate(event_at)::Date AS event_day,",
+              "+  1::UInt64 AS event_count,",
+              "+  toUInt64(status = 'created')::UInt64 AS order_count,",
+              "+  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,",
+              "+  toUInt64(status = 'refunded')::UInt64 AS refund_count,",
+              "+  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,",
+              "+  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.tbl__order_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_event_facts",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__order_events",
+              "+TO analytics.tbl__order_events AS",
+              "+SELECT",
+              "+  event_id::String AS event_id,",
+              "+  event_type::String AS event_type,",
+              "+  schema_version::UInt16 AS schema_version,",
+              "+  order_id::String AS order_id,",
+              "+  customer_id::String AS customer_id,",
+              "+  product::String AS product,",
+              "+  category::String AS category,",
+              "+  quantity::UInt32 AS quantity,",
+              "+  unit_price_cents::UInt32 AS unit_price_cents,",
+              "+    currency::String AS currency,",
+              "+    status::String AS status,",
+              "+    region_code::String AS region_code,",
+              "+    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,",
+              "+  event_at::DateTime64(3) AS event_at,",
+              "+  _replay_partition::Int64 AS _replay_partition,",
+              "+  _replay_offset::Int64 AS _replay_offset,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
+              "+  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
+              "+FROM analytics.tbl__commerce_events"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__order_events",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,17 @@",
+              "+CREATE TABLE analytics.raw__commerce_event_stream (",
+              "+    kafka_key String,",
+              "+    kafka_value String,",
+              "+    kafka_topic String,",
+              "+    kafka_partition Int32,",
+              "+    kafka_offset Int64,",
+              "+    kafka_timestamp Nullable(DateTime64(3)),",
+              "+    _replay_partition Int32,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp Nullable(DateTime64(3)),",
+              "+    kafka_header_keys Array(String),",
+              "+    kafka_header_values Array(String),",
+              "+    kafka_landed_at DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (_replay_partition, _replay_offset)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "raw__commerce_event_stream",
+              "object_type": "table"
+            },
+            "name": "raw__commerce_event_stream",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,22 @@",
+              "+CREATE TABLE analytics.tbl__commerce_events (",
+              "+    event_id String,",
+              "+    event_type String,",
+              "+    schema_version UInt16,",
+              "+    order_id String,",
+              "+    customer_id String,",
+              "+    product String,",
+              "+    category String,",
+              "+    quantity UInt32,",
+              "+    unit_price_cents UInt32,",
+              "+    currency String,",
+              "+    status String,",
+              "+    region_code String,",
+              "+    event_at DateTime64(3),",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (event_id, _replay_partition, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "name": "tbl__commerce_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,23 @@",
+              "+CREATE TABLE analytics.tbl__order_event_facts (",
+              "+    event_id String,",
+              "+    order_id String,",
+              "+    category String,",
+              "+    currency String,",
+              "+    region_code String,",
+              "+    region_name String,",
+              "+    event_at DateTime64(3),",
+              "+    event_day Date,",
+              "+    event_count UInt64,",
+              "+    order_count UInt64,",
+              "+    cancellation_count UInt64,",
+              "+    refund_count UInt64,",
+              "+    units_ordered UInt64,",
+              "+    gross_revenue_cents UInt64,",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (event_id, _replay_partition, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            },
+            "name": "tbl__order_event_facts",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,23 @@",
+              "+CREATE TABLE analytics.tbl__order_events (",
+              "+    event_id String,",
+              "+    event_type String,",
+              "+    schema_version UInt16,",
+              "+    order_id String,",
+              "+    customer_id String,",
+              "+    product String,",
+              "+    category String,",
+              "+    quantity UInt32,",
+              "+    unit_price_cents UInt32,",
+              "+    currency String,",
+              "+    status String,",
+              "+    region_code String,",
+              "+    region_name String,",
+              "+    event_at DateTime64(3),",
+              "+    _replay_partition Int64,",
+              "+    _replay_offset Int64,",
+              "+    _replay_timestamp DateTime64(3),",
+              "+    _replay_landed_at DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id, event_at, event_id, _replay_offset)",
+              "+PARTITION BY toYYYYMM(_replay_landed_at)",
+              "+TTL _replay_landed_at + INTERVAL 7 DAY"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            },
+            "name": "tbl__order_events",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,49 @@",
+              "+CREATE VIEW analytics.view__commerce_kpis AS",
+              "+SELECT",
+              "+  event_day::Date AS event_day,",
+              "+  currency::String AS currency,",
+              "+  region_code::String AS region_code,",
+              "+  region_name::String AS region_name,",
+              "+  category::String AS category,",
+              "+  event_count::UInt64 AS event_count,",
+              "+  order_count::UInt64 AS order_count,",
+              "+  cancellation_count::UInt64 AS cancellation_count,",
+              "+  refund_count::UInt64 AS refund_count,",
+              "+  units_ordered::UInt64 AS units_ordered,",
+              "+  gross_revenue_cents::UInt64 AS gross_revenue_cents,",
+              "+  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,",
+              "+  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,",
+              "+  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,",
+              "+  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate",
+              "+FROM (",
+              "+  SELECT",
+              "+    event_day,",
+              "+    currency,",
+              "+    region_code,",
+              "+    region_name,",
+              "+    category,",
+              "+    sum(event_count)::UInt64 AS event_count,",
+              "+    sum(order_count)::UInt64 AS order_count,",
+              "+    sum(cancellation_count)::UInt64 AS cancellation_count,",
+              "+    sum(refund_count)::UInt64 AS refund_count,",
+              "+    sum(units_ordered)::UInt64 AS units_ordered,",
+              "+    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents",
+              "+  FROM (",
+              "+    SELECT",
+              "+      event_id,",
+              "+      argMax(event_day, _replay_offset) AS event_day,",
+              "+      argMax(currency, _replay_offset) AS currency,",
+              "+      argMax(region_code, _replay_offset) AS region_code,",
+              "+      argMax(region_name, _replay_offset) AS region_name,",
+              "+      argMax(category, _replay_offset) AS category,",
+              "+      argMax(event_count, _replay_offset) AS event_count,",
+              "+      argMax(order_count, _replay_offset) AS order_count,",
+              "+      argMax(cancellation_count, _replay_offset) AS cancellation_count,",
+              "+      argMax(refund_count, _replay_offset) AS refund_count,",
+              "+      argMax(units_ordered, _replay_offset) AS units_ordered,",
+              "+      argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents",
+              "+    FROM analytics.tbl__order_event_facts",
+              "+    GROUP BY event_id",
+              "+  )",
+              "+  GROUP BY event_day, currency, region_code, region_name, category",
+              "+)"
+            ],
+            "key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            },
+            "name": "view__commerce_kpis",
+            "object_type": "view"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__commerce_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__commerce_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_events",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_events",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_events",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "tbl__order_event_facts",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__order_event_facts__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__order_event_facts",
+            "target_key": {
+              "database": null,
+              "name": "mv__order_event_facts",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "plan_shadow_view",
+            "phase": "plan",
+            "physical_name": "view__commerce_kpis__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-view-view__commerce_kpis",
+            "target_key": {
+              "database": null,
+              "name": "view__commerce_kpis",
+              "object_type": "view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__commerce_events",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__commerce_events__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__commerce_events",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__commerce_events",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "direct_empty_all_models": {
+      "plan": {
+        "creation_operations": [
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__commerce_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_event_facts",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__commerce_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_event_facts",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "relation_name": "view__commerce_kpis",
+            "resource_kind": "view"
+          }
+        ],
+        "database": "analytics",
+        "effective_start_time": null,
+        "entries": [
+          {
+            "driving_input_key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "is_replay_root": true,
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__commerce_events",
+              "mv__commerce_events"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "8089d77a5ca5e1766e61b7a938fe1d7ebcb7e1a246d06c0fdc4bc8000a9bf1d1",
+              "current_sql": "SELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __source(\"commerce_event_stream\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "is_replay_root": false,
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__order_events",
+              "mv__order_events"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "d6ecdb77c3d63c7f5f388b0be45dfdc2f22479f29cd3d04a397c01d955c6cc71",
+              "current_sql": "SELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"commerce_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "is_replay_root": false,
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__order_event_facts",
+              "mv__order_event_facts"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "7b0b27b7f5edaa240f06753e2afddfb557108c7b5d155040859215439ad36ce5",
+              "current_sql": "SELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"order_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": null,
+            "is_replay_root": false,
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "view__commerce_kpis"
+            ],
+            "resource_kinds": [
+              "view"
+            ],
+            "sql_change": {
+              "current_hash": "68e55ad232b5f27fb94a992aadf55a594e8e6e964e50a518f03b2761d616cbdb",
+              "current_sql": "SELECT\n  event_day::Date AS event_day,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  category::String AS category,\n  event_count::UInt64 AS event_count,\n  order_count::UInt64 AS order_count,\n  cancellation_count::UInt64 AS cancellation_count,\n  refund_count::UInt64 AS refund_count,\n  units_ordered::UInt64 AS units_ordered,\n  gross_revenue_cents::UInt64 AS gross_revenue_cents,\n  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,\n  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,\n  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,\n  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate\nFROM (\n  SELECT\n    event_day,\n    currency,\n    region_code,\n    region_name,\n    category,\n    sum(event_count)::UInt64 AS event_count,\n    sum(order_count)::UInt64 AS order_count,\n    sum(cancellation_count)::UInt64 AS cancellation_count,\n    sum(refund_count)::UInt64 AS refund_count,\n    sum(units_ordered)::UInt64 AS units_ordered,\n    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents\n  FROM (\n    SELECT\n      event_id,\n      argMax(event_day, _replay_offset) AS event_day,\n      argMax(currency, _replay_offset) AS currency,\n      argMax(region_code, _replay_offset) AS region_code,\n      argMax(region_name, _replay_offset) AS region_name,\n      argMax(category, _replay_offset) AS category,\n      argMax(event_count, _replay_offset) AS event_count,\n      argMax(order_count, _replay_offset) AS order_count,\n      argMax(cancellation_count, _replay_offset) AS cancellation_count,\n      argMax(refund_count, _replay_offset) AS refund_count,\n      argMax(units_ordered, _replay_offset) AS units_ordered,\n      argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents\n    FROM __ref(\"order_event_facts\")\n    GROUP BY event_id\n  )\n  GROUP BY event_day, currency, region_code, region_name, category\n)",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          }
+        ],
+        "execution_scope": [
+          {
+            "name": "commerce_events",
+            "resource_type": "model"
+          },
+          {
+            "name": "order_events",
+            "resource_type": "model"
+          },
+          {
+            "name": "order_event_facts",
+            "resource_type": "model"
+          },
+          {
+            "name": "commerce_kpis",
+            "resource_type": "model"
+          }
+        ],
+        "prerequisite_execution_scope": [],
+        "prerequisite_scope": [
+          {
+            "framework_managed": true,
+            "key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "present": false,
+            "relation_names": [
+              "raw__commerce_event_stream"
+            ]
+          }
+        ],
+        "replay_roots": [
+          {
+            "driving_input_key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "driving_input_relation_name": "raw__commerce_event_stream",
+            "driving_input_replay_columns": {
+              "cursor": "_replay_cursor",
+              "landed_at": "_replay_landed_at",
+              "offset": "_replay_offset",
+              "partition": "_replay_partition",
+              "timestamp": "_replay_timestamp"
+            },
+            "has_aggregate_semantics": false,
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "propagated_model_keys": [
+              {
+                "name": "commerce_events",
+                "resource_type": "model"
+              },
+              {
+                "name": "order_events",
+                "resource_type": "model"
+              },
+              {
+                "name": "order_event_facts",
+                "resource_type": "model"
+              }
+            ],
+            "replay_boundary_mode": "offsets",
+            "replay_settings": []
+          }
+        ],
+        "selection_mode": "all_models",
+        "source_drift_selections": [],
+        "teardown_operations": [
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "relation_name": "view__commerce_kpis",
+            "resource_kind": "view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_event_facts",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__commerce_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_event_facts",
+            "resource_kind": "table"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__commerce_events",
+            "resource_kind": "table"
+          }
+        ],
+        "user_scope": [],
+        "warnings": []
+      }
+    },
+    "direct_settled_all_models": {
+      "plan": {
+        "creation_operations": [
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__commerce_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_event_facts",
+            "resource_kind": "table"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__commerce_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_event_facts",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "create",
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "relation_name": "view__commerce_kpis",
+            "resource_kind": "view"
+          }
+        ],
+        "database": "analytics",
+        "effective_start_time": null,
+        "entries": [
+          {
+            "driving_input_key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "is_replay_root": true,
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__commerce_events",
+              "mv__commerce_events"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "8089d77a5ca5e1766e61b7a938fe1d7ebcb7e1a246d06c0fdc4bc8000a9bf1d1",
+              "current_sql": "SELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __source(\"commerce_event_stream\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "is_replay_root": false,
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__order_events",
+              "mv__order_events"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "d6ecdb77c3d63c7f5f388b0be45dfdc2f22479f29cd3d04a397c01d955c6cc71",
+              "current_sql": "SELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"commerce_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "is_replay_root": false,
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "tbl__order_event_facts",
+              "mv__order_event_facts"
+            ],
+            "resource_kinds": [
+              "table",
+              "materialized_view"
+            ],
+            "sql_change": {
+              "current_hash": "7b0b27b7f5edaa240f06753e2afddfb557108c7b5d155040859215439ad36ce5",
+              "current_sql": "SELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"order_events\")",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          },
+          {
+            "driving_input_key": null,
+            "is_replay_root": false,
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "reason": "all_models",
+            "relation_names": [
+              "view__commerce_kpis"
+            ],
+            "resource_kinds": [
+              "view"
+            ],
+            "sql_change": {
+              "current_hash": "68e55ad232b5f27fb94a992aadf55a594e8e6e964e50a518f03b2761d616cbdb",
+              "current_sql": "SELECT\n  event_day::Date AS event_day,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  category::String AS category,\n  event_count::UInt64 AS event_count,\n  order_count::UInt64 AS order_count,\n  cancellation_count::UInt64 AS cancellation_count,\n  refund_count::UInt64 AS refund_count,\n  units_ordered::UInt64 AS units_ordered,\n  gross_revenue_cents::UInt64 AS gross_revenue_cents,\n  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,\n  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,\n  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,\n  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate\nFROM (\n  SELECT\n    event_day,\n    currency,\n    region_code,\n    region_name,\n    category,\n    sum(event_count)::UInt64 AS event_count,\n    sum(order_count)::UInt64 AS order_count,\n    sum(cancellation_count)::UInt64 AS cancellation_count,\n    sum(refund_count)::UInt64 AS refund_count,\n    sum(units_ordered)::UInt64 AS units_ordered,\n    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents\n  FROM (\n    SELECT\n      event_id,\n      argMax(event_day, _replay_offset) AS event_day,\n      argMax(currency, _replay_offset) AS currency,\n      argMax(region_code, _replay_offset) AS region_code,\n      argMax(region_name, _replay_offset) AS region_name,\n      argMax(category, _replay_offset) AS category,\n      argMax(event_count, _replay_offset) AS event_count,\n      argMax(order_count, _replay_offset) AS order_count,\n      argMax(cancellation_count, _replay_offset) AS cancellation_count,\n      argMax(refund_count, _replay_offset) AS refund_count,\n      argMax(units_ordered, _replay_offset) AS units_ordered,\n      argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents\n    FROM __ref(\"order_event_facts\")\n    GROUP BY event_id\n  )\n  GROUP BY event_day, currency, region_code, region_name, category\n)",
+              "previous_hash": null,
+              "previous_sql": null,
+              "status": "first_baseline",
+              "unified_diff": null,
+              "warning": null
+            }
+          }
+        ],
+        "execution_scope": [
+          {
+            "name": "commerce_events",
+            "resource_type": "model"
+          },
+          {
+            "name": "order_events",
+            "resource_type": "model"
+          },
+          {
+            "name": "order_event_facts",
+            "resource_type": "model"
+          },
+          {
+            "name": "commerce_kpis",
+            "resource_type": "model"
+          }
+        ],
+        "prerequisite_execution_scope": [],
+        "prerequisite_scope": [
+          {
+            "framework_managed": true,
+            "key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "present": true,
+            "relation_names": [
+              "raw__commerce_event_stream"
+            ]
+          }
+        ],
+        "replay_roots": [
+          {
+            "driving_input_key": {
+              "name": "commerce_event_stream",
+              "resource_type": "source"
+            },
+            "driving_input_relation_name": "raw__commerce_event_stream",
+            "driving_input_replay_columns": {
+              "cursor": "_replay_cursor",
+              "landed_at": "_replay_landed_at",
+              "offset": "_replay_offset",
+              "partition": "_replay_partition",
+              "timestamp": "_replay_timestamp"
+            },
+            "has_aggregate_semantics": false,
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "propagated_model_keys": [
+              {
+                "name": "commerce_events",
+                "resource_type": "model"
+              },
+              {
+                "name": "order_events",
+                "resource_type": "model"
+              },
+              {
+                "name": "order_event_facts",
+                "resource_type": "model"
+              }
+            ],
+            "replay_boundary_mode": "offsets",
+            "replay_settings": []
+          }
+        ],
+        "selection_mode": "all_models",
+        "source_drift_selections": [],
+        "teardown_operations": [
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_kpis",
+              "resource_type": "model"
+            },
+            "relation_name": "view__commerce_kpis",
+            "resource_kind": "view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_event_facts",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__order_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "mv__commerce_events",
+            "resource_kind": "materialized_view"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_event_facts",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_event_facts",
+            "resource_kind": "table"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "order_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__order_events",
+            "resource_kind": "table"
+          },
+          {
+            "action": "drop",
+            "model_key": {
+              "name": "commerce_events",
+              "resource_type": "model"
+            },
+            "relation_name": "tbl__commerce_events",
+            "resource_kind": "table"
+          }
+        ],
+        "user_scope": [],
+        "warnings": []
+      }
+    }
+  }
+}
