@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.50.0](https://github.com/sqlstack-io/sqltide/compare/v0.49.0...v0.50.0) (2026-10-31)
+
+
+### Features
+
+* move planner decisions to Rust ([#283](https://github.com/sqlstack-io/sqltide/issues/283)) ([359322e](https://github.com/sqlstack-io/sqltide/commit/359322e88be55fda55982ccb0bfe3d8c2db52ff6))
+
 ## [0.49.0](https://github.com/sqlstack-io/sqltide/compare/v0.48.0...v0.49.0) (2026-10-31)
 
 
