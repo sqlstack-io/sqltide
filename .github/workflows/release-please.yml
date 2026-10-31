@@ -76,7 +76,7 @@ jobs:
           RELEASE_BRANCH: ${{ steps.release_branch.outputs.name }}
         run: |
           uv lock
-          uv sync --locked --all-groups
+          uv sync --locked --all-groups --no-install-project
           if git diff --quiet -- uv.lock; then
             exit 0
           fi

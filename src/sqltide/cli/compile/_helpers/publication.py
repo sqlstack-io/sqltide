@@ -7,13 +7,13 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
+import sqltide._native as _native
 from sqltide.cli.compile.constants import (
     ARTIFACTS_MANIFEST_FIELD,
-    PARENT_PATH_SEGMENT,
     RESERVED_TARGET_OWNER_NAMES,
 )
 from sqltide.cli.compile.exceptions import CompileArtifactError
-from sqltide.cli.compile.models import StaticArtifactFile, StaticCompileArtifacts
+from sqltide.cli.compile.models import StaticCompileArtifacts
 
 
 def publish_static_compile_artifacts(
@@ -46,14 +46,16 @@ def publish_static_compile_artifacts(
 
 def _stage_artifacts(*, artifacts: StaticCompileArtifacts, staging_root: Path) -> None:
     (staging_root / "compiled").mkdir(parents=True, exist_ok=True)
-    artifact_file: StaticArtifactFile
-    for artifact_file in artifacts.compiled_files:
-        staged_path: Path = _staged_path(
-            staging_root=staging_root,
-            relative_path=artifact_file.relative_path,
+    try:
+        _native.stage_artifact_files(
+            staging_root,
+            [
+                (str(artifact_file.relative_path), artifact_file.contents)
+                for artifact_file in artifacts.compiled_files
+            ],
         )
-        staged_path.parent.mkdir(parents=True, exist_ok=True)
-        staged_path.write_text(artifact_file.contents, encoding="utf-8")
+    except ValueError as error:
+        raise CompileArtifactError(str(error)) from None
     (staging_root / "manifest.json").write_text(artifacts.manifest_json, encoding="utf-8")
     (staging_root / "sqltide_dag.json").write_text(artifacts.dag_json, encoding="utf-8")
 
@@ -116,17 +118,3 @@ def _legacy_pipeline_paths(*, target_dir: Path) -> tuple[Path, ...]:
             continue
         legacy_paths.append(pipeline_path)
     return tuple(legacy_paths)
-
-
-def _staged_path(*, staging_root: Path, relative_path: Path) -> Path:
-    if relative_path.is_absolute() or PARENT_PATH_SEGMENT in relative_path.parts:
-        raise CompileArtifactError(
-            f"Compile artifact path '{relative_path}' escapes the target root"
-        )
-    staged_path: Path = staging_root / relative_path
-    resolved_staging_root: Path = staging_root.resolve()
-    if resolved_staging_root not in staged_path.resolve().parents:
-        raise CompileArtifactError(
-            f"Compile artifact path '{relative_path}' escapes the target root"
-        )
-    return staged_path
