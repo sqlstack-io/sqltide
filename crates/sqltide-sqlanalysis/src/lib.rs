@@ -17,6 +17,7 @@ mod relations;
 mod rewriting;
 mod storage;
 mod tree;
+mod types;
 mod vocabulary;
 
 pub use catalog::{
@@ -34,6 +35,7 @@ pub use rewriting::{
 };
 pub use storage::storage_column_names;
 pub use tree::{AnalysisError, SqlDialect};
+pub use types::normalize_data_type;
 
 #[cfg(test)]
 mod tests;

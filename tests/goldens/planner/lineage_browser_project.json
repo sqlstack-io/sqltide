@@ -1,0 +1,2083 @@
+{
+  "project": "lineage_browser_project",
+  "scenarios": {
+    "deploy_drifted": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": "non_breaking",
+            "seed_compatibility": "seedable"
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "tbl__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "mv__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "tbl__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "mv__moving_orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__idle_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__idle_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_idle_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__moving_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__moving_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_moving_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__idle_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -1,4 +1,5 @@",
+              " CREATE TABLE analytics.tbl__idle_orders (",
+              "-    order_id String",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3)",
+              " ) ENGINE = MergeTree()",
+              " ORDER BY (order_id)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__idle_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -3,4 +3,3 @@",
+              "     _replay_timestamp DateTime64(3)",
+              " ) ENGINE = MergeTree()",
+              " ORDER BY (order_id)",
+              "-SETTINGS index_granularity = 1024"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__moving_orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-table-tbl__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-materialized_view-mv__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-2-tbl__moving_orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_empty": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "tbl__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "mv__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "tbl__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "mv__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "tbl__stalled_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "mv__stalled_orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__idle_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__idle_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_idle_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__moving_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__moving_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_moving_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__stalled_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__stalled_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_stalled_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,7 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__idle_orders",
+              "+TO analytics.tbl__idle_orders AS",
+              "+SELECT",
+              "+  order_id::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_idle_events)",
+              "+WHERE 0"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__idle_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__moving_orders",
+              "+TO analytics.tbl__moving_orders AS",
+              "+SELECT",
+              "+  order_id::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_moving_events)"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__moving_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__stalled_orders",
+              "+TO analytics.tbl__stalled_orders AS",
+              "+SELECT",
+              "+  CAST(order_id AS UInt64) AS order_number,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_stalled_events)"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__stalled_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__idle_orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__idle_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__moving_orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__moving_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__stalled_orders (",
+              "+    order_number UInt64,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_number)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__stalled_orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-table-tbl__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-materialized_view-mv__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-table-tbl__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-materialized_view-mv__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-3-tbl__stalled_orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_full_refresh_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "rebuild",
+            "force_full_refresh": true,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "tbl__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "mv__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "tbl__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "mv__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "tbl__stalled_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "mv__stalled_orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__idle_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__idle_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": "full",
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": true,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_idle_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__moving_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__moving_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": "full",
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": true,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_moving_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__stalled_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__stalled_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": "full",
+            "execution_lookback_seconds": null,
+            "execution_mode": "full_rebuild",
+            "forced_full_refresh": true,
+            "forced_start_time": null,
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_stalled_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__idle_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__moving_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [],
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__stalled_orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-table-tbl__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-materialized_view-mv__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-table-tbl__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-materialized_view-mv__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-3-tbl__stalled_orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "deploy_settled": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "no_op",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [],
+        "rebuild_subtrees": [],
+        "sql_diffs": [],
+        "steps": [],
+        "warnings": []
+      }
+    },
+    "deploy_start_time_anchors": {
+      "plan": {
+        "deployment_id": "golden",
+        "object_changes": [
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": null,
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          },
+          {
+            "change_type": "create",
+            "force_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "schema_change_kind": null,
+            "seed_compatibility": null
+          }
+        ],
+        "prepared_shadow_objects": [
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "tbl__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "idle_orders",
+            "physical_name": "mv__idle_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "tbl__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "moving_orders",
+            "physical_name": "mv__moving_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "tbl__stalled_orders__golden"
+          },
+          {
+            "logical_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "logical_model_name": "stalled_orders",
+            "physical_name": "mv__stalled_orders__golden"
+          }
+        ],
+        "rebuild_subtrees": [
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__idle_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__idle_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_idle_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__moving_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__moving_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_moving_events",
+              "object_type": "table"
+            }
+          },
+          {
+            "affected_keys": [
+              {
+                "database": null,
+                "name": "tbl__stalled_orders",
+                "object_type": "table"
+              },
+              {
+                "database": null,
+                "name": "mv__stalled_orders",
+                "object_type": "materialized_view"
+              }
+            ],
+            "configured_backfill_mode": null,
+            "execution_lookback_seconds": null,
+            "execution_mode": "seeded_bounded_rebuild",
+            "forced_full_refresh": false,
+            "forced_start_time": "2026-01-01 00:00:00.000",
+            "history_preserving_bounded_supported": true,
+            "replay_required": true,
+            "requested_start_time": null,
+            "resolved_bounded_replay_fallback": null,
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "strategy": "shadow_rebuild",
+            "upstream_boundary_key": {
+              "database": null,
+              "name": "browser_stalled_events",
+              "object_type": "table"
+            }
+          }
+        ],
+        "sql_diffs": [
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,7 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__idle_orders",
+              "+TO analytics.tbl__idle_orders AS",
+              "+SELECT",
+              "+  order_id::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_idle_events)",
+              "+WHERE 0"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__idle_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__moving_orders",
+              "+TO analytics.tbl__moving_orders AS",
+              "+SELECT",
+              "+  order_id::String AS order_id,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_moving_events)"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__moving_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,6 @@",
+              "+CREATE MATERIALIZED VIEW analytics.mv__stalled_orders",
+              "+TO analytics.tbl__stalled_orders AS",
+              "+SELECT",
+              "+  CAST(order_id AS UInt64) AS order_number,",
+              "+  _replay_timestamp::DateTime64(3) AS _replay_timestamp",
+              "+FROM (SELECT *, event_timestamp AS _replay_timestamp FROM analytics.browser_stalled_events)"
+            ],
+            "key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            },
+            "name": "mv__stalled_orders",
+            "object_type": "transform"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__idle_orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__idle_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__moving_orders (",
+              "+    order_id String,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_id)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__moving_orders",
+            "object_type": "table"
+          },
+          {
+            "diff_lines": [
+              "--- current",
+              "+++ desired",
+              "@@ -0,0 +1,5 @@",
+              "+CREATE TABLE analytics.tbl__stalled_orders (",
+              "+    order_number UInt64,",
+              "+    _replay_timestamp DateTime64(3)",
+              "+) ENGINE = MergeTree()",
+              "+ORDER BY (order_number)"
+            ],
+            "key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "name": "tbl__stalled_orders",
+            "object_type": "table"
+          }
+        ],
+        "steps": [
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-table-tbl__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-1-materialized_view-mv__idle_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__idle_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__idle_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__idle_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-1-tbl__idle_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-table-tbl__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-2-materialized_view-mv__moving_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__moving_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__moving_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__moving_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-2-tbl__moving_orders",
+            "target_key": null
+          },
+          {
+            "action": "plan_shadow_table",
+            "phase": "plan",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-table-tbl__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            }
+          },
+          {
+            "action": "plan_shadow_materialized_view",
+            "phase": "plan",
+            "physical_name": "mv__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "plan-3-materialized_view-mv__stalled_orders",
+            "target_key": {
+              "database": null,
+              "name": "mv__stalled_orders",
+              "object_type": "materialized_view"
+            }
+          },
+          {
+            "action": "backfill_subtree",
+            "phase": "backfill",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "backfill-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "audit_subtree",
+            "phase": "audit",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "audit-3-tbl__stalled_orders",
+            "target_key": null
+          },
+          {
+            "action": "publish_subtree",
+            "phase": "publish",
+            "physical_name": "tbl__stalled_orders__golden",
+            "root_key": {
+              "database": null,
+              "name": "tbl__stalled_orders",
+              "object_type": "table"
+            },
+            "step_id": "publish-3-tbl__stalled_orders",
+            "target_key": null
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "direct_empty_all_models": {
+      "error": "DirectPlanError",
+      "message": "Direct plan requires preserved upstream relations that do not exist: browser_idle_events, browser_moving_events, browser_stalled_events"
+    },
+    "direct_settled_all_models": {
+      "error": "DirectPlanError",
+      "message": "Direct plan requires preserved upstream relations that do not exist: browser_idle_events, browser_moving_events, browser_stalled_events"
+    }
+  }
+}

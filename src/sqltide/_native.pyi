@@ -30,7 +30,7 @@ def merge_template_ctes(template: str, named_queries: list[tuple[str, str]]) -> 
 
 class PolyglotError(ValueError): ...
 
-def polyglot_generate_data_type(sql: str, dialect_name: str) -> str: ...
+def sql_normalize_data_type(sql: str, dialect_name: str) -> str: ...
 def polyglot_analyze_query(sql: str, dialect_name: str) -> dict[str, Any]: ...
 
 class SqlTreeError(ValueError):
@@ -106,3 +106,40 @@ def build_project_graph(
     pipeline_reference_scope: bool,
     allowed_cross_pipeline_references: list[tuple[str, str]],
 ) -> tuple[list[int], list[list[tuple[int, str]]], list[list[tuple[int, int]]], list[int]]: ...
+
+type _NativeSpec = tuple[
+    str,
+    list[tuple[str, str, str | None]],
+    list[str | None],
+    list[str],
+    list[tuple[str, str]] | None,
+]
+
+def classify_object_changes(
+    comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
+) -> list[tuple[str, str | None, str | None]]: ...
+
+class DesiredGraph:
+    def __init__(
+        self,
+        keys: list[tuple[str, str]],
+        objects: list[
+            tuple[
+                int,
+                list[int],
+                str,
+                int | None,
+                str | None,
+                tuple[tuple[str, int | None] | None, tuple[str, int | None] | None] | None,
+            ]
+        ],
+        replay_anchors: list[int],
+    ) -> None: ...
+    def reverse_deps(self) -> list[tuple[int, list[int]]]: ...
+    def order(self, included: set[int]) -> list[int]: ...
+    def descendants(self, root: int) -> list[int]: ...
+    def rebuild_subtrees(
+        self,
+        changes: list[tuple[int, str, bool, str | None, str | None, str | None]],
+    ) -> list[tuple[int, list[int], int, bool, str, bool, str | None, str | None, int | None]]: ...
+    def nearest_replay_anchor(self, root: int, allow_root: bool, root_name: str) -> int: ...

@@ -68,8 +68,6 @@ DEPLOYMENT_ACTION_PUBLISH_SUBTREE: Final[DeploymentAction] = DeploymentAction(
     DeploymentAction.PUBLISH_SUBTREE
 )
 
-ADD_ONLY_COLUMN_DIFFERENCE: str = "add_only"
-TYPE_CHANGE_COLUMN_DIFFERENCE: str = "type_change"
 VIEW_RELATION_ENGINE: str = "View"
 ENGINE_ARGUMENT_OPEN: str = "("
 EMPTY_TUPLE_EXPRESSION: str = "tuple()"

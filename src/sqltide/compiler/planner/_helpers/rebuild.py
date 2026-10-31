@@ -3,36 +3,28 @@
 from __future__ import annotations
 
 from sqltide.compiler.compile.constants import (
-    DESIRED_OBJECT_TYPE_KAFKA_TABLE,
-    DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
-    DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
-    RAW_TABLE_NAME_PREFIX,
 )
 from sqltide.compiler.compile.models import (
-    DesiredMaterializedView,
     DesiredState,
-    DesiredTable,
     ObjectKey,
 )
-from sqltide.compiler.discovery.models import ReplayOnChangeRule
 from sqltide.compiler.discovery.types import ReplayOnChangeMode
+from sqltide.compiler.graph.exceptions import GraphInputError
+from sqltide.compiler.graph.main._build_native_desired_graph import build_native_desired_graph
 from sqltide.compiler.graph.main._descendant_keys import descendant_keys
 from sqltide.compiler.graph.main._nearest_upstream_replay_anchor_key import (
     nearest_upstream_replay_anchor_key,
 )
+from sqltide.compiler.graph.models import NativeDesiredGraph
 from sqltide.compiler.planner.constants import (
-    PLANNED_CHANGE_TYPE_CREATE,
-    PLANNED_CHANGE_TYPE_REBUILD,
     REBUILD_EXECUTION_MODE_FULL,
-    REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
-    REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED,
     REBUILD_STRATEGY_SHADOW,
-    TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING,
-    TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE,
 )
 from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
 from sqltide.compiler.planner.types import (
+    NativeObjectChange,
+    NativeRebuildSubtree,
     RebuildExecutionMode,
 )
 
@@ -74,136 +66,53 @@ def emit_rebuild_subtrees_from_changes(
 ) -> tuple[RebuildSubtree, ...]:
     """Build rebuild subtrees while collapsing descendant candidate roots."""
 
-    desired_tables_by_key: dict[ObjectKey, DesiredTable] = {
-        object_.key: object_
-        for object_ in desired_state.objects
-        if isinstance(object_, DesiredTable)
-    }
-    candidate_subtrees: tuple[RebuildSubtree, ...] = tuple(
-        _build_rebuild_subtree_for_change(
-            desired_state=desired_state,
-            object_change=object_change,
-            desired_table=desired_tables_by_key.get(object_change.key),
-        )
-        for object_change in object_changes
-        if object_change.change_type in {PLANNED_CHANGE_TYPE_CREATE, PLANNED_CHANGE_TYPE_REBUILD}
-        and object_change.key.object_type != DESIRED_OBJECT_TYPE_KAFKA_TABLE
-        and not _is_stable_landing_object(desired_state=desired_state, key=object_change.key)
-    )
-    sorted_candidate_subtrees: tuple[RebuildSubtree, ...] = tuple(
-        sorted(
-            candidate_subtrees,
-            key=lambda subtree: (
-                -len(subtree.affected_keys),
-                subtree.root_key.object_type,
-                subtree.root_key.name,
-            ),
-        )
-    )
-    retained_subtrees: list[RebuildSubtree] = []
-    subtree: RebuildSubtree
-    for subtree in sorted_candidate_subtrees:
-        if any(
-            subtree.root_key in retained_subtree.affected_keys
-            for retained_subtree in retained_subtrees
-        ):
-            continue
-        retained_subtrees.append(subtree)
-
-    return tuple(retained_subtrees)
+    graph: NativeDesiredGraph = build_native_desired_graph(desired_state=desired_state)
+    changes: list[NativeObjectChange] = [
+        _native_change(graph=graph, object_change=object_change) for object_change in object_changes
+    ]
+    try:
+        subtrees: list[NativeRebuildSubtree] = graph.native.rebuild_subtrees(changes)
+    except ValueError as error:
+        raise GraphInputError(str(error)) from None
+    return tuple(_rebuild_subtree(graph=graph, subtree=subtree) for subtree in subtrees)
 
 
-def _is_stable_landing_object(*, desired_state: DesiredState, key: ObjectKey) -> bool:
-    if key.object_type == DESIRED_OBJECT_TYPE_TABLE and key.name.startswith(RAW_TABLE_NAME_PREFIX):
-        return True
-    if key.object_type != DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW:
-        return False
-    object_by_key: dict[ObjectKey, DesiredTable | DesiredMaterializedView] = {
-        object_.key: object_
-        for object_ in desired_state.objects
-        if isinstance(object_, (DesiredTable, DesiredMaterializedView))
-    }
-    object_: DesiredTable | DesiredMaterializedView | None = object_by_key.get(key)
-    return isinstance(object_, DesiredMaterializedView) and object_.target_table_name.startswith(
-        RAW_TABLE_NAME_PREFIX
-    )
-
-
-def _default_execution_mode_for_change(object_change: PlannedObjectChange) -> RebuildExecutionMode:
-    if (
-        object_change.schema_change_kind == TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING
-        and object_change.seed_compatibility == TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE
-    ):
-        return REBUILD_EXECUTION_MODE_SEEDED_BOUNDED
-    return REBUILD_EXECUTION_MODE_FULL
-
-
-def _build_rebuild_subtree_for_change(
-    *,
-    desired_state: DesiredState,
-    object_change: PlannedObjectChange,
-    desired_table: DesiredTable | None,
-) -> RebuildSubtree:
-    if object_change.force_full_refresh:
-        return build_rebuild_subtree(
-            desired_state=desired_state,
-            root_key=object_change.key,
-            execution_mode=REBUILD_EXECUTION_MODE_FULL,
-            forced_full_refresh=True,
-            configured_backfill_mode=ReplayOnChangeMode(ReplayOnChangeMode.FULL),
-            execution_lookback_seconds=None,
-        )
-    if object_change.forced_start_time is not None:
-        return build_rebuild_subtree(
-            desired_state=desired_state,
-            root_key=object_change.key,
-            execution_mode=REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
-            forced_start_time=object_change.forced_start_time,
-            configured_backfill_mode=None,
-            execution_lookback_seconds=None,
-        )
-    resolved_execution_mode, configured_backfill_mode, execution_lookback_seconds = (
-        _resolve_execution_policy(
-            object_change=object_change,
-            desired_table=desired_table,
-        )
-    )
-    return build_rebuild_subtree(
-        desired_state=desired_state,
-        root_key=object_change.key,
-        execution_mode=resolved_execution_mode,
-        configured_backfill_mode=configured_backfill_mode,
-        execution_lookback_seconds=execution_lookback_seconds,
-    )
-
-
-def _resolve_execution_policy(
-    *,
-    object_change: PlannedObjectChange,
-    desired_table: DesiredTable | None,
-) -> tuple[RebuildExecutionMode, ReplayOnChangeMode | None, int | None]:
-    if desired_table is None or desired_table.replay_on_change is None:
-        return (_default_execution_mode_for_change(object_change), None, None)
-    if object_change.schema_change_kind == TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING:
-        policy_rule: ReplayOnChangeRule | None = desired_table.replay_on_change.non_breaking
-    else:
-        policy_rule = desired_table.replay_on_change.breaking
-    if policy_rule is None:
-        return (_default_execution_mode_for_change(object_change), None, None)
-    if policy_rule.mode == ReplayOnChangeMode.FULL:
-        return (
-            REBUILD_EXECUTION_MODE_FULL,
-            ReplayOnChangeMode(ReplayOnChangeMode.FULL),
-            None,
-        )
-    if object_change.seed_compatibility == TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE:
-        return (
-            REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
-            ReplayOnChangeMode(ReplayOnChangeMode.BOUNDED),
-            policy_rule.lookback_seconds,
-        )
+def _native_change(
+    *, graph: NativeDesiredGraph, object_change: PlannedObjectChange
+) -> NativeObjectChange:
     return (
-        REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED,
-        ReplayOnChangeMode(ReplayOnChangeMode.BOUNDED),
-        policy_rule.lookback_seconds,
+        graph.index_by_key[object_change.key],
+        str(object_change.change_type),
+        object_change.force_full_refresh,
+        object_change.forced_start_time,
+        None if object_change.schema_change_kind is None else str(object_change.schema_change_kind),
+        None if object_change.seed_compatibility is None else str(object_change.seed_compatibility),
+    )
+
+
+def _rebuild_subtree(*, graph: NativeDesiredGraph, subtree: NativeRebuildSubtree) -> RebuildSubtree:
+    (
+        root,
+        affected,
+        boundary,
+        replay_required,
+        execution_mode,
+        forced_full_refresh,
+        forced_start_time,
+        backfill_mode,
+        lookback_seconds,
+    ) = subtree
+    return RebuildSubtree(
+        root_key=graph.keys[root],
+        affected_keys=tuple(graph.keys[index] for index in affected),
+        upstream_boundary_key=graph.keys[boundary],
+        strategy=REBUILD_STRATEGY_SHADOW,
+        replay_required=replay_required,
+        execution_mode=RebuildExecutionMode(execution_mode),
+        forced_full_refresh=forced_full_refresh,
+        forced_start_time=forced_start_time,
+        configured_backfill_mode=None
+        if backfill_mode is None
+        else ReplayOnChangeMode(backfill_mode),
+        execution_lookback_seconds=lookback_seconds,
     )

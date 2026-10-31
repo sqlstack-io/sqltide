@@ -2,43 +2,32 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+import sqltide._native as _native
 from sqltide.compiler.compile.models import (
     Column,
-    DesiredMaterializedView,
     DesiredState,
-    DesiredTable,
-    DesiredView,
+    KafkaSettings,
+    KafkaTableSpec,
+    MaterializedViewSpec,
     ObjectKey,
     TableSpec,
+    TableStorage,
+    ViewSpec,
 )
-from sqltide.compiler.planner.constants import (
-    ADD_ONLY_COLUMN_DIFFERENCE,
-    PLANNED_CHANGE_TYPE_CREATE,
-    PLANNED_CHANGE_TYPE_NO_OP,
-    PLANNED_CHANGE_TYPE_REBUILD,
-    TABLE_SCHEMA_CHANGE_KIND_BREAKING,
-    TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING,
-    TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE,
-    TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE,
-    TYPE_CHANGE_COLUMN_DIFFERENCE,
-)
-from sqltide.compiler.planner.main.columns_match import columns_match
-from sqltide.compiler.planner.models import (
-    ActualMaterializedView,
-    ActualState,
-    ActualTable,
-    ActualView,
-    PlannedObjectChange,
-)
+from sqltide.compiler.planner.exceptions import DeploymentPlanError
+from sqltide.compiler.planner.models import ActualState, PlannedObjectChange
 from sqltide.compiler.planner.types import (
     ActualObject,
     DesiredObject,
+    NativeClassification,
+    NativeComparison,
+    NativeSpec,
     PlannedChangeType,
     TableSchemaChangeKind,
     TableSchemaSeedCompatibility,
 )
-from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main._canonicalize_sql import canonicalize_sql
 
 
 def classify_object_changes(
@@ -54,49 +43,36 @@ def classify_object_changes(
     actual_by_key: dict[ObjectKey, ActualObject] = {
         object_.key: object_ for object_ in actual_state.objects
     }
-    planned_changes: list[PlannedObjectChange] = []
-    desired_object: DesiredObject
-    for desired_object in desired_state.objects:
-        actual_object: ActualObject | None = actual_by_key.get(desired_object.key)
-        force_full_refresh: bool = desired_object.key in full_refresh_keys
-        forced_start_time: str | None = (
-            start_time if desired_object.key in start_time_keys else None
-        )
-        if actual_object is None:
-            planned_changes.append(
-                PlannedObjectChange(
-                    key=desired_object.key,
-                    change_type=PLANNED_CHANGE_TYPE_CREATE,
-                    force_full_refresh=force_full_refresh,
-                    forced_start_time=forced_start_time,
-                )
+    forced_start_times: list[str | None] = [
+        start_time if object_.key in start_time_keys else None for object_ in desired_state.objects
+    ]
+    classifications: list[NativeClassification] = _classify(
+        comparisons=[
+            (
+                _native_spec(object_=object_),
+                _native_actual_spec(object_=actual_by_key.get(object_.key)),
+                object_.key in full_refresh_keys or forced_start_time is not None,
             )
-            continue
-
-        change_type: PlannedChangeType = classify_object_change_type(
-            desired_object=desired_object,
-            actual_object=actual_object,
-            force_full_refresh=force_full_refresh,
+            for object_, forced_start_time in zip(
+                desired_state.objects, forced_start_times, strict=True
+            )
+        ]
+    )
+    return tuple(
+        PlannedObjectChange(
+            key=object_.key,
+            change_type=PlannedChangeType(change_type),
+            force_full_refresh=object_.key in full_refresh_keys,
             forced_start_time=forced_start_time,
+            schema_change_kind=_schema_change_kind(text=schema_change_kind),
+            seed_compatibility=_seed_compatibility(text=seed_compatibility),
         )
-        schema_change_kind: TableSchemaChangeKind | None = classify_table_schema_change_kind(
-            desired_object=desired_object, actual_object=actual_object
-        )
-        seed_compatibility: TableSchemaSeedCompatibility | None = classify_table_seed_compatibility(
-            desired_object=desired_object, actual_object=actual_object
-        )
-        planned_changes.append(
-            PlannedObjectChange(
-                key=desired_object.key,
-                change_type=change_type,
-                force_full_refresh=force_full_refresh,
-                forced_start_time=forced_start_time,
-                schema_change_kind=schema_change_kind,
-                seed_compatibility=seed_compatibility,
-            )
-        )
-
-    return tuple(planned_changes)
+        for object_, forced_start_time, (
+            change_type,
+            schema_change_kind,
+            seed_compatibility,
+        ) in zip(desired_state.objects, forced_start_times, classifications, strict=True)
+    )
 
 
 def classify_object_change_type(
@@ -108,13 +84,13 @@ def classify_object_change_type(
 ) -> PlannedChangeType:
     """Classify a single desired-vs-actual object comparison."""
 
-    if force_full_refresh:
-        return PLANNED_CHANGE_TYPE_REBUILD
-    if forced_start_time is not None:
-        return PLANNED_CHANGE_TYPE_REBUILD
-    if _specs_equal(desired_object=desired_object, actual_object=actual_object):
-        return PLANNED_CHANGE_TYPE_NO_OP
-    return PLANNED_CHANGE_TYPE_REBUILD
+    return PlannedChangeType(
+        _classify_one(
+            desired_object=desired_object,
+            actual_object=actual_object,
+            forced=force_full_refresh or forced_start_time is not None,
+        )[0]
+    )
 
 
 def classify_table_schema_change_kind(
@@ -122,17 +98,11 @@ def classify_table_schema_change_kind(
 ) -> TableSchemaChangeKind | None:
     """Classify table-column compatibility for planner policy decisions."""
 
-    if not isinstance(desired_object, DesiredTable) or not isinstance(actual_object, ActualTable):
-        return None
-    column_difference: str | None = _classify_table_column_difference(
-        desired_columns=desired_object.columns,
-        actual_columns=actual_object.columns,
+    return _schema_change_kind(
+        text=_classify_one(desired_object=desired_object, actual_object=actual_object, forced=True)[
+            1
+        ]
     )
-    if column_difference is None:
-        return None
-    if column_difference == ADD_ONLY_COLUMN_DIFFERENCE:
-        return TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING
-    return TABLE_SCHEMA_CHANGE_KIND_BREAKING
 
 
 def classify_table_seed_compatibility(
@@ -140,91 +110,76 @@ def classify_table_seed_compatibility(
 ) -> TableSchemaSeedCompatibility | None:
     """Classify whether table schema changes can safely seed from active data."""
 
-    if not isinstance(desired_object, DesiredTable) or not isinstance(actual_object, ActualTable):
-        return None
-    column_difference: str | None = _classify_table_column_difference(
-        desired_columns=desired_object.columns,
-        actual_columns=actual_object.columns,
+    return _seed_compatibility(
+        text=_classify_one(desired_object=desired_object, actual_object=actual_object, forced=True)[
+            2
+        ]
     )
-    if column_difference is None:
-        return None
-    if column_difference == TYPE_CHANGE_COLUMN_DIFFERENCE:
-        return TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE
-    return TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE
 
 
-def _classify_table_column_difference(
-    *, desired_columns: tuple[Column, ...], actual_columns: tuple[Column, ...]
-) -> str | None:
-    desired_columns_by_name: dict[str, Column] = {column.name: column for column in desired_columns}
-    actual_columns_by_name: dict[str, Column] = {column.name: column for column in actual_columns}
-    added_column_names: set[str] = set(desired_columns_by_name) - set(actual_columns_by_name)
-    removed_column_names: set[str] = set(actual_columns_by_name) - set(desired_columns_by_name)
-    changed_columns: set[str] = {
-        column_name
-        for column_name in set(desired_columns_by_name) & set(actual_columns_by_name)
-        if not columns_match(
-            desired_columns=(desired_columns_by_name[column_name],),
-            actual_columns=(actual_columns_by_name[column_name],),
-        )
-    }
-    if not added_column_names and not removed_column_names and not changed_columns:
-        return None
-    if changed_columns:
-        return "type_change"
-    if added_column_names and not removed_column_names:
-        return "add_only"
-    if removed_column_names and not added_column_names:
-        return "remove_only"
-    return "add_and_remove"
+def _classify_one(
+    *, desired_object: DesiredObject, actual_object: ActualObject, forced: bool
+) -> NativeClassification:
+    return _classify(
+        comparisons=[
+            (_native_spec(object_=desired_object), _native_spec(object_=actual_object), forced)
+        ]
+    )[0]
 
 
-def _specs_equal(*, desired_object: DesiredObject, actual_object: ActualObject) -> bool:
-    if isinstance(desired_object, DesiredTable) and isinstance(actual_object, ActualTable):
-        return _table_specs_equal(desired_spec=desired_object.spec, actual_spec=actual_object.spec)
-    if desired_object.spec == actual_object.spec:
-        return True
-    if isinstance(desired_object, DesiredMaterializedView) and isinstance(
-        actual_object, ActualMaterializedView
-    ):
-        return (
-            desired_object.spec.source_table_name == actual_object.spec.source_table_name
-            and desired_object.spec.target_table_name == actual_object.spec.target_table_name
-            and _queries_equal(
-                desired_query=desired_object.spec.query, actual_query=actual_object.spec.query
-            )
-        )
-    if isinstance(desired_object, DesiredView) and isinstance(actual_object, ActualView):
-        return _queries_equal(
-            desired_query=desired_object.spec.query, actual_query=actual_object.spec.query
-        )
-    return False
-
-
-def _queries_equal(*, desired_query: str, actual_query: str) -> bool:
-    if desired_query == actual_query:
-        return True
+def _classify(*, comparisons: list[NativeComparison]) -> list[NativeClassification]:
     try:
-        return canonicalize_sql(sql=desired_query, dialect="clickhouse") == canonicalize_sql(
-            sql=actual_query, dialect="clickhouse"
+        return _native.classify_object_changes(comparisons)
+    except ValueError as error:
+        raise DeploymentPlanError(str(error)) from None
+
+
+def _schema_change_kind(*, text: str | None) -> TableSchemaChangeKind | None:
+    return None if text is None else TableSchemaChangeKind(text)
+
+
+def _seed_compatibility(*, text: str | None) -> TableSchemaSeedCompatibility | None:
+    return None if text is None else TableSchemaSeedCompatibility(text)
+
+
+def _native_actual_spec(*, object_: ActualObject | None) -> NativeSpec | None:
+    return None if object_ is None else _native_spec(object_=object_)
+
+
+def _native_spec(*, object_: DesiredObject | ActualObject) -> NativeSpec:
+    spec: TableSpec | KafkaTableSpec | MaterializedViewSpec | ViewSpec = object_.spec
+    if isinstance(spec, TableSpec):
+        storage: TableStorage = spec.storage
+        return (
+            "table",
+            _native_columns(columns=spec.columns),
+            [storage.engine, storage.partition_by, storage.ttl],
+            list(storage.order_by),
+            _native_settings(settings=storage.settings),
         )
-    except SqlAnalysisError:
-        return False
-
-
-def _table_specs_equal(*, desired_spec: TableSpec, actual_spec: TableSpec) -> bool:
-    return (
-        _columns_equal_tuple(
-            desired_columns=desired_spec.columns, actual_columns=actual_spec.columns
+    if isinstance(spec, KafkaTableSpec):
+        kafka: KafkaSettings = spec.kafka
+        return (
+            "kafka_table",
+            _native_columns(columns=spec.columns),
+            [kafka.broker_list, kafka.topic, kafka.consumer_group, kafka.format],
+            [],
+            _native_settings(settings=kafka.settings),
         )
-        and desired_spec.storage == actual_spec.storage
-    )
+    if isinstance(spec, MaterializedViewSpec):
+        return (
+            "materialized_view",
+            [],
+            [spec.source_table_name, spec.target_table_name, spec.query],
+            [],
+            None,
+        )
+    return ("view", [], [spec.query], [], None)
 
 
-def _columns_equal_tuple(
-    *, desired_columns: tuple[Column, ...], actual_columns: tuple[Column, ...]
-) -> bool:
-    return columns_match(
-        desired_columns=desired_columns,
-        actual_columns=actual_columns,
-    )
+def _native_columns(*, columns: tuple[Column, ...]) -> list[tuple[str, str, str | None]]:
+    return [(column.name, column.type, column.default) for column in columns]
+
+
+def _native_settings(*, settings: Mapping[str, str] | None) -> list[tuple[str, str]] | None:
+    return None if settings is None else list(settings.items())

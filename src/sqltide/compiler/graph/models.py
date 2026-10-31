@@ -4,7 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey
+import sqltide._native as _native
+from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey, ObjectKey
 from sqltide.compiler.graph.types import DependencyEdgeType
 
 
@@ -37,3 +38,12 @@ class ProjectGraph:
             "downstream_edges_by_key",
             MappingProxyType(dict(self.downstream_edges_by_key)),
         )
+
+
+@dataclass(frozen=True)
+class NativeDesiredGraph:
+    """One desired state's interned keys and the native graph over their indices."""
+
+    keys: tuple[ObjectKey, ...]
+    index_by_key: Mapping[ObjectKey, int]
+    native: _native.DesiredGraph

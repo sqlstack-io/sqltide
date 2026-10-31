@@ -16,3 +16,10 @@ class GraphTraversalDirection(StrEnum):
 
     UPSTREAM = "upstream"
     DOWNSTREAM = "downstream"
+
+
+type NativeReplayRule = tuple[str, int | None]
+type NativeReplayPolicy = tuple[NativeReplayRule | None, NativeReplayRule | None]
+type NativeDesiredObject = tuple[
+    int, list[int], str, int | None, str | None, NativeReplayPolicy | None
+]

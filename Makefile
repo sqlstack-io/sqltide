@@ -23,6 +23,7 @@ test:
 
 test-goldens:
 	uv run python -m scripts.check_compiler_goldens
+	uv run python -m scripts.check_planner_goldens
 
 
 rust-test:

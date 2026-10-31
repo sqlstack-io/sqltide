@@ -4,6 +4,7 @@ members = [
     "crates/sqltide-json",
     "crates/sqltide-compile",
     "crates/sqltide-sqlanalysis",
+    "crates/sqltide-planner",
     "crates/sqltide-python",
 ]
 resolver = "2"
@@ -29,6 +30,7 @@ serde = "1"
 serde_json = "1"
 sqltide-compile = { path = "crates/sqltide-compile" }
 sqltide-json = { path = "crates/sqltide-json" }
+sqltide-planner = { path = "crates/sqltide-planner" }
 sqltide-sqlanalysis = { path = "crates/sqltide-sqlanalysis" }
 sqltide-sqltext = { path = "crates/sqltide-sqltext" }
 
