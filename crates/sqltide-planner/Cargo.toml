@@ -1,0 +1,11 @@
+[package]
+name = "sqltide-planner"
+version.workspace = true
+description = "Deployment planning for SQLTide: desired-state graphs and rebuild decisions."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
