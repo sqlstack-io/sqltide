@@ -343,6 +343,13 @@ fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
     canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
+/// One canonical data type. A failure raises `ValueError` with the compiler's message.
+#[pyfunction]
+fn sql_normalize_data_type(sql: &str, dialect_name: &str) -> PyResult<String> {
+    sqltide_sqlanalysis::normalize_data_type(sql, dialect_name)
+        .map_err(|error| PyValueError::new_err(error.0))
+}
+
 #[pyfunction]
 fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
     render_string_literal(value, &SqlDialect::new(dialect_name)).map_err(analysis_error)
@@ -350,6 +357,7 @@ fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("SqlTreeError", module.py().get_type::<SqlTreeError>())?;
+    module.add_function(wrap_pyfunction!(sql_normalize_data_type, module)?)?;
     module.add_class::<SqlModelTree>()?;
     module.add_class::<SqlTreeAnalyzer>()?;
     module.add_function(wrap_pyfunction!(sql_rewrite_query, module)?)?;
