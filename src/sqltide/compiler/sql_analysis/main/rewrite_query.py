@@ -1,19 +1,8 @@
 """Rewrite one SELECT through the mandatory SQL-analysis boundary."""
 
-from typing import Any
-
+import sqltide._native as _native
 from sqltide.compiler.sql_analysis._helpers.aggregates import build_aggregate_facts
-from sqltide.compiler.sql_analysis._helpers.polyglot import (
-    generate_sql_tree,
-    parse_sql_tree,
-    tree_aggregate_facts,
-)
-from sqltide.compiler.sql_analysis._helpers.query_rewriting import (
-    append_query_predicate,
-    get_select_payload,
-    prepend_query_ctes,
-    rewrite_query_tree,
-)
+from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 from sqltide.compiler.sql_analysis.models import (
     SqlAggregateFacts,
     SqlNamedQuery,
@@ -32,17 +21,24 @@ def rewrite_query(
 ) -> SqlQueryRewriteResult:
     """Rewrite relations, predicate, and CTEs in one parsed SELECT."""
 
-    tree: dict[str, Any] = parse_sql_tree(sql=sql, dialect=dialect)
-    _ = get_select_payload(tree)
-    rewrite_query_tree(tree=tree, rewrites=relation_rewrites, dialect=dialect)
-    if predicate is not None:
-        append_query_predicate(tree=tree, predicate=predicate, dialect=dialect)
-    prepend_query_ctes(tree=tree, named_queries=prepend_ctes, dialect=dialect)
-    function_names, has_group_by = tree_aggregate_facts(tree=tree)
+    query, function_names, has_group_by = native_sql(
+        lambda: _native.sql_rewrite_query(
+            sql,
+            dialect,
+            [
+                (
+                    rewrite.source_name,
+                    rewrite.target_relation,
+                    None if rewrite.source_databases is None else list(rewrite.source_databases),
+                    rewrite.preserve_source_database,
+                )
+                for rewrite in relation_rewrites
+            ],
+            predicate,
+            [(named_query.name, named_query.query) for named_query in prepend_ctes],
+        )
+    )
     facts: SqlAggregateFacts = build_aggregate_facts(
         function_names=function_names, has_group_by=has_group_by, engine=""
     )
-    return SqlQueryRewriteResult(
-        query=generate_sql_tree(tree=tree, dialect=dialect),
-        has_aggregate_semantics=facts.has_semantics,
-    )
+    return SqlQueryRewriteResult(query=query, has_aggregate_semantics=facts.has_semantics)

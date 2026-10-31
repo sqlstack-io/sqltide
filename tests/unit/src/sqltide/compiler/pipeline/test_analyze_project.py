@@ -289,9 +289,7 @@ def test_given_adapter_profile_when_analyzing_then_references_use_its_dialect(
         ProjectSqlAnalysisCallCountTestCase(
             description="bounds Python-side Polyglot calls across one two-model project analysis",
             expected_model_count=2,
-            expected_parse_one_calls=5,
             expected_analyze_calls=1,
-            expected_generate_calls=4,
         )
     ],
     ids=lambda case: case.description,
@@ -306,17 +304,9 @@ def test_given_complete_project_when_analyzing_then_polyglot_calls_remain_bounde
 
     with (
         patch(
-            "sqltide.compiler.sql_analysis._helpers.polyglot._native.polyglot_parse_one",
-            wraps=_native.polyglot_parse_one,
-        ) as parse_one,
-        patch(
             "sqltide.compiler.sql_analysis._helpers.polyglot._native.polyglot_analyze_query",
             wraps=_native.polyglot_analyze_query,
         ) as analyze_query,
-        patch(
-            "sqltide.compiler.sql_analysis._helpers.polyglot._native.polyglot_generate",
-            wraps=_native.polyglot_generate,
-        ) as generate,
     ):
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_dir / "pipelines",
@@ -325,9 +315,7 @@ def test_given_complete_project_when_analyzing_then_polyglot_calls_remain_bounde
         )
 
     assert len(analysis.compiled_project.models) == test_case.expected_model_count
-    assert parse_one.call_count == test_case.expected_parse_one_calls
     assert analyze_query.call_count == test_case.expected_analyze_calls
-    assert generate.call_count == test_case.expected_generate_calls
 
 
 @pytest.mark.parametrize(

@@ -1,20 +1,12 @@
 """Build one INSERT SELECT through the mandatory SQL-analysis boundary."""
 
-from typing import Any
-
-from sqltide.compiler.sql_analysis._helpers.polyglot import parse_sql_tree
-from sqltide.compiler.sql_analysis.constants import POLYGLOT_INSERT_KEY, POLYGLOT_QUERY_KEY
-from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
+import sqltide._native as _native
+from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 
 
 def build_insert_query(*, target_relation: str, query: str, dialect: str) -> str:
     """Compose one byte-preserving INSERT SELECT statement validated by parsing."""
 
     statement: str = f"INSERT INTO {target_relation}\n{query}"
-    tree: dict[str, Any] = parse_sql_tree(sql=statement, dialect=dialect)
-    insert_payload: Any = tree.get(POLYGLOT_INSERT_KEY)
-    if not isinstance(insert_payload, dict) or not isinstance(
-        insert_payload.get(POLYGLOT_QUERY_KEY), dict
-    ):
-        raise SqlAnalysisError("Replay output expects an INSERT SELECT query")
+    _ = native_sql(lambda: _native.sql_validate_insert_query(statement, dialect))
     return statement

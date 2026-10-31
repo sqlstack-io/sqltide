@@ -59,9 +59,7 @@ class CompiledAuditPolicyTestCase:
 class ProjectSqlAnalysisCallCountTestCase:
     description: str
     expected_model_count: int
-    expected_parse_one_calls: int
     expected_analyze_calls: int
-    expected_generate_calls: int
 
 
 @dataclass(frozen=True)

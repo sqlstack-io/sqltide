@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import sqltide._native as _native
@@ -65,15 +66,6 @@ _CANONICAL_TYPE_NAMES: dict[str, str] = {
 }
 
 
-def parse_sql_tree(*, sql: str, dialect: str) -> dict[str, Any]:
-    """Parse exactly one SQL expression into a private serialized tree."""
-
-    try:
-        return _native.polyglot_parse_one(sql, dialect)
-    except Exception as error:
-        raise SqlAnalysisError(f"SQL could not be parsed with Polyglot: {error}") from None
-
-
 def normalize_data_type_sql(*, sql: str, dialect: str) -> str:
     """Generate one data type with canonical ClickHouse type vocabulary."""
 
@@ -98,29 +90,11 @@ def analyze_query_facts(*, sql: str, dialect: str) -> dict[str, Any]:
     return result
 
 
-def generate_sql_tree(*, tree: dict[str, Any], dialect: str, pretty: bool = False) -> str:
-    """Generate exactly one SQL expression from a private serialized tree."""
+def native_sql[T](call: Callable[[], T]) -> T:
+    """Run one native SQL analysis call, raising its SQL analysis exception on failure."""
 
     try:
-        return _native.polyglot_generate(tree, dialect, pretty)
-    except Exception as error:
-        raise SqlAnalysisError(f"SQL could not be generated with Polyglot: {error}") from None
-
-
-def tree_aggregate_facts(*, tree: dict[str, Any]) -> tuple[list[str], bool]:
-    """Return a tree's aggregate function names and whether it groups, in one native walk."""
-
-    try:
-        return _native.polyglot_tree_aggregate_facts(tree)
-    except _native.SqlTreeError as error:
-        raise sql_tree_error(error) from None
-
-
-def parse_relation_tree(*, target: str, dialect: str) -> dict[str, Any]:
-    """Parse one resolution target as a bare, unaliased relation tree."""
-
-    try:
-        return _native.polyglot_parse_relation(target, dialect)
+        return call()
     except _native.SqlTreeError as error:
         raise sql_tree_error(error) from None
 

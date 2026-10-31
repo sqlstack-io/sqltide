@@ -381,7 +381,7 @@ fn scalar_name(argument: &Value) -> Option<&str> {
 /// # Errors
 ///
 /// Returns the parse failure, or an error when the target is not exactly one unaliased relation.
-pub fn parse_relation(target: &str, dialect: &SqlDialect) -> AnalysisResult<Value> {
+pub(crate) fn parse_relation(target: &str, dialect: &SqlDialect) -> AnalysisResult<Value> {
     let invalid = || {
         AnalysisError(format!(
             "Resolved relation '{target}' is not a valid SQL relation"

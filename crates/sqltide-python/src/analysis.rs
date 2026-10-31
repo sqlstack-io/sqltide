@@ -7,12 +7,14 @@ use std::sync::{Mutex, MutexGuard};
 use pyo3::create_exception;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
-use pythonize::{depythonize, pythonize};
+use pyo3::types::PyTuple;
 use sqltide_sqlanalysis::{
-    AnalysisError, ExpectedReference, ModelError, ParsedModel, Projection, ProjectionTypeCache,
-    RelationCache, SqlDialect, analyze_model, canonical_query_with_database_template,
-    parse_relation, storage_column_names, tree_aggregate_facts, validated_relation_rewrite,
+    AnalysisError, CatalogAnalysis, ExpectedReference, ModelError, NamedQuery, ParsedModel,
+    Projection, ProjectionTypeCache, RelationCache, RelationIdentity, RelationRewrite,
+    RewrittenQuery, SqlDialect, analyze_catalog, analyze_model,
+    canonical_query_with_database_template, canonicalize_sql, expression_list,
+    render_string_literal, rewrite_query, select_aggregate_facts, storage_column_names,
+    validate_insert_query, validate_query, validated_relation_rewrite,
 };
 use sqltide_sqltext::sql_scan::SourceSpan;
 
@@ -228,31 +230,135 @@ impl SqlTreeAnalyzer {
     }
 }
 
-/// `(function_names, has_group_by)` for a serialized tree that Python still edits.
-#[pyfunction]
-fn polyglot_tree_aggregate_facts(tree: &Bound<'_, PyDict>) -> PyResult<(Vec<String>, bool)> {
-    let value: serde_json::Value = depythonize(tree)
-        .map_err(|error| analysis_error(AnalysisError(format!("Invalid SQL tree: {error}"))))?;
-    Ok(tree_aggregate_facts(&value))
+type NativeRewrite = (String, String, Option<Vec<Option<String>>>, bool);
+type NativeIdentity = (Option<String>, String);
+type NativeCatalog = (
+    String,
+    Option<String>,
+    Vec<NativeIdentity>,
+    Option<NativeIdentity>,
+    Option<NativeIdentity>,
+    Option<String>,
+    Option<String>,
+    Vec<(String, String)>,
+);
+
+fn identity(relation: RelationIdentity) -> NativeIdentity {
+    (relation.database, relation.name)
 }
 
-/// One resolution target parsed as a bare relation tree, for rewrites Python still edits.
+/// Rewrite relations, conjoin a predicate and prepend CTEs in one SELECT, returning
+/// `(query, function_names, has_group_by)`.
 #[pyfunction]
-fn polyglot_parse_relation<'py>(
-    py: Python<'py>,
-    target: &str,
+#[pyo3(signature = (sql, dialect_name, rewrites, predicate, ctes))]
+fn sql_rewrite_query(
+    py: Python<'_>,
+    sql: &str,
     dialect_name: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let relation: serde_json::Value =
-        parse_relation(target, &SqlDialect::new(dialect_name)).map_err(analysis_error)?;
-    pythonize(py, &relation).map_err(|error| analysis_error(AnalysisError(error.to_string())))
+    rewrites: Vec<NativeRewrite>,
+    predicate: Option<String>,
+    ctes: Vec<(String, String)>,
+) -> PyResult<(String, Vec<String>, bool)> {
+    let rewrites: Vec<RelationRewrite> = rewrites
+        .into_iter()
+        .map(
+            |(source_name, target_relation, source_databases, preserve_source_database)| {
+                RelationRewrite {
+                    source_name,
+                    target_relation,
+                    source_databases,
+                    preserve_source_database,
+                }
+            },
+        )
+        .collect();
+    let ctes: Vec<NamedQuery> = ctes
+        .into_iter()
+        .map(|(name, query)| NamedQuery { name, query })
+        .collect();
+    py.detach(|| {
+        rewrite_query(
+            sql,
+            &SqlDialect::new(dialect_name),
+            &rewrites,
+            predicate.as_deref(),
+            &ctes,
+        )
+    })
+    .map(|rewritten: RewrittenQuery| {
+        (
+            rewritten.query,
+            rewritten.function_names,
+            rewritten.has_group_by,
+        )
+    })
+    .map_err(analysis_error)
+}
+
+/// `(function_names, has_group_by)` of one SELECT.
+#[pyfunction]
+fn sql_select_aggregate_facts(sql: &str, dialect_name: &str) -> PyResult<(Vec<String>, bool)> {
+    select_aggregate_facts(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+/// Canonical query and catalog facts of one statement, as a flat tuple.
+#[pyfunction]
+fn sql_analyze_catalog(py: Python<'_>, sql: &str, dialect_name: &str) -> PyResult<NativeCatalog> {
+    let analysis: CatalogAnalysis = py
+        .detach(|| analyze_catalog(sql, &SqlDialect::new(dialect_name)))
+        .map_err(analysis_error)?;
+    Ok((
+        analysis.canonical_sql,
+        analysis.query_sql,
+        analysis
+            .source_relations
+            .into_iter()
+            .map(identity)
+            .collect(),
+        analysis.direct_source.map(identity),
+        analysis.target_relation.map(identity),
+        analysis.engine,
+        analysis.ttl,
+        analysis.settings,
+    ))
+}
+
+#[pyfunction]
+fn sql_expression_list(sql: &str, dialect_name: &str) -> PyResult<Vec<String>> {
+    expression_list(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+#[pyfunction]
+fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
+    validate_query(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+#[pyfunction]
+fn sql_validate_insert_query(sql: &str, dialect_name: &str) -> PyResult<()> {
+    validate_insert_query(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+#[pyfunction]
+fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
+    canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+#[pyfunction]
+fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
+    render_string_literal(value, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("SqlTreeError", module.py().get_type::<SqlTreeError>())?;
     module.add_class::<SqlModelTree>()?;
     module.add_class::<SqlTreeAnalyzer>()?;
-    module.add_function(wrap_pyfunction!(polyglot_tree_aggregate_facts, module)?)?;
-    module.add_function(wrap_pyfunction!(polyglot_parse_relation, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_rewrite_query, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_select_aggregate_facts, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_analyze_catalog, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_expression_list, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_validate_query, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_validate_insert_query, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_canonicalize, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_render_string_literal, module)?)?;
     Ok(())
 }

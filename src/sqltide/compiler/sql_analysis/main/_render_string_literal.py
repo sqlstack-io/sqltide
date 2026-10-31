@@ -1,17 +1,10 @@
 """Render one SQL string literal through the mandatory analysis boundary."""
 
-from typing import Any
-
-from sqltide.compiler.sql_analysis._helpers.polyglot import generate_sql_tree
+import sqltide._native as _native
+from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 
 
 def render_string_literal(*, value: str, dialect: str) -> str:
     """Return one dialect-safe SQL string literal."""
 
-    tree: dict[str, Any] = {
-        "literal": {
-            "literal_type": "string",
-            "value": value,
-        }
-    }
-    return generate_sql_tree(tree=tree, dialect=dialect)
+    return native_sql(lambda: _native.sql_render_string_literal(value, dialect))

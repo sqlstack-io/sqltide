@@ -1,13 +1,10 @@
 """Parse one SQL expression list through the mandatory analysis boundary."""
 
-from typing import Any
-
-from sqltide.compiler.sql_analysis._helpers.polyglot import parse_sql_tree
-from sqltide.compiler.sql_analysis._helpers.query_rewriting import expression_list
+import sqltide._native as _native
+from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 
 
 def parse_expression_list(*, sql: str, dialect: str) -> tuple[str, ...]:
     """Return canonical top-level expressions without textual comma splitting."""
 
-    tree: dict[str, Any] = parse_sql_tree(sql=f"SELECT {sql}", dialect=dialect)
-    return expression_list(tree=tree, dialect=dialect)
+    return tuple(native_sql(lambda: _native.sql_expression_list(sql, dialect)))

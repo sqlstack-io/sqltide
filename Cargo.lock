@@ -362,7 +362,6 @@ dependencies = [
  "pyo3",
  "pythonize",
  "serde",
- "serde_json",
  "sqltide-sqlanalysis",
  "sqltide-sqltext",
 ]

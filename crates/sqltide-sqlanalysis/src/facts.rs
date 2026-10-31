@@ -41,7 +41,7 @@ pub(crate) fn collect_tree_facts(tree: &Value) -> TreeFacts {
 /// The aggregate function names, in first-seen order with repeats, and whether any GROUP BY
 /// appears.
 #[must_use]
-pub fn tree_aggregate_facts(tree: &Value) -> (Vec<String>, bool) {
+pub(crate) fn tree_aggregate_facts(tree: &Value) -> (Vec<String>, bool) {
     let facts: TreeFacts = collect_tree_facts(tree);
     (facts.function_names, facts.has_group_by)
 }
