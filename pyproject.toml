@@ -7,7 +7,7 @@ build-backend = "maturin"
 
 [project]
 name = "sqltide"
-version = "0.45.0"
+version = "0.46.0"
 description = "Declarative SQL streaming pipelines for ClickHouse"
 readme = "README.md"
 requires-python = ">=3.12"
