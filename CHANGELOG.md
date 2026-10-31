@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.0](https://github.com/sqlstack-io/sqltide/compare/v0.46.0...v0.47.0) (2026-10-31)
+
+
+### Features
+
+* serialize and stage compile artifacts in Rust ([#277](https://github.com/sqlstack-io/sqltide/issues/277)) ([167b743](https://github.com/sqlstack-io/sqltide/commit/167b743ce3103af542e38cc926fb64141d7d02df))
+
 ## [0.46.0](https://github.com/sqlstack-io/sqltide/compare/v0.45.0...v0.46.0) (2026-10-31)
 
 
