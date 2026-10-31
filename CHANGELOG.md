@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.49.0](https://github.com/sqlstack-io/sqltide/compare/v0.48.0...v0.49.0) (2026-10-31)
+
+
+### Features
+
+* build the logical dependency graph in Rust ([#281](https://github.com/sqlstack-io/sqltide/issues/281)) ([775ad17](https://github.com/sqlstack-io/sqltide/commit/775ad174e440d494e84757932fda7fb75391e03e))
+
 ## [0.48.0](https://github.com/sqlstack-io/sqltide/compare/v0.47.0...v0.48.0) (2026-10-31)
 
 
