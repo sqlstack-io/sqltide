@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.54.0](https://github.com/sqlstack-io/sqltide/compare/v0.53.0...v0.54.0) (2026-11-01)
+
+
+### Features
+
+* plan direct builds and deployment steps in Rust ([#295](https://github.com/sqlstack-io/sqltide/issues/295)) ([5df2679](https://github.com/sqlstack-io/sqltide/commit/5df2679effa0630f270713c3926b65b39d87eb51))
+
 ## [0.53.0](https://github.com/sqlstack-io/sqltide/compare/v0.52.0...v0.53.0) (2026-11-01)
 
 
