@@ -1,20 +1,16 @@
 """Apache-2.0: SQLBuild compiler/discovery/_helpers/filesystem/aggregation.py@7e3b2f854f05."""
 
-from pathlib import Path
-
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.discovery._helpers.replay_policy_validation import (
-    validate_replay_policies_for_mode,
+    pipeline_facts,
+    project_policy_facts,
 )
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import (
-    AllowedCrossPipelineReference,
     DiscoveredSourceFile,
-    ExternalTableSourceStep,
-    KafkaLandingStep,
     LoadedPipeline,
     LoadedProject,
-    PostgresRefreshSourceStep,
 )
 from sqltide.compiler.discovery.types import PipelineMode
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
@@ -30,129 +26,57 @@ def validate_discovered_project_inputs(
 ) -> None:
     """Reject duplicate project identities after semantic inputs are attached."""
 
-    _validate_pipeline_names(loaded_pipelines)
-    _validate_cross_pipeline_references(
-        loaded_project=loaded_project,
-        loaded_pipelines=loaded_pipelines,
-    )
-    validate_replay_policies_for_mode(
-        default_pipeline_mode=(
-            PipelineMode.DIRECT
-            if loaded_project is None or loaded_project.effective_configuration is None
-            else PipelineMode(loaded_project.effective_configuration.defaults.pipeline_mode)
-        ),
-        project=None if loaded_project is None else loaded_project.project,
-        project_file_path=None if loaded_project is None else loaded_project.source_file.file_path,
-        loaded_pipelines=loaded_pipelines,
-    )
-    _validate_logical_node_names(
-        logical_node_names=_source_logical_names(source_files),
-        loaded_pipelines=loaded_pipelines,
-    )
-    _validate_test_names(loaded_tests)
-    _validate_audit_names(loaded_audits)
+    try:
+        _native.validate_project_inputs(
+            _source_names(source_files),
+            pipeline_facts(loaded_pipelines),
+            _project_references(loaded_project),
+            project_policy_facts(
+                default_pipeline_mode=(
+                    PipelineMode.DIRECT
+                    if loaded_project is None or loaded_project.effective_configuration is None
+                    else PipelineMode(loaded_project.effective_configuration.defaults.pipeline_mode)
+                ),
+                project=None if loaded_project is None else loaded_project.project,
+                project_file_path=(
+                    None if loaded_project is None else loaded_project.source_file.file_path
+                ),
+            ),
+            [
+                (test.name if test.name is not None else test.file_path.stem, str(test.file_path))
+                for test in loaded_tests
+            ],
+            [
+                (
+                    audit.name if audit.name is not None else audit.file_path.stem,
+                    str(audit.file_path),
+                )
+                for audit in loaded_audits
+            ],
+        )
+    except ValueError as error:
+        raise PipelineDiscoveryError(str(error)) from None
 
 
-def _source_logical_names(
-    source_files: tuple[DiscoveredSourceFile, ...],
-) -> dict[str, Path]:
-    logical_node_names: dict[str, Path] = {}
+def _source_names(source_files: tuple[DiscoveredSourceFile, ...]) -> list[tuple[str, str]]:
+    names: list[tuple[str, str]] = []
     source_file: DiscoveredSourceFile
     for source_file in source_files:
-        source: KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
-        for source in source_file.sources:
-            logical_node_names[source.name] = source_file.source_file.file_path
-    return logical_node_names
+        names.extend(
+            (source.name, str(source_file.source_file.file_path)) for source in source_file.sources
+        )
+    return names
 
 
-def _validate_logical_node_names(
-    *, logical_node_names: dict[str, Path], loaded_pipelines: tuple[LoadedPipeline, ...]
-) -> None:
-    known_logical_node_names: dict[str, Path] = dict(logical_node_names)
-    loaded_pipeline: LoadedPipeline
-    for loaded_pipeline in loaded_pipelines:
-        pipeline_name: str = loaded_pipeline.pipeline.name
-        existing_pipeline_name_path: Path | None = known_logical_node_names.get(pipeline_name)
-        if existing_pipeline_name_path is not None:
-            raise PipelineDiscoveryError(
-                f"Logical resource name '{pipeline_name}' is defined in both "
-                f"'{existing_pipeline_name_path}' and '{loaded_pipeline.file_path}'"
-            )
-        known_logical_node_names[pipeline_name] = loaded_pipeline.file_path
-        logical_name: str
-        for logical_name in (transform.name for transform in loaded_pipeline.pipeline.transforms):
-            existing_path: Path | None = known_logical_node_names.get(logical_name)
-            if existing_path is not None:
-                raise PipelineDiscoveryError(
-                    f"Logical node name '{logical_name}' is defined in both "
-                    f"'{existing_path}' and '{loaded_pipeline.file_path}'"
-                )
-            known_logical_node_names[logical_name] = loaded_pipeline.file_path
-
-
-def _validate_pipeline_names(loaded_pipelines: tuple[LoadedPipeline, ...]) -> None:
-    names_and_paths: tuple[tuple[str, Path], ...] = tuple(
-        (loaded_pipeline.pipeline.name, loaded_pipeline.file_path)
-        for loaded_pipeline in loaded_pipelines
-    )
-    _validate_unique_names(resource_kind="pipeline", names_and_paths=names_and_paths)
-
-
-def _validate_cross_pipeline_references(
-    *, loaded_project: LoadedProject | None, loaded_pipelines: tuple[LoadedPipeline, ...]
-) -> None:
+def _project_references(
+    loaded_project: LoadedProject | None,
+) -> tuple[str, list[tuple[str, str]]] | None:
     if loaded_project is None:
-        return
-    known_pipeline_names: frozenset[str] = frozenset(
-        loaded_pipeline.pipeline.name for loaded_pipeline in loaded_pipelines
+        return None
+    return (
+        str(loaded_project.source_file.file_path),
+        [
+            (reference.upstream_pipeline, reference.downstream_pipeline)
+            for reference in loaded_project.project.dependencies.allowed_cross_pipeline_references
+        ],
     )
-    reference: AllowedCrossPipelineReference
-    for reference in loaded_project.project.dependencies.allowed_cross_pipeline_references:
-        unknown_names: tuple[str, ...] = tuple(
-            name
-            for name in (reference.upstream_pipeline, reference.downstream_pipeline)
-            if name not in known_pipeline_names
-        )
-        if unknown_names:
-            raise PipelineDiscoveryError(
-                f"{loaded_project.source_file.file_path} allowed cross-pipeline reference "
-                f"{reference.upstream_pipeline} -> {reference.downstream_pipeline} names unknown "
-                f"pipeline(s): {', '.join(unknown_names)}"
-            )
-
-
-def _validate_test_names(loaded_tests: tuple[LoadedSqlTest, ...]) -> None:
-    names_and_paths: tuple[tuple[str, Path], ...] = tuple(
-        (
-            loaded_test.name if loaded_test.name is not None else loaded_test.file_path.stem,
-            loaded_test.file_path,
-        )
-        for loaded_test in loaded_tests
-    )
-    _validate_unique_names(resource_kind="SQL test", names_and_paths=names_and_paths)
-
-
-def _validate_audit_names(loaded_audits: tuple[LoadedSqlAudit, ...]) -> None:
-    names_and_paths: tuple[tuple[str, Path], ...] = tuple(
-        (
-            loaded_audit.name if loaded_audit.name is not None else loaded_audit.file_path.stem,
-            loaded_audit.file_path,
-        )
-        for loaded_audit in loaded_audits
-    )
-    _validate_unique_names(resource_kind="SQL audit", names_and_paths=names_and_paths)
-
-
-def _validate_unique_names(
-    *, resource_kind: str, names_and_paths: tuple[tuple[str, Path], ...]
-) -> None:
-    path_by_name: dict[str, Path] = {}
-    name: str
-    path: Path
-    for name, path in names_and_paths:
-        existing_path: Path | None = path_by_name.get(name)
-        if existing_path is not None:
-            raise PipelineDiscoveryError(
-                f"Duplicate {resource_kind} name '{name}' found in '{existing_path}' and '{path}'"
-            )
-        path_by_name[name] = path

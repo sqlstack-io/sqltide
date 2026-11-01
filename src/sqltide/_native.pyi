@@ -759,3 +759,15 @@ def resolve_audit_policies(
     pipelines: list[tuple[tuple[str | None, int | None, int | None], list[str]]],
     project: tuple[str | None, int | None, int | None],
 ) -> list[tuple[str, int | None, int, bool]]: ...
+def validate_replay_policies(
+    project_policy: tuple[str, bool, bool, bool] | None,
+    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
+) -> None: ...
+def validate_project_inputs(
+    sources: list[tuple[str, str]],
+    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
+    project_references: tuple[str, list[tuple[str, str]]] | None,
+    project_policy: tuple[str, bool, bool, bool] | None,
+    tests: list[tuple[str, str]],
+    audits: list[tuple[str, str]],
+) -> None: ...

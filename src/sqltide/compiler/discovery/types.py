@@ -86,3 +86,8 @@ class ReplayOnChangeMode(StrEnum):
 class SchemaChangeKind(StrEnum):
     BREAKING = "breaking"
     NON_BREAKING = "non_breaking"
+
+
+type ModelFacts = tuple[str, bool, bool, bool]
+type PipelineFacts = tuple[str, str, bool, bool, bool, list[ModelFacts]]
+type ProjectPolicyFacts = tuple[str, bool, bool, bool]
