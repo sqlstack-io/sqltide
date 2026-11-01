@@ -440,6 +440,7 @@ dependencies = [
 name = "sqltide-executor"
 version = "0.53.0"
 dependencies = [
+ "sqltide-json",
  "sqltide-planner",
 ]
 

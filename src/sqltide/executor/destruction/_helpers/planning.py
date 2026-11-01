@@ -9,30 +9,23 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
+from typing import NoReturn
 from uuid import uuid4
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterManagedSource,
-    AdapterManifestResource,
     AdapterManifestSnapshot,
     AdapterMaterializedView,
     AdapterQueryResult,
     AdapterTable,
     AdapterView,
-    CatalogRelation,
     CatalogSnapshot,
 )
 from sqltide.adapter.types import AdapterOptionalStateStatus
-from sqltide.compiler.compile.models import (
-    CompiledModel,
-    CompiledProject,
-    LogicalResourceKey,
-)
+from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey
 from sqltide.compiler.compile.types import DesiredObjectType, LogicalResourceType
-from sqltide.compiler.graph.constants import ALL_DEPENDENCY_EDGE_TYPES
-from sqltide.compiler.graph.main.collect_reachable_keys import collect_reachable_keys
-from sqltide.compiler.graph.types import GraphTraversalDirection
 from sqltide.compiler.manifest.constants import MANIFEST_VERSION
 from sqltide.compiler.manifest.main.resolve_manifest_project_identity import (
     resolve_manifest_project_identity,
@@ -41,13 +34,8 @@ from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction._helpers.ordering import (
     reverse_topologically_order_relations,
 )
-from sqltide.executor.destruction.classes.owned_relation import OwnedRelation
 from sqltide.executor.destruction.constants import (
-    CATALOG_MATERIALIZED_VIEW_ENGINE,
-    CATALOG_VIEW_ENGINE,
     DEFAULT_DESTRUCTION_PLAN_TTL,
-    MAX_NAMED_CHALLENGES,
-    METADATA_RELATION_PREFIX,
     PRODUCTION_TARGET_NAMES,
 )
 from sqltide.executor.destruction.exceptions import (
@@ -68,8 +56,34 @@ from sqltide.executor.destruction.types import (
     DestructionOperation,
     DestructionOwnership,
     DestructionPlanningConnection,
+    DestructionPlanningErrorCode,
     DestructionRelationKind,
 )
+
+type _NativeKey = tuple[str, bool, str | None, list[tuple[str, str]]]
+type _NativeProject = tuple[
+    list[_NativeKey],
+    list[list[int]],
+    list[list[int]],
+    list[tuple[str, int | None]],
+    list[int],
+    list[int],
+]
+type _NativeRequest = tuple[str, str, list[str], list[str], bool]
+type _NativeOwned = tuple[str, str, list[str], list[str], list[str]]
+type _NativeEvidence = tuple[
+    str,
+    str,
+    str,
+    bool,
+    int | None,
+    int | None,
+    str | None,
+    list[str],
+    list[str],
+    list[str],
+    list[str],
+]
 
 
 def plan_destruction(
@@ -98,32 +112,24 @@ def plan_destruction(
             analysis=analysis,
             connection=connection,
         )
-    pipeline_names: tuple[str, ...] = tuple(
-        sorted(
-            set(current_pipeline_names)
-            | (
-                set(
-                    _manifest_pipeline_names(
-                        snapshot=historical_snapshot,
-                        current_pipeline_names=frozenset(current_pipeline_names),
-                    )
-                )
-                if historical_snapshot is not None
-                else set()
-            )
+    project: _NativeProject = _native_project(analysis=analysis)
+    native_request: _NativeRequest = (
+        str(request.operation),
+        request.database,
+        list(request.pipeline_names),
+        list(request.included_dependent_pipeline_names),
+        request.include_orphans,
+    )
+    try:
+        requested, included, affected = _native.resolve_destruction_selection(
+            project,
+            native_request,
+            _native.destruction_available_pipelines(
+                list(current_pipeline_names), historical_snapshot
+            ),
         )
-    )
-    requested: tuple[str, ...]
-    included: tuple[str, ...]
-    affected: tuple[str, ...]
-    requested, included, affected = _resolve_pipeline_selection(
-        request=request,
-        analysis=analysis,
-        available_pipeline_names=pipeline_names,
-    )
-    affected_model_names: tuple[str, ...]
-    affected_source_names: tuple[str, ...]
-    relations: tuple[DestructionRelationEvidence, ...]
+    except ValueError as error:
+        _raise_planning_error(error)
     relation_drop_size_connection_limit: int | None = connection.load_relation_drop_size_limit()
     relation_drop_size_server_limit: int | None = (
         connection.load_relation_drop_size_server_default()
@@ -136,17 +142,43 @@ def plan_destruction(
         if relation_drop_size_override is not None
         else relation_drop_size_connection_limit
     )
-    affected_model_names, affected_source_names, relations = _plan_relation_evidence(
-        request=request,
-        analysis=analysis,
-        connection=connection,
-        affected_pipeline_names=affected,
-        current_pipeline_names=frozenset(current_pipeline_names),
-        historical_snapshot=historical_snapshot,
-        relation_drop_size_limit=relation_drop_size_limit,
+    catalog: CatalogSnapshot = connection.load_catalog(request.database)
+    inventory: AdapterDeploymentInventory = connection.load_deployment_inventory(
+        request.metadata_database
     )
+    try:
+        affected_model_names, affected_source_names, owned = _native.plan_destruction_scope(
+            project,
+            native_request,
+            affected,
+            list(current_pipeline_names),
+            historical_snapshot,
+            catalog,
+            inventory,
+        )
+        relations: tuple[DestructionRelationEvidence, ...] = _relation_evidence(
+            native_evidence=_native.build_destruction_evidence(
+                request.database,
+                owned,
+                catalog,
+                _load_relation_stats(
+                    connection=connection,
+                    database=request.database,
+                    relation_names=tuple(relation[0] for relation in owned),
+                ),
+                relation_drop_size_limit,
+            )
+        )
+    except ValueError as error:
+        _raise_planning_error(error)
+    _validate_external_dependants(
+        connection=connection,
+        database=request.database,
+        owned_relation_names=frozenset(relation[0] for relation in owned),
+    )
+    _ = reverse_topologically_order_relations(relations)
     challenges: tuple[str, ...] = build_destruction_challenges(
-        pipeline_names=affected,
+        pipeline_names=tuple(affected),
         production_reset=(
             request.operation == DestructionOperation.RESET_TARGET
             and (
@@ -159,29 +191,25 @@ def plan_destruction(
             )
         ),
     )
-    manifest_fingerprint: str = _fingerprint(_manifest_payload(analysis=analysis))
     parts: DestructionPlanParts = DestructionPlanParts(
         plan_id=plan_id,
         created_at=created_at,
         ttl=ttl,
-        requested_pipeline_names=requested,
-        included_dependent_pipeline_names=included,
-        affected_pipeline_names=affected,
-        affected_model_names=affected_model_names,
-        affected_source_names=affected_source_names,
+        requested_pipeline_names=tuple(requested),
+        included_dependent_pipeline_names=tuple(included),
+        affected_pipeline_names=tuple(affected),
+        affected_model_names=tuple(affected_model_names),
+        affected_source_names=tuple(affected_source_names),
         relations=relations,
         challenges=challenges,
-        manifest_fingerprint=manifest_fingerprint,
+        manifest_fingerprint=_fingerprint(_manifest_payload(analysis=analysis)),
         relation_drop_size_limit=relation_drop_size_limit,
         relation_drop_size_server_limit=relation_drop_size_server_limit,
         relation_drop_size_override=relation_drop_size_override,
         relation_drop_size_policy_observed=True,
         include_orphans=request.include_orphans or historical_names_requested,
     )
-    return _build_plan(
-        request=request,
-        parts=parts,
-    )
+    return _build_plan(request=request, parts=parts)
 
 
 def _validated_created_at(*, now: datetime | None, ttl: timedelta) -> datetime:
@@ -201,43 +229,34 @@ def inactive_pipelines(
 ) -> tuple[InactivePipeline, ...]:
     """List manifest-owned pipelines absent from the current compiled project."""
 
-    current: frozenset[str] = frozenset(_current_pipeline_names(request=request, analysis=analysis))
+    current: tuple[str, ...] = _current_pipeline_names(request=request, analysis=analysis)
     snapshot: AdapterManifestSnapshot = _load_manifest_snapshot(
         request=request,
         analysis=analysis,
         connection=connection,
     )
-    models_by_pipeline: dict[str, set[str]] = {}
-    resources_by_pipeline: dict[str, set[str]] = {}
-    published_at_by_pipeline: dict[str, str] = {}
-    seen_resource_names: set[str] = set()
-    for manifest in snapshot.manifests:
-        resources_by_name: dict[str, set[AdapterManifestResource]] = {}
-        for resource in manifest.resources:
-            resources_by_name.setdefault(resource.resource_name, set()).add(resource)
-        for resource_name, resources in resources_by_name.items():
-            if resource_name in seen_resource_names:
-                continue
-            seen_resource_names.add(resource_name)
-            if any(resource.pipeline_name in current for resource in resources):
-                continue
-            for resource in resources:
-                name: str = resource.pipeline_name
-                if name in current:
-                    continue
-                published_at_by_pipeline.setdefault(name, manifest.published_at)
-                resources_by_pipeline.setdefault(name, set()).add(resource_name)
-                if resource.logical_type == str(LogicalResourceType.MODEL):
-                    models_by_pipeline.setdefault(name, set()).add(resource.logical_name)
     return tuple(
         InactivePipeline(
             name=name,
-            model_count=len(models_by_pipeline.get(name, set())),
-            resource_count=len(resources_by_pipeline.get(name, set())),
-            last_published_at=published_at_by_pipeline[name],
+            model_count=model_count,
+            resource_count=resource_count,
+            last_published_at=last_published_at,
         )
-        for name in sorted(resources_by_pipeline)
+        for name, model_count, resource_count, last_published_at in (
+            _native.list_destruction_inactive_pipelines(list(current), snapshot)
+        )
     )
+
+
+def build_destruction_challenges(
+    *, pipeline_names: tuple[str, ...], production_reset: bool = False
+) -> tuple[str, ...]:
+    """Return stable, ordered challenge values for the affected pipeline set."""
+
+    try:
+        return tuple(_native.build_destruction_challenges(list(pipeline_names), production_reset))
+    except ValueError as error:
+        _raise_planning_error(error)
 
 
 def _current_pipeline_names(
@@ -255,152 +274,139 @@ def _current_pipeline_names(
     return pipeline_names
 
 
-def _plan_relation_evidence(
-    *,
-    request: DestructionRequest,
-    analysis: CompileAnalysis,
-    connection: DestructionPlanningConnection,
-    affected_pipeline_names: tuple[str, ...],
-    current_pipeline_names: frozenset[str],
-    historical_snapshot: AdapterManifestSnapshot | None,
-    relation_drop_size_limit: int | None,
-) -> tuple[
-    tuple[str, ...],
-    tuple[str, ...],
-    tuple[DestructionRelationEvidence, ...],
-]:
-    models: tuple[CompiledModel, ...] = tuple(
-        sorted(
+def _native_project(*, analysis: CompileAnalysis) -> _NativeProject:
+    project: CompiledProject = analysis.realized_project.project
+    resources_by_key: Mapping[LogicalResourceKey, tuple[object, ...]] = (
+        analysis.realized_project.resources_by_logical_key
+    )
+    index_by_key: dict[LogicalResourceKey, int] = {}
+    candidate_keys: list[LogicalResourceKey] = [
+        *analysis.graph.ordered_keys,
+        *(model.key for model in project.models),
+        *(source.key for source in project.sources),
+        *(pipeline.source.key for pipeline in project.pipelines if pipeline.source is not None),
+        *resources_by_key,
+    ]
+    for key in candidate_keys:
+        index_by_key.setdefault(key, len(index_by_key))
+    pipeline_by_model_key: dict[LogicalResourceKey, str] = {
+        model.key: model.pipeline_name for model in project.models
+    }
+    keys: list[_NativeKey] = []
+    upstream: list[list[int]] = []
+    downstream: list[list[int]] = []
+    for key in index_by_key:
+        resources: list[tuple[str, str]] = [
+            (resource.name, str(_resource_kind(resource)))
+            for resource in resources_by_key.get(key, ())
+        ]
+        keys.append(
             (
-                model
-                for model in analysis.realized_project.project.models
-                if model.pipeline_name in affected_pipeline_names
-            ),
-            key=lambda model: model.key.name,
-        )
-    )
-    affected_model_names: tuple[str, ...] = tuple(model.key.name for model in models)
-    source_keys: frozenset[LogicalResourceKey]
-    affected_source_names: tuple[str, ...]
-    source_keys, affected_source_names = _affected_sources(
-        request=request,
-        analysis=analysis,
-        affected_pipeline_names=affected_pipeline_names,
-    )
-    logical_pipeline_names: dict[str, tuple[str, ...]] = _pipeline_names_by_logical_name(
-        analysis=analysis
-    )
-    if historical_snapshot is not None:
-        logical_pipeline_names = _add_historical_logical_pipeline_names(
-            logical_pipeline_names=logical_pipeline_names,
-            snapshot=historical_snapshot,
-        )
-    catalog: CatalogSnapshot = connection.load_catalog(request.database)
-    owned: dict[str, OwnedRelation] = _manifest_owned_relations(
-        analysis=analysis,
-        models=models,
-        source_keys=source_keys,
-        logical_pipeline_names=logical_pipeline_names,
-    )
-
-    inventory: AdapterDeploymentInventory = connection.load_deployment_inventory(
-        request.metadata_database
-    )
-    if request.operation == DestructionOperation.RESET_TARGET:
-        recorded_logical_names: set[str] = set()
-        for deployment in inventory.deployments:
-            for mapping in deployment.prepared_object_mappings:
-                recorded_logical_names.add(mapping.logical_model_name)
-        affected_model_names = tuple(
-            sorted(
-                set(affected_model_names) | (recorded_logical_names - set(affected_source_names))
+                key.name,
+                key.resource_type == LogicalResourceType.SOURCE,
+                pipeline_by_model_key.get(key),
+                resources,
             )
         )
-    inactive_pipeline_names: frozenset[str] = (
-        frozenset(affected_pipeline_names) - current_pipeline_names
-    )
-    if request.include_orphans or inactive_pipeline_names:
-        owned = _add_historical_manifest_relations(
-            owned=owned,
-            request=request,
-            analysis=analysis,
-            connection=connection,
-            catalog=catalog,
-            affected_pipeline_names=frozenset(affected_pipeline_names),
-            allow_published_pipeline_names=inactive_pipeline_names,
-            snapshot=historical_snapshot,
+        upstream.append(
+            [
+                index_by_key[edge.upstream_key]
+                for edge in analysis.graph.upstream_edges_by_key.get(key, ())
+            ]
         )
-        historical_model_names: frozenset[str]
-        historical_source_names: frozenset[str]
-        historical_model_names, historical_source_names = _historical_logical_names(
-            snapshot=historical_snapshot,
-            affected_pipeline_names=frozenset(affected_pipeline_names),
-            current_model_names=frozenset(
-                model.key.name for model in analysis.realized_project.project.models
-            ),
-            current_source_names=frozenset(
-                source.key.name for source in analysis.realized_project.project.sources
-            ),
+        downstream.append(
+            [
+                index_by_key[edge.downstream_key]
+                for edge in analysis.graph.downstream_edges_by_key.get(key, ())
+            ]
         )
-        affected_model_names = tuple(
-            sorted(set(affected_model_names) | set(historical_model_names))
-        )
-        affected_source_names = tuple(
-            sorted(set(affected_source_names) | set(historical_source_names))
-        )
-    affected_logical_names: frozenset[str] = frozenset(
-        (*affected_model_names, *affected_source_names)
+    return (
+        keys,
+        upstream,
+        downstream,
+        [
+            (
+                pipeline.pipeline.name,
+                None if pipeline.source is None else index_by_key[pipeline.source.key],
+            )
+            for pipeline in project.pipelines
+        ],
+        [index_by_key[source.key] for source in project.sources],
+        [index_by_key[model.key] for model in project.models],
     )
-    owned = _add_virtual_inventory_relations(
-        owned=owned,
-        inventory=inventory,
-        database=request.database,
-        affected_logical_names=affected_logical_names,
-        logical_pipeline_names=logical_pipeline_names,
-        include_all=request.operation == DestructionOperation.RESET_TARGET,
-    )
-    stats: dict[str, tuple[int, int]] = _load_relation_stats(
-        connection=connection,
-        database=request.database,
-        relation_names=tuple(sorted(owned)),
-    )
-    relations: tuple[DestructionRelationEvidence, ...] = _build_evidence(
-        database=request.database,
-        owned=owned,
-        catalog=catalog,
-        stats=stats,
-    )
-    _validate_drop_size_limit(limit=relation_drop_size_limit, relations=relations)
-    _validate_external_dependants(
-        connection=connection,
-        database=request.database,
-        owned_relation_names=frozenset(owned),
-    )
-    _ = reverse_topologically_order_relations(relations)
-    return affected_model_names, affected_source_names, relations
 
 
-def _validate_drop_size_limit(
-    *,
-    limit: int | None,
-    relations: tuple[DestructionRelationEvidence, ...],
-) -> None:
-    if limit is None:
-        return
-    oversized: tuple[DestructionRelationEvidence, ...] = tuple(
-        relation
-        for relation in relations
-        if relation.exists and relation.total_bytes is not None and relation.total_bytes > limit
+def _raise_planning_error(error: ValueError) -> NoReturn:
+    if not error.args or not isinstance(error.args[0], tuple):
+        raise error
+    code: DestructionPlanningErrorCode = DestructionPlanningErrorCode(error.args[0][0])
+    detail: object = error.args[0][1]
+    if code == DestructionPlanningErrorCode.SELECTION:
+        raise DestructionSelectionError(str(detail)) from None
+    if code == DestructionPlanningErrorCode.UNKNOWN_PIPELINES and isinstance(detail, list):
+        raise DestructionSelectionError(f"Unknown pipelines: {tuple(detail)!r}") from None
+    if code == DestructionPlanningErrorCode.DEPENDENCY and isinstance(detail, list):
+        raise DestructionDependencyError(tuple(detail)) from None
+    if code == DestructionPlanningErrorCode.UNSUPPORTED_HISTORICAL_KIND and isinstance(
+        detail, tuple
+    ):
+        kind, name = detail
+        raise DestructionResourceError(
+            f"Unsupported historical manifest resource kind {kind!r} for {name!r}"
+        ) from None
+    if code == DestructionPlanningErrorCode.INVALID_OBJECT_TYPE:
+        DesiredObjectType(str(detail))
+    raise DestructionResourceError(str(detail)) from None
+
+
+def _relation_evidence(
+    *, native_evidence: list[_NativeEvidence]
+) -> tuple[DestructionRelationEvidence, ...]:
+    return tuple(_evidence(native=native) for native in native_evidence)
+
+
+def _evidence(*, native: _NativeEvidence) -> DestructionRelationEvidence:
+    (
+        database,
+        name,
+        kind,
+        exists,
+        total_bytes,
+        active_parts,
+        catalog_fingerprint,
+        logical_names,
+        pipeline_names,
+        ownership,
+        dependency_relation_names,
+    ) = native
+    return DestructionRelationEvidence(
+        database=database,
+        name=name,
+        kind=kind,
+        exists=exists,
+        total_bytes=total_bytes,
+        active_parts=active_parts,
+        catalog_fingerprint=catalog_fingerprint,
+        logical_names=tuple(logical_names),
+        pipeline_names=tuple(pipeline_names),
+        ownership=tuple(DestructionOwnership(value) for value in ownership),
+        dependency_relation_names=tuple(dependency_relation_names),
     )
-    if not oversized:
-        return
-    details: str = ", ".join(
-        f"{relation.database}.{relation.name} ({relation.total_bytes:,} bytes)"
-        for relation in oversized
-    )
-    raise DestructionResourceError(
-        f"Warehouse relation DROP limit is {limit:,} bytes; oversized resources block "
-        f"destruction before mutation: {details}"
+
+
+def _native_evidence(relation: DestructionRelationEvidence) -> _NativeEvidence:
+    return (
+        relation.database,
+        relation.name,
+        str(relation.kind),
+        relation.exists,
+        relation.total_bytes,
+        relation.active_parts,
+        relation.catalog_fingerprint,
+        list(relation.logical_names),
+        list(relation.pipeline_names),
+        [str(value) for value in relation.ownership],
+        list(relation.dependency_relation_names),
     )
 
 
@@ -418,45 +424,30 @@ def _validate_external_dependants(
         raise DestructionExternalDependencyError(tuple(sorted(set(blocked))))
 
 
-def _catalog_dependency_names(relation: CatalogRelation) -> frozenset[str]:
-    return frozenset(
-        dependency
-        for dependency in (
-            *relation.source_relation_names,
-            relation.target_relation_name,
-            relation.stable_binding_name,
-        )
-        if dependency is not None
-    )
-
-
 def _build_plan(
     *,
     request: DestructionRequest,
     parts: DestructionPlanParts,
 ) -> DestructionPlan:
-    plan_payload: dict[str, object] = {
-        "operation": request.operation,
-        "target": request.target,
-        "database": request.database,
-        "metadata_database": request.metadata_database,
-        "requested_pipeline_names": parts.requested_pipeline_names,
-        "included_dependent_pipeline_names": parts.included_dependent_pipeline_names,
-        "affected_pipeline_names": parts.affected_pipeline_names,
-        "affected_model_names": parts.affected_model_names,
-        "affected_source_names": parts.affected_source_names,
-        "relations": tuple(_structural_relation_payload(relation) for relation in parts.relations),
-        "challenges": parts.challenges,
-        "preserves_sources": False,
-        "preserves_replay_data": False,
-        "manifest_fingerprint": parts.manifest_fingerprint,
-        "relation_drop_size_limit": parts.relation_drop_size_limit,
-        "relation_drop_size_server_limit": parts.relation_drop_size_server_limit,
-        "relation_drop_size_override": parts.relation_drop_size_override,
-        "relation_drop_size_policy_observed": parts.relation_drop_size_policy_observed,
-    }
-    if parts.include_orphans:
-        plan_payload["include_orphans"] = True
+    plan_fingerprint: str = _native.destruction_plan_fingerprint(
+        operation=str(request.operation),
+        target=request.target,
+        database=request.database,
+        metadata_database=request.metadata_database,
+        requested_pipeline_names=list(parts.requested_pipeline_names),
+        included_dependent_pipeline_names=list(parts.included_dependent_pipeline_names),
+        affected_pipeline_names=list(parts.affected_pipeline_names),
+        affected_model_names=list(parts.affected_model_names),
+        affected_source_names=list(parts.affected_source_names),
+        relations=[_native_evidence(relation) for relation in parts.relations],
+        challenges=list(parts.challenges),
+        manifest_fingerprint=parts.manifest_fingerprint,
+        relation_drop_size_limit=parts.relation_drop_size_limit,
+        relation_drop_size_server_limit=parts.relation_drop_size_server_limit,
+        relation_drop_size_override=parts.relation_drop_size_override,
+        relation_drop_size_policy_observed=parts.relation_drop_size_policy_observed,
+        include_orphans=parts.include_orphans,
+    )
     return DestructionPlan(
         plan_id=parts.plan_id or f"destruction_{uuid4().hex}",
         operation=DestructionOperation(request.operation),
@@ -473,7 +464,7 @@ def _build_plan(
         preserves_sources=False,
         preserves_replay_data=False,
         manifest_fingerprint=parts.manifest_fingerprint,
-        plan_fingerprint=_fingerprint(plan_payload),
+        plan_fingerprint=plan_fingerprint,
         created_at=parts.created_at,
         expires_at=parts.created_at + parts.ttl,
         relation_drop_size_limit=parts.relation_drop_size_limit,
@@ -482,326 +473,6 @@ def _build_plan(
         relation_drop_size_policy_observed=parts.relation_drop_size_policy_observed,
         include_orphans=parts.include_orphans,
     )
-
-
-def build_destruction_challenges(
-    *, pipeline_names: tuple[str, ...], production_reset: bool = False
-) -> tuple[str, ...]:
-    """Return stable, ordered challenge values for the affected pipeline set."""
-
-    names: tuple[str, ...] = tuple(sorted(set(pipeline_names)))
-    if not names:
-        raise DestructionSelectionError(
-            "Destructive execution requires at least one attributable pipeline challenge"
-        )
-    selected: tuple[str, ...]
-    if len(names) <= MAX_NAMED_CHALLENGES:
-        selected = names
-    else:
-        selected = (names[0], names[len(names) // 2], names[-1])
-    if production_reset:
-        return (*selected, "PRODUCTION")
-    return selected
-
-
-def _resolve_pipeline_selection(
-    *,
-    request: DestructionRequest,
-    analysis: CompileAnalysis,
-    available_pipeline_names: tuple[str, ...],
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    available: frozenset[str] = frozenset(available_pipeline_names)
-    if request.operation == DestructionOperation.RESET_TARGET:
-        if request.pipeline_names or request.included_dependent_pipeline_names:
-            raise DestructionSelectionError("Target reset does not accept a pipeline selection")
-        return (), (), available_pipeline_names
-    if not request.pipeline_names:
-        raise DestructionSelectionError("Pipeline destruction requires at least one pipeline")
-    supplied: frozenset[str] = frozenset(
-        (*request.pipeline_names, *request.included_dependent_pipeline_names)
-    )
-    unknown: tuple[str, ...] = tuple(sorted(supplied - available))
-    if unknown:
-        raise DestructionSelectionError(f"Unknown pipelines: {unknown!r}")
-
-    pipeline_by_model_key: dict[LogicalResourceKey, str] = {
-        model.key: model.pipeline_name for model in analysis.realized_project.project.models
-    }
-    required_pipeline_names: set[str] = set(supplied)
-    while True:
-        root_keys: frozenset[LogicalResourceKey] = frozenset(
-            model.key
-            for model in analysis.realized_project.project.models
-            if model.pipeline_name in required_pipeline_names
-        )
-        reachable: tuple[LogicalResourceKey, ...] = collect_reachable_keys(
-            graph=analysis.graph,
-            root_keys=root_keys,
-            direction=GraphTraversalDirection.DOWNSTREAM,
-            edge_types=ALL_DEPENDENCY_EDGE_TYPES,
-        )
-        expanded_pipeline_names: set[str] = set(required_pipeline_names)
-        expanded_pipeline_names.update(
-            pipeline_by_model_key[key] for key in reachable if key in pipeline_by_model_key
-        )
-        expanded_pipeline_names.update(
-            _shared_source_pipeline_names(
-                analysis=analysis,
-                pipeline_names=frozenset(required_pipeline_names),
-            )
-        )
-        if expanded_pipeline_names == required_pipeline_names:
-            break
-        required_pipeline_names = expanded_pipeline_names
-    required_dependents: frozenset[str] = frozenset(
-        required_pipeline_names - set(request.pipeline_names)
-    )
-    missing: tuple[str, ...] = tuple(
-        sorted(required_dependents - set(request.included_dependent_pipeline_names))
-    )
-    if missing:
-        raise DestructionDependencyError(missing)
-    affected: tuple[str, ...] = tuple(sorted(supplied))
-    return request.pipeline_names, request.included_dependent_pipeline_names, affected
-
-
-def _affected_sources(
-    *,
-    request: DestructionRequest,
-    analysis: CompileAnalysis,
-    affected_pipeline_names: tuple[str, ...],
-) -> tuple[frozenset[LogicalResourceKey], tuple[str, ...]]:
-    managed_source_keys: frozenset[LogicalResourceKey] = frozenset(
-        source.key
-        for source in analysis.realized_project.project.sources
-        if analysis.realized_project.resources_by_logical_key.get(source.key, ())
-    )
-    if request.operation == DestructionOperation.RESET_TARGET:
-        selected_source_keys: frozenset[LogicalResourceKey] = managed_source_keys
-    else:
-        model_keys: frozenset[LogicalResourceKey] = frozenset(
-            model.key
-            for model in analysis.realized_project.project.models
-            if model.pipeline_name in affected_pipeline_names
-        )
-        upstream_keys: frozenset[LogicalResourceKey] = frozenset(
-            collect_reachable_keys(
-                graph=analysis.graph,
-                root_keys=model_keys,
-                direction=GraphTraversalDirection.UPSTREAM,
-                edge_types=ALL_DEPENDENCY_EDGE_TYPES,
-            )
-        )
-        declared_source_keys: frozenset[LogicalResourceKey] = frozenset(
-            pipeline.source.key
-            for pipeline in analysis.realized_project.project.pipelines
-            if pipeline.pipeline.name in affected_pipeline_names and pipeline.source is not None
-        )
-        selected_source_keys = managed_source_keys & (upstream_keys | declared_source_keys)
-    return selected_source_keys, tuple(sorted(key.name for key in selected_source_keys))
-
-
-def _shared_source_pipeline_names(
-    *, analysis: CompileAnalysis, pipeline_names: frozenset[str]
-) -> frozenset[str]:
-    managed_source_names: frozenset[str] = frozenset(
-        source.key.name
-        for source in analysis.realized_project.project.sources
-        if analysis.realized_project.resources_by_logical_key.get(source.key, ())
-    )
-    source_names: set[str] = {
-        pipeline.source.key.name
-        for pipeline in analysis.realized_project.project.pipelines
-        if pipeline.pipeline.name in pipeline_names
-        and pipeline.source is not None
-        and pipeline.source.key.name in managed_source_names
-    }
-    selected_model_keys: frozenset[LogicalResourceKey] = frozenset(
-        model.key
-        for model in analysis.realized_project.project.models
-        if model.pipeline_name in pipeline_names
-    )
-    upstream_keys: tuple[LogicalResourceKey, ...] = collect_reachable_keys(
-        graph=analysis.graph,
-        root_keys=selected_model_keys,
-        direction=GraphTraversalDirection.UPSTREAM,
-        edge_types=ALL_DEPENDENCY_EDGE_TYPES,
-    )
-    source_names.update(
-        key.name
-        for key in upstream_keys
-        if key.resource_type == LogicalResourceType.SOURCE and key.name in managed_source_names
-    )
-    pipeline_names_by_logical_name: dict[str, tuple[str, ...]] = _pipeline_names_by_logical_name(
-        analysis=analysis
-    )
-    shared_pipeline_names: set[str] = set()
-    for source_name in source_names:
-        shared_pipeline_names.update(pipeline_names_by_logical_name.get(source_name, ()))
-    return frozenset(shared_pipeline_names)
-
-
-def _pipeline_names_by_logical_name(*, analysis: CompileAnalysis) -> dict[str, tuple[str, ...]]:
-    names: dict[str, set[str]] = {}
-    pipeline_by_model_key: dict[LogicalResourceKey, str] = {
-        model.key: model.pipeline_name for model in analysis.realized_project.project.models
-    }
-    for model in analysis.realized_project.project.models:
-        names.setdefault(model.key.name, set()).add(model.pipeline_name)
-    for pipeline in analysis.realized_project.project.pipelines:
-        if pipeline.source is not None:
-            names.setdefault(pipeline.source.key.name, set()).add(pipeline.pipeline.name)
-    for source in analysis.realized_project.project.sources:
-        downstream_keys: tuple[LogicalResourceKey, ...] = collect_reachable_keys(
-            graph=analysis.graph,
-            root_keys=frozenset((source.key,)),
-            direction=GraphTraversalDirection.DOWNSTREAM,
-            edge_types=ALL_DEPENDENCY_EDGE_TYPES,
-        )
-        names.setdefault(source.key.name, set()).update(
-            pipeline_by_model_key[key] for key in downstream_keys if key in pipeline_by_model_key
-        )
-    return {name: tuple(sorted(values)) for name, values in names.items()}
-
-
-def _manifest_owned_relations(
-    *,
-    analysis: CompileAnalysis,
-    models: tuple[CompiledModel, ...],
-    source_keys: frozenset[LogicalResourceKey],
-    logical_pipeline_names: Mapping[str, tuple[str, ...]],
-) -> dict[str, OwnedRelation]:
-    owned: dict[str, OwnedRelation] = {}
-    selected_keys: set[LogicalResourceKey] = {model.key for model in models} | set(source_keys)
-    for key in sorted(selected_keys, key=lambda value: (value.resource_type, value.name)):
-        for resource in analysis.realized_project.resources_by_logical_key.get(key, ()):
-            name: str = resource.name
-            if _excluded_metadata_relation(name):
-                continue
-            _add_associated_relation(
-                owned=owned,
-                name=name,
-                kind=_resource_kind(resource),
-                logical_name=key.name,
-                pipeline_names=logical_pipeline_names.get(key.name, ()),
-                ownership=DestructionOwnership.CURRENT_MANIFEST,
-            )
-    return owned
-
-
-def _add_historical_manifest_relations(
-    *,
-    owned: dict[str, OwnedRelation],
-    request: DestructionRequest,
-    analysis: CompileAnalysis,
-    connection: DestructionPlanningConnection,
-    catalog: CatalogSnapshot,
-    affected_pipeline_names: frozenset[str],
-    allow_published_pipeline_names: frozenset[str],
-    snapshot: AdapterManifestSnapshot | None,
-) -> dict[str, OwnedRelation]:
-    current_resource_names: frozenset[str] = _current_manifest_resource_names(analysis=analysis)
-    resolved_snapshot: AdapterManifestSnapshot = snapshot or _load_manifest_snapshot(
-        request=request,
-        analysis=analysis,
-        connection=connection,
-    )
-    if resolved_snapshot.status == AdapterOptionalStateStatus.ABSENT:
-        return owned
-    historical_resources: set[AdapterManifestResource] = _eligible_historical_resources(
-        snapshot=resolved_snapshot,
-        affected_pipeline_names=affected_pipeline_names,
-        allow_published_pipeline_names=allow_published_pipeline_names,
-        database=request.database,
-        current_resource_names=current_resource_names,
-        catalog=catalog,
-    )
-    for resource in sorted(
-        historical_resources,
-        key=lambda value: (
-            value.resource_name,
-            value.pipeline_name,
-            value.logical_name,
-        ),
-    ):
-        try:
-            kind: DestructionRelationKind = DestructionRelationKind(resource.resource_kind)
-        except ValueError as error:
-            raise DestructionResourceError(
-                f"Unsupported historical manifest resource kind {resource.resource_kind!r} "
-                f"for {resource.resource_name!r}"
-            ) from error
-        _add_owned_relation(
-            owned=owned,
-            name=resource.resource_name,
-            kind=kind,
-            logical_name=resource.logical_name,
-            pipeline_name=resource.pipeline_name,
-            ownership=DestructionOwnership.HISTORICAL_MANIFEST,
-        )
-    return owned
-
-
-def _current_manifest_resource_names(*, analysis: CompileAnalysis) -> frozenset[str]:
-    names: set[str] = set()
-    for resources in analysis.realized_project.resources_by_logical_key.values():
-        names.update(
-            resource.name
-            for resource in resources
-            if not _excluded_metadata_relation(resource.name)
-        )
-    return frozenset(names)
-
-
-def _eligible_historical_resources(
-    *,
-    snapshot: AdapterManifestSnapshot,
-    affected_pipeline_names: frozenset[str],
-    allow_published_pipeline_names: frozenset[str],
-    database: str,
-    current_resource_names: frozenset[str],
-    catalog: CatalogSnapshot,
-) -> set[AdapterManifestResource]:
-    if not snapshot.manifests:
-        return set()
-    published_pipelines_by_name: dict[str, set[str]] = {}
-    for resource in snapshot.manifests[0].resources:
-        published_pipelines_by_name.setdefault(resource.resource_name, set()).add(
-            resource.pipeline_name
-        )
-    latest_resources_by_name: dict[str, set[AdapterManifestResource]] = {}
-    for manifest in snapshot.manifests:
-        if manifest.manifest_version != MANIFEST_VERSION:
-            raise DestructionResourceError(
-                f"Unsupported manifest version {manifest.manifest_version}; "
-                f"expected {MANIFEST_VERSION}"
-            )
-        resources_by_name: dict[str, set[AdapterManifestResource]] = {}
-        for resource in manifest.resources:
-            resources_by_name.setdefault(resource.resource_name, set()).add(resource)
-        for name, resources in resources_by_name.items():
-            latest_resources_by_name.setdefault(name, resources)
-    eligible: set[AdapterManifestResource] = set()
-    for name, resources in latest_resources_by_name.items():
-        published_pipelines: set[str] = published_pipelines_by_name.get(name, set())
-        published_resource_protected: bool = bool(published_pipelines) and not (
-            published_pipelines <= allow_published_pipeline_names
-        )
-        if (
-            name in current_resource_names
-            or published_resource_protected
-            or _excluded_metadata_relation(name)
-        ):
-            continue
-        if catalog.relation(name) is None:
-            continue
-        for resource in resources:
-            if resource.pipeline_name not in affected_pipeline_names:
-                continue
-            if resource.resource_database != database:
-                continue
-            eligible.add(resource)
-    return eligible
 
 
 def _load_manifest_snapshot(
@@ -827,206 +498,6 @@ def _load_manifest_snapshot(
     return snapshot
 
 
-def _manifest_pipeline_names(
-    *,
-    snapshot: AdapterManifestSnapshot,
-    current_pipeline_names: frozenset[str],
-) -> tuple[str, ...]:
-    latest_resources_by_name: dict[str, set[AdapterManifestResource]] = {}
-    for manifest in snapshot.manifests:
-        resources_by_name: dict[str, set[AdapterManifestResource]] = {}
-        for resource in manifest.resources:
-            resources_by_name.setdefault(resource.resource_name, set()).add(resource)
-        for name, resources in resources_by_name.items():
-            latest_resources_by_name.setdefault(name, resources)
-    pipeline_names: set[str] = set()
-    for resources in latest_resources_by_name.values():
-        if any(resource.pipeline_name in current_pipeline_names for resource in resources):
-            continue
-        pipeline_names.update(resource.pipeline_name for resource in resources)
-    return tuple(sorted(pipeline_names))
-
-
-def _add_historical_logical_pipeline_names(
-    *,
-    logical_pipeline_names: dict[str, tuple[str, ...]],
-    snapshot: AdapterManifestSnapshot,
-) -> dict[str, tuple[str, ...]]:
-    combined: dict[str, tuple[str, ...]] = dict(logical_pipeline_names)
-    for manifest in snapshot.manifests:
-        pipeline_names_by_logical_name: dict[str, set[str]] = {}
-        for resource in manifest.resources:
-            pipeline_names_by_logical_name.setdefault(resource.logical_name, set()).add(
-                resource.pipeline_name
-            )
-        for logical_name, pipeline_names in pipeline_names_by_logical_name.items():
-            combined.setdefault(logical_name, tuple(sorted(pipeline_names)))
-    return combined
-
-
-def _historical_logical_names(
-    *,
-    snapshot: AdapterManifestSnapshot | None,
-    affected_pipeline_names: frozenset[str],
-    current_model_names: frozenset[str],
-    current_source_names: frozenset[str],
-) -> tuple[frozenset[str], frozenset[str]]:
-    if snapshot is None:
-        return frozenset(), frozenset()
-    latest_resources_by_logical_key: dict[tuple[str, str], set[AdapterManifestResource]] = {}
-    for manifest in snapshot.manifests:
-        resources_by_logical_key: dict[tuple[str, str], set[AdapterManifestResource]] = {}
-        for resource in manifest.resources:
-            key: tuple[str, str] = (resource.logical_type, resource.logical_name)
-            resources_by_logical_key.setdefault(key, set()).add(resource)
-        for key, resources in resources_by_logical_key.items():
-            latest_resources_by_logical_key.setdefault(key, resources)
-    model_names: set[str] = set()
-    source_names: set[str] = set()
-    for (logical_type, logical_name), resources in latest_resources_by_logical_key.items():
-        pipeline_names: set[str] = {resource.pipeline_name for resource in resources}
-        if not pipeline_names or not pipeline_names <= affected_pipeline_names:
-            continue
-        if (
-            logical_type == str(LogicalResourceType.MODEL)
-            and logical_name not in current_model_names
-        ):
-            model_names.add(logical_name)
-        if (
-            logical_type == str(LogicalResourceType.SOURCE)
-            and logical_name not in current_source_names
-        ):
-            source_names.add(logical_name)
-    return frozenset(model_names), frozenset(source_names)
-
-
-def _add_virtual_inventory_relations(
-    *,
-    owned: dict[str, OwnedRelation],
-    inventory: AdapterDeploymentInventory,
-    database: str,
-    affected_logical_names: frozenset[str],
-    logical_pipeline_names: Mapping[str, tuple[str, ...]],
-    include_all: bool,
-) -> dict[str, OwnedRelation]:
-    logical_name_by_published_name: dict[str, str] = {}
-    for deployment in sorted(inventory.deployments, key=lambda value: value.deployment_id):
-        for mapping in sorted(
-            deployment.prepared_object_mappings,
-            key=lambda value: (value.physical_name, value.logical_key.name),
-        ):
-            logical_name_by_published_name[mapping.logical_key.name] = mapping.logical_model_name
-            logical_name_by_published_name[mapping.physical_name] = mapping.logical_model_name
-            if not include_all and mapping.logical_model_name not in affected_logical_names:
-                continue
-            if mapping.logical_key.database not in {None, database}:
-                raise DestructionResourceError(
-                    "Destruction cannot mutate recorded virtual resources outside the target "
-                    f"database: {mapping.logical_key.database}.{mapping.physical_name}"
-                )
-            if _excluded_metadata_relation(mapping.physical_name):
-                continue
-            _add_associated_relation(
-                owned=owned,
-                name=mapping.physical_name,
-                kind=_object_type_kind(mapping.logical_key.object_type),
-                logical_name=mapping.logical_model_name,
-                pipeline_names=logical_pipeline_names.get(mapping.logical_model_name, ()),
-                ownership=DestructionOwnership.VIRTUAL_PHYSICAL_MAPPING,
-            )
-    for event in sorted(
-        inventory.publish_events, key=lambda value: (value.published_at, value.deployment_id)
-    ):
-        for binding in sorted(
-            event.bindings,
-            key=lambda value: (value.logical_name, value.database),
-        ):
-            if binding.database != database:
-                continue
-            if _excluded_metadata_relation(binding.logical_name):
-                continue
-            logical_name: str = logical_name_by_published_name.get(
-                binding.logical_name,
-                binding.logical_name,
-            )
-            if binding.logical_name in owned:
-                logical_name = sorted(owned[binding.logical_name].logical_names)[0]
-            if not include_all and logical_name not in affected_logical_names:
-                continue
-            _add_associated_relation(
-                owned=owned,
-                name=binding.logical_name,
-                kind=DestructionRelationKind.VIEW,
-                logical_name=logical_name,
-                pipeline_names=logical_pipeline_names.get(logical_name, ()),
-                ownership=DestructionOwnership.PUBLISHED_STABLE_BINDING,
-            )
-            if not _excluded_metadata_relation(binding.physical_name):
-                _add_associated_relation(
-                    owned=owned,
-                    name=binding.physical_name,
-                    kind=DestructionRelationKind.TABLE,
-                    logical_name=logical_name_by_published_name.get(
-                        binding.physical_name,
-                        logical_name,
-                    ),
-                    pipeline_names=logical_pipeline_names.get(logical_name, ()),
-                    ownership=DestructionOwnership.VIRTUAL_PHYSICAL_MAPPING,
-                )
-    return owned
-
-
-def _add_owned_relation(
-    *,
-    owned: dict[str, OwnedRelation],
-    name: str,
-    kind: DestructionRelationKind,
-    logical_name: str,
-    pipeline_name: str | None,
-    ownership: DestructionOwnership,
-) -> dict[str, OwnedRelation]:
-    existing: OwnedRelation | None = owned.get(name)
-    if existing is None:
-        owned[name] = OwnedRelation(
-            name=name,
-            kind=kind,
-            logical_name=logical_name,
-            pipeline_name=pipeline_name,
-            ownership=ownership,
-        )
-        return owned
-    existing.merge(
-        kind=kind,
-        logical_name=logical_name,
-        pipeline_name=pipeline_name,
-        ownership=ownership,
-        kind_rank=_drop_rank(kind),
-        current_kind_rank=_drop_rank(existing.kind),
-    )
-    return owned
-
-
-def _add_associated_relation(
-    *,
-    owned: dict[str, OwnedRelation],
-    name: str,
-    kind: DestructionRelationKind,
-    logical_name: str,
-    pipeline_names: tuple[str, ...],
-    ownership: DestructionOwnership,
-) -> None:
-    associated_pipeline_names: tuple[str | None, ...] = pipeline_names or (None,)
-    for pipeline_name in associated_pipeline_names:
-        _add_owned_relation(
-            owned=owned,
-            name=name,
-            kind=kind,
-            logical_name=logical_name,
-            pipeline_name=pipeline_name,
-            ownership=ownership,
-        )
-
-
 def _load_relation_stats(
     *,
     connection: DestructionPlanningConnection,
@@ -1049,68 +520,6 @@ def _load_relation_stats(
             int(str(row["active_parts"])),
         )
     return stats
-
-
-def _build_evidence(
-    *,
-    database: str,
-    owned: Mapping[str, OwnedRelation],
-    catalog: CatalogSnapshot,
-    stats: Mapping[str, tuple[int, int]],
-) -> tuple[DestructionRelationEvidence, ...]:
-    evidence: list[DestructionRelationEvidence] = []
-    for name in sorted(owned):
-        relation: OwnedRelation = owned[name]
-        catalog_relation: CatalogRelation | None = catalog.relation(name)
-        kind: DestructionRelationKind = _catalog_kind(
-            relation=catalog_relation,
-            fallback=relation.kind,
-        )
-        table_stats: tuple[int, int] | None = stats.get(name)
-        exists: bool = catalog_relation is not None
-        has_parts: bool = kind == DestructionRelationKind.TABLE
-        evidence.append(
-            DestructionRelationEvidence(
-                database=database,
-                name=name,
-                kind=kind,
-                exists=exists,
-                total_bytes=(table_stats[0] if table_stats else 0)
-                if has_parts and exists
-                else None,
-                active_parts=(table_stats[1] if table_stats else 0)
-                if has_parts and exists
-                else None,
-                catalog_fingerprint=(
-                    None if catalog_relation is None else catalog_relation.ownership_generation
-                ),
-                logical_names=tuple(sorted(relation.logical_names)),
-                pipeline_names=tuple(sorted(relation.pipeline_names)),
-                ownership=tuple(sorted(relation.ownership, key=lambda value: value.value)),
-                dependency_relation_names=(
-                    tuple(sorted(_catalog_dependency_names(catalog_relation) & owned.keys()))
-                    if catalog_relation is not None
-                    else ()
-                ),
-            )
-        )
-    return tuple(evidence)
-
-
-def _structural_relation_payload(relation: DestructionRelationEvidence) -> dict[str, object]:
-    """Exclude volatile footprint estimates from execution drift identity."""
-
-    return {
-        "database": relation.database,
-        "name": relation.name,
-        "kind": relation.kind,
-        "exists": relation.exists,
-        "catalog_fingerprint": relation.catalog_fingerprint,
-        "logical_names": relation.logical_names,
-        "pipeline_names": relation.pipeline_names,
-        "ownership": relation.ownership,
-        "dependency_relation_names": relation.dependency_relation_names,
-    }
 
 
 def _manifest_payload(*, analysis: CompileAnalysis) -> dict[str, object]:
@@ -1178,42 +587,6 @@ def _resource_kind(resource: object) -> DestructionRelationKind:
     if isinstance(resource, AdapterTable):
         return DestructionRelationKind.TABLE
     raise DestructionResourceError(f"Unsupported manifest resource: {type(resource).__name__}")
-
-
-def _object_type_kind(object_type: DesiredObjectType | str) -> DestructionRelationKind:
-    value: DesiredObjectType = DesiredObjectType(object_type)
-    if value == DesiredObjectType.VIEW:
-        return DestructionRelationKind.VIEW
-    if value == DesiredObjectType.MATERIALIZED_VIEW:
-        return DestructionRelationKind.MATERIALIZED_VIEW
-    if value == DesiredObjectType.KAFKA_TABLE:
-        return DestructionRelationKind.MANAGED_SOURCE
-    return DestructionRelationKind.TABLE
-
-
-def _catalog_kind(
-    *, relation: CatalogRelation | None, fallback: DestructionRelationKind
-) -> DestructionRelationKind:
-    if relation is None:
-        return fallback
-    if relation.engine == CATALOG_VIEW_ENGINE:
-        return DestructionRelationKind.VIEW
-    if relation.engine == CATALOG_MATERIALIZED_VIEW_ENGINE:
-        return DestructionRelationKind.MATERIALIZED_VIEW
-    return fallback
-
-
-def _drop_rank(kind: DestructionRelationKind) -> int:
-    return {
-        DestructionRelationKind.VIEW: 0,
-        DestructionRelationKind.MATERIALIZED_VIEW: 1,
-        DestructionRelationKind.TABLE: 2,
-        DestructionRelationKind.MANAGED_SOURCE: 2,
-    }[kind]
-
-
-def _excluded_metadata_relation(name: str) -> bool:
-    return name.casefold().startswith(METADATA_RELATION_PREFIX)
 
 
 def _quote_string(value: str) -> str:

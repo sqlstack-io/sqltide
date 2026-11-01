@@ -38,6 +38,17 @@ class DestructionOwnership(StrEnum):
     HISTORICAL_MANIFEST = "historical_manifest"
 
 
+class DestructionPlanningErrorCode(StrEnum):
+    """Why the native planner rejected a destruction request."""
+
+    SELECTION = "selection"
+    UNKNOWN_PIPELINES = "unknown_pipelines"
+    DEPENDENCY = "dependency"
+    RESOURCE = "resource"
+    UNSUPPORTED_HISTORICAL_KIND = "unsupported_historical_kind"
+    INVALID_OBJECT_TYPE = "invalid_object_type"
+
+
 class DestructionPlanningConnection(Protocol):
     """The complete, read-only adapter surface available to planning."""
 
