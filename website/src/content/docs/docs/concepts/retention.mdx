@@ -1,0 +1,85 @@
+---
+title: Retention policies
+description: Keep source history and derived model storage on explicit, independently checked clocks.
+---
+
+Retention determines how much history remains available, not how much SQLTide can recover from
+Kafka after ClickHouse has expired it. Broker retention, landing retention and model retention are
+separate policies. Keep enough input history for the rebuilds you intend to perform.
+
+## Managed Kafka landing
+
+Set a typed project default in `sqltide_project.toml`:
+
+```toml
+[defaults.sources.kafka.retention]
+duration = "7d"
+timestamp = "broker"
+fallback = "landed"
+cap_at = "landed"
+```
+
+The broker timestamp is the retention clock. `fallback = "landed"` uses landing time when the
+broker timestamp is missing. Optional `cap_at = "landed"` caps a future broker timestamp at landing
+time. These refer to SQLTide's fixed normalized Kafka columns, not arbitrary payload fields.
+
+A managed source can override the default:
+
+```yaml
+sources:
+  - name: order_events
+    kind: kafka
+    broker_list: localhost:9092
+    topic: source.order_events.live
+    consumer_group: sqltide_order_events
+    retention:
+      duration: 14d
+      timestamp: broker
+      fallback: landed
+      cap_at: landed
+    replay_boundary:
+      mode: offsets
+```
+
+Use `retention: false` to opt out for one source. Adopted stream tables do not accept managed
+retention: their owner controls expiry. SQLTide does not configure Kafka topic retention.
+
+## Table models
+
+```toml
+[defaults.models.retention]
+duration = "7d"
+timestamp_column = "_replay_timestamp"
+cap_at_column = "_replay_landed_at"
+when_missing = "error"
+```
+
+Those columns must be projected by the model with compatible timestamp types. Optional
+`cap_at_column` caps the retention clock. The compiler validates against the output schema:
+`when_missing = "error"` rejects missing required columns; `"skip"` leaves that model without this
+typed TTL when columns are missing. Use `skip` deliberately, not to hide an unexpected schema change.
+
+Override the default in a pipeline's `pipeline.toml` with the same `[defaults.models.retention]`
+table, or on an individual model:
+
+```sql
+MODEL (
+  retention (
+    duration "2d",
+    timestamp_column _replay_timestamp,
+    when_missing error,
+  ),
+);
+```
+
+This is a header excerpt; follow it with the model's typed SELECT. `retention false` opts a table
+model out. Terminal query views do not inherit model retention.
+
+Resolution is model → pipeline → project. Explicit free-form `ttl` remains available for
+ClickHouse-specific expressions and overrides inherited retention. Do not declare both an explicit
+`ttl` and typed `retention` on the same resource. The older `[defaults].managed_source_ttl` and
+`[defaults].model_ttl` are still supported; avoid combining competing defaults. See
+[model storage settings](/docs/concepts/models/).
+
+ClickHouse applies TTL asynchronously. A configured duration is not an exact physical deletion
+deadline, and a retention policy cannot restore expired rows.

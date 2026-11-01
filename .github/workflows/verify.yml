@@ -60,6 +60,9 @@ jobs:
               ui/*)
                 browser=true
                 ;;
+              .github/workflows/website.yml|.github/workflows/verify.yml)
+                focused=false
+                ;;
               tests/unit/*)
                 ;;
               .github/*|docs/*|*.md|LICENSE)
@@ -223,10 +226,14 @@ jobs:
     if: needs.changes.outputs.packaging == 'true'
     uses: ./.github/workflows/build-distributions.yml
 
+  website:
+    name: Website
+    uses: ./.github/workflows/website.yml
+
   verify:
     name: Verify
     if: always()
-    needs: [changes, checks, integration, e2e, browser, distributions]
+    needs: [changes, checks, integration, e2e, browser, distributions, website]
     runs-on: ubuntu-latest
     steps:
       - name: Confirm all required verification jobs passed
@@ -237,9 +244,10 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
           DISTRIBUTIONS_RESULT: ${{ needs.distributions.result }}
+          WEBSITE_RESULT: ${{ needs.website.result }}
         run: |
-          if [[ "${CHANGES_RESULT}" != "success" || "${CHECKS_RESULT}" != "success" ]]; then
-            echo "Required classification or static checks did not pass" >&2
+          if [[ "${CHANGES_RESULT}" != "success" || "${CHECKS_RESULT}" != "success" || "${WEBSITE_RESULT}" != "success" ]]; then
+            echo "Required classification, static or website checks did not pass" >&2
             exit 1
           fi
           for result in "${INTEGRATION_RESULT}" "${E2E_RESULT}" "${BROWSER_RESULT}" \

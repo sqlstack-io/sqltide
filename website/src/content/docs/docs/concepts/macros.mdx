@@ -1,0 +1,105 @@
+---
+title: "Python Macros"
+description: "Invocation-scoped Python functions that generate SQL at compile time."
+---
+
+Macros are trusted project-local Python functions. SQLTide loads one deterministic registry per
+compile invocation and expands calls before SQL analysis.
+
+```text
+macros/
+  common.py
+  testing.py
+```
+
+Public synchronous functions defined by discovered modules become macros. Private functions,
+imported functions, async functions, `__init__.py`, private modules, and private directories are not
+registered.
+
+## Define and call a macro
+
+```python
+# macros/common.py
+def replay_columns() -> str:
+    return (
+        "_replay_partition::Int64 AS _replay_partition,\n"
+        "  _replay_offset::Int64 AS _replay_offset,\n"
+        "  _replay_timestamp::DateTime64(3) AS _replay_timestamp"
+    )
+```
+
+```sql
+SELECT
+  order_id::String AS order_id,
+  @replay_columns()
+FROM __ref("orders")
+```
+
+Macros expand in model, test, and audit SQL bodies. They do not expand inside `MODEL()`, `TEST()`,
+or `AUDIT()` headers.
+
+## Arguments and nesting
+
+Macro calls accept Python literals: strings, numbers, booleans, `None`, lists, dictionaries, tuples,
+and named arguments.
+
+```python
+def mock_rows(rows: list[dict[str, object]]) -> str:
+    selects: list[str] = []
+    for row in rows:
+        columns = ", ".join(f"{value!r} AS {name}" for name, value in row.items())
+        selects.append(f"SELECT {columns}")
+    return " UNION ALL ".join(selects)
+```
+
+```sql
+@mock_rows([
+  {"order_id": "ord_001", "quantity": 2},
+  {"order_id": "ord_002", "quantity": 3}
+])
+```
+
+Nested calls resolve from the inside out. Inner calls may return structured Python values; a call
+inserted directly into SQL must return a string.
+
+```sql
+@mock_rows(@with_timestamps(@load_fixture("orders_simple"), "2026-07-01 00:00:00"))
+```
+
+Macro output may not contain a new unexpanded `@macro(...)` call. Compose macros by calling Python
+functions directly instead.
+
+## Macro context
+
+A first parameter named `ctx` requests the immutable invocation context. Annotate it as
+`MacroContext`:
+
+```python
+from __future__ import annotations
+
+from sqltide.compiler.macros.models import MacroContext
+
+def target_relation(ctx: MacroContext, name: str) -> str:
+    database = ctx.database or "default"
+    return f"{database}.{name}"
+```
+
+The context exposes:
+
+```text
+adapter_name
+dialect
+target_name
+database
+schema
+virtual_environments
+variables
+```
+
+Structured project variables remain mappings in `ctx.variables` and are deeply immutable.
+
+## Loading and errors
+
+Macro modules execute as trusted project code during compilation. SQLTide reports syntax,
+import-time, duplicate-name, unknown-call, argument, return-type, and nested-expansion failures with
+both call and definition locations.

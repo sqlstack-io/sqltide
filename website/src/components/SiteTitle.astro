@@ -1,0 +1,82 @@
+---
+import logoDark from '../assets/logo-dark.png';
+import logoLight from '../assets/logo-light.png';
+---
+
+<div class="site-title">
+	<div class="brand-lockup">
+		<a class="logo" href="/" aria-label="SQLTide home">
+			<img class="logo-for-light" src={logoLight.src} alt="SQLTide" width={140} height={30} />
+			<img class="logo-for-dark" src={logoDark.src} alt="SQLTide" width={140} height={30} />
+		</a>
+		<a class="brand-byline" href="https://sqlstack.io">by SQLStack</a>
+	</div>
+	<a class="docs" href="/docs/">Docs</a>
+</div>
+
+<style>
+	.site-title {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 12px;
+		min-width: 0;
+	}
+
+	.brand-lockup {
+		display: grid;
+	}
+
+	.brand-byline {
+		display: flex;
+		align-items: center;
+		min-height: 24px;
+		margin-inline-start: 34%;
+		color: var(--sqb-muted);
+		font-size: 11px;
+		line-height: 14px;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.brand-byline:hover {
+		color: var(--sqb-fg);
+		text-decoration: underline;
+	}
+
+	.logo {
+		display: flex;
+	}
+
+	img {
+		width: auto;
+		height: 30px;
+	}
+
+	.logo-for-dark,
+	:global(:root[data-theme='dark']) .logo-for-light {
+		display: none;
+	}
+
+	:global(:root[data-theme='dark']) .logo-for-dark {
+		display: block;
+	}
+
+	.docs {
+		padding: 2px 6px;
+		border: 1px solid var(--sqb-line-strong);
+		border-radius: 2px;
+		color: var(--sqb-muted);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		line-height: 1.4;
+		text-transform: uppercase;
+		text-decoration: none;
+	}
+
+	.docs:hover {
+		border-color: var(--sqb-primary);
+		color: var(--sqb-primary);
+	}
+</style>

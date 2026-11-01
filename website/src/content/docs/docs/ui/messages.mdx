@@ -1,0 +1,26 @@
+---
+title: "Messages"
+description: "Search and inspect source records retained in ClickHouse."
+---
+
+Open **Messages** from a managed [source](/ui/sources) to query records retained in its ClickHouse
+landing table. The browser supports:
+
+- JSON field predicates and value facets
+- landed-at and broker timestamp ranges
+- partition and offset ranges
+- stable preview columns
+- cursor pagination
+- full-record inspection up to 16 MiB
+
+Message searches read `raw__<source>` landing history. They do not query Kafka, change a consumer
+group, or alter the source. Broker inventory, consumer lag, and retained-message queries remain
+separate operations so one unavailable signal does not disable the others.
+
+<Note>
+  Retained-message visibility is bounded by the source landing TTL. The browser cannot recover data
+  that ClickHouse has already expired.
+</Note>
+
+See [Topics](/ui/topics) for broker-only metadata and [Replay and Lineage](/concepts/replay-lineage)
+for normalized replay columns and boundary semantics.

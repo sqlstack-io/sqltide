@@ -1,0 +1,6 @@
+.astro/
+.amp/
+dist/
+node_modules/
+playwright-report/
+test-results/

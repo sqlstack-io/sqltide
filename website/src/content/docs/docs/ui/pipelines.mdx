@@ -1,0 +1,22 @@
+---
+title: "Pipelines"
+description: "Inspect pipeline health and create frozen bulk destruction or target reset plans."
+---
+
+The Pipelines view combines pipeline mode, source, boundary, model count, replay anchors, audits,
+ingest rate, and model freshness in one inventory.
+
+Users with `pipeline.destroy` can select individual rows or select all authorized pipelines in the
+current inventory. **Destroy** opens a read-only frozen impact plan. If downstream dependants are
+missing, the dialog identifies them and offers an explicit replan action; it does not silently
+cascade.
+
+Users with target-scoped `target.reset` can open a complete target reset plan. The dialog makes
+managed-source and replay-data inclusion explicit.
+
+After reviewing the target, database, pipeline closure, models, physical relations, bytes, and data
+policy, record the review gate. The dialog then provides one empty input for each exact challenge.
+Inputs are case-sensitive and are not trimmed or normalized. Successful execution opens the durable
+run, where statement and residual-object evidence remains available.
+
+See [Destructive Operations](/concepts/destructive-operations) for the safety contract.

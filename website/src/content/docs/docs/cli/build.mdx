@@ -1,0 +1,132 @@
+---
+title: "sqt build"
+description: "Build selected pipelines directly or as an isolated deployment."
+---
+
+`build` plans and executes selected pipelines in their effective modes. It is the only public build
+verb.
+
+```bash
+sqt build
+sqt build --select orders
+sqt build --auto-approve
+sqt build --auto-approve --json
+sqt build --auto-approve --events
+sqt build --select pipeline:orders --auto-approve --confirm DEPLOY_ORDERS
+sqt build --deployment-id 20260701T120000Z_release202607
+sqt build --select orders --full-refresh
+sqt build --select orders --start-time 2026-07-01T00:00:00Z
+```
+
+In direct mode, SQLTide preserves managed sources, drops and recreates the selected closure at
+ordinary `tbl__*` and `mv__*` names, and replays retained history through the rebuilt graph.
+
+With `[defaults] pipeline_mode = "virtual"`, the same command creates an unpublished deployment.
+Deployment-specific tables and materialized views are populated while stable published views remain
+unchanged. Use `sqt deployment audit <deployment-id>` and `sqt deployment promote <deployment-id>`
+afterward.
+
+Pipelines can override the default with `mode = "direct"` or `mode = "virtual"` in `pipeline.toml`.
+For a mixed selection, SQLTide asks for confirmation once, stages every virtual pipeline first,
+and starts the direct phase only after staging succeeds. Direct changes are live immediately; the
+virtual deployment remains staged until promotion. If direct execution fails, the staged deployment
+is retained and reported.
+
+SQLTide inspects current warehouse state and assembles the complete workflow before displaying
+the destructive plan and asking:
+
+```text
+Proceed with build? [y/N]
+```
+
+Only `y` or `yes` approves. `--auto-approve` skips the prompt. JSON execution requires
+`--auto-approve`.
+
+| Option | Purpose |
+|---|---|
+| `--select VALUE` | Bare model or `pipeline:<name>`; repeatable |
+| `--changed` | Select changed direct models/source-setting drift; cannot combine with `--select` |
+| `--include-missing-upstream` | Include absent project-owned prerequisites with `--changed` or `--select` |
+| `--deployment-id VALUE` | Fixed virtual deployment identity |
+| `--full-refresh` | Rebuild selected virtual roots from retained history |
+| `--start-time VALUE` | Bound selected direct or virtual replay from a UTC timestamp |
+| `--auto-approve` | Skip confirmation |
+| `--confirm VALUE` | Supply one exact protected-pipeline confirmation; repeatable |
+| `--json` | Structured result; requires auto approval |
+| `--events` | Stream JSONL progress events; requires auto approval |
+| `--verbose`, `-v` | Show complete schema diffs |
+
+The selected model or pipeline includes all downstream models. `--deployment-id` and
+`--full-refresh` require virtual environments. `--start-time` works in both modes, requires
+`--changed` or a selection in direct mode, and cannot be combined with `--full-refresh`.
+
+In a mixed build, `--deployment-id` and `--full-refresh` apply only to the virtual phase.
+
+## Protected pipelines
+
+A direct pipeline with `[protection]` in `pipeline.toml` adds a separate confirmation gate. Every
+protected pipeline reached by the resolved build closure requires its exact configured value:
+
+```bash
+sqt build --select pipeline:orders --auto-approve --confirm DEPLOY_ORDERS
+```
+
+`--auto-approve` skips only the ordinary plan prompt. It does not bypass pipeline protection,
+including with `--json` or `--events`. Repeat `--confirm` when one invocation reaches multiple
+protected pipelines. Confirmation values are single shell-safe tokens containing letters, numbers,
+`.`, `_`, `:`, or `-`.
+
+Start times are UTC instants. SQLTide preserves that UTC value in `plan.json` and renders replay
+predicates with an explicit UTC timezone, regardless of the ClickHouse server timezone. This keeps
+winter and summer offsets correct and distinguishes both occurrences of a repeated hour during a
+daylight-saving fall-back transition.
+
+In direct mode, `--start-time` is an unseeded bounded rebuild. SQLTide preserves source
+definitions and rows, drops and recreates the selected closure at ordinary names, and omits derived
+output before the effective lower frontier. Direct `--full-refresh` is rejected because an ordinary
+direct build already replays all retained history.
+
+Bounded direct replay inputs must already exist and retain time lineage. Bootstrap missing managed
+sources with an ordinary direct build, and project timestamp or landed-at lineage through any
+intermediate model used as a replay input.
+
+## Exact workflow artifacts
+
+Single-mode build visibility artifacts use this layout:
+
+```text
+target/run/build/
+├── plan.json
+├── workflow.sql
+├── execution.json       # direct mode
+└── steps/
+    ├── 0001_<step-id>.sql
+    └── ...
+```
+
+`plan.json` is the confirmed connected plan. Each numbered file is byte-identical to the resolved SQL
+for that step, and `workflow.sql` joins the statements in order. Virtual workflows are complete at
+confirmation and are published before the first mutation. Direct workflows resolve captured
+watermarks during execution, then publish the exact resolved SQL and `execution.json` on success or
+a handled failure.
+
+These files are disposable transparency output. SQLTide never reads `target/` as lifecycle
+state. A copied artifact is not recovery state.
+
+`sqt plan` uses the same workflow preparation and serialization path under `target/run/plan/`, but
+build never reads or compares that directory. A mixed plan emits one combined text or JSON document
+without flattening its two phase workflows into one artifact. Every build independently inspects
+current warehouse state, assembles and confirms a fresh in-memory workflow, executes it, and records
+artifacts according to the mode-specific timing above.
+
+Builds do not resume a prior workflow. After cancellation or failure, correct the cause and run
+`sqt build` again so SQLTide can inspect current warehouse state, assemble a fresh workflow, and
+apply current preconditions. Direct and virtual builds do not roll back mutations already completed.
+
+A full direct build runs every applicable audit; a selected direct build runs audits whose complete
+model reference set is in execution scope. Virtual deployment readiness is assessed separately.
+
+<Warning>
+  Do not execute copied workflow SQL as a recovery procedure. Rerun the SQLTide command so it can
+  plan against current warehouse state.
+</Warning>

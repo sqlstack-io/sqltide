@@ -1,0 +1,76 @@
+---
+title: "Development UI"
+description: "Explore one SQLTide project and its live ClickHouse target in a local web UI."
+---
+
+Start the UI from a project directory or point it at a project explicitly:
+
+```bash
+sqt dev
+sqt dev --project-dir examples/orders_demo
+```
+
+Open `http://127.0.0.1:8000`. The server compiles the selected project, connects to its resolved
+ClickHouse target, and combines authored definitions with live warehouse evidence. The header shows
+the project and target, connection state, and the time of the current warehouse snapshot. SQLTide
+refreshes live state periodically, and the refresh button requests a new snapshot immediately.
+
+## Find the right view
+
+| View | Use it for |
+|---|---|
+| Overview | Source health, model state, quality summary, and recent activity |
+| Warehouse Health | Current ClickHouse capacity, memory context, activity, and project table footprint |
+| Lineage | The complete source-to-model graph and driving or reference edges |
+| Pipelines | Pipeline-scoped definitions and lineage |
+| Catalog | Searchable model relations, schemas, storage, and replay facts |
+| Sources | Landing retention, throughput, freshness, and partition-level Kafka lag |
+| Topics | Managed topics or the wider broker inventory |
+| Plan | Preview and launch direct, virtual, or mixed builds from model or pipeline selectors |
+| Deployments | Inspect staged and retained deployments, compare changes, promote, and clean up |
+| Quality | Inspect and run SQL tests and audits, including scheduler state |
+| Sensors | Operate authored automation, inspect ticks, and resolve dead letters |
+| Runs | Durable invocation and statement history with owned-build cancellation |
+| Status | Project compilation, warehouse connection, and definition counts |
+| Settings | Read-only effective project, target, connection, naming, variables, and macros |
+
+## Operating model
+
+The UI serves one resolved project and target per `sqt dev` process. Configuration remains owned by
+`sqltide_project.toml` and `sqltide_local.toml`; Settings displays the effective values but
+does not edit them.
+
+The Plan workflow executes direct, virtual, and mixed builds through the same SQLTide command
+path used by the CLI. The Deployments view provides inventory, diff, promotion, and cleanup;
+deployment audit, rollback, repair, and reconciliation remain explicit CLI operations. See
+[Virtual Environments](/concepts/deployments).
+
+Local `sqt dev` defaults to disabled authentication and loopback binding. For shared access, choose
+trusted-proxy or password authentication and define project permissions. See
+[Authentication](/concepts/authentication-and-access) and [Access Control](/concepts/access-control).
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Warehouse Health" icon="server" href="/ui/warehouse-health">
+    Check ClickHouse capacity, memory context, and current activity.
+  </Card>
+  <Card title="Sources" icon="database" href="/ui/sources">
+    Inspect landing health, retention, freshness, and Kafka lag.
+  </Card>
+  <Card title="Topics" icon="radio" href="/ui/topics">
+    Inspect managed topics and read-only broker metadata.
+  </Card>
+  <Card title="Messages" icon="message" href="/ui/messages">
+    Search and inspect records retained in ClickHouse.
+  </Card>
+  <Card title="Plans" icon="play" href="/ui/plans">
+    Preview warehouse changes and launch builds.
+  </Card>
+  <Card title="Runs" icon="clock" href="/ui/runs">
+    Inspect durable progress, history, cancellation, and recovery.
+  </Card>
+  <Card title="Quality" icon="shield-check" href="/ui/quality">
+    Run tests and audits and understand scheduler state.
+  </Card>
+</CardGroup>

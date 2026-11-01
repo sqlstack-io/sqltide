@@ -1,0 +1,168 @@
+---
+title: "Models"
+description: "Typed SQL models, references, storage settings, and graph semantics."
+---
+
+Each model is one SQL file with a `MODEL()` header and one outer `SELECT`. Models default to
+streaming tables: SQLTide creates a ClickHouse table and the materialized view that writes into
+it. A `kind view` model instead creates an ordinary terminal query view.
+
+```sql
+MODEL (
+  engine "MergeTree()",
+  order_by ["order_id", "_replay_partition", "_replay_offset"],
+  partition_by "toYYYYMM(event_at)",
+  ttl "event_at + INTERVAL 30 DAY",
+  settings (
+    index_granularity 8192,
+  ),
+  replay_anchor auto,
+);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  amount_cents::UInt64 AS amount_cents,
+  event_at::DateTime64(3) AS event_at,
+  _replay_partition::Int32 AS _replay_partition,
+  _replay_offset::Int64 AS _replay_offset,
+  _replay_timestamp::DateTime64(3) AS _replay_timestamp
+FROM __source("orders")
+```
+
+The header grammar is:
+
+- fields are whitespace-separated `key value` entries
+- lists use `[...]`
+- nested mappings use `(...)`
+- commas are optional separators and may trail the final entry
+- values containing spaces must be quoted
+
+YAML-like `key: value` and `{...}` mappings are not accepted. `MODEL ();` uses all defaults.
+
+## SQL contract
+
+The outer statement must be one `SELECT`. Every outer projection must:
+
+- be explicit rather than `*`
+- have a unique alias
+- declare an exact ClickHouse type with `CAST(expr AS Type) AS alias` or `expr::Type AS alias`
+
+CTEs may contain stars, untyped expressions, and set operations. A top-level `UNION`, `INTERSECT`,
+or `EXCEPT` is rejected; wrap it in a CTE and finish with a typed projection.
+
+`order_by`, `partition_by`, and `ttl` expressions may reference only output columns.
+
+## Header fields
+
+| Field | Default | Purpose |
+|---|---|---|
+| `kind` | `table` | `table` for streaming storage or `view` for an ordinary terminal view |
+| `relation_name` | none | Exact warehouse relation name, overriding prefix-based naming |
+| `engine` | `"MergeTree()"` | ClickHouse MergeTree-family table engine |
+| `order_by` | `["_replay_timestamp"]` | Table sorting key expressions |
+| `partition_by` | none | Partition expression |
+| `ttl` | `[defaults].model_ttl` or none | ClickHouse TTL expression |
+| `retention` | model/pipeline/project policy | Typed expiry mapping or `false`; see [retention](/docs/concepts/retention/) |
+| `settings` | none | Table settings mapping |
+| `replay_anchor` | `auto` | Use `replay_anchor never` to prevent this model becoming a replay anchor |
+| `replay_on_change` | inherited | Virtual-environment change policy |
+| `bounded_replay_fallback` | `full` | Virtual-environment fallback for unseedable models |
+
+`replay_on_change` and `bounded_replay_fallback` are rejected in direct mode. `replay_anchor`
+remains valid because direct rebuilds also need replay roots.
+
+`engine`, `order_by`, `partition_by`, `ttl`, `retention`, `settings`, `replay_anchor`, `replay_on_change`, and
+`bounded_replay_fallback` are table-only and are rejected on views.
+
+An explicit model `ttl` overrides `[defaults].model_ttl`. SQLTide validates the effective
+expression against the model's output columns and includes it in table storage identity, desired
+state, and drift detection.
+
+## Driving references
+
+A model has exactly one untyped driving input:
+
+```sql
+FROM __source("orders")
+```
+
+or:
+
+```sql
+FROM __ref("orders")
+```
+
+Source-root models use `__source`. Downstream models use `__ref`.
+
+Additional joins and subqueries must declare their role:
+
+```sql
+FROM __ref("orders") AS orders
+LEFT JOIN __ref("region_lookup", ref_type="reference") AS regions
+  ON orders.region_code = regions.region_code
+```
+
+| `ref_type` | Meaning |
+|---|---|
+| `reference` | A side dependency expected to be stable for replay |
+| `mutable` | A side dependency whose current state may differ from historical processing-time state |
+
+Mutable references emit a replay warning and prevent the model from being a replay anchor. Both
+side-reference types participate in graph scope and ordering.
+
+The single driving edge determines the streaming and replay path. Reference and mutable side edges
+both affect graph ordering and scope, but a mutable side edge also prevents the receiving model from
+becoming a replay anchor. A terminal view may read several graph relations for query-time joins, but
+it has no outgoing edge to another model.
+
+## Terminal views
+
+A terminal view has no driving input and may read any number of sources or models:
+
+```sql
+MODEL (
+  kind view,
+  relation_name customer_orders,
+);
+
+SELECT
+  orders.order_id::UInt64 AS order_id,
+  payments.amount_cents::UInt64 AS amount_cents
+FROM __ref("orders") AS orders
+JOIN __ref("payments") AS payments USING (order_id)
+```
+
+View references do not use `ref_type`: every reference is an ordinary query dependency. Views do
+not participate in source inference, replay roots, watermarks, retention, or replay population. A
+view must have zero downstream model edges across the complete project graph, including
+cross-pipeline references. Other models cannot reference it, while tests and audits may target it.
+
+Without `relation_name`, tables use the effective `table_prefix` and views use `view_prefix`.
+Pipeline naming overrides project naming, whose defaults are `tbl__` and `view__`. Logical refs
+continue to use filename stems. `kafka__`, `raw__`, and `mv__` are reserved internal prefixes.
+
+## Replay columns
+
+Normalized replay columns are source-independent:
+
+```text
+_replay_partition
+_replay_offset
+_replay_timestamp
+_replay_landed_at
+_replay_cursor
+```
+
+Managed Kafka landing exposes partition, offset, timestamp, and landed-at values. Adopted sources
+expose the roles declared in their column mapping. Preserve the columns required by the source mode
+through non-aggregate models when those outputs should remain eligible replay anchors.
+
+Aggregate models do not need to expose post-aggregate replay columns. SQLTide places replay
+predicates on their input query instead.
+
+## Engines and duplicate delivery
+
+Common engines include `MergeTree`, `ReplacingMergeTree`, `SummingMergeTree`, and
+`AggregatingMergeTree`, including replicated variants. Engine choice is part of replay correctness:
+the replay cutoff is inclusive, so authored SQL and storage engines must tolerate duplicate delivery
+where necessary.

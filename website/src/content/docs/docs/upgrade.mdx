@@ -1,0 +1,44 @@
+---
+title: From StreamBuild to SQLTide
+description: Upgrade authored names and preserve the state that SQLTide migrates automatically.
+---
+
+SQLTide 0.60.0 is the renamed package. The command is `sqt`, not `stb`. There is no compatibility
+alias for authored configuration or Python imports.
+
+## Change the authored names
+
+- Install `sqltide` in place of `streambuild` in every development, server and CI environment.
+- Rename `streambuild_project.toml` → `sqltide_project.toml` and
+  `streambuild_local.toml` → `sqltide_local.toml`.
+- Change `STREAMBUILD_*` environment variables to `SQLTIDE_*`.
+- Import `sqltide` instead of `streambuild` in macros, sensors and providers.
+- Change trusted proxies to the default `X-SQLTide-User` header, or explicitly configure your header.
+- Ignore `.sqltide/` in place of `.streambuild/`. Browser sessions must sign in again.
+
+## Let SQLTide migrate stored state
+
+Quiesce writers and upgrade all machines and CI jobs that write to a target together. The first
+connected `sqt` command renames `_streambuild_*` metadata to `_sqltide_*`; it refuses while an old
+StreamBuild run still holds the target lock. Do not remove a lock until you have confirmed no
+warehouse mutation is still running. StreamBuild cannot read a target after it has been renamed.
+
+Accounts in `.streambuild/` or a shared control-store database are migrated too. Managed Kafka
+sources keep their existing consumer groups and committed offsets. Version 0.60.0 still generates
+`streambuild_` group defaults when no group is specified. Preserve an existing live identity:
+changing its prefix creates a different consumer group and does not transfer committed offsets.
+The new-project examples explicitly configure `sqltide_` groups; do not copy those values over an
+existing source. Do not reset broker offsets or drop metadata tables as part of this upgrade.
+
+## Verify before rebuilding
+
+```bash
+sqt --version
+sqt discover
+sqt compile
+sqt plan
+```
+
+Inspect the connected plan before approving a build. Check source groups, target database, retained
+history, role assignments and proxy authentication. A successful compile alone does not prove the
+warehouse or access configuration is correct.

@@ -1,0 +1,105 @@
+---
+title: "sqt plan"
+description: "Preview direct rebuilds or virtual-environment deployments without mutating ClickHouse."
+---
+
+Compare the compiled project with ClickHouse and print a read-only warehouse plan. A successful
+command assembles the complete workflow that a build would execute against the same observed state,
+then atomically publishes its JSON and SQL visibility artifacts without mutating ClickHouse.
+
+```bash
+sqt plan
+sqt plan --select orders
+sqt plan --select pipeline:order_events --json
+sqt plan --deployment-id 20260701T120000Z_release202607
+sqt plan --verbose
+sqt plan -v
+```
+
+The effective project mode chooses the planner:
+
+- **Direct mode:** plan the requested destructive rebuild. No selector means every model; selectors
+  include downstream closure. Matching objects are not pruned.
+- **Virtual environments:** plan changed deployment objects, replay roots, and policies against
+  published and staged state.
+
+Use `--deployment-id` in virtual-environment mode to inspect exact deployment-specific physical
+names. Its timestamp prefix also fixes the deployment creation timestamp, so unchanged warehouse
+state and the same explicit identity produce deterministic workflow bytes. If omitted, `plan`
+generates a disposable preview identity.
+
+## Selection
+
+Repeat `--select` to union bare model names and `pipeline:<name>` selectors:
+
+```bash
+sqt plan --select orders --select region_lookup
+```
+
+Graph `+` syntax, tags, paths, globs, and exclusions are not supported by `plan`.
+
+### Changed direct models
+
+```bash
+sqt plan --changed
+sqt plan --changed --include-missing-upstream
+```
+
+`--changed` selects changed direct models and pipelines reading managed Kafka sources with deployed
+settings drift, then expands their downstream scope. It is direct-only and cannot be combined with
+`--select`. `--include-missing-upstream` includes absent project-owned prerequisites; it requires
+`--changed` or `--select`. The same flags work on `sqt build`. Inspect the connected plan rather than
+assuming every missing or drifted source can be safely recreated.
+
+## Replay controls
+
+```bash
+sqt plan --select orders --full-refresh
+sqt plan --select orders --start-time 2026-07-01T00:00:00Z
+```
+
+The replay controls are mutually exclusive. `--full-refresh` requires `--select` in virtual mode;
+direct `--start-time` accepts `--changed` or an explicit selection.
+
+`--full-refresh` applies only to virtual environments. `--start-time` applies to both modes. In
+direct mode it shows the effective start time in plan text and the nullable top-level `start_time`
+field in plan JSON. The direct SQL template shows the capture, preflight, and replay structure; values
+captured from ClickHouse during execution remain placeholders. Direct replay inputs must already
+exist and expose timestamp or landed-at lineage through the selected closure.
+
+## Common options
+
+Connecting commands accept `--host`, `--port`, `--username`, `--password`, `--database`,
+`--target`, `--vars`, and `--project-dir`. `--json` emits structured output and `--verbose` (`-v`)
+includes full schema diffs.
+
+## Workflow artifacts
+
+After read-only connected inspection, SQLTide atomically replaces the complete plan directory.
+Direct mode publishes a non-executable template because replay watermarks and other runtime captures
+do not exist yet:
+
+```text
+target/run/plan/
+├── plan.json
+├── workflow.template.sql
+└── steps/
+    ├── 0001_<step-id>.sql.template
+    └── ...
+```
+
+Virtual-environment plans have all physical identities and SQL values available during planning, so
+they publish exact `workflow.sql` and `steps/*.sql` files instead.
+
+The bytes printed by `sqt plan --json` are exactly the bytes stored in `plan.json`; text mode writes
+the same JSON through the same serializer. In either layout, the combined workflow joins the
+numbered statements in execution order.
+
+Plan and build use the same connected preparation and ordering rules. They remain independent
+invocations: `sqt build` inspects current warehouse state again and never reads, compares, promotes,
+or executes `target/run/plan/`. Warehouse changes between commands can therefore produce a different
+build workflow; build preflight assertions protect the state observed during its own preparation.
+
+All `target/run/` files are disposable visibility output, not local state. Failed compilation,
+connected inspection, workflow assembly, or publication leaves any previous complete plan artifact
+unchanged.

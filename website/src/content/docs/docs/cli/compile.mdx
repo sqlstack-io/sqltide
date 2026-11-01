@@ -1,0 +1,41 @@
+---
+title: "sqt compile"
+description: "Compile the project into canonical SQL, DDL, graph, test, and audit artifacts."
+---
+
+Compile every project resource without connecting to ClickHouse.
+
+```bash
+sqt compile
+sqt compile --project-dir /path/to/project
+sqt compile --target-dir /tmp/sqltide-target
+```
+
+The default output root is project-level `target/`:
+
+```text
+target/
+  manifest.json
+  sqltide_dag.json
+  compiled/
+    models/<pipeline>/<model>.sql
+    resources/sources/...
+    resources/models/...
+    audits/...
+    tests/...
+```
+
+SQLTide builds the static target in staging and replaces `compiled/`, `manifest.json`, and
+`sqltide_dag.json` individually with atomic filesystem operations and rollback on publication
+failure. The three owners are not exposed as one graph-atomic snapshot. Runtime artifacts under
+`target/run/` are preserved. Sensitive Kafka broker userinfo and source settings are redacted.
+Executable build workflows require connected warehouse state and are not compile artifacts.
+
+| Option | Purpose |
+|---|---|
+| `--project-dir PATH` | Project root |
+| `--target-dir PATH` | Replace the project `target/` root |
+| `--target NAME` | Select a project target |
+| `--vars JSON` | Variable overrides as one JSON object |
+
+`compile` works in both modes and remains connection-free.

@@ -1,0 +1,127 @@
+---
+title: "SQL Testing"
+description: "Model-chain tests, zero-row assertions, macro tests, and bag comparison."
+---
+
+SQLTide discovers `tests/**/*.sql`, assembles each test as one ClickHouse query, and compares
+actual and expected rows with duplicate-aware bag semantics.
+`TEST()` uses the same declaration header grammar as `MODEL()`: write `key value`, not `key: value`.
+
+## Model test
+
+```sql
+TEST (name "line total computes correctly");
+
+WITH __ref__orders AS (
+  SELECT 'ord_001' AS order_id, 2 AS quantity, 10.0 AS unit_price
+),
+__expected__order_items AS (
+  SELECT 'ord_001' AS order_id, 20.0 AS line_total
+)
+SELECT 1
+```
+
+A model-mode test contains:
+
+1. `TEST()` with an optional name
+2. at least one source or model mock
+3. at least one expected target or zero-row assertion
+4. a ceremonial final `SELECT 1`
+
+## CTE roles
+
+| Prefix | Purpose |
+|---|---|
+| `__source__<name>` | Mock `__source("name")` |
+| `__ref__<name>` | Mock `__ref("name")` |
+| `__expected__<model>` | Expected rows for a model target |
+| `__assert__<name>` | Query that must return zero rows |
+
+Arbitrary helper CTEs are allowed. A mock cuts dependency assembly at that relation; dependencies
+without a mock are assembled from the real compiled model graph. Multiple expected targets are
+executed in dependency order.
+
+SQLTide stops traversing at each supplied mock and fills every unmocked path with the real
+compiled model SQL. It evaluates assembled targets in dependency order, compares actual rows with
+type-cast expected rows in both directions, and separately requires each assertion CTE to return no
+rows. All of that work is emitted as one ClickHouse query for the test.
+
+## Zero-row assertion
+
+```sql
+TEST (name "line totals are non-negative");
+
+WITH __ref__orders AS (
+  SELECT 'ord_001' AS order_id, 2 AS quantity, 10.0 AS unit_price
+),
+__assert__no_negative_totals AS (
+  SELECT order_id
+  FROM __ref("order_items")
+  WHERE line_total < 0
+)
+SELECT 1
+```
+
+## Expected values
+
+Expected CTEs may project only the columns under test. SQLTide casts those values to the exact
+compiled target types before comparison.
+
+Comparison is bidirectional and NULL-safe:
+
+- duplicate multiplicity matters
+- missing and unexpected rows are both reported
+- NULL equals NULL through ClickHouse `isNotDistinctFrom`
+
+## Macro test
+
+Use macro mode to test an otherwise standalone project macro:
+
+```sql
+TEST (mode macro, name "line total expression handles nulls");
+
+WITH input_values AS (
+  SELECT 2 AS quantity, 10.0 AS unit_price
+),
+__macro_actual__ AS (
+  SELECT @line_total_expression("quantity", "unit_price") AS line_total
+  FROM input_values
+),
+__macro_expected__ AS (
+  SELECT 20.0 AS line_total
+)
+SELECT 1
+```
+
+Macro calls are allowed in `__macro_actual__`, not in macro expected or helper CTEs.
+
+## Multiple blocks
+
+A file may contain multiple `TEST` blocks. Every block in a multi-test file must have a unique
+`name`. A single block may remain unnamed.
+
+## Run tests
+
+```bash
+sqt test
+sqt test tests/order_events/test_line_total.sql
+sqt test tests/order_events/
+sqt test --select order_items
+sqt test --select +order_items+
+sqt test --verbose
+```
+
+Test selectors support bare model names, `pipeline:<name>`, and optional graph operators:
+
+| Selector | Included target tests |
+|---|---|
+| `order_items` | the selected model |
+| `+order_items` | selected model and upstream models |
+| `order_items+` | selected model and downstream models |
+| `+order_items+` | selected model in both directions |
+
+Runtime SQL is written byte-for-byte under `target/run/tests/`. One warehouse execution error is
+reported as `ERROR` without preventing the remaining tests from running.
+
+Unsupported test surfaces include authored seeds, dbt refs, UDFs, table functions, and scenario
+mode.
