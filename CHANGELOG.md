@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.61.0](https://github.com/sqlstack-io/sqltide/compare/v0.60.0...v0.61.0) (2026-11-01)
+
+
+### Features
+
+* integrate SQLClean rules and verified SQL formatting ([#315](https://github.com/sqlstack-io/sqltide/issues/315)) ([7a6e0e9](https://github.com/sqlstack-io/sqltide/commit/7a6e0e9c871cd0d8a7d26bb501b1780002f272df))
+
+
+### Documentation
+
+* launch SQLTide website and refreshed guides ([#314](https://github.com/sqlstack-io/sqltide/issues/314)) ([ee3ccc4](https://github.com/sqlstack-io/sqltide/commit/ee3ccc4d233b8640d8494709edd0f9cbb8d23c8d))
+
 ## [0.60.0](https://github.com/sqlstack-io/sqltide/compare/v0.59.0...v0.60.0) (2026-11-01)
 
 
