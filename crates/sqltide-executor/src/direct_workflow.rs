@@ -1,6 +1,8 @@
 //! Every statement of a direct build, and the statements that recover its sources, from
 //! pre-rendered adapter SQL.
 
+use sqltide_clickhouse::audit::{audit_count_query, audit_sample_query};
+
 use crate::workflow::{Intent, Phase, Statement, step_segment, terminate_sql, wait_sql};
 
 /// A Kafka table recreated with its declared settings.
@@ -111,18 +113,10 @@ pub fn statements(input: &Input) -> (Vec<Statement>, Vec<Statement>) {
     for (position, (name, query)) in input.audits.iter().enumerate() {
         let prefix: String = format!("audit_{}_{}", position + 1, step_segment(name));
         for (suffix, sql) in [
-            (
-                "count",
-                format!(
-                    "SELECT count() AS failing_row_count FROM (\n{query}\n) AS __sqltide_audit;"
-                ),
-            ),
+            ("count", format!("{};", audit_count_query(query))),
             (
                 "sample",
-                format!(
-                    "SELECT * FROM (\n{query}\n) AS __sqltide_audit LIMIT {};",
-                    input.audit_sample_limit
-                ),
+                format!("{};", audit_sample_query(query, input.audit_sample_limit)),
             ),
         ] {
             let mut statement: Statement = Statement::new(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterQueryResult
@@ -59,7 +60,7 @@ def _execute_single_sql_audit(
         failing_row_count = _query_failing_row_count(query=resolved_query, client=client)
         if failing_row_count:
             sample_result: AdapterQueryResult = client.query(
-                f"SELECT * FROM ({resolved_query}) AS __sqltide_audit LIMIT {AUDIT_SAMPLE_LIMIT}"
+                _native.render_clickhouse_audit_sample_query(resolved_query, AUDIT_SAMPLE_LIMIT)
             )
             sample_column_names = sample_result.column_names
             sample_rows = sample_result.rows
@@ -91,9 +92,7 @@ def _execute_single_sql_audit(
 
 
 def _query_failing_row_count(*, query: str, client: AdapterConnection) -> int:
-    result: AdapterQueryResult = client.query(
-        f"SELECT count() AS value FROM ({query}) AS __sqltide_audit"
-    )
+    result: AdapterQueryResult = client.query(_native.render_clickhouse_audit_count_query(query))
     if not result.rows:
         raise AuditExecutionError("Expected a count row from SQL audit execution")
     count_value: object = result.rows[0][0]

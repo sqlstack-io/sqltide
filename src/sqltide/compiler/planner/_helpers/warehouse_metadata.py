@@ -2,9 +2,9 @@
 
 from collections.abc import Mapping
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
-    METADATA_OBJECT_STATE_TABLE_NAME,
     VIRTUAL_OBJECT_STATE_KIND_RECONCILE,
 )
 from sqltide.adapter.exceptions import AdapterRelationNotFoundError
@@ -39,12 +39,7 @@ def load_all_object_state_records(
 
     try:
         rows: tuple[ObjectStateMetadataRow, ...] = client.query_many(
-            statement="SELECT state_id AS deployment_id, observation_id, state_kind, "
-            "logical_database_name AS database_name, "
-            "logical_object_type AS object_type, logical_object_name AS object_name, "
-            "object_fingerprint AS normalized_fingerprint, canonical_query AS normalized_query, "
-            "observed_at AS recorded_at "
-            f"FROM {metadata_database}.{METADATA_OBJECT_STATE_TABLE_NAME}",
+            statement=_native.render_clickhouse_object_state_records_query(metadata_database),
             decode=_decode_object_state_metadata_row,
         )
     except AdapterRelationNotFoundError:

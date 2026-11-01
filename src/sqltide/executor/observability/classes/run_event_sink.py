@@ -11,9 +11,9 @@ from hashlib import sha256
 from typing import TextIO
 from uuid import uuid4
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
-    METADATA_RUN_STATEMENTS_TABLE_NAME,
     REDACTED_SECRET_PLACEHOLDER,
 )
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -275,11 +275,10 @@ class RunEventSink:
     def _verify_workflow_statements(
         self, *, records: tuple[AdapterRunStatementRecord, ...]
     ) -> None:
-        invocation_id: str = self._invocation_id.replace("\\", "\\\\").replace("'", "\\'")
         result: AdapterQueryResult = self._connection.query(
-            "SELECT statement_sequence, toString(sql_sha256), toString(workflow_sha256) "
-            f"FROM `{self._database}`.`{METADATA_RUN_STATEMENTS_TABLE_NAME}` FINAL "
-            f"WHERE invocation_id = '{invocation_id}' ORDER BY statement_sequence"
+            _native.render_clickhouse_run_statement_verification_query(
+                self._database, self._invocation_id
+            )
         )
         observed: tuple[tuple[int, str, str], ...] = tuple(
             (int(str(row[0])), str(row[1]), str(row[2])) for row in result.rows
