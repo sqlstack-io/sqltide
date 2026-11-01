@@ -1,7 +1,8 @@
 """Resolve rollback publications from authoritative metadata and live bindings."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
@@ -16,8 +17,12 @@ from sqltide.compiler.compile.constants import (
     DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
 )
+from sqltide.executor.promotion.constants import UNRANKED_PUBLICATION_ERROR
 from sqltide.executor.promotion.exceptions import PublishExecutionError
 from sqltide.executor.promotion.models import RollbackPlan, RollbackRequest
+
+_EPOCH: datetime = datetime(1970, 1, 1, tzinfo=UTC)
+_MICROSECOND: timedelta = timedelta(microseconds=1)
 
 
 def resolve_rollback_plan(*, request: RollbackRequest, client: AdapterConnection) -> RollbackPlan:
@@ -29,18 +34,12 @@ def resolve_rollback_plan(*, request: RollbackRequest, client: AdapterConnection
     managed_state: InspectedManagedTableState = client.inspect_managed_table_state(
         request.default_database
     )
-    current_event: AdapterPublishEventRecord = _current_publish_event(
+    current_event: AdapterPublishEventRecord
+    target_event: AdapterPublishEventRecord
+    current_event, target_event = _select_publish_events(
         events=inventory.publish_events,
         active_bindings=managed_state.active_bindings,
-    )
-    target_event: AdapterPublishEventRecord = (
-        _previous_publish_event(events=inventory.publish_events, current_event=current_event)
-        if request.previous
-        else _explicit_publish_event(
-            events=inventory.publish_events,
-            deployment_id=request.deployment_id or "",
-            current_event=current_event,
-        )
+        deployment_id=None if request.previous else request.deployment_id or "",
     )
     deployment_by_id: dict[str, AdapterDeploymentRecord] = {
         deployment.deployment_id: deployment for deployment in inventory.deployments
@@ -103,69 +102,44 @@ def resolve_rollback_plan(*, request: RollbackRequest, client: AdapterConnection
     )
 
 
-def _current_publish_event(
+def _select_publish_events(
     *,
     events: tuple[AdapterPublishEventRecord, ...],
     active_bindings: tuple[InspectedActiveTableBinding, ...],
-) -> AdapterPublishEventRecord:
-    if not active_bindings:
-        raise PublishExecutionError("Rollback requires an active published deployment")
-    active_identity: tuple[tuple[str, str, str], ...] = tuple(
-        sorted(
-            (binding.database, binding.logical_name, binding.physical_name)
-            for binding in active_bindings
-        )
-    )
-    matching_events: tuple[AdapterPublishEventRecord, ...] = tuple(
-        event for event in events if _binding_identity(event.bindings) == active_identity
-    )
-    if not matching_events:
-        raise PublishExecutionError(
-            "Active bindings do not match a complete publication; repair the target before rollback"
-        )
-    return max(matching_events, key=_event_rank)
-
-
-def _previous_publish_event(
-    *,
-    events: tuple[AdapterPublishEventRecord, ...],
-    current_event: AdapterPublishEventRecord,
-) -> AdapterPublishEventRecord:
-    current_rank: tuple[datetime, str] = _event_rank(current_event)
-    current_identity: tuple[tuple[str, str, str], ...] = _binding_identity(current_event.bindings)
-    previous_events: tuple[AdapterPublishEventRecord, ...] = tuple(
-        sorted(
-            (
-                event
+    deployment_id: str | None,
+) -> tuple[AdapterPublishEventRecord, AdapterPublishEventRecord]:
+    try:
+        current: int
+        target: int
+        current, target = _native.select_rollback_publications(
+            [
+                (event.deployment_id, _native_event_rank(event), _native_bindings(event.bindings))
                 for event in events
-                if _event_rank(event) < current_rank
-                and _binding_identity(event.bindings) != current_identity
-            ),
-            key=_event_rank,
-            reverse=True,
+            ],
+            _native_bindings(active_bindings),
+            deployment_id,
         )
-    )
-    if not previous_events:
-        raise PublishExecutionError("No previous published deployment is available for rollback")
-    return previous_events[0]
+    except ValueError as error:
+        if error.args[0] == UNRANKED_PUBLICATION_ERROR:
+            _event_rank(events[error.args[1]])
+        raise PublishExecutionError(error.args[1]) from None
+    return events[current], events[target]
 
 
-def _explicit_publish_event(
-    *,
-    events: tuple[AdapterPublishEventRecord, ...],
-    deployment_id: str,
-    current_event: AdapterPublishEventRecord,
-) -> AdapterPublishEventRecord:
-    if deployment_id == current_event.deployment_id:
-        raise PublishExecutionError(f"Deployment '{deployment_id}' is already active")
-    matching_events: tuple[AdapterPublishEventRecord, ...] = tuple(
-        event for event in events if event.deployment_id == deployment_id
-    )
-    if not matching_events:
-        raise PublishExecutionError(
-            f"Deployment '{deployment_id}' has no successful publication to roll back to"
-        )
-    return max(matching_events, key=_event_rank)
+def _native_event_rank(event: AdapterPublishEventRecord) -> tuple[int, str] | None:
+    try:
+        published_at: datetime
+        rank_id: str
+        published_at, rank_id = _event_rank(event)
+    except ValueError:
+        return None
+    return (published_at - _EPOCH) // _MICROSECOND, rank_id
+
+
+def _native_bindings(
+    bindings: tuple[AdapterStableBinding, ...] | tuple[InspectedActiveTableBinding, ...],
+) -> list[tuple[str, str, str]]:
+    return [(binding.database, binding.logical_name, binding.physical_name) for binding in bindings]
 
 
 def _binding_identity(
