@@ -4,6 +4,7 @@
 
 mod analysis;
 mod artifacts;
+mod clickhouse;
 mod config;
 mod discovery;
 mod executor;
@@ -62,6 +63,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_model_header, module)?)?;
     analysis::register(module)?;
     artifacts::register(module)?;
+    clickhouse::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     discovery::register(module)?;

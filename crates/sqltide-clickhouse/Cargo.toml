@@ -1,0 +1,13 @@
+[package]
+name = "sqltide-clickhouse"
+version.workspace = true
+description = "ClickHouse SQL rendering for SQLTide's adapter: resource DDL and comparison queries."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
