@@ -6,13 +6,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.selection.constants import (
+from sqltide.compiler.compile.main.compiled_models import compiled_models
+from sqltide.compiler.compile.models import CompiledModel, CompiledPipeline, ParsedRef
+from sqltide.compiler.graph.constants import (
     PIPELINE_SELECTOR_NAMESPACE,
     SELECTOR_NAMESPACE_SEPARATOR,
     UPSTREAM_SELECTOR_PREFIX,
 )
-from sqltide.compiler.compile.main.compiled_models import compiled_models
-from sqltide.compiler.compile.models import CompiledModel, CompiledPipeline, ParsedRef
 from sqltide.compiler.test_discovery.main.sql_test_target_names import (
     sql_test_target_names,
 )

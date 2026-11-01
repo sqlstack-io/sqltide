@@ -109,10 +109,12 @@ def parse_generic_sql_audit_definition(
         header=first_header,
         file_path=file_path,
     )
-    if header_values:
+    if header_values.keys() - {"sql_analysis"}:
         raise SqlAuditParseError(
             f"Generic SQL audit definition '{file_path}' must not define AUDIT() header fields"
         )
+    if type(header_values.get("sql_analysis", True)) is not bool:
+        raise SqlAuditParseError(f"AUDIT() in '{file_path}' sql_analysis must be a boolean")
     leading_length: int = len(first_sql) - len(first_sql.lstrip())
     source_line: int
     source_column: int

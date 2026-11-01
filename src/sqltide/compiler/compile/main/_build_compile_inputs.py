@@ -93,6 +93,7 @@ def build_compile_inputs(
             constant_files=discovered_inputs.constant_files,
             enum_files=discovered_inputs.enum_files,
         ),
+        expansions={},
     )
     macro_context: MacroContext = build_macro_context(
         adapter_name=adapter_profile.identity.name,

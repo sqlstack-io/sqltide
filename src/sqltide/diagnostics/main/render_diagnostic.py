@@ -1,4 +1,4 @@
-"""Render one structured diagnostic for human-readable CLI output."""
+"""Render one structured diagnostic for human-readable compiler and CLI output."""
 
 from collections.abc import Mapping
 from pathlib import Path

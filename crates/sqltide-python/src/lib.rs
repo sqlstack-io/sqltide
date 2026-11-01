@@ -17,6 +17,7 @@ mod polyglot;
 mod population;
 mod sources;
 mod sql_scan;
+mod sqlclean;
 mod workflow;
 
 use pyo3::exceptions::PyValueError;
@@ -80,6 +81,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     polyglot::register(module)?;
     population::register(module)?;
     sources::register(module)?;
+    sqlclean::register(module)?;
     sql_scan::register(module)?;
     workflow::register(module)
 }

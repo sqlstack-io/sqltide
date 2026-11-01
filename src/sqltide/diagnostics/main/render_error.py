@@ -1,6 +1,6 @@
 """Render an exception through its structured diagnostic when present."""
 
-from sqltide.diagnostics.main._render_diagnostic import render_diagnostic
+from sqltide.diagnostics.main.render_diagnostic import render_diagnostic
 from sqltide.diagnostics.models import CompilerDiagnostic
 
 

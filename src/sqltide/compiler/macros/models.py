@@ -36,10 +36,13 @@ class LoadedMacro:
 
 @dataclass(frozen=True, repr=False)
 class MacroRegistry:
-    """One deeply immutable invocation-scoped macro registry."""
+    """Immutable macro definitions and invocation-local expansion source maps."""
 
     macros: Mapping[str, LoadedMacro] = field(default_factory=dict)
     declarations: _native.Declarations | None = None
+    expansions: dict[tuple[Path, str, int, int], tuple[str, list[tuple[int, int, int, int]]]] = (
+        field(default_factory=dict, compare=False, repr=False)
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "macros", MappingProxyType(dict(self.macros)))

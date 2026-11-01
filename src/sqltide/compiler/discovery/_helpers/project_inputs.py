@@ -29,7 +29,7 @@ def read_discovered_files(
         DiscoveredProjectFile(
             file_path=file_path,
             relative_path=file_path.relative_to(project_dir),
-            contents=file_path.read_text(encoding="utf-8"),
+            contents=file_path.read_bytes().decode("utf-8"),
         )
         for file_path in sorted(file_paths)
     )

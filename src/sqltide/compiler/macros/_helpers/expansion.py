@@ -53,6 +53,7 @@ def expand_sql_body_macros(
             partial(_macro_error, registry=registry, locate=locate),
             partial(_located_macro_error, registry=registry, locate=locate),
             registry.declarations,
+            partial(registry.expansions.__setitem__, (file_path, sql, source_line, source_column)),
         )
     )
 

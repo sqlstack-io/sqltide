@@ -12,6 +12,8 @@ COMMANDS_REQUIRING_PIPELINES_ROOT: frozenset[CliCommand] = frozenset(
         CliCommand.DEV,
         CliCommand.DISCOVER,
         CliCommand.COMPILE,
+        CliCommand.LINT,
+        CliCommand.FORMAT,
         CliCommand.TEST,
         CliCommand.PLAN,
         CliCommand.BUILD,
@@ -23,7 +25,7 @@ COMMANDS_REQUIRING_PIPELINES_ROOT: frozenset[CliCommand] = frozenset(
     }
 )
 COMMANDS_WITHOUT_ADAPTER_CONNECTION: frozenset[CliCommand] = frozenset(
-    {CliCommand.DISCOVER, CliCommand.COMPILE}
+    {CliCommand.DISCOVER, CliCommand.COMPILE, CliCommand.LINT, CliCommand.FORMAT}
 )
 DIRECT_ONLY_COMMANDS: frozenset[CliCommand] = frozenset()
 VIRTUAL_ENVIRONMENT_ONLY_COMMANDS: frozenset[CliCommand] = frozenset(

@@ -56,7 +56,7 @@ def _model_sql(*, upstream_name: str) -> str:
     return (
         'MODEL (\n  engine "MergeTree()",\n  order_by ["order_id"],\n);\n\n'
         "WITH base AS (\n"
-        "  SELECT\n"
+        "  SELECT DISTINCT\n"
         "    CAST(order_id AS UInt64) AS order_id,\n"
         "    CAST(amount AS Float64) AS amount\n"
         f'  FROM __ref("{upstream_name}")\n'
@@ -70,7 +70,7 @@ def _model_sql(*, upstream_name: str) -> str:
         "    SUM(amount) OVER (\n"
         "      ORDER BY order_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n"
         "    ) AS running_amount,\n"
-        "    ROW_NUMBER() OVER (ORDER BY order_id) AS row_number\n"
+        "    ROW_NUMBER() OVER (ORDER BY order_id, amount) AS row_number\n"
         "  FROM base\n"
         "),\n"
         "grouped AS (\n"

@@ -33,6 +33,7 @@ class CompilationTimings:
     assembly_ms: int
     graph_ms: int
     realization_ms: int
+    rules_ms: int = 0
 
 
 @dataclass(frozen=True)

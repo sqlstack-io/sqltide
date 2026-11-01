@@ -823,7 +823,7 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
     "test_case",
     [
         CompilationEntrypointsTestCase(
-            description="routes exactly ten command paths through one compilation service",
+            description="routes exactly eleven command paths through one compilation service",
             expected_entrypoint_paths=(
                 "src/sqltide/cli/audit/main/_run_audit.py",
                 "src/sqltide/cli/build/main/_run_build.py",
@@ -834,9 +834,10 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
                 "src/sqltide/cli/plan/main/_run_plan.py",
                 "src/sqltide/cli/readiness/main/_run_deployment_audit.py",
                 "src/sqltide/cli/reconcile/main/_run_reconcile.py",
+                "src/sqltide/cli/sql/main/_run_sql.py",
                 "src/sqltide/cli/test/main/_run_test.py",
             ),
-            expected_entrypoint_count=10,
+            expected_entrypoint_count=11,
             expected_assembly_call_count=1,
             expected_realization_call_count=1,
             expected_consumer_rebuild_count=0,
@@ -1041,6 +1042,7 @@ def test_given_compile_artifacts_when_writing_then_discovered_sources_are_not_re
     write_compilation_project(project_dir)
     macro_import_counter: Path = write_macro_import_counter(project_dir)
     original_read_text: Callable[..., str] = Path.read_text
+    original_read_bytes: Callable[..., bytes] = Path.read_bytes
     original_loader_get_data: Callable[..., bytes] = SourceFileLoader.get_data
     with (
         patch.object(
@@ -1049,6 +1051,12 @@ def test_given_compile_artifacts_when_writing_then_discovered_sources_are_not_re
             autospec=True,
             side_effect=original_read_text,
         ) as read_text,
+        patch.object(
+            Path,
+            "read_bytes",
+            autospec=True,
+            side_effect=original_read_bytes,
+        ) as read_bytes,
         patch.object(
             SourceFileLoader,
             "get_data",
@@ -1064,7 +1072,9 @@ def test_given_compile_artifacts_when_writing_then_discovered_sources_are_not_re
             target_dir=project_dir / "target",
         )
 
-    read_paths: tuple[Path, ...] = tuple(call.args[0] for call in read_text.call_args_list)
+    read_paths: tuple[Path, ...] = tuple(
+        call.args[0] for call in (*read_text.call_args_list, *read_bytes.call_args_list)
+    )
     relative_read_paths: tuple[str, ...] = tuple(
         sorted(str(path.relative_to(project_dir)) for path in read_paths)
     )

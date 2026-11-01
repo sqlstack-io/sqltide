@@ -15,7 +15,7 @@ use crate::retention::{
 use crate::text::python_strip;
 use crate::value::{Kind, Value};
 
-const PROJECT_CONFIG_KEYS: [&str; 13] = [
+const PROJECT_CONFIG_KEYS: [&str; 15] = [
     "name",
     "adapter",
     "default_target",
@@ -29,6 +29,8 @@ const PROJECT_CONFIG_KEYS: [&str; 13] = [
     "build",
     "ui",
     "dependencies",
+    "rules",
+    "settings",
 ];
 const LOCAL_CONFIG_KEYS: [&str; 6] = [
     "target",
@@ -301,6 +303,13 @@ impl Parser<'_> {
 
     fn project(&mut self, payload: &Value) -> SpecResult<ProjectConfig> {
         self.allowed_keys(payload, &PROJECT_CONFIG_KEYS, "project")?;
+        let settings = self.mapping(field(payload, "settings"), "settings")?;
+        self.allowed_keys(settings, &["sql_analysis"], "settings")?;
+        if let Some(value) = field(settings, "sql_analysis")
+            && !matches!(value.kind, Kind::Bool(_))
+        {
+            return self.error("settings.sql_analysis must be a boolean");
+        }
         let targets: Vec<(String, ProjectTarget)> = self
             .sorted_entries(field(payload, "targets"), "targets")?
             .into_iter()

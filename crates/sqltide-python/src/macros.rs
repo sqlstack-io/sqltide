@@ -178,8 +178,10 @@ impl<'py> Expansion<'_, 'py> {
     }
 
     /// The SQL with every top-level macro call replaced by its result.
-    fn expand(&self, sql: &[char]) -> PyResult<String> {
+    fn expand(&self, sql: &[char], capture: Option<&Bound<'py, PyAny>>) -> PyResult<String> {
         let mut rendered: String = String::new();
+        let mut spans: Vec<(usize, usize, usize, usize)> = Vec::new();
+        let mut output_position: usize = 0;
         let mut cursor: usize = 0;
         while cursor < sql.len() {
             let Some(start) = find_next_macro_start(sql, cursor).map_err(raise)? else {
@@ -187,10 +189,21 @@ impl<'py> Expansion<'_, 'py> {
                 break;
             };
             rendered.extend(&sql[cursor..start]);
+            output_position += start - cursor;
             let (result, next): (Bound<'py, PyAny>, usize) =
                 self.evaluate_call(sql, start, 0, true)?;
-            rendered.push_str(&result.str()?.to_cow()?);
+            let output = result.str()?;
+            let output = output.to_cow()?;
+            let output_end = output_position + output.chars().count();
+            spans.push((start, next, output_position, output_end));
+            rendered.push_str(&output);
+            output_position = output_end;
             cursor = next;
+        }
+        if !spans.is_empty()
+            && let Some(capture) = capture
+        {
+            capture.call1(((rendered.clone(), spans),))?;
         }
         Ok(rendered)
     }
@@ -613,6 +626,7 @@ fn skip_whitespace(text: &[char], start: usize) -> usize {
 /// describes.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
+#[pyo3(signature = (sql, macro_names, file_path, call, fail, locate, declarations, capture=None))]
 fn expand_macro_calls<'py>(
     py: Python<'py>,
     sql: &str,
@@ -622,6 +636,7 @@ fn expand_macro_calls<'py>(
     fail: &Bound<'py, PyAny>,
     locate: &Bound<'py, PyAny>,
     declarations: Option<PyRef<'py, PyDeclarations>>,
+    capture: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<String> {
     let empty: Declarations = Declarations::default();
     let expansion: Expansion<'_, 'py> = Expansion {
@@ -640,7 +655,7 @@ fn expand_macro_calls<'py>(
         fail,
         locate,
     };
-    expansion.expand(&sql.chars().collect::<Vec<char>>())
+    expansion.expand(&sql.chars().collect::<Vec<char>>(), capture)
 }
 
 /// Unique top-level macro call names in encounter order, without `@const` and `@enum`, and the
