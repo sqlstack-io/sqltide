@@ -1,11 +1,11 @@
-//! SQL test files: the `TEST(...);` blocks a file contains and the name and mode each header
-//! declares.
+//! Extension header blocks: the `MODEL(...);` header of a model file, the `TEST(...);` blocks
+//! of a SQL test file, and the name and mode each test header declares.
 
 use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::text::python_strip;
+use crate::text::{is_python_space, python_strip};
 use crate::value::{Kind, Value};
 
 const NAME_KEY: &str = "name";
@@ -26,6 +26,37 @@ static BLOCK: LazyLock<Regex> = LazyLock::new(|| {
     )
     .expect("valid block pattern")
 });
+
+static MODEL_BLOCK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?s)^[\s\x1C-\x1F]*MODEL[\s\x1C-\x1F]*\((?P<header>.*?)\)[\s\x1C-\x1F]*;[\s\x1C-\x1F]*(?P<sql>.*)$",
+    )
+    .expect("valid model block pattern")
+});
+
+/// A model file's header text, its SQL body, and the one-based line and column, in characters,
+/// where the body's first non-whitespace character sits; `None` without a leading header.
+#[must_use]
+pub fn model_header_block(contents: &str) -> Option<(String, String, usize, usize)> {
+    let captures = MODEL_BLOCK.captures(contents)?;
+    let sql = captures.name("sql").expect("the pattern captures sql");
+    let leading: usize =
+        sql.as_str().len() - sql.as_str().trim_start_matches(is_python_space).len();
+    let before: &str = &contents[..sql.start() + leading];
+    let line: usize = before.matches('\n').count() + 1;
+    let column: usize = before
+        .rsplit_once('\n')
+        .map_or(before, |(_, rest)| rest)
+        .chars()
+        .count()
+        + 1;
+    Some((
+        captures["header"].to_owned(),
+        sql.as_str().to_owned(),
+        line,
+        column,
+    ))
+}
 
 /// One `TEST(...);` block's header text and SQL body.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,14 +96,19 @@ pub fn sql_test_blocks(contents: &str) -> Result<Vec<Block>, LeadingContent> {
     if !python_strip(&contents[..*first]).is_empty() {
         return Err(LeadingContent);
     }
+    let mut counted: (usize, usize) = (0, 0);
     Ok(starts
         .iter()
         .enumerate()
         .map(|(position, start)| {
             let end: usize = starts.get(position + 1).copied().unwrap_or(contents.len());
             let block: &str = python_strip(&contents[*start..end]);
+            counted = (
+                *start,
+                counted.1 + contents[counted.0..*start].chars().count(),
+            );
             Block {
-                start: contents[..*start].chars().count(),
+                start: counted.1,
                 header: BLOCK.captures(block).map(|captures| {
                     let sql = captures.name("sql").expect("the pattern captures sql");
                     BlockHeader {

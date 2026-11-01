@@ -401,6 +401,7 @@ def resolve_variable_values(
 def interpolate_config_value(
     value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
 ) -> object: ...
+def model_header_block(contents: str) -> tuple[str, str, int, int] | None: ...
 def sql_test_blocks(contents: str) -> list[tuple[int, tuple[str, str, int] | None]]: ...
 def sql_test_header_fields(
     file_path: str, header: list[tuple[str, object]]
@@ -411,6 +412,18 @@ def unsupported_audit_header_keys(
 def audit_header_fields(
     file_path: str, header: list[tuple[str, object]]
 ) -> tuple[str, str | None, str | None, bool, int | None, int | None, bool | None]: ...
+def transform_contract(
+    transform_name: str,
+    source: str,
+    references_in_order: list[tuple[str, str, str | None]],
+    output_column_names: list[str],
+    replay_lineage_mode: str,
+    replay_anchor: str,
+    has_aggregate_semantics: bool,
+) -> tuple[bool, bool]: ...
+def view_ref_type_error(
+    view_name: str, references_in_order: list[tuple[str, str, str | None]]
+) -> str | None: ...
 def generic_audit_instances(
     file_path: str,
     raw_audits: object,

@@ -324,7 +324,62 @@ impl SqlTestChainRegistry {
     }
 }
 
+/// `(name, relation type, ref type)` references in query order.
+type ReferenceArgument = (String, String, Option<String>);
+
+fn references(rows: &[ReferenceArgument]) -> Vec<sqltide_compile::transforms::Reference<'_>> {
+    rows.iter()
+        .map(|(name, relation_type, ref_type)| {
+            (name.as_str(), relation_type.as_str(), ref_type.as_deref())
+        })
+        .collect()
+}
+
+/// `(preserves required lineage, replay anchor eligible)` of one transform. Raises
+/// `ValueError(message)` for its first invalid reference or a missing driving source.
+#[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
+fn transform_contract(
+    transform_name: &str,
+    source: &str,
+    references_in_order: Vec<ReferenceArgument>,
+    output_column_names: Vec<String>,
+    replay_lineage_mode: &str,
+    replay_anchor: &str,
+    has_aggregate_semantics: bool,
+) -> PyResult<(bool, bool)> {
+    let columns: Vec<&str> = output_column_names.iter().map(String::as_str).collect();
+    sqltide_compile::transforms::transform_contract(
+        transform_name,
+        source,
+        &references(&references_in_order),
+        &columns,
+        replay_lineage_mode,
+        replay_anchor,
+        has_aggregate_semantics,
+    )
+    .map(|contract| {
+        (
+            contract.preserves_required_lineage,
+            contract.replay_anchor_eligible,
+        )
+    })
+    .map_err(PyValueError::new_err)
+}
+
+/// The message for a view that declares ref types, or `None`.
+#[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
+fn view_ref_type_error(
+    view_name: &str,
+    references_in_order: Vec<ReferenceArgument>,
+) -> Option<String> {
+    sqltide_compile::transforms::view_ref_type_error(view_name, &references(&references_in_order))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(transform_contract, module)?)?;
+    module.add_function(wrap_pyfunction!(view_ref_type_error, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_model_relation_name, module)?)?;
     module.add_function(wrap_pyfunction!(validate_project_relation_names, module)?)?;
     module.add_function(wrap_pyfunction!(render_kafka_retention_ttl, module)?)?;

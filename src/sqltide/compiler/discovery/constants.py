@@ -2,14 +2,8 @@
 
 from __future__ import annotations
 
-import re
-
 import sqltide._native as _native
 
-MODEL_HEADER_PATTERN: re.Pattern[str] = re.compile(
-    r"^\s*MODEL\s*\((?P<header>.*?)\)\s*;\s*(?P<sql>.*)$",
-    re.DOTALL,
-)
 DEFAULT_SQL_MODEL_ENGINE: str = _native.DEFAULT_SQL_MODEL_ENGINE
 DEFAULT_PIPELINE_PREFIX: str = _native.DEFAULT_PIPELINE_PREFIX
 DEFAULT_TABLE_PREFIX: str = _native.DEFAULT_TABLE_PREFIX

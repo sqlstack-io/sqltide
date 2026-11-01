@@ -16,12 +16,12 @@ use sqltide_discovery::config::{
 use sqltide_discovery::durations;
 use sqltide_discovery::errors::{ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
+use sqltide_discovery::header_blocks::{self as test_blocks, Block, LeadingContent};
 use sqltide_discovery::pipeline_config::{self, PipelineSettings};
 use sqltide_discovery::source_registry::{
     self, Boundary, DerivedName, KafkaDefaults, KafkaRetentionChoice, Port, Source, SourceFile,
     SourceKind,
 };
-use sqltide_discovery::sql_test_blocks::{self as test_blocks, Block, LeadingContent};
 
 use sqltide_discovery::effective::{self, EffectiveConfig, Invocation};
 use sqltide_discovery::interpolation;
@@ -1276,6 +1276,13 @@ fn sql_test_blocks(contents: &str) -> PyResult<Vec<SqlTestBlockResult>> {
         .collect())
 }
 
+/// `(header, sql, query line, query column)` of a model file's leading `MODEL(...);` header,
+/// or `None`.
+#[pyfunction]
+fn model_header_block(contents: &str) -> Option<(String, String, usize, usize)> {
+    test_blocks::model_header_block(contents)
+}
+
 /// `(name, mode)` of one parsed `TEST()` header. Raises `ValueError(message)` for unsupported
 /// keys, then an invalid name, then an invalid mode.
 #[pyfunction]
@@ -1462,6 +1469,7 @@ fn render_generic_audit<'py>(
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(sql_test_blocks, module)?)?;
+    module.add_function(wrap_pyfunction!(model_header_block, module)?)?;
     module.add_function(wrap_pyfunction!(sql_test_header_fields, module)?)?;
     module.add_function(wrap_pyfunction!(unsupported_audit_header_keys, module)?)?;
     module.add_function(wrap_pyfunction!(audit_header_fields, module)?)?;
