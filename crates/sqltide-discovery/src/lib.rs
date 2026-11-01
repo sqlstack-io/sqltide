@@ -15,6 +15,7 @@ pub mod project_validation;
 pub mod retention;
 pub mod source_registry;
 pub mod sources;
+pub mod sql_test_classification;
 pub mod text;
 pub mod value;
 

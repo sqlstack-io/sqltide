@@ -4,20 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.discovery.types import SqlRelationType
 from sqltide.compiler.sql_analysis.main._extract_references import extract_references
 from sqltide.compiler.sql_analysis.models import SqlReference
 from sqltide.compiler.test_discovery.constants import (
-    ASSERT_CTE_PREFIX,
-    EXPECTED_CTE_PREFIX,
-    MACRO_ACTUAL_CTE_NAME,
-    MACRO_EXPECTED_CTE_NAME,
-    MODEL_MODE_CTE_PREFIXES,
+    ASSERTION_CTE_ROLE,
+    EXPECTED_CTE_ROLE,
+    HELPER_CTE_ROLE,
+    MACRO_ACTUAL_CTE_ROLE,
+    MACRO_EXPECTED_CTE_ROLE,
     REF_CTE_PREFIX,
-    RESERVED_SQL_TEST_CTE_NAMES,
+    REF_MOCK_CTE_ROLE,
     SOURCE_CTE_PREFIX,
-    UNSUPPORTED_MODE_CTE_NAMES,
-    UNSUPPORTED_MODE_CTE_PREFIXES,
 )
 from sqltide.compiler.test_discovery.exceptions import SqlTestParseError
 from sqltide.compiler.test_discovery.models import (
@@ -26,7 +25,6 @@ from sqltide.compiler.test_discovery.models import (
     SqlTestMock,
     SqlTestModelPayload,
 )
-from sqltide.compiler.test_discovery.types import SqlTestMode
 
 
 def classify_model_test_ctes(
@@ -39,30 +37,18 @@ def classify_model_test_ctes(
     expected_targets: list[SqlTestCte] = []
     assertions: list[SqlTestCte] = []
     cte: SqlTestCte
-    for cte in ctes:
-        _reject_unsupported_cte(cte=cte, file_path=file_path, mode=SqlTestMode.MODEL)
-        _reject_macro_mode_cte(cte=cte, file_path=file_path)
-        mock: SqlTestMock | None = _mock_for(cte=cte, file_path=file_path)
-        if mock is not None:
-            authored_ctes.append(cte)
-            mocks.append(mock)
-            continue
-        if cte.name.startswith(EXPECTED_CTE_PREFIX):
-            _require_suffix(cte=cte, prefix=EXPECTED_CTE_PREFIX, file_path=file_path)
+    role: str
+    for cte, role in zip(
+        ctes, _roles(ctes=ctes, file_path=file_path, macro_mode=False), strict=True
+    ):
+        if role == EXPECTED_CTE_ROLE:
             expected_targets.append(cte)
-            continue
-        if cte.name.startswith(ASSERT_CTE_PREFIX):
-            _require_suffix(cte=cte, prefix=ASSERT_CTE_PREFIX, file_path=file_path)
+        elif role == ASSERTION_CTE_ROLE:
             assertions.append(cte)
-            continue
-        _reject_reserved_cte(cte=cte, file_path=file_path)
-        authored_ctes.append(cte)
-    _validate_model_completeness(
-        mocks=tuple(mocks),
-        expected_targets=tuple(expected_targets),
-        assertions=tuple(assertions),
-        file_path=file_path,
-    )
+        else:
+            authored_ctes.append(cte)
+            if role != HELPER_CTE_ROLE:
+                mocks.append(_mock(cte=cte, is_ref=role == REF_MOCK_CTE_ROLE))
     return tuple(authored_ctes), SqlTestModelPayload(
         mocks=tuple(mocks),
         expected_targets=tuple(expected_targets),
@@ -77,64 +63,38 @@ def classify_macro_test_ctes(
     """Split macro-mode CTEs into helper CTEs and the actual/expected pair."""
 
     authored_ctes: list[SqlTestCte] = []
-    actual_cte: SqlTestCte | None = None
-    expected_cte: SqlTestCte | None = None
+    actual_ctes: list[SqlTestCte] = []
+    expected_ctes: list[SqlTestCte] = []
     cte: SqlTestCte
-    for cte in ctes:
-        _reject_unsupported_cte(cte=cte, file_path=file_path, mode=SqlTestMode.MACRO)
-        if cte.name == MACRO_ACTUAL_CTE_NAME:
-            actual_cte = cte
-            continue
-        if cte.name == MACRO_EXPECTED_CTE_NAME:
-            expected_cte = cte
-            continue
-        _reject_model_mode_cte(cte=cte, file_path=file_path)
-        _reject_reserved_cte(cte=cte, file_path=file_path)
-        authored_ctes.append(cte)
-    if actual_cte is None or expected_cte is None:
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' mode 'macro' must define exactly one "
-            f"{MACRO_ACTUAL_CTE_NAME} CTE and exactly one {MACRO_EXPECTED_CTE_NAME} CTE"
-        )
-    return tuple(authored_ctes), SqlTestMacroPayload(actual=actual_cte, expected=expected_cte)
+    role: str
+    for cte, role in zip(
+        ctes, _roles(ctes=ctes, file_path=file_path, macro_mode=True), strict=True
+    ):
+        if role == MACRO_ACTUAL_CTE_ROLE:
+            actual_ctes.append(cte)
+        elif role == MACRO_EXPECTED_CTE_ROLE:
+            expected_ctes.append(cte)
+        else:
+            authored_ctes.append(cte)
+    return tuple(authored_ctes), SqlTestMacroPayload(
+        actual=actual_ctes[-1], expected=expected_ctes[-1]
+    )
 
 
-def _mock_for(*, cte: SqlTestCte, file_path: Path) -> SqlTestMock | None:
-    if cte.name.startswith(REF_CTE_PREFIX):
-        _require_suffix(cte=cte, prefix=REF_CTE_PREFIX, file_path=file_path)
-        return SqlTestMock(
-            cte_name=cte.name,
-            name=cte.name.removeprefix(REF_CTE_PREFIX),
-            relation_type=SqlRelationType.REF,
-            query=cte.query,
-        )
-    if cte.name.startswith(SOURCE_CTE_PREFIX):
-        _require_suffix(cte=cte, prefix=SOURCE_CTE_PREFIX, file_path=file_path)
-        return SqlTestMock(
-            cte_name=cte.name,
-            name=cte.name.removeprefix(SOURCE_CTE_PREFIX),
-            relation_type=SqlRelationType.SOURCE,
-            query=cte.query,
-        )
-    return None
+def _roles(*, ctes: tuple[SqlTestCte, ...], file_path: Path, macro_mode: bool) -> list[str]:
+    try:
+        return _native.classify_sql_test_ctes([cte.name for cte in ctes], macro_mode)
+    except ValueError as error:
+        raise SqlTestParseError(f"SQL test '{file_path}' {error}") from None
 
 
-def _validate_model_completeness(
-    *,
-    mocks: tuple[SqlTestMock, ...],
-    expected_targets: tuple[SqlTestCte, ...],
-    assertions: tuple[SqlTestCte, ...],
-    file_path: Path,
-) -> None:
-    if not mocks:
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' must define at least one __ref__* or __source__* mock CTE"
-        )
-    if not expected_targets and not assertions:
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' must define at least one __expected__<model> or "
-            "__assert__<assertion> CTE"
-        )
+def _mock(*, cte: SqlTestCte, is_ref: bool) -> SqlTestMock:
+    return SqlTestMock(
+        cte_name=cte.name,
+        name=cte.name.removeprefix(REF_CTE_PREFIX if is_ref else SOURCE_CTE_PREFIX),
+        relation_type=SqlRelationType.REF if is_ref else SqlRelationType.SOURCE,
+        query=cte.query,
+    )
 
 
 def _assertion_reference_names(*, assertions: tuple[SqlTestCte, ...]) -> tuple[str, ...]:
@@ -146,41 +106,3 @@ def _assertion_reference_names(*, assertions: tuple[SqlTestCte, ...]) -> tuple[s
             if reference.relation_type == SqlRelationType.REF:
                 names.append(reference.name)
     return tuple(dict.fromkeys(names))
-
-
-def _reject_unsupported_cte(*, cte: SqlTestCte, file_path: Path, mode: SqlTestMode) -> None:
-    if cte.name in UNSUPPORTED_MODE_CTE_NAMES or cte.name.startswith(UNSUPPORTED_MODE_CTE_PREFIXES):
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' mode '{mode.value}' does not support CTE '{cte.name}'; "
-            "SQLTide supports __source__, __ref__, __expected__, __assert__, "
-            "__macro_actual__, and __macro_expected__"
-        )
-
-
-def _reject_macro_mode_cte(*, cte: SqlTestCte, file_path: Path) -> None:
-    if cte.name in {MACRO_ACTUAL_CTE_NAME, MACRO_EXPECTED_CTE_NAME}:
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' is mode 'model' but defines macro-test CTE "
-            f"'{cte.name}'; use TEST (mode macro)"
-        )
-
-
-def _reject_model_mode_cte(*, cte: SqlTestCte, file_path: Path) -> None:
-    if cte.name.startswith(MODEL_MODE_CTE_PREFIXES):
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' is mode 'macro' but defines model-test CTE '{cte.name}'"
-        )
-
-
-def _reject_reserved_cte(*, cte: SqlTestCte, file_path: Path) -> None:
-    if cte.name in RESERVED_SQL_TEST_CTE_NAMES:
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' uses reserved helper CTE name '{cte.name}'"
-        )
-
-
-def _require_suffix(*, cte: SqlTestCte, prefix: str, file_path: Path) -> None:
-    if not cte.name.removeprefix(prefix):
-        raise SqlTestParseError(
-            f"SQL test '{file_path}' must use {prefix}<name> to identify a target"
-        )

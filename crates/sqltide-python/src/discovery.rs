@@ -11,6 +11,9 @@ use sqltide_discovery::project_validation::{
     ReplayPolicyFacts, validate_project_inputs, validate_replay_policies,
 };
 use sqltide_discovery::sources::{PipelineTransforms, pipeline_sources};
+use sqltide_discovery::sql_test_classification::{
+    CteRole, classify_macro_test_ctes, classify_model_test_ctes,
+};
 
 /// Python objects that pass through interpolation untouched, by handle.
 struct Values<'py> {
@@ -281,10 +284,27 @@ fn validate_project_inputs_py(
     .map_err(PyValueError::new_err)
 }
 
+/// Each SQL test CTE's role (`helper`, `ref_mock`, `source_mock`, `expected`, `assertion`,
+/// `macro_actual`, `macro_expected`); an invalid test raises `ValueError(detail)`, the message
+/// without its `SQL test '<path>' ` prefix.
+#[pyfunction]
+fn classify_sql_test_ctes(names: Vec<String>, macro_mode: bool) -> PyResult<Vec<&'static str>> {
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    let classify = if macro_mode {
+        classify_macro_test_ctes
+    } else {
+        classify_model_test_ctes
+    };
+    classify(&names)
+        .map(|roles| roles.into_iter().map(CteRole::as_str).collect())
+        .map_err(PyValueError::new_err)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(infer_pipeline_sources, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_variable_values, module)?)?;
     module.add_function(wrap_pyfunction!(interpolate_config_value, module)?)?;
     module.add_function(wrap_pyfunction!(validate_replay_policies_py, module)?)?;
-    module.add_function(wrap_pyfunction!(validate_project_inputs_py, module)?)
+    module.add_function(wrap_pyfunction!(validate_project_inputs_py, module)?)?;
+    module.add_function(wrap_pyfunction!(classify_sql_test_ctes, module)?)
 }
