@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from sqltide._native import SqlTestChainRegistry
 from sqltide.adapter.types import AdapterSetDifferenceComparisonRenderer
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.quality.main._build_test_quality_identity import (
@@ -40,6 +41,7 @@ def build_sql_test_case(
     reference_rewriter: SqlReferenceRewriter,
     comparison_renderer: AdapterSetDifferenceComparisonRenderer,
     dialect: str,
+    chain_registry: SqlTestChainRegistry,
 ) -> SqlTestCase:
     """Assemble one discovered SQL test into an executable comparison statement."""
 
@@ -55,6 +57,7 @@ def build_sql_test_case(
         reference_rewriter=reference_rewriter,
         comparison_renderer=comparison_renderer,
         dialect=dialect,
+        chain_registry=chain_registry,
     )
 
 
@@ -65,6 +68,7 @@ def _build_model_test_case(
     reference_rewriter: SqlReferenceRewriter,
     comparison_renderer: AdapterSetDifferenceComparisonRenderer,
     dialect: str,
+    chain_registry: SqlTestChainRegistry,
 ) -> SqlTestCase:
     payload: SqlTestModelPayload = _require_model_payload(loaded_test)
     assembler: SqlTestChainAssembler = SqlTestChainAssembler(
@@ -72,6 +76,7 @@ def _build_model_test_case(
         payload=payload,
         compiled_pipelines=compiled_pipelines,
         reference_rewriter=reference_rewriter,
+        chain_registry=chain_registry,
     )
     authored_ctes: tuple[tuple[str, str], ...] = tuple(
         (cte.name, cte.query) for cte in loaded_test.authored_ctes

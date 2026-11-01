@@ -1,16 +1,12 @@
 """Assemble actual objects from desired objects and inspected state."""
 
+import sqltide._native as _native
 from sqltide.adapter.constants import VIRTUAL_OBJECT_STATE_KIND_RECONCILE
-from sqltide.compiler.compile.constants import (
-    MATERIALIZED_VIEW_NAME_PREFIX,
-    RAW_TABLE_NAME_PREFIX,
-)
 from sqltide.compiler.compile.models import (
     DesiredKafkaTable,
     DesiredMaterializedView,
     DesiredState,
     DesiredTable,
-    DesiredView,
     KafkaTableSpec,
     MaterializedViewSpec,
     ObjectKey,
@@ -18,6 +14,15 @@ from sqltide.compiler.compile.models import (
     TableStorage,
     ViewSpec,
 )
+from sqltide.compiler.planner.constants import (
+    ACTUAL_ACTIVE_TABLE_SOURCE,
+    ACTUAL_PHYSICAL_NAME_LOOKUP,
+    DESIRED_KAFKA_TABLE_KIND,
+    DESIRED_MATERIALIZED_VIEW_KIND,
+    DESIRED_TABLE_KIND,
+    DESIRED_VIEW_KIND,
+)
+from sqltide.compiler.planner.exceptions import ActualStateError
 from sqltide.compiler.planner.models import (
     ActualKafkaTable,
     ActualMaterializedView,
@@ -25,72 +30,121 @@ from sqltide.compiler.planner.models import (
     ActualTable,
     ActualView,
     ObjectStateRecord,
-    RootDeploymentInspection,
 )
-from sqltide.compiler.planner.types import RootDeploymentStateKind
+from sqltide.compiler.planner.types import ActualObject, DesiredObject, RootDeploymentStateKind
 
 
 def build_inspected_actual_objects(
     *,
     desired_state: DesiredState,
     inspection: ActualStateInspection,
-) -> tuple[ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView, ...]:
+) -> tuple[ActualObject, ...]:
     """Build actual objects corresponding to the desired object graph."""
 
-    actual_objects: list[ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView] = []
-    desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
+    keys: list[ObjectKey] = []
+    index_by_key: dict[ObjectKey, int] = {}
+    desired_object: DesiredObject
     for desired_object in desired_state.objects:
-        actual_object: ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView | None
-        if isinstance(desired_object, DesiredKafkaTable):
-            actual_object = _build_actual_kafka_table(
-                desired_object=desired_object,
-                inspection=inspection,
+        index_by_key.setdefault(desired_object.key, len(keys))
+        if index_by_key[desired_object.key] == len(keys):
+            keys.append(desired_object.key)
+    try:
+        sources: list[tuple[str, str | None] | None] = _native.actual_state_sources(
+            [
+                _object_facts(desired=item, index_by_key=index_by_key)
+                for item in desired_state.objects
+            ],
+            set(inspection.existing_names),
+            {
+                index_by_key[key]: (
+                    root.state_kind == RootDeploymentStateKind.ACTIVE_VIEW_PRESENT,
+                    root.active_deployment_id,
+                )
+                for key, root in inspection.active_deployment_by_root.items()
+                if key in index_by_key
+            },
+            {
+                (deployment_id, index_by_key[key]): _record_facts(record)
+                for (deployment_id, key), record in (
+                    inspection.object_state_by_deployment_and_key.items()
+                )
+                if key in index_by_key
+            },
+            {
+                index_by_key[key]: _record_facts(record)
+                for key, record in inspection.latest_object_state_by_key.items()
+                if key in index_by_key
+            },
+            dict(inspection.active_physical_names_by_logical_name),
+            set(inspection.active_table_specs_by_name),
+        )
+    except ValueError as error:
+        _repeat_missing_lookup(lookup=error.args, keys=keys, inspection=inspection)
+        raise ActualStateError(f"Actual-state lookup unexpectedly succeeded: {error}") from None
+    actual_objects: list[ActualObject] = []
+    source: tuple[str, str | None] | None
+    for desired_object, source in zip(desired_state.objects, sources, strict=True):
+        if source is not None:
+            actual_objects.append(
+                _actual_object(desired_object=desired_object, source=source, inspection=inspection)
             )
-        elif isinstance(desired_object, DesiredTable):
-            actual_object = _build_actual_table(
-                desired_object=desired_object,
-                inspection=inspection,
-            )
-        elif isinstance(desired_object, DesiredMaterializedView):
-            actual_object = _build_actual_materialized_view(
-                desired_object=desired_object,
-                desired_state=desired_state,
-                inspection=inspection,
-            )
-        else:
-            actual_object = _build_actual_view(
-                desired_object=desired_object,
-                inspection=inspection,
-            )
-        if actual_object is not None:
-            actual_objects.append(actual_object)
     return tuple(actual_objects)
 
 
-def _build_actual_kafka_table(
-    *,
-    desired_object: DesiredKafkaTable,
-    inspection: ActualStateInspection,
-) -> ActualKafkaTable | None:
-    if desired_object.name not in inspection.existing_names:
-        return None
-    return ActualKafkaTable(
-        key=desired_object.key,
-        spec=KafkaTableSpec(
-            columns=desired_object.columns,
-            kafka=desired_object.kafka,
-        ),
-    )
+def _repeat_missing_lookup(
+    *, lookup: tuple[str, int | str], keys: list[ObjectKey], inspection: ActualStateInspection
+) -> None:
+    """Repeat the inspection lookup the native decision found missing, raising its KeyError."""
+
+    kind, value = lookup
+    if isinstance(value, int):
+        inspection.active_deployment_by_root[keys[value]]
+    elif kind == ACTUAL_PHYSICAL_NAME_LOOKUP:
+        inspection.active_physical_names_by_logical_name[value]
+    else:
+        inspection.active_table_specs_by_name[value]
 
 
-def _build_actual_table(
+def _object_facts(
+    *, desired: DesiredObject, index_by_key: dict[ObjectKey, int]
+) -> tuple[int, str, str, str | None]:
+    desired_object: DesiredObject = desired
+    index: int = index_by_key[desired_object.key]
+    if isinstance(desired_object, DesiredKafkaTable):
+        return (index, desired_object.name, DESIRED_KAFKA_TABLE_KIND, None)
+    if isinstance(desired_object, DesiredTable):
+        return (index, desired_object.name, DESIRED_TABLE_KIND, None)
+    if isinstance(desired_object, DesiredMaterializedView):
+        return (
+            index,
+            desired_object.name,
+            DESIRED_MATERIALIZED_VIEW_KIND,
+            desired_object.target_table_name,
+        )
+    return (index, desired_object.name, DESIRED_VIEW_KIND, None)
+
+
+def _record_facts(record: ObjectStateRecord) -> tuple[bool, str | None]:
+    return (record.state_kind == VIRTUAL_OBJECT_STATE_KIND_RECONCILE, record.normalized_query)
+
+
+def _actual_object(
     *,
-    desired_object: DesiredTable,
+    desired_object: DesiredObject,
+    source: tuple[str, str | None],
     inspection: ActualStateInspection,
-) -> ActualTable | None:
-    if desired_object.name.startswith(RAW_TABLE_NAME_PREFIX):
-        if desired_object.name not in inspection.existing_names:
-            return None
+) -> ActualObject:
+    kind, value = source
+    if isinstance(desired_object, DesiredKafkaTable):
+        return ActualKafkaTable(
+            key=desired_object.key,
+            spec=KafkaTableSpec(columns=desired_object.columns, kafka=desired_object.kafka),
+        )
+    if isinstance(desired_object, DesiredTable):
+        if kind == ACTUAL_ACTIVE_TABLE_SOURCE and value is not None:
+            return ActualTable(
+                key=desired_object.key, spec=inspection.active_table_specs_by_name[value]
+            )
         return ActualTable(
             key=desired_object.key,
             spec=TableSpec(
@@ -104,141 +158,19 @@ def _build_actual_table(
                 ),
             ),
         )
-
-    root_inspection: RootDeploymentInspection = inspection.active_deployment_by_root[
-        desired_object.key
-    ]
-    if root_inspection.state_kind != RootDeploymentStateKind.ACTIVE_VIEW_PRESENT:
-        return None
-    active_physical_name: str = inspection.active_physical_names_by_logical_name[
-        desired_object.name
-    ]
-    return ActualTable(
-        key=desired_object.key,
-        spec=inspection.active_table_specs_by_name[active_physical_name],
-    )
-
-
-def _build_actual_materialized_view(
-    *,
-    desired_object: DesiredMaterializedView,
-    desired_state: DesiredState,
-    inspection: ActualStateInspection,
-) -> ActualMaterializedView | None:
-    is_managed_view: bool = desired_object.name.startswith(MATERIALIZED_VIEW_NAME_PREFIX)
-    if desired_object.name not in inspection.existing_names and not is_managed_view:
-        return None
-
-    actual_query: str = desired_object.query
-    model_table_names: frozenset[str] = frozenset(
-        object_.name
-        for object_ in desired_state.objects
-        if isinstance(object_, DesiredTable) and not object_.name.startswith(RAW_TABLE_NAME_PREFIX)
-    )
-    if is_managed_view and desired_object.target_table_name in model_table_names:
-        root_key: ObjectKey = _transform_root_key(
-            desired_state=desired_state,
-            target_table_name=desired_object.target_table_name,
+    if isinstance(desired_object, DesiredMaterializedView):
+        query: str = desired_object.query if value is None else value
+        return ActualMaterializedView(
+            key=desired_object.key,
+            spec=MaterializedViewSpec(
+                source_table_name=desired_object.source_table_name,
+                target_table_name=desired_object.target_table_name,
+                query=query,
+                database_template=query,
+            ),
         )
-        root_inspection: RootDeploymentInspection = inspection.active_deployment_by_root[root_key]
-        if root_inspection.state_kind != RootDeploymentStateKind.ACTIVE_VIEW_PRESENT:
-            return None
-        actual_query = _active_deployment_query(
-            desired_object=desired_object,
-            root_inspection=root_inspection,
-            inspection=inspection,
-        )
-        actual_query = _latest_reconcile_query(
-            desired_object=desired_object,
-            fallback_query=actual_query,
-            inspection=inspection,
-        )
-    elif is_managed_view and desired_object.target_table_name.startswith(RAW_TABLE_NAME_PREFIX):
-        if desired_object.name not in inspection.existing_names:
-            return None
-    elif desired_object.name not in inspection.existing_names:
-        return None
-
-    return ActualMaterializedView(
-        key=desired_object.key,
-        spec=MaterializedViewSpec(
-            source_table_name=desired_object.source_table_name,
-            target_table_name=desired_object.target_table_name,
-            query=actual_query,
-            database_template=actual_query,
-        ),
-    )
-
-
-def _build_actual_view(
-    *,
-    desired_object: DesiredView,
-    inspection: ActualStateInspection,
-) -> ActualView | None:
-    root_inspection: RootDeploymentInspection | None = inspection.active_deployment_by_root.get(
-        desired_object.key
-    )
-    if (
-        root_inspection is None
-        or root_inspection.state_kind != RootDeploymentStateKind.ACTIVE_VIEW_PRESENT
-        or root_inspection.active_deployment_id is None
-    ):
-        return None
-    object_state_record: ObjectStateRecord | None = (
-        inspection.object_state_by_deployment_and_key.get(
-            (root_inspection.active_deployment_id, desired_object.key)
-        )
-    )
-    if object_state_record is None or object_state_record.normalized_query is None:
-        return None
+    view_query: str = str(value)
     return ActualView(
         key=desired_object.key,
-        spec=ViewSpec(
-            query=object_state_record.normalized_query,
-            database_template=object_state_record.normalized_query,
-        ),
+        spec=ViewSpec(query=view_query, database_template=view_query),
     )
-
-
-def _transform_root_key(*, desired_state: DesiredState, target_table_name: str) -> ObjectKey:
-    return next(
-        desired_object.key
-        for desired_object in desired_state.objects
-        if isinstance(desired_object, DesiredTable) and desired_object.name == target_table_name
-    )
-
-
-def _active_deployment_query(
-    *,
-    desired_object: DesiredMaterializedView,
-    root_inspection: RootDeploymentInspection,
-    inspection: ActualStateInspection,
-) -> str:
-    if root_inspection.active_deployment_id is None:
-        return desired_object.query
-    object_state_record: ObjectStateRecord | None = (
-        inspection.object_state_by_deployment_and_key.get(
-            (root_inspection.active_deployment_id, desired_object.key)
-        )
-    )
-    if object_state_record is None or object_state_record.normalized_query is None:
-        return desired_object.query
-    return object_state_record.normalized_query
-
-
-def _latest_reconcile_query(
-    *,
-    desired_object: DesiredMaterializedView,
-    fallback_query: str,
-    inspection: ActualStateInspection,
-) -> str:
-    latest_record: ObjectStateRecord | None = inspection.latest_object_state_by_key.get(
-        desired_object.key
-    )
-    if latest_record is None:
-        return fallback_query
-    if latest_record.state_kind != VIRTUAL_OBJECT_STATE_KIND_RECONCILE:
-        return fallback_query
-    if latest_record.normalized_query is None:
-        return fallback_query
-    return latest_record.normalized_query

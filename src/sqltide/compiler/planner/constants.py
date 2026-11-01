@@ -79,3 +79,10 @@ MUTABLE_REF_WARNING_MESSAGE: str = (
     "Transform uses mutable side refs; exact historical replay equivalence cannot be guaranteed "
     "because side-table state may differ from the original processing time."
 )
+
+DESIRED_KAFKA_TABLE_KIND: str = "kafka_table"
+DESIRED_TABLE_KIND: str = "table"
+DESIRED_MATERIALIZED_VIEW_KIND: str = "materialized_view"
+DESIRED_VIEW_KIND: str = "view"
+ACTUAL_ACTIVE_TABLE_SOURCE: str = "active_table"
+ACTUAL_PHYSICAL_NAME_LOOKUP: str = "physical_name"

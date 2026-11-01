@@ -1,7 +1,7 @@
 //! Python bindings for compile policy: model relation names, retention TTL rendering, and
 //! SQL audit policies, quality identities, and manifest contents.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -12,6 +12,7 @@ use sqltide_compile::manifest::{
 use sqltide_compile::quality::{self, AuditIdentityInput, QualityFingerprints, TestIdentityInput};
 use sqltide_compile::relations::{self, ModelClaim, ModelNaming, ModelRelationKind, SourceClaim};
 use sqltide_compile::retention::{self, KafkaRetention, ModelRetention};
+use sqltide_compile::sql_test_chain::{ChainError, resolve_chain};
 
 fn kind(is_table: bool) -> ModelRelationKind {
     if is_table {
@@ -292,6 +293,37 @@ fn build_manifest_contents(
     Ok((contents.pipelines, contents.resources, contents.fingerprint))
 }
 
+/// Every compiled model's references, converted once per compile and shared by its tests.
+#[pyclass(name = "SqlTestChainRegistry", module = "sqltide._native", frozen)]
+struct SqlTestChainRegistry {
+    refs_by_model: HashMap<String, Vec<String>>,
+}
+
+#[pymethods]
+impl SqlTestChainRegistry {
+    #[new]
+    fn new(refs_by_model: HashMap<String, Vec<String>>) -> Self {
+        Self { refs_by_model }
+    }
+
+    /// `(models newly assembled in dependency order, mocks reached)` for one logical relation.
+    /// A cycle raises `ValueError(("cycle", name))`; an unknown relation raises
+    /// `ValueError(("unresolved", name))`.
+    fn resolve(
+        &self,
+        logical_name: &str,
+        mocks: HashSet<String>,
+        assembled: HashSet<String>,
+    ) -> PyResult<(Vec<String>, Vec<String>)> {
+        resolve_chain(logical_name, &self.refs_by_model, &mocks, &assembled)
+            .map(|resolution| (resolution.assembled, resolution.used_mocks))
+            .map_err(|error| match error {
+                ChainError::Cycle(name) => PyValueError::new_err(("cycle", name)),
+                ChainError::Unresolved(name) => PyValueError::new_err(("unresolved", name)),
+            })
+    }
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(resolve_model_relation_name, module)?)?;
     module.add_function(wrap_pyfunction!(validate_project_relation_names, module)?)?;
@@ -300,5 +332,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(resolve_audit_policies_py, module)?)?;
     module.add_function(wrap_pyfunction!(quality_test_identity, module)?)?;
     module.add_function(wrap_pyfunction!(quality_audit_identity, module)?)?;
-    module.add_function(wrap_pyfunction!(build_manifest_contents, module)?)
+    module.add_function(wrap_pyfunction!(build_manifest_contents, module)?)?;
+    module.add_class::<SqlTestChainRegistry>()
 }

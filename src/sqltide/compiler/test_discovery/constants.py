@@ -21,30 +21,6 @@ TEST_HEADER_ONLY_PATTERN: re.Pattern[str] = re.compile(
     r"^\s*TEST\s*\((?P<header>.*?)\)\s*;\s*",
     re.DOTALL | re.MULTILINE,
 )
-RESERVED_SQL_TEST_CTE_NAMES: frozenset[str] = frozenset(
-    {
-        "__actual",
-        "__expected__typed",
-        "__actual__projected",
-        "__missing__",
-        "__unexpected__",
-    }
-)
-UNSUPPORTED_MODE_CTE_NAMES: frozenset[str] = frozenset(
-    {
-        "__udf_actual__",
-        "__udf_expected__",
-        "__table_fn_actual__",
-        "__table_fn_expected__",
-    }
-)
-UNSUPPORTED_MODE_CTE_PREFIXES: tuple[str, ...] = ("__macro__", "__seed__", "__dbt_ref__")
-MODEL_MODE_CTE_PREFIXES: tuple[str, ...] = (
-    REF_CTE_PREFIX,
-    SOURCE_CTE_PREFIX,
-    EXPECTED_CTE_PREFIX,
-    ASSERT_CTE_PREFIX,
-)
 
 TEST_HEADER_NAME_KEY: str = "name"
 TEST_HEADER_MODE_KEY: str = "mode"
@@ -54,3 +30,10 @@ SUPPORTED_SQL_TEST_MODES: str = ", ".join(mode.value for mode in SqlTestMode)
 CEREMONIAL_SELECT_KEYWORD: str = "SELECT"
 CEREMONIAL_SELECT_LITERAL: str = "1"
 SQL_TEST_SCANNER_CONTEXT: str = "SQL test"
+
+HELPER_CTE_ROLE: str = "helper"
+REF_MOCK_CTE_ROLE: str = "ref_mock"
+EXPECTED_CTE_ROLE: str = "expected"
+ASSERTION_CTE_ROLE: str = "assertion"
+MACRO_ACTUAL_CTE_ROLE: str = "macro_actual"
+MACRO_EXPECTED_CTE_ROLE: str = "macro_expected"

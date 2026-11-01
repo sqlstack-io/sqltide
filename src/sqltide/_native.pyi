@@ -797,3 +797,20 @@ def build_manifest_contents(
     pipeline_names: list[str],
     logical_resources: list[tuple[str, str, list[str], list[tuple[str, str]]]],
 ) -> tuple[list[str], list[list[str]], str]: ...
+def classify_sql_test_ctes(names: list[str], macro_mode: bool) -> list[str]: ...
+
+class SqlTestChainRegistry:
+    def __init__(self, refs_by_model: dict[str, list[str]]) -> None: ...
+    def resolve(
+        self, logical_name: str, mocks: set[str], assembled: set[str]
+    ) -> tuple[list[str], list[str]]: ...
+
+def actual_state_sources(
+    objects: list[tuple[int, str, str, str | None]],
+    existing_names: set[str],
+    roots: dict[int, tuple[bool, str | None]],
+    records_by_deployment_and_key: dict[tuple[str, int], tuple[bool, str | None]],
+    latest_records: dict[int, tuple[bool, str | None]],
+    active_physical_names: dict[str, str],
+    active_table_spec_names: set[str],
+) -> list[tuple[str, str | None] | None]: ...

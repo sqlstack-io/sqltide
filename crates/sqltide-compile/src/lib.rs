@@ -7,4 +7,5 @@ pub mod paths;
 pub mod quality;
 pub mod relations;
 pub mod retention;
+pub mod sql_test_chain;
 pub mod staging;
