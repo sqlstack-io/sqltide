@@ -60,61 +60,8 @@ EXECUTION_SETTING_NAME_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z_][A-Za-z0
 EXECUTION_SETTINGS_KEYS: frozenset[str] = frozenset({"replay"})
 DEFAULT_ADAPTER_NAME: str = "clickhouse"
 PYTHON_PACKAGE_INITIALIZER_FILE_NAME: str = "__init__.py"
-INTERPOLATION_TOKEN_START: str = "${"
 KAFKA_NAMING_MACRO_TOPIC_PARAMETER: str = "topic"
-SOURCE_FILE_KEYS: frozenset[str] = frozenset({"sources"})
-SOURCE_KEYS: frozenset[str] = frozenset(
-    {
-        "name",
-        "kind",
-        "broker_list",
-        "topic",
-        "consumer_group",
-        "format",
-        "ttl",
-        "retention",
-        "settings",
-        "table_name",
-        "replay_boundary",
-        "freshness",
-        "host",
-        "port",
-        "database",
-        "table",
-        "user",
-        "password_env",
-        "refresh",
-        "append",
-    }
-)
-POSTGRES_SOURCE_REQUIRED_KEYS: tuple[str, ...] = ("host", "database", "table", "user")
-REFRESH_INTERVAL_PATTERN: re.Pattern[str] = re.compile(
-    r"^\d+\s+(SECOND|MINUTE|HOUR|DAY)S?$", re.IGNORECASE
-)
 DEFAULT_POSTGRES_PORT: int = 5432
-BOOLEAN_TRUE_LITERALS: frozenset[str] = frozenset({"true", "yes", "1"})
-BOOLEAN_FALSE_LITERALS: frozenset[str] = frozenset({"false", "no", "0"})
-POSTGRES_FORBIDDEN_SOURCE_KEYS: tuple[str, ...] = (
-    "broker_list",
-    "topic",
-    "consumer_group",
-    "format",
-    "ttl",
-    "retention",
-    "settings",
-    "table_name",
-    "replay_boundary",
-)
-REPLAY_BOUNDARY_KEYS: frozenset[str] = frozenset({"mode", "columns"})
-REPLAY_BOUNDARY_COLUMN_KEYS: frozenset[str] = frozenset(
-    {
-        "_replay_partition",
-        "_replay_offset",
-        "_replay_timestamp",
-        "_replay_landed_at",
-        "_replay_cursor",
-    }
-)
 MODEL_COLUMN_KEYS: frozenset[str] = frozenset({"description", "audits"})
 SECONDS_BY_DURATION_UNIT: dict[str, int] = {
     "d": 24 * 60 * 60,

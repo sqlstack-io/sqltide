@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 
 use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::config::{
@@ -13,6 +14,12 @@ use sqltide_discovery::durations;
 use sqltide_discovery::errors::{ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
 use sqltide_discovery::pipeline_config::{self, PipelineSettings};
+use sqltide_discovery::source_registry::{
+    self, Boundary, DerivedName, KafkaDefaults, KafkaRetentionChoice, Port, Source, SourceFile,
+    SourceKind,
+};
+
+use crate::discovery::PyEnvironment;
 use sqltide_discovery::retention::{self, KafkaRetention, ModelRetention, Retention};
 use sqltide_discovery::value::{Kind, Value};
 
@@ -506,6 +513,7 @@ pub(crate) fn spec_error(py: Python<'_>, error: SpecError) -> PyErr {
         ErrorKind::DurationParse => "DurationParseError",
         ErrorKind::RetentionConfig => "RetentionConfigError",
         ErrorKind::PipelineDiscovery => "PipelineDiscoveryError",
+        ErrorKind::Type => return PyTypeError::new_err(error.message),
     };
     match py
         .import(EXCEPTIONS_MODULE)
@@ -711,7 +719,226 @@ fn parse_pipeline_settings<'py>(
     )
 }
 
+impl<'py> Document<'py> {
+    fn boundary(&self, boundary: &Boundary) -> PyResult<Bound<'py, PyAny>> {
+        let [partition, offset, timestamp, landed_at, cursor] = &boundary.columns.0;
+        self.model(
+            "ReplayBoundary",
+            &[
+                ("mode", self.object(&boundary.mode)?),
+                (
+                    "columns",
+                    self.model(
+                        "ReplayBoundaryColumns",
+                        &[
+                            ("partition", self.object(partition.as_deref())?),
+                            ("offset", self.object(offset.as_deref())?),
+                            ("timestamp", self.object(timestamp.as_deref())?),
+                            ("landed_at", self.object(landed_at.as_deref())?),
+                            ("cursor", self.object(cursor.as_deref())?),
+                        ],
+                    )?,
+                ),
+            ],
+        )
+    }
+
+    fn source(
+        &self,
+        source: &Source,
+        default_retention: &Bound<'py, PyAny>,
+        default_freshness: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let freshness: Bound<'py, PyAny> = match &source.freshness {
+            Some(_) => self.freshness(source.freshness.as_ref())?,
+            None => default_freshness.clone(),
+        };
+        match &source.kind {
+            SourceKind::Kafka(kafka) => {
+                let (retention, origin): (Bound<'py, PyAny>, Option<&str>) = match &kafka.retention
+                {
+                    KafkaRetentionChoice::Source(retention) => (
+                        retention_object(self.py, retention.clone(), |policy| {
+                            self.kafka_retention(policy)
+                        })?,
+                        Some("source"),
+                    ),
+                    KafkaRetentionChoice::Project => (default_retention.clone(), Some("project")),
+                    KafkaRetentionChoice::None => (self.object(None::<u8>)?, None),
+                };
+                let settings: Bound<'py, PyAny> = if kafka.settings.is_empty() {
+                    self.object(None::<u8>)?
+                } else {
+                    let settings: Bound<'py, PyDict> = PyDict::new(self.py);
+                    for (key, value) in &kafka.settings {
+                        settings.set_item(key, value)?;
+                    }
+                    settings.into_any()
+                };
+                let (macro_name, fingerprint) = match &kafka.derived {
+                    Some((macro_name, fingerprint)) => {
+                        (Some(macro_name.as_str()), Some(fingerprint.as_str()))
+                    }
+                    None => (None, None),
+                };
+                self.model(
+                    "KafkaLandingStep",
+                    &[
+                        ("name", self.object(&kafka.name)?),
+                        (
+                            "kafka",
+                            self.model(
+                                "KafkaSettings",
+                                &[
+                                    ("broker_list", self.object(&kafka.broker_list)?),
+                                    ("topic", self.object(&kafka.topic)?),
+                                    (
+                                        "consumer_group",
+                                        self.object(kafka.consumer_group.as_deref())?,
+                                    ),
+                                    ("format", self.object(&kafka.format)?),
+                                    ("ttl", self.object(kafka.ttl.as_deref())?),
+                                    ("settings", settings),
+                                    ("retention", retention),
+                                    ("retention_origin", self.object(origin)?),
+                                ],
+                            )?,
+                        ),
+                        ("replay_boundary", self.boundary(&kafka.replay_boundary)?),
+                        ("freshness", freshness),
+                        (
+                            "name_origin",
+                            self.object(if kafka.derived.is_some() {
+                                "derived"
+                            } else {
+                                "explicit"
+                            })?,
+                        ),
+                        ("naming_macro", self.object(macro_name)?),
+                        ("naming_macro_fingerprint", self.object(fingerprint)?),
+                    ],
+                )
+            }
+            SourceKind::Adopted {
+                name,
+                table_name,
+                replay_boundary,
+            } => self.model(
+                "ExternalTableSourceStep",
+                &[
+                    ("name", self.object(name)?),
+                    ("kind", self.object("stream_table")?),
+                    ("table_name", self.object(table_name)?),
+                    ("replay_boundary", self.boundary(replay_boundary)?),
+                    ("freshness", freshness),
+                ],
+            ),
+            SourceKind::Postgres(postgres) => self.model(
+                "PostgresRefreshSourceStep",
+                &[
+                    ("name", self.object(&postgres.name)?),
+                    ("kind", self.object("postgres")?),
+                    ("host", self.object(&postgres.host)?),
+                    ("database", self.object(&postgres.database)?),
+                    ("table", self.object(&postgres.table)?),
+                    ("user", self.object(&postgres.user)?),
+                    ("refresh", self.object(&postgres.refresh)?),
+                    (
+                        "port",
+                        match postgres.port {
+                            Port::Number(number) => self.object(number)?,
+                            Port::Handle(handle) => self.objects[handle].clone(),
+                        },
+                    ),
+                    (
+                        "password_env",
+                        self.object(postgres.password_env.as_deref())?,
+                    ),
+                    ("append", self.object(postgres.append)?),
+                    ("freshness", freshness),
+                ],
+            ),
+        }
+    }
+}
+
+/// Parse `[(path, payload, decode_error)]` source files in order into one tuple of sources
+/// per file. `derive_name(topic=, label=, file_path=)` runs the Kafka naming macro and returns
+/// `(name, macro_name, fingerprint)`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn parse_source_registry<'py>(
+    py: Python<'py>,
+    files: Vec<(String, Bound<'py, PyAny>, Option<String>)>,
+    variables: &Bound<'py, PyAny>,
+    environment: Bound<'py, PyAny>,
+    default_ttl: Option<String>,
+    default_retention: Bound<'py, PyAny>,
+    default_broker_list: Option<String>,
+    default_freshness: Bound<'py, PyAny>,
+    derive_name: &Bound<'py, PyAny>,
+) -> PyResult<Vec<Bound<'py, PyTuple>>> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let variables: Value = document.value(variables)?;
+    let source_files: Vec<SourceFile> = files
+        .iter()
+        .map(|(path, payload, decode_error)| {
+            Ok(SourceFile {
+                path: path.clone(),
+                payload: match decode_error {
+                    Some(message) => Err(message.clone()),
+                    None => Ok(document.value(payload)?),
+                },
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    let defaults: KafkaDefaults = KafkaDefaults {
+        ttl: default_ttl,
+        retention_set: !default_retention.is_none(),
+        broker_list: default_broker_list,
+    };
+    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
+    let mut derive =
+        |topic: &str, label: &str, file_path: &str| -> Result<DerivedName, SpecError> {
+            let kwargs: Bound<'py, PyDict> = PyDict::new(py);
+            kwargs
+                .set_item("topic", topic)
+                .and_then(|()| kwargs.set_item("label", label))
+                .and_then(|()| kwargs.set_item("file_path", file_path))
+                .and_then(|()| derive_name.call((), Some(&kwargs)))
+                .and_then(|result| result.extract::<DerivedName>())
+                .map_err(|failure| {
+                    callback_error.replace(Some(failure));
+                    SpecError::new(ErrorKind::PipelineDiscovery, String::new())
+                })
+        };
+    let parsed = source_registry::parse_source_registry(
+        &source_files,
+        &variables,
+        &PyEnvironment(environment),
+        &defaults,
+        &mut derive,
+    );
+    if let Some(failure) = callback_error.take() {
+        return Err(failure);
+    }
+    parsed
+        .map_err(|error| spec_error(py, error))?
+        .iter()
+        .map(|sources| {
+            PyTuple::new(
+                py,
+                sources
+                    .iter()
+                    .map(|source| document.source(source, &default_retention, &default_freshness))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(parse_source_registry, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
     module.add_function(wrap_pyfunction!(parse_model_retention, module)?)?;

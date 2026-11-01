@@ -1010,6 +1010,21 @@ def test_given_postgres_source_when_discovering_then_refresh_identity_is_retaine
             """,
             expected_error_fragment="database",
         ),
+        PostgresSourceRejectionTestCase(
+            description="a postgres source rejects a superscript digit port",
+            sources_yaml="""
+            sources:
+              - name: inventory__course
+                kind: postgres
+                host: pg.internal
+                database: inventory
+                table: course
+                user: readonly
+                refresh: 1 HOUR
+                port: "²"
+            """,
+            expected_error_fragment="port must be a whole number",
+        ),
     ],
     ids=lambda case: case.description,
 )

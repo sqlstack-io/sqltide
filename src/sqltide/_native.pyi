@@ -6,11 +6,14 @@ from sqltide.compiler.discovery.models import (
     AuditDefaults,
     AuthoredProjectConfig,
     ExecutionSettings,
+    ExternalTableSourceStep,
+    KafkaLandingStep,
     KafkaRetentionPolicy,
     LocalProjectConfig,
     ModelRetentionPolicy,
     PipelineNaming,
     PipelineProtection,
+    PostgresRefreshSourceStep,
     ReplayOnChangePolicy,
     SourceFreshnessPolicy,
 )
@@ -165,6 +168,16 @@ def parse_pipeline_settings(
     ExecutionSettings,
     ModelRetentionPolicy | Literal[False] | None,
 ]: ...
+def parse_source_registry(
+    files: list[tuple[str, object, str | None]],
+    variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    default_ttl: str | None,
+    default_retention: KafkaRetentionPolicy | Literal[False] | None,
+    default_broker_list: str | None,
+    default_freshness: SourceFreshnessPolicy | None,
+    derive_name: Callable[..., tuple[str, str, str]],
+) -> list[tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...]]: ...
 def parse_project_config(
     payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
 ) -> AuthoredProjectConfig: ...

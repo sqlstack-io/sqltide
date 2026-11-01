@@ -9,6 +9,7 @@ pub mod freshness;
 pub mod interpolation;
 pub mod pipeline_config;
 pub mod retention;
+pub mod source_registry;
 pub mod sources;
 pub mod text;
 pub mod value;
