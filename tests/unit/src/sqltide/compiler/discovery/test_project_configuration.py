@@ -1044,6 +1044,14 @@ def test_given_absent_local_toml_when_loading_then_returns_typed_defaults(
             ),
             expected_error_fragment="run_presumed_failed_after must be longer than 45s",
         ),
+        ProjectConfigurationErrorTestCase(
+            description="rejects an array audit severity",
+            project_contents=(
+                'name = "analytics"\ndefault_target = "dev"\n'
+                '[defaults.audits]\nseverity = ["error"]\n[targets.dev]\n'
+            ),
+            expected_error_fragment="defaults.audits.severity must be 'error' or 'warning'",
+        ),
     ],
     ids=lambda case: case.description,
 )

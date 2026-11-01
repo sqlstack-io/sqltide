@@ -1,6 +1,14 @@
 import os
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, Literal
+
+from sqltide.compiler.discovery.models import (
+    AuthoredProjectConfig,
+    KafkaRetentionPolicy,
+    LocalProjectConfig,
+    ModelRetentionPolicy,
+    SourceFreshnessPolicy,
+)
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -127,6 +135,20 @@ def resolve_variable_values(
 def interpolate_config_value(
     value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
 ) -> object: ...
+def parse_model_retention(
+    value: object, field_path: str
+) -> ModelRetentionPolicy | Literal[False] | None: ...
+def parse_kafka_retention(
+    value: object, field_path: str
+) -> KafkaRetentionPolicy | Literal[False] | None: ...
+def parse_duration_seconds(value: object, field_path: str, allow_zero: bool) -> int: ...
+def parse_freshness_policy(
+    payload: object, label: str, file_path: str
+) -> SourceFreshnessPolicy | None: ...
+def parse_project_config(
+    payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
+) -> AuthoredProjectConfig: ...
+def parse_local_config(payload: Mapping[str, object], file_path: str) -> LocalProjectConfig: ...
 def infer_pipeline_sources(
     pipelines: list[tuple[str, list[tuple[str, str]]]],
     inputs_by_transform: dict[str, str],
