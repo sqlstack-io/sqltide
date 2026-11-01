@@ -12,13 +12,12 @@ from sqltide.adapter.models import (
     AdapterQueryResult,
 )
 from sqltide.adapters.clickhouse._helpers.metadata import (
-    build_clickhouse_metadata_insert_statements,
     load_clickhouse_manifests,
     render_clickhouse_manifest_publication,
     render_clickhouse_metadata_migration_statements,
     render_clickhouse_metadata_migration_workflow,
+    render_clickhouse_metadata_state,
 )
-from sqltide.adapters.clickhouse.models import ClickHouseMetadataStatement
 from sqltide.compiler.planner.main.build_adapter_metadata_state import (
     build_adapter_metadata_state,
 )
@@ -219,25 +218,15 @@ def test_given_metadata_database_when_rendering_then_it_returns_expected_metadat
                 "physical_relation_name, logical_model_database, logical_model_name, "
                 "is_selected_root, object_fingerprint, canonical_query, observed_at) VALUES"
             ),
-            expected_row={
-                "state_id": "20260408T130000Z_ab12cd",
-                "observation_id": (
-                    "622c1dd60e3a5b7e56eae621b143b0756a7fdb685c421d446873718ef43e979e"
-                ),
-                "state_kind": "deployment",
-                "deployment_id": "20260408T130000Z_ab12cd",
-                "logical_database_name": None,
-                "logical_object_type": "table",
-                "logical_object_name": "tbl__orders_enriched",
-                "physical_database_name": None,
-                "physical_relation_name": "tbl__orders_enriched__20260408T130000Z_ab12cd",
-                "logical_model_database": None,
-                "logical_model_name": "orders_enriched",
-                "is_selected_root": False,
-                "object_fingerprint": "fingerprint_transform",
-                "canonical_query": "SELECT * FROM raw__orders",
-                "observed_at": "2026-04-08T13:00:00Z",
-            },
+            expected_values=(
+                "('20260408T130000Z_ab12cd', "
+                "'622c1dd60e3a5b7e56eae621b143b0756a7fdb685c421d446873718ef43e979e', "
+                "'deployment', '20260408T130000Z_ab12cd', NULL, 'table', "
+                "'tbl__orders_enriched', NULL, "
+                "'tbl__orders_enriched__20260408T130000Z_ab12cd', NULL, 'orders_enriched', "
+                "false, 'fingerprint_transform', 'SELECT * FROM raw__orders', "
+                "'2026-04-08T13:00:00Z')"
+            ),
         ),
         MetadataStateInsertStatementTestCase(
             description="builds deployments insert statement rows",
@@ -247,14 +236,10 @@ def test_given_metadata_database_when_rendering_then_it_returns_expected_metadat
                 "(deployment_id, workflow_fingerprint, replay_lineage_mode, boundary_time, "
                 "created_at, tool_version) VALUES"
             ),
-            expected_row={
-                "deployment_id": "20260408T130000Z_ab12cd",
-                "workflow_fingerprint": "workflow-fingerprint",
-                "replay_lineage_mode": "offsets",
-                "boundary_time": "2026-04-08T13:00:05Z",
-                "created_at": "2026-04-08T13:00:00Z",
-                "tool_version": "1.2.3",
-            },
+            expected_values=(
+                "('20260408T130000Z_ab12cd', 'workflow-fingerprint', 'offsets', "
+                "'2026-04-08T13:00:05Z', '2026-04-08T13:00:00Z', '1.2.3')"
+            ),
         ),
         MetadataStateInsertStatementTestCase(
             description="builds deployment-watermarks insert statement rows",
@@ -266,22 +251,11 @@ def test_given_metadata_database_when_rendering_then_it_returns_expected_metadat
                 "value_kind, partition_value, lower_value, cutoff_value, cutoff_inclusive, "
                 "captured_at) VALUES"
             ),
-            expected_row={
-                "deployment_id": "20260408T130000Z_ab12cd",
-                "root_database_name": None,
-                "root_object_type": "table",
-                "root_object_name": "tbl__orders_enriched",
-                "anchor_database_name": None,
-                "anchor_object_type": "table",
-                "anchor_object_name": "raw__orders",
-                "boundary_kind": "offsets",
-                "value_kind": "integer",
-                "partition_value": "0",
-                "lower_value": None,
-                "cutoff_value": "12345",
-                "cutoff_inclusive": True,
-                "captured_at": "1970-01-01 00:00:00.000",
-            },
+            expected_values=(
+                "('20260408T130000Z_ab12cd', NULL, 'table', 'tbl__orders_enriched', NULL, "
+                "'table', 'raw__orders', 'offsets', 'integer', '0', NULL, '12345', true, "
+                "'1970-01-01 00:00:00.000')"
+            ),
         ),
         MetadataStateInsertStatementTestCase(
             description="builds publish-history insert statement rows",
@@ -292,19 +266,12 @@ def test_given_metadata_database_when_rendering_then_it_returns_expected_metadat
                 "logical_database_name, logical_view_name, physical_database_name, "
                 "physical_relation_name, published_at) VALUES"
             ),
-            expected_row={
-                "publication_id": (
-                    "7fde4a17795328da5b8f307aea327ca739a8475d033005bf2208d00e93b21d26"
-                ),
-                "deployment_id": "20260408T130000Z_ab12cd",
-                "operation": "promote",
-                "previous_deployment_id": None,
-                "logical_database_name": "analytics",
-                "logical_view_name": "tbl__orders_enriched",
-                "physical_database_name": "analytics",
-                "physical_relation_name": ("tbl__orders_enriched__20260408T130000Z_ab12cd"),
-                "published_at": "2026-04-08T13:30:00Z",
-            },
+            expected_values=(
+                "('7fde4a17795328da5b8f307aea327ca739a8475d033005bf2208d00e93b21d26', "
+                "'20260408T130000Z_ab12cd', 'promote', NULL, 'analytics', "
+                "'tbl__orders_enriched', 'analytics', "
+                "'tbl__orders_enriched__20260408T130000Z_ab12cd', '2026-04-08T13:30:00Z')"
+            ),
         ),
     ],
     ids=lambda case: case.description,
@@ -312,16 +279,14 @@ def test_given_metadata_database_when_rendering_then_it_returns_expected_metadat
 def test_given_metadata_records_when_building_insert_statement_then_it_returns_expected_rows(
     test_case: MetadataStateInsertStatementTestCase,
 ) -> None:
-    statements: tuple[ClickHouseMetadataStatement, ...] = (
-        build_clickhouse_metadata_insert_statements(
-            database="metadata",
-            state=build_adapter_metadata_state(build_metadata_state()),
-        )
+    statements: tuple[str, ...] = render_clickhouse_metadata_state(
+        database="metadata",
+        state=build_adapter_metadata_state(build_metadata_state()),
     )
-    statement: ClickHouseMetadataStatement = statements[test_case.statement_index]
 
-    assert statement.sql == test_case.expected_sql
-    assert statement.rows == (test_case.expected_row,)
+    assert statements[test_case.statement_index] == (
+        f"{test_case.expected_sql}\n{test_case.expected_values};"
+    )
 
 
 @pytest.mark.parametrize(
@@ -331,6 +296,16 @@ def test_given_metadata_records_when_building_insert_statement_then_it_returns_e
             description="builds structured terminal observation rows",
             expected_invocation_id="inv-1",
             expected_result_id="result-1",
+            expected_invocation_values=(
+                "\n('inv-1', '/projects/orders', 'analytics', 'audit', NULL, 'failed', 1, NULL, "
+                "NULL, NULL, 1, '2026-08-02 12:00:00.000', '2026-08-02 12:00:01.000', 1000, NULL, "
+                "'{\"error_failure_count\":1}', '1.2.3');"
+            ),
+            expected_node_result_values=(
+                "\n('result-1', 'inv-1', 'audit', 'order ids are present', 'binding', "
+                "'fingerprint', 'execution', 'analytics', 'manual', NULL, NULL, 0, 'failed', "
+                "'error', 2, '2026-08-02 12:00:01.000', '{\"sample_rows\":[[1],[2]]}', NULL);"
+            ),
         )
     ],
     ids=lambda case: case.description,
@@ -383,16 +358,10 @@ def test_given_terminal_observations_when_building_inserts_then_rows_are_structu
         node_results=(node_result,),
     )
 
-    statements: tuple[ClickHouseMetadataStatement, ...] = (
-        build_clickhouse_metadata_insert_statements(database="metadata", state=state)
-    )
+    statements: tuple[str, ...] = render_clickhouse_metadata_state(database="metadata", state=state)
 
-    expected_invocation: dict[str, object] = dict(invocation.__dict__)
-    expected_invocation.pop("artifact_project_dir")
-    assert statements[4].rows == (expected_invocation,)
-    assert statements[5].rows == (node_result.__dict__,)
-    assert statements[4].rows[0]["invocation_id"] == test_case.expected_invocation_id
-    assert statements[5].rows[0]["result_id"] == test_case.expected_result_id
+    assert statements[4].endswith(test_case.expected_invocation_values)
+    assert statements[5].endswith(test_case.expected_node_result_values)
 
 
 @pytest.mark.parametrize(

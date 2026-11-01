@@ -130,6 +130,8 @@ class TerminalObservationInsertTestCase:
     description: str
     expected_invocation_id: str
     expected_result_id: str
+    expected_invocation_values: str
+    expected_node_result_values: str
 
 
 @dataclass(frozen=True)
@@ -225,7 +227,7 @@ class MetadataStateInsertStatementTestCase:
     description: str
     statement_index: int
     expected_sql: str
-    expected_row: dict[str, object]
+    expected_values: str
 
 
 @dataclass(frozen=True)

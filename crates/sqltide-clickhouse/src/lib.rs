@@ -2,6 +2,7 @@
 //! connection, and credential substitution; these functions only build SQL text.
 
 pub mod comparison;
+pub mod metadata;
 pub mod replay;
 pub mod resources;
 

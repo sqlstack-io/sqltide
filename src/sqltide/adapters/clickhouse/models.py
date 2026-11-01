@@ -38,15 +38,6 @@ class PhysicalCandidateSystemRow:
 
 
 @dataclass(frozen=True)
-class ClickHouseMetadataStatement:
-    """A ClickHouse metadata insert statement and its row mappings."""
-
-    table: str
-    sql: str
-    rows: tuple[dict[str, object], ...] = ()
-
-
-@dataclass(frozen=True)
 class ClickHouseDeploymentInventoryRow:
     """One persisted deployment row used by lifecycle cleanup."""
 
