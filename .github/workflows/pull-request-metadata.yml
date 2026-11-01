@@ -113,7 +113,7 @@ jobs:
           unexpected_files="$(gh api --paginate \
             "repos/${GITHUB_REPOSITORY}/pulls/${pull_request}/files" \
             --jq '.[].filename' | grep -Ev \
-            '^(\.release-please-manifest\.json|CHANGELOG\.md|pyproject\.toml|uv\.lock)$' || true)"
+            '^(\.release-please-manifest\.json|CHANGELOG\.md|Cargo\.lock|Cargo\.toml|pyproject\.toml|uv\.lock)$' || true)"
           if [[ -n "${unexpected_files}" ]]; then
             echo "Release pull request contains non-metadata changes:" >&2
             echo "${unexpected_files}" >&2
