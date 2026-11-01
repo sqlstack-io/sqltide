@@ -6,12 +6,14 @@ mod analysis;
 mod artifacts;
 mod clickhouse;
 mod config;
+mod destruction;
 mod discovery;
 mod executor;
 mod graph;
 mod macros;
 mod planner;
 mod polyglot;
+mod population;
 mod sql_scan;
 
 use pyo3::exceptions::PyValueError;
@@ -68,8 +70,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     macros::register(module)?;
     discovery::register(module)?;
     config::register(module)?;
+    destruction::register(module)?;
     executor::register(module)?;
     planner::register(module)?;
     polyglot::register(module)?;
+    population::register(module)?;
     sql_scan::register(module)
 }

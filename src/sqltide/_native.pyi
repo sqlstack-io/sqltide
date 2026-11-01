@@ -2,6 +2,11 @@ import os
 from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
+from sqltide.adapter.models import (
+    AdapterDeploymentInventory,
+    AdapterManifestSnapshot,
+    CatalogSnapshot,
+)
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
     AuthoredProjectConfig,
@@ -186,6 +191,137 @@ type _NativeSpec = tuple[
 def classify_object_changes(
     comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
 ) -> list[tuple[str, str | None, str | None]]: ...
+def destruction_available_pipelines(
+    current: list[str], snapshot: AdapterManifestSnapshot | None
+) -> list[str]: ...
+def resolve_destruction_selection(
+    project_argument: tuple[
+        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
+        list[list[int]],
+        list[list[int]],
+        list[tuple[str, int | None]],
+        list[int],
+        list[int],
+    ],
+    request_argument: tuple[str, str, list[str], list[str], bool],
+    available: list[str],
+) -> tuple[list[str], list[str], list[str]]: ...
+def plan_destruction_scope(
+    project_argument: tuple[
+        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
+        list[list[int]],
+        list[list[int]],
+        list[tuple[str, int | None]],
+        list[int],
+        list[int],
+    ],
+    request_argument: tuple[str, str, list[str], list[str], bool],
+    affected: list[str],
+    current: list[str],
+    snapshot: AdapterManifestSnapshot | None,
+    catalog_snapshot: CatalogSnapshot,
+    deployment_inventory: AdapterDeploymentInventory,
+) -> tuple[list[str], list[str], list[tuple[str, str, list[str], list[str], list[str]]]]: ...
+def build_destruction_evidence(
+    database: str,
+    owned: list[tuple[str, str, list[str], list[str], list[str]]],
+    catalog_snapshot: CatalogSnapshot,
+    stats: dict[str, tuple[int, int]],
+    limit: int | None,
+) -> list[
+    tuple[
+        str,
+        str,
+        str,
+        bool,
+        int | None,
+        int | None,
+        str | None,
+        list[str],
+        list[str],
+        list[str],
+        list[str],
+    ]
+]: ...
+def build_destruction_challenges(
+    pipeline_names: list[str], production_reset: bool
+) -> list[str]: ...
+def destruction_plan_fingerprint(
+    *,
+    operation: str,
+    target: str,
+    database: str,
+    metadata_database: str,
+    requested_pipeline_names: list[str],
+    included_dependent_pipeline_names: list[str],
+    affected_pipeline_names: list[str],
+    affected_model_names: list[str],
+    affected_source_names: list[str],
+    relations: list[
+        tuple[
+            str,
+            str,
+            str,
+            bool,
+            int | None,
+            int | None,
+            str | None,
+            list[str],
+            list[str],
+            list[str],
+            list[str],
+        ]
+    ],
+    challenges: list[str],
+    manifest_fingerprint: str,
+    relation_drop_size_limit: int | None,
+    relation_drop_size_server_limit: int | None,
+    relation_drop_size_override: int | None,
+    relation_drop_size_policy_observed: bool,
+    include_orphans: bool,
+) -> str: ...
+def list_destruction_inactive_pipelines(
+    current: list[str], snapshot_object: AdapterManifestSnapshot
+) -> list[tuple[str, int, int, str]]: ...
+def plan_population_replays(
+    *,
+    roots: list[tuple[int, int, str, str, str | None, int | None]],
+    tables: list[tuple[int, str, str | None, list[str], list[tuple[str, str]]]],
+    views: list[tuple[str, str]],
+    key_names: list[str],
+    physical_names: list[tuple[int, str]],
+    external_columns: list[
+        tuple[int, tuple[str | None, str | None, str | None, str | None, str | None]]
+    ],
+    replay_anchor_keys: set[int],
+    default_database: str,
+    boundary_time: str,
+    watermarks: list[tuple[int, str, str]] | None,
+) -> tuple[
+    list[tuple[str, str]],
+    list[
+        tuple[
+            int,
+            str,
+            str,
+            tuple[str, str, str, str],
+            int,
+            list[tuple[str, str, str | None]],
+            list[str],
+            tuple[str, str, str | None, int | None],
+            bool,
+            list[str],
+            list[tuple[str, str]],
+            bool,
+        ]
+    ],
+]: ...
+def bounded_replay_outcome(
+    mode: str | None,
+    forced_start_time: bool,
+    live_columns: set[str] | None,
+    fallback_without_history: bool,
+) -> str: ...
 def unified_diff(a: str, b: str, from_file: str, to_file: str, keep_ends: bool) -> list[str]: ...
 def stage_deployment(
     keys: list[tuple[str, str, bool]],

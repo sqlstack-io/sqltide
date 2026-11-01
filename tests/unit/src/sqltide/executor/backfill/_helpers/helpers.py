@@ -1,4 +1,4 @@
-from sqltide.adapter.models import AdapterReplayRequest
+from sqltide.adapter.models import AdapterReplayRequest, CatalogColumn, CatalogRelation
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.models import DeploymentPlan, DeploymentWatermarkRecord
@@ -53,3 +53,21 @@ def capture_replay_requests(
         boundary_time="2026-04-08 13:00:00.000",
     )
     return tuple(request for _root_key, request in requests)
+
+
+def bound_live_table(*column_names: str) -> tuple[CatalogRelation, ...]:
+    """Catalog relations for a stable view bound to a live table with `column_names`."""
+
+    return (
+        CatalogRelation(
+            name="tbl__hourly_order_volume",
+            engine="View",
+            columns=(),
+            stable_binding_name="tbl__hourly_order_volume__20260409T150000Z_ab12",
+        ),
+        CatalogRelation(
+            name="tbl__hourly_order_volume__20260409T150000Z_ab12",
+            engine="MergeTree",
+            columns=tuple(CatalogColumn(name=name, type="String") for name in column_names),
+        ),
+    )
