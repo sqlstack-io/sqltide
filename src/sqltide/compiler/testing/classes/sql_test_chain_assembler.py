@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import sqltide._native as _native
 from sqltide.compiler.compile.main.replace_refs import replace_refs
 from sqltide.compiler.compile.models import CompiledModel, CompiledPipeline, ParsedRef
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
@@ -18,7 +19,7 @@ from sqltide.compiler.test_discovery.models import (
     LoadedSqlTest,
     SqlTestModelPayload,
 )
-from sqltide.compiler.testing.constants import ASSEMBLED_MODEL_CTE_PREFIX
+from sqltide.compiler.testing.constants import ASSEMBLED_MODEL_CTE_PREFIX, CHAIN_CYCLE_REASON
 from sqltide.compiler.testing.exceptions import SqlTestAssemblyError
 
 
@@ -32,6 +33,7 @@ class SqlTestChainAssembler:
         payload: SqlTestModelPayload,
         compiled_pipelines: tuple[CompiledPipeline, ...],
         reference_rewriter: SqlReferenceRewriter,
+        chain_registry: _native.SqlTestChainRegistry | None = None,
     ) -> None:
         self._loaded_test: LoadedSqlTest = loaded_test
         self._payload: SqlTestModelPayload = payload
@@ -45,6 +47,9 @@ class SqlTestChainAssembler:
         self._mock_cte_by_name: dict[str, str] = {
             mock.name: mock.cte_name for mock in payload.mocks
         }
+        self._chain_registry: _native.SqlTestChainRegistry = (
+            build_chain_registry(compiled_pipelines) if chain_registry is None else chain_registry
+        )
         self._assembled_cte_by_name: dict[str, str] = {}
         self._assembled_position_by_name: dict[str, int] = {}
         self._assembled_ctes: list[tuple[str, str]] = []
@@ -79,35 +84,24 @@ class SqlTestChainAssembler:
     def resolve(self, *, logical_name: str) -> str:
         """Return the CTE name that realizes one logical relation."""
 
-        pending: list[tuple[str, bool]] = [(logical_name, False)]
-        active: set[str] = set()
-        while pending:
-            current_name: str
-            expanded: bool
-            current_name, expanded = pending.pop()
-            mock_cte_name: str | None = self._mock_cte_by_name.get(current_name)
-            if mock_cte_name is not None:
-                self._used_mock_cte_names.add(mock_cte_name)
-                continue
-            if current_name in self._assembled_cte_by_name:
-                continue
-            if expanded:
-                self._assemble(logical_name=current_name, entry=self._registry[current_name])
-                active.remove(current_name)
-                continue
-            if current_name in active:
+        try:
+            assembled_names, used_mock_names = self._chain_registry.resolve(
+                logical_name, set(self._mock_cte_by_name), set(self._assembled_cte_by_name)
+            )
+        except ValueError as error:
+            reason, name = error.args
+            if reason == CHAIN_CYCLE_REASON:
                 raise SqlTestAssemblyError(
                     f"SQL test '{self._loaded_test.file_path}' encountered a cyclic dependency "
-                    f"while assembling '{current_name}'"
-                )
-            entry: CompiledModel | None = self._registry.get(current_name)
-            if entry is None:
-                raise SqlTestAssemblyError(self._unresolved_message(current_name))
-            active.add(current_name)
-            pending.append((current_name, True))
-            parsed_ref: ParsedRef
-            for parsed_ref in reversed(entry.parsed_refs):
-                pending.append((parsed_ref.name, False))
+                    f"while assembling '{name}'"
+                ) from None
+            raise SqlTestAssemblyError(self._unresolved_message(name)) from None
+        self._used_mock_cte_names.update(
+            self._mock_cte_by_name[mock_name] for mock_name in used_mock_names
+        )
+        assembled_name: str
+        for assembled_name in assembled_names:
+            self._assemble(logical_name=assembled_name, entry=self._registry[assembled_name])
         return self._resolved_cte_name(logical_name)
 
     def rewrite(self, *, sql: str, resolver: dict[str, str]) -> str:
@@ -156,3 +150,16 @@ def _build_registry(
         for compiled_model in compiled_pipeline.models:
             registry[compiled_model.key.name] = compiled_model
     return registry
+
+
+def build_chain_registry(
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+) -> _native.SqlTestChainRegistry:
+    """Convert every compiled model's references once for all tests in one compile."""
+
+    refs_by_model: dict[str, list[str]] = {}
+    name: str
+    model: CompiledModel
+    for name, model in _build_registry(compiled_pipelines).items():
+        refs_by_model[name] = [parsed_ref.name for parsed_ref in model.parsed_refs]
+    return _native.SqlTestChainRegistry(refs_by_model)
