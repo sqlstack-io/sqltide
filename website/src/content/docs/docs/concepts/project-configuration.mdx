@@ -1,0 +1,336 @@
+---
+title: "Project Configuration"
+description: "TOML targets, local overrides, variables, connections, and mode selection."
+---
+
+Every project has a committed `sqltide_project.toml`. Legacy YAML project files are rejected.
+
+```toml
+name = "analytics"
+default_target = "dev"
+adapter = "clickhouse"
+
+[connection]
+host = "localhost"
+port = 8123
+username = "default"
+password = "${ENV:CLICKHOUSE_PASSWORD}"
+
+[vars]
+environment_name = "dev"
+
+[defaults]
+pipeline_mode = "direct"
+kafka_broker_list = "${ENV:KAFKA_BROKERS}"
+managed_source_ttl = "_replay_landed_at + INTERVAL 14 DAY"
+model_ttl = "event_at + INTERVAL 90 DAY"
+run_presumed_failed_after = "10m"
+
+[dependencies]
+model_reference_scope = "pipeline"
+
+[ui]
+timezone = "Europe/London"
+
+[naming]
+pipeline_prefix = "pl__"
+table_prefix = "tbl__"
+view_prefix = "view__"
+
+[targets.dev]
+database = "analytics_dev"
+
+[targets.dev.connection]
+host = "dev-clickhouse"
+
+[targets.dev.vars]
+environment_name = "target-dev"
+```
+
+`name` and `default_target` are required. `adapter` defaults to `clickhouse`.
+The example opts into pipeline-local model references; the built-in default is `"project"`.
+See [dependency policy](/docs/concepts/pipelines/#pipeline-directories) for directional exceptions.
+`[ui].timezone` controls display, not replay boundaries, which remain UTC.
+
+Classify a production target in committed configuration even when its name is not `prod` or
+`production`:
+
+```toml
+[targets.live]
+database = "analytics_live"
+production = true
+```
+
+This immutable classification adds the exact `PRODUCTION` challenge to target reset. It is not
+accepted in `sqltide_local.toml`, so a local override cannot weaken or add production status.
+
+Commands that connect to ClickHouse require `host`, `port`, `username`, and `password` after all
+configuration layers are merged. SQLTide supplies no connection defaults. Use `password = ""`
+when the ClickHouse account intentionally has an empty password.
+
+## Connection settings
+
+`settings` sends ClickHouse session settings on every statement SQLTide runs, including replay:
+
+```toml
+[targets.prod.connection.settings]
+max_threads = "8"
+max_memory_usage = "16000000000"
+```
+
+Values may be strings, numbers, or booleans, and are sent as strings (`true` becomes `"1"`).
+
+These override the server's defaults for SQLTide's own connection only; nothing else querying
+the server is affected. Use this when replay needs a different execution profile from the rest of
+the warehouse — for example capping `max_threads` so a large replay does not exhaust
+`max_memory_usage`, since read memory scales with thread count.
+
+A target's `settings` table replaces the project-level one rather than merging key by key.
+ClickHouse rejects unknown setting names, so a typo fails on connect.
+
+## Kafka and retention defaults
+
+Set a broker list once for every managed Kafka source in the project:
+
+```toml
+[defaults]
+kafka_broker_list = "${ENV:KAFKA_BROKERS}"
+```
+
+A source-level `broker_list` overrides this value. A managed Kafka source must resolve a broker list
+from one of those levels. The default supports normal project and environment interpolation.
+
+Set an optional project-wide TTL for SQLTide-managed Kafka landing tables:
+
+```toml
+[defaults]
+managed_source_ttl = "_replay_landed_at + INTERVAL 14 DAY"
+```
+
+The value is a ClickHouse TTL expression. `_replay_landed_at` is the recommended clock because it
+tracks when SQLTide persisted the Kafka record, independently of the event timestamp. A managed
+source can override this default with its own `ttl`. When neither level defines a value, SQLTide
+does not add a TTL clause and retains landing data indefinitely.
+
+Set an independent default for table models:
+
+```toml
+[defaults]
+model_ttl = "event_at + INTERVAL 90 DAY"
+```
+
+An explicit `ttl` in `MODEL()` overrides `model_ttl`. When neither level defines a model TTL,
+SQLTide creates the table without a TTL clause. The effective TTL is validated against output
+columns and participates in storage identity and drift detection. Terminal views do not inherit a
+model TTL.
+
+For schema-checked expiry, prefer the typed `[defaults.sources.kafka.retention]` and
+`[defaults.models.retention]` policies described in [Retention policies](/docs/concepts/retention/).
+Do not combine typed and free-form TTL defaults at the same scope.
+
+## Pipeline naming
+
+Pipeline names must start with `pl__` by default:
+
+```toml
+[naming]
+pipeline_prefix = "custom__" # Use "" to allow unprefixed names.
+pipeline_naming_macro = "pipeline_name"
+```
+
+`pipeline_naming_macro` is optional. It names a Python macro that accepts a
+`PipelineNamingContext` and returns the required pipeline directory name. A mismatch stops
+discovery; SQLTide never renames project files. Pipeline, source, and model names must be unique
+across the project.
+
+## Model relation naming
+
+Set project-wide prefixes for table and terminal-view relations:
+
+```toml
+[naming]
+table_prefix = "tbl__"
+view_prefix = "view__"
+```
+
+These are the built-in defaults. A pipeline can partially override them in its optional
+`pipeline.toml`, and a model can set an exact `relation_name` in `MODEL()`. Resolution order is exact
+model name, pipeline prefix, project prefix, then built-in prefix. Logical model identity remains
+the SQL filename stem, so `__ref()`, selectors, tests, and audits do not change when warehouse
+naming changes.
+
+`kafka__`, `raw__`, and `mv__` are reserved for SQLTide internals. Deployment suffixes are also
+internal and cannot be configured. Effective relation names must be unique unqualified identifiers.
+
+## Pipeline build modes
+
+Direct mode is the project default. Set it explicitly with:
+
+```toml
+[defaults]
+pipeline_mode = "direct"
+```
+
+Use virtual mode as the project default with:
+
+```toml
+[defaults]
+pipeline_mode = "virtual"
+```
+
+An individual `pipeline.toml` can override the project default:
+
+```toml
+mode = "virtual"
+```
+
+Direct pipelines may reference direct pipelines, and virtual pipelines may reference virtual
+pipelines. Model relationships cannot cross the mode boundary in either direction. Multiple
+pipelines may still consume the same project source.
+
+`sqt plan` and `sqt build` accept mixed selections. SQLTide stages the virtual phase first and
+starts the immediately-applied direct phase only after virtual staging succeeds.
+
+## Build limits
+
+Set an absolute maximum for the distinct pipelines in a build's expanded downstream scope:
+
+```toml
+[build]
+max_pipelines = 20
+
+[targets.prod.build]
+max_pipelines = 5
+```
+
+A target override requires the project default. Builds above the effective limit stop before any
+warehouse mutation. The limit cannot be set in `sqltide_local.toml`; local-only targets inherit
+the project default.
+
+## Sensor automation
+
+Enable durable event and polling sensors per target:
+
+```toml
+[targets.prod.sensors]
+enabled = true
+tick_retention_days = 30
+```
+
+Sensors are disabled by default. Zero retention keeps all tick history. See
+[Sensors](/concepts/sensors).
+
+## Deployment readiness
+
+Virtual deployment audits use configurable project-wide thresholds:
+
+```toml
+[defaults.deployment_readiness]
+maximum_lag = "30s"
+minimum_staged_row_ratio = 0.5
+```
+
+`maximum_lag` accepts an `<int><s|m|h|d>` duration and defaults to `30s`.
+`minimum_staged_row_ratio` accepts a number from `0` to `1` and defaults to `0.5`. These thresholds
+contribute to the overall `ready`, `caution`, or `not_ready` assessment reported by
+`sqt deployment audit`; replay evidence and applicable SQL audits also contribute. The assessment
+remains advisory and does not block promotion.
+
+## Run recovery window
+
+`sqt dev` blocks a new build while a durable run is still `running` or `unresponsive`. Configure how
+long a silent run remains blocking:
+
+```toml
+[defaults]
+run_presumed_failed_after = "10m"
+```
+
+The value accepts an `<int><s|m|h|d>` duration, defaults to `10m`, and must exceed the 45-second
+unresponsive threshold. Once the window expires, the run is displayed as `presumed_failed` and a
+fresh build may start. This setting is committed project policy because overlapping writes affect
+everyone using the target database.
+
+## Local overrides
+
+Use ignored `sqltide_local.toml` for developer-specific values:
+
+```toml
+target = "personal"
+adapter = "clickhouse"
+
+[defaults]
+pipeline_mode = "virtual"
+
+[connection]
+host = "localhost"
+port = 18123
+
+[targets.personal]
+database = "analytics_personal"
+```
+
+Local configuration can override the target, adapter, default pipeline mode, connection, variables,
+and target values. It cannot replace the project name or authored resources. Other committed
+project defaults are not locally overridable.
+
+## Precedence
+
+### Target
+
+1. CLI `--target`
+2. local `target`
+3. project `default_target`
+
+### Variables, lowest to highest
+
+1. project `[vars]`
+2. selected project target vars
+3. selected local target vars
+4. local `[vars]`
+5. CLI `--vars`
+
+```bash
+sqt plan --vars '{"environment_name":"ci"}'
+```
+
+### Database
+
+1. CLI `--database`
+2. selected local target database
+3. selected project target database
+
+### Connection, lowest to highest
+
+1. project connection
+2. selected project target connection
+3. selected local target connection
+4. local connection
+5. `SQLTIDE_CLICKHOUSE_HOST`, `SQLTIDE_CLICKHOUSE_PORT`,
+   `SQLTIDE_CLICKHOUSE_USERNAME`, and `SQLTIDE_CLICKHOUSE_PASSWORD`
+6. CLI connection flags
+
+There is no public metadata-database override. Metadata lives in the selected target database.
+
+## Interpolation
+
+Use project variables and environment variables in values:
+
+```toml
+[vars]
+database_suffix = "dev"
+credentials = {username = "reader", role = "analytics"}
+
+[targets.dev]
+database = "analytics_${database_suffix}"
+
+[connection]
+password = "${ENV:CLICKHOUSE_PASSWORD}"
+```
+
+Interpolation is recursive through arrays and mappings. A whole token preserves scalar or
+structured value types. Objects and arrays cannot be embedded inside surrounding text; consume
+structured variables through a Python macro instead.
+
+Connection secrets are expanded only when a command actually connects. `sqt discover` and
+`sqt compile` remain connection-free.

@@ -1,0 +1,88 @@
+---
+title: "Sensors"
+description: "Build durable event-driven and polling automation from warehouse state."
+---
+
+Sensors are Python handlers discovered from `sensors/`. Event sensors react to SQLTide events
+derived from persisted run and audit results; polling sensors run no more often than a configured
+interval. Use [providers](/concepts/providers) to inject settings and external clients into either
+kind of sensor.
+
+Enable the dispatcher for a target:
+
+```toml
+[targets.prod.sensors]
+enabled = true
+tick_retention_days = 30
+```
+
+Sensors are disabled by default. `tick_retention_days = 0` retains tick history indefinitely.
+
+## React to events
+
+```python
+from providers.slack import QualitySlack
+from sqltide.events import AuditCompleted, AuditTransition
+from sqltide.sensors import (
+    DefaultSensorStatus,
+    EventSensorContext,
+    SensorRetryPolicy,
+    event_sensor,
+)
+
+@event_sensor(
+    on=AuditCompleted,
+    default_status=DefaultSensorStatus.STOPPED,
+    retry_policy=SensorRetryPolicy(max_attempts=3, backoff_seconds=30),
+)
+def quality_alerts(
+    ctx: EventSensorContext[AuditCompleted], quality_slack: QualitySlack
+) -> None:
+    if ctx.event.transition not in {
+        AuditTransition.NEW_FAILURE,
+        AuditTransition.RECOVERED,
+    }:
+        return
+    message = ctx.step(
+        "compose",
+        lambda: f"{ctx.event.audit_name}: {ctx.event.transition}",
+    )
+    ctx.step("slack", lambda: quality_slack.send(str(message)))
+```
+
+Delivery is at least once. Use `ctx.event.id` as the idempotency key and wrap side effects in
+`ctx.step()` so retries resume from persisted step results. After retries are exhausted, the event
+becomes a dead letter and the stream advances; operators can retry or skip it later.
+
+The built-in catalog currently exposes `AuditCompleted` and `RunCompleted`. Audit events distinguish
+new failures, continuing failures, recoveries, and continuing passes.
+
+## Poll external state
+
+```python
+from sqltide.sensors import PollingSensorContext, PollingSensorResult, polling_sensor
+
+@polling_sensor(minimum_interval_seconds=60)
+def poll_inbox(ctx: PollingSensorContext) -> PollingSensorResult:
+    next_cursor = fetch_after(ctx.cursor)
+    return PollingSensorResult(cursor=next_cursor)
+```
+
+The context includes the last successful cursor, success time, and target. The interval is measured
+from tick start, and a failed poll retries on a later interval.
+
+<Tip>
+  Keep credentials and client setup out of the sensor function. Define them once as a
+  [provider](/concepts/providers), then request that provider by parameter name as shown in
+  `quality_alerts` above.
+</Tip>
+
+## Operate sensors
+
+The **Sensors** page lists each sensor with its toggle, trigger, and last-tick outcome. Starting,
+stopping, resetting, retrying, and skipping require target-scoped `automation.manage` permission.
+
+Each sensor has a detail page with its configuration, tick history, and any unresolved dead
+letters — events whose handler failed every retry, so the sensor's action never ran for them. Retry
+re-attempts the handler without repeating completed steps; skip records a reason and drops the
+event.

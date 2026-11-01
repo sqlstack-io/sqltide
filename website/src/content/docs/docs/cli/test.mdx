@@ -1,0 +1,36 @@
+---
+title: "sqt test"
+description: "Execute SQL-native model and macro tests against ClickHouse."
+---
+
+Discover, assemble, and execute tests under `tests/`:
+
+```bash
+sqt test
+sqt test tests/order_events/test_line_total.sql
+sqt test tests/order_events/
+sqt test --select order_items
+sqt test --select +order_items+
+sqt test --verbose
+```
+
+Positional paths and repeated selectors are combined. Paths must resolve inside the project's
+`tests/` directory.
+
+Selectors support:
+
+- a bare model name
+- `pipeline:<name>`
+- leading `+` for upstream graph expansion
+- trailing `+` for downstream graph expansion
+
+`--verbose` shows every diff row instead of a bounded failure preview. `--target-dir` replaces the
+project-level artifact root.
+
+SQLTide compiles the full project, executes selected cases independently, and writes the exact
+runtime SQL under `target/run/tests/`. Warehouse errors are rendered in command output but are not
+persisted there. Test failures and execution errors exit 1. A project with no discovered tests
+exits 0; requested selectors or paths that match no tests are errors.
+
+`test` works in both direct and virtual-environment modes. Test queries use CTE-assembled model
+logic rather than persisted live or staged model relations.

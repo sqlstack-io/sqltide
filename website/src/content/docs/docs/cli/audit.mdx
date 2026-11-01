@@ -1,0 +1,28 @@
+---
+title: "sqt audit"
+description: "Run data-quality audits against current live relations."
+---
+
+Run authored SQL audits against current relations:
+
+```bash
+sqt audit
+sqt audit --select order_items
+sqt audit --select +daily_revenue
+sqt audit --select pipeline:order_events --json
+sqt audit --force
+```
+
+Live audit works in both modes. Error-severity failures exit 1; warning failures are reported but do
+not fail the command.
+
+Selectors support bare model names, `pipeline:<name>`, and optional leading `+` for upstream
+models. Multiple selectors are repeatable. Trailing `+` is not accepted by audit selection.
+
+Live audits respect each audit's post-build warmup and report an ineligible audit as deferred. Use
+`--force` for an intentional early evaluation; the result still records the audit's effective
+cadence and warmup policy.
+
+Use [`sqt deployment audit <deployment-id>`](/cli/deployment) to audit staged data and produce an
+overall readiness assessment before promotion. Live audit and staged deployment assessment are
+deliberately separate operations.

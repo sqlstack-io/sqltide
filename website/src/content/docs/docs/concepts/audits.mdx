@@ -1,0 +1,188 @@
+---
+title: "Audits"
+description: "Live and staged data-quality checks using singular and generic SQL audits."
+---
+
+An audit passes when its query returns zero rows. Every returned row is a violation.
+`AUDIT()` uses the same declaration header grammar as `MODEL()`: write `key value`, not `key: value`.
+
+## Singular audit
+
+Concrete audits live recursively under `audits/`, excluding `audits/generic/`:
+
+```sql
+AUDIT (
+  name "no negative totals",
+  severity warning,
+  description "Line totals should not be negative",
+);
+
+SELECT order_id, line_total
+FROM __ref("order_items")
+WHERE line_total < 0
+```
+
+| Header field | Default | Meaning |
+|---|---|---|
+| `name` | none | Required for each block in a multi-audit file |
+| `severity` | `error` | `error` or `warning` |
+| `description` | none | Operator-facing explanation |
+| `every` | inherited or none | Schedule cadence as `<int><s\|m\|h\|d>` |
+| `warmup` | inherited or `0s` | Delay after the newest referenced model is applied |
+| `scheduled` | inherited | Set `false` to opt out of inherited scheduling |
+
+Audits require at least one model `__ref`. Source refs are not allowed.
+
+## Generic audit
+
+Reusable definitions live under `audits/generic/`:
+
+```sql
+AUDIT ();
+
+SELECT @column
+FROM __ref("@model")
+WHERE @column NOT IN (@'values')
+```
+
+- `@name` inserts a raw identifier, expression, number, string, or list.
+- `@'name'` inserts quoted SQL literals.
+
+Instantiate definitions from a pipeline's `schema.yml`:
+
+```yaml
+models:
+  - name: orders
+    columns:
+      - name: status
+        audits:
+          - accepted_values:
+              values: [created, paid, shipped, delivered]
+              severity: error
+    audits:
+      - expression_is_true:
+          name: totals are non-negative
+          expression: "amount_cents >= 0"
+```
+
+Column-level instances receive `model` and `column`; model-level instances receive `model`.
+Implicit context values cannot be overridden.
+
+## Live audits
+
+```bash
+sqt audit
+sqt audit --select order_items
+sqt audit --select +daily_revenue
+sqt audit --select pipeline:order_events
+```
+
+Live audits resolve refs to current direct tables or published virtual-environment views. A failing
+error-severity audit exits 1; warnings do not.
+
+Audit selectors support bare model names, `pipeline:<name>`, and an optional leading `+` to include
+upstream models. A trailing `+` is not supported for audits.
+
+## Staged audits
+
+```bash
+DEPLOYMENT_ID="replace-with-deployment-id"
+sqt deployment audit "$DEPLOYMENT_ID"
+```
+
+This virtual-environment command resolves refs to deployment tables. The command combines
+staged-versus-active comparisons, replay coverage, and data-quality results into an overall
+readiness assessment: `ready`, `caution`, or `not_ready`. Here, **audit** names the operation and
+**assessment** names its result.
+
+`deployment audit` does not accept `--select`. Error-severity failures produce a `not_ready`
+assessment, but SQLTide does not enforce that result as a promotion lock. Warning-severity
+failures are included in the results without changing the assessment by themselves. See
+[Virtual Environments](/concepts/deployments#audit-staged-data) for the meaning of each assessment.
+
+Python macros are available in audit SQL bodies.
+
+## Policy and precedence
+
+Project defaults live under `[defaults.audits]`; pipeline defaults live under
+`[audit_defaults]`. An audit's explicit header values win over pipeline values, which win over
+project values:
+
+```toml
+# sqltide_project.toml
+[defaults.audits]
+severity = "warning"
+every = "15m"
+warmup = "5m"
+```
+
+```toml
+# pipelines/orders/pipeline.toml
+[audit_defaults]
+severity = "error"
+every = "5m"
+```
+
+Durations use a positive integer followed by `s`, `m`, `h`, or `d`. `warmup` may be `0s`.
+`scheduled false` removes an inherited cadence. Defining both `scheduled false` and `every`, or
+setting `scheduled true` without an effective cadence, is a compile error.
+
+An audit attached to models from multiple pipelines inherits the strongest severity (`error` over
+`warning`) and longest warmup. Conflicting inherited cadences require an explicit audit cadence.
+The built-in fallback remains `error` when no policy sets severity.
+
+## Warmup behavior
+
+Warmup starts from the newest apply or publication timestamp among the audit's referenced models.
+An audit with positive warmup is recorded as `deferred`, with its eligibility timestamp, rather than
+reported as passed or failed prematurely. Missing model anchors leave a manually invoked audit
+eligible; warmup is not an assertion that input contains rows.
+
+- `sqt audit` respects warmup; `sqt audit --force` evaluates early.
+- Direct builds immediately run `0s` audits and defer positive-warmup audits.
+- Deployment audits validate populated staged data and do not wait for live post-publication warmup.
+- Scheduled audits never start while a direct build is actively mutating the target.
+- A failed direct materialization blocks scheduled audits until a later direct build applies
+  successfully.
+
+## Identity and drift
+
+Every compiled audit and SQL test has a stable logical name, binding key, authored-definition
+fingerprint, and target-resolved execution fingerprint. File moves and formatting-only SQL changes
+preserve identity. The Quality view reports distinct drift states:
+
+- `binding changed`: attachment, referenced models, severity, or another binding field changed;
+- `definition changed`: authored SQL changed semantically;
+- `execution changed`: target-resolved SQL changed, including a referenced relation change;
+- `schedule changed`: cadence or warmup changed without changing execution.
+
+Manual and build-triggered results reset cadence after a matching evaluation even though they have
+no scheduled slot.
+
+## Scheduled audits
+
+The scheduler is disabled unless the selected target enables it:
+
+```toml
+[audit_scheduler]
+enabled = false
+
+[targets.prod.audit_scheduler]
+enabled = true
+```
+
+The selected target override wins over the project value. Scheduling is hosted by `sqt dev`; run
+exactly one scheduler-enabled process per target database. It wakes every 10 seconds, calculates due
+times with the warehouse UTC clock, batches currently due audits, and runs them sequentially.
+Overdue audits run once after restart; missed cadence intervals are not backfilled.
+
+Each cadence occurrence is one logical `scheduled_for` slot. Scheduled work waits while direct
+materialization is unsafe, and the process skips starting a slot while it can observe an active
+scheduled audit run. This is not a distributed lock or leader election protocol. Run exactly one
+scheduler-enabled `sqt dev` process per target database; overlapping processes can both execute the
+same read-only slot.
+
+Known per-audit SQL and result-shape failures are persisted as `error` results for the original slot.
+Failures before identities are available, such as compilation or connection errors, put the
+scheduler into bounded exponential backoff. Scheduler health reports the latest error, backoff,
+running count, and last successful tick.

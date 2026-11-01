@@ -1,0 +1,47 @@
+---
+title: "sqt destroy and reset-target"
+description: "Interactively destroy selected pipelines or reset SQLTide-managed target relations."
+---
+
+Destroy selected pipelines while preserving their managed sources and replay data:
+
+```bash
+sqt destroy \
+  --target uat \
+  --select pipeline:pl__orders pipeline:pl__reporting
+```
+
+Reset all SQLTide-managed pipeline and source relations in one target:
+
+```bash
+sqt reset-target --target uat
+```
+
+Standalone destructive commands resolve the local OS username in the same SQLTide account
+control store used by the development server. The account must be active and hold the built-in
+`admin` role. Use `--control-store-url` when the installation does not use the project-local default
+store.
+
+The frozen plan and review lifecycle use the durable relational control store rather than
+process-local memory. Immediately before execution, SQLTide reloads the account, recompiles the
+project, resolves the selected target's physical database again, and rejects account, target, or
+database drift.
+
+Both commands:
+
+- require an interactive stdin terminal
+- print the complete frozen impact plan before prompting
+- require a separate review decision
+- prompt separately for every exact, case-sensitive challenge value
+- use the same planner, target lock, drift checks, executor, and operation recording as the UI
+
+The commands do not accept non-interactive output or approval options. In particular, there is no
+`--yes`, `--force`, `--auto-approve`, `--confirm`, `--apply`, or `--no-confirm` option.
+
+<Warning>
+  Destruction is irreversible. A later build can recreate authored resources, but SQLTide does
+  not restore the dropped data or automatically roll back a partial failure.
+</Warning>
+
+See [Destructive Operations](/concepts/destructive-operations) for exact resource scope,
+confirmation rules, dependency closure, and retained evidence.

@@ -1,0 +1,76 @@
+---
+title: "Authentication"
+description: "Secure the SQLTide web UI with a trusted proxy or password sessions."
+---
+
+`sqt dev` supports three authentication modes:
+
+| Mode | Use |
+|---|---|
+| `disabled` | Local loopback development only |
+| `trusted_proxy` | An upstream proxy authenticates users and replaces the identity header |
+| `password` | SQLTide login page and server-side sessions |
+
+Account data lives in a SQLite or PostgreSQL control store, never in ClickHouse or project files.
+Disabled authentication cannot bind to a shared interface.
+
+Authentication establishes who made a request. [Access control](/concepts/access-control) separately
+determines which operational changes that user may make.
+
+## Start a secured server
+
+Use trusted-proxy mode behind Apache/PAM, GSSAPI, OIDC, or another authenticated upstream:
+
+```bash
+sqt dev \
+  --auth-mode trusted_proxy \
+  --auth-username-header X-SQLTide-User \
+  --control-store-url sqlite:////var/lib/sqltide/control.db
+```
+
+The proxy must strip and replace `X-SQLTide-User`. Unknown identities become viewers by default;
+use `--auth-unknown-user-policy deny` to require pre-provisioning.
+
+<Warning>
+  Trusted-proxy mode treats the configured identity header as proof of authentication. Do not expose
+  the SQLTide process directly: bind it behind the proxy and ensure the proxy removes any
+  client-supplied copy of that header before setting its own value.
+</Warning>
+
+For standalone password authentication:
+
+```bash
+sqt dev \
+  --auth-mode password \
+  --control-store-url postgresql+psycopg://user:password@db/sqltide
+```
+
+Bootstrap the first administrator without connecting to ClickHouse:
+
+```bash
+sqt admin --control-store-url sqlite:////var/lib/sqltide/control.db create-user \
+  --username operator --authentication-source password --role admin
+```
+
+The CLI reads passwords securely. Administrators can then create, disable, promote, and reset
+accounts in **Users**; the CLI remains the recovery path.
+
+Password mode issues an HTTP-only, same-site session cookie. The cookie is secure by default, and
+insecure cookies are accepted only on a loopback bind. Disabling an account or resetting its
+password revokes its active sessions. Role changes are read from the control store on each request,
+so they do not require a new login.
+
+## Manage accounts
+
+System administrators use **Users** to create accounts, enable or disable access, reset password
+credentials, and grant the built-in `admin` role. SQLTide prevents removal or disabling of the
+last active administrator.
+
+The same page assigns project-authored operational roles. Continue with [Access
+Control](/concepts/access-control) for the policy format, permission scopes, and a complete
+assignment example.
+
+<Tip>
+  Runtime settings also accept `SQLTIDE_AUTH_*` and `SQLTIDE_CONTROL_STORE_URL` environment
+  variables. Run `sqt dev --help` for the complete list.
+</Tip>

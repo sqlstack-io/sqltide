@@ -1,0 +1,30 @@
+---
+title: Command overview
+description: Know which commands are offline, read-only, or mutate the warehouse.
+---
+
+Run `sqt --help` and `sqt <command> --help` for the installed version's options. These docs describe
+SQLTide 0.60.0. Run from inside a project or pass `--project-dir PATH`.
+
+| Task | Command | Effect |
+| --- | --- | --- |
+| Inspect authored resources | `sqt discover` | Offline |
+| Validate and emit SQL/DDL | `sqt compile` | Offline; writes disposable `target/` artifacts |
+| Inspect proposed operations | `sqt plan` | Reads warehouse; writes local plan artifacts |
+| Apply a pipeline change | `sqt build` | Replans, confirms, mutates warehouse |
+| Test model logic | `sqt test` | Executes test queries and records results |
+| Check current data | `sqt audit` | Executes audits and records results |
+| Run local UI and enabled automation | `sqt dev` | Connected server; actions can mutate |
+| Inspect/stage publication workflow | `sqt deployment` | Read or mutate depending on subcommand |
+| Inspect stable bindings | `sqt doctor` | Read-only warehouse inspection |
+| Repair one stable view | `sqt repair active-view` | Explicit mutation |
+| Adopt compatible metadata baseline | `sqt reconcile` | Preview; `--apply` confirms and writes metadata |
+| Clean deployment physicals | `sqt janitor` | Preview; `--apply` drops without another prompt |
+| Destroy/reset owned relations | `sqt destroy`, `sqt reset-target` | Interactive frozen-plan review and typed challenges |
+| Manage accounts | `sqt admin` | Control-store mutation; no warehouse required |
+
+`compile` is not a dry-run build and `plan` is not an approval token. Every build inspects current
+state again. Failed builds are rerun, not resumed from copied workflow SQL.
+
+Selection syntax varies by command: plan/build select downstream closure without graph `+` syntax;
+test supports leading/trailing `+`; audit supports leading `+` only. See each command's reference.

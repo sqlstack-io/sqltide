@@ -1,0 +1,23 @@
+---
+title: sqt admin
+description: Bootstrap and recover accounts without a warehouse connection.
+---
+
+`sqt admin` operates on the SQLite or PostgreSQL account control store. Pass `--project-dir` or
+`--control-store-url` before the subcommand when needed.
+
+```bash
+sqt admin migrate
+sqt admin create-user --username operator --authentication-source password --role admin
+sqt admin grant-role --username operator --role admin
+sqt admin revoke-role --username analyst --role admin
+sqt admin disable-user --username analyst
+sqt admin enable-user --username analyst
+sqt admin reset-password --username operator
+```
+
+Password commands prompt securely; do not put passwords in shell history. `create-user` requires
+an explicit authentication source, `password` or `trusted_proxy`, and accepts display-name/email
+options. The CLI is the bootstrap/recovery path for the built-in roles; project operational roles
+are defined in `access.yml` and assigned in Users. See [authentication](/docs/concepts/authentication-and-access/)
+and [access control](/docs/concepts/access-control/).

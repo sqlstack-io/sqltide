@@ -1,0 +1,83 @@
+---
+title: "Replay and Lineage"
+description: "Replay boundaries, inclusive cutoffs, anchors, and virtual-environment policies."
+---
+
+SQLTide records normalized boundary columns so a model graph can be populated from retained
+stream history. Boundary mode belongs to each source declaration.
+
+## Boundary modes
+
+| Mode | Source types | Boundary |
+|---|---|---|
+| `offsets` | managed Kafka, adopted table | maximum offset per partition |
+| `timestamp` | managed Kafka, adopted table | timestamp cutoff |
+| `landed_at` | managed Kafka only | ClickHouse landing time cutoff |
+| `cursor` | adopted table only | monotonically increasing cursor cutoff |
+
+The normalized columns are `_replay_partition`, `_replay_offset`, `_replay_timestamp`,
+`_replay_landed_at`, and `_replay_cursor`.
+
+## Inclusive, at-least-once cutoffs
+
+Every replay boundary is inclusive. SQLTide intentionally allows overlap between rows handled
+by an attached live materialized view and rows inserted by replay. This avoids missing data at the
+cutoff, but it is not an exactly-once guarantee.
+
+Replay includes rows at boundary `B`, while the attached live materialized view may also deliver
+those same boundary rows. This deliberate at-least-once overlap closes the gap between retained
+history and live ingestion; it does not deduplicate the target.
+
+Model SQL and ClickHouse engines own deduplication or aggregate idempotency.
+
+## Replay anchors
+
+A replay starts at a source or eligible upstream model and flows through materialized views into the
+selected closure. A model can be an anchor when it:
+
+- preserves the lineage required by its source mode
+- is non-aggregate
+- has no mutable side reference
+- does not set `replay_anchor never`
+
+SQLTide derives anchors from typed graph edges. A selected model also includes its descendants.
+
+## Direct mode
+
+Direct builds replay retained history for the selected closure. There is no bounded change policy:
+the selected resources are rebuilt each time. Before teardown, SQLTide verifies the source still
+covers any required historical range recorded by prior builds.
+
+## Virtual-environment replay
+
+Virtual environments may seed older rows from the active table and replay only a newer range. Change
+policies use:
+
+```toml
+[defaults]
+bounded_replay_fallback = "full"
+
+[defaults.replay_on_change]
+breaking = "full"
+non_breaking = "bounded-7d"
+```
+
+The same fields can appear in an optional `pipeline.toml` or `MODEL()` header; model wins over
+pipeline, which wins over project. Durations accept `d`, `h`, `m`, or `s`.
+
+When a model cannot preserve older seeded history, typically because aggregation prevents a clean
+split, `bounded_replay_fallback` controls the result:
+
+| Value | Behavior |
+|---|---|
+| `full` | Replay all available history |
+| `bounded_without_history` | Replay only the bounded window and omit older history |
+
+`--full-refresh` forces full replay for selected virtual-environment models. `--start-time` requests
+a bounded replay from an explicit time. Virtual environments require active published roots and may
+seed pre-window history. Direct mode performs an unseeded destructive rebuild, preserves source
+relations unchanged, and intentionally omits pre-window derived output.
+
+Start-time boundaries are UTC instants, not warehouse-local wall times. Generated replay SQL uses
+explicit UTC `DateTime64` literals so server timezone and daylight-saving transitions cannot shift or
+collapse the requested boundary.

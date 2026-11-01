@@ -1,0 +1,23 @@
+---
+title: "sqt discover"
+description: "List the pipelines discovered in a project."
+---
+
+Scan project inputs and print discovered pipelines without connecting to ClickHouse.
+
+```bash
+sqt discover
+sqt discover --project-dir /path/to/project
+sqt discover --target dev --vars '{"region":"us-east"}'
+```
+
+Output is JSON. The command validates project TOML, source YAML, pipeline layout, model headers,
+macros, tests, and audits as they are attached to the project compiler.
+
+| Option | Purpose |
+|---|---|
+| `--project-dir PATH` | Project root; otherwise search upward from the current directory |
+| `--target NAME` | Select a project target |
+| `--vars JSON` | Variable overrides as one JSON object |
+
+`discover` works in both modes and does not expand connection secrets or open a connection.

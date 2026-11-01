@@ -1,0 +1,113 @@
+---
+title: "Destructive Operations"
+description: "Destroy deployed pipelines or reset a target with frozen impact plans and recorded confirmation."
+---
+
+SQLTide provides two destructive operations:
+
+| Operation | Removes | Preserves |
+|---|---|---|
+| **Destroy pipelines** | Selected pipelines' owned model tables, views, materialized views, virtual bindings, and retained deployment physicals | Authored files, managed sources, retained replay data, metadata, users, and history |
+| **Reset target** | Every current or historically recorded SQLTide-managed pipeline, managed source, and replay relation in the target | The target database, `_sqltide_*` metadata, users, authorization state, operation history, external relations, Kafka topics, consumer groups, and offsets |
+
+Adopted or external relations are never dropped. Historical deployment metadata can retain an
+absent relation in reset evidence, but it cannot authorize deletion when a live relation later
+reuses the same name. A live relation requires matching current-manifest structure or a recorded
+ownership generation. A later build recreates resources that still exist in the authored project.
+
+## Review a frozen impact plan
+
+Planning is read-only. The plan records:
+
+- target and physical database
+- original pipeline selection and explicitly included downstream closure
+- affected models and physical relation kinds
+- approximate active-part bytes and part counts where available
+- managed-source and replay-data inclusion
+- manifest, warehouse, and plan fingerprints
+- deterministic confirmation challenges and expiry
+
+Plans and their review state are durable in the SQLTide control store, including standalone CLI
+plans. A plan remains actor-bound and single-use across development-server restarts and multiple
+server workers until it expires or is consumed.
+
+If an unselected downstream pipeline depends on the selection, planning blocks. SQLTide reports
+the complete required closure but never adds it silently. Include those pipelines explicitly and
+create a new plan.
+
+## Pass both confirmation gates
+
+Every execution has two server-enforced gates:
+
+1. Review the exact frozen plan and explicitly continue.
+2. Type the exact challenge values from that plan.
+
+Challenge selection is deterministic:
+
+| Affected pipelines | Required pipeline challenges |
+|---|---|
+| One | Its exact name |
+| Two or three | Every exact name |
+| More than three | Three deterministic names from the frozen plan |
+
+A production target reset also requires the exact value `PRODUCTION`. Mark non-standard production
+target names in committed configuration with `production = true`; local configuration cannot
+remove or add this classification.
+
+<Warning>
+  There is no `--yes`, `--force`, configuration, environment variable, API flag, or administrator
+  shortcut around these gates. Destructive CLI commands require an interactive terminal and reject
+  piped input.
+</Warning>
+
+## Execution and evidence
+
+After exact confirmation, SQLTide acquires the target mutation lock and replans. A manifest,
+selection, ownership, binding, or warehouse-structure change rejects the operation before the first
+drop. Normal ingestion growth does not invalidate a plan. SQLTide durably records the exact
+actor, challenge submission, and statement set before atomically consuming the plan once and
+starting warehouse mutation.
+
+Dependency validation scans view and materialized-view definitions across every ClickHouse database.
+An unmanaged dependant in any database blocks deletion. The authenticated account is also reloaded
+from the control store and must still be active with the built-in `admin` role at execution time.
+
+Owned relations are dropped in reverse dependency-safe order. ClickHouse DDL is not graph-wide
+transactional, so a failure can leave a partial result. SQLTide does not hide that state or
+retry it as a fresh plan. Runs retains the actor, reviewed and confirmed timestamps, expected and
+submitted challenges, fingerprints, estimated bytes, every statement and timing, completed and
+pending sequences, errors, and remaining objects.
+
+An interrupt after plan consumption follows the same terminalization path: SQLTide inspects the
+catalog, recovers an ownership tombstone when a DROP reached its postcondition, records the terminal
+state, and only then propagates the interrupt.
+
+If the residual catalog cannot be read after a partial mutation, Runs records the residual state as
+unavailable rather than claiming that no objects remain.
+
+Target mutation locks encode their owner in the atomic ClickHouse namespace claim and use an atomic
+table exchange when releasing. Locks do not expire automatically. After a crashed owner, keep the
+target quiescent and recover the lock explicitly; age-based takeover could overlap a server-side
+ClickHouse query that outlived its client.
+
+Resetting warehouse source relations does not call Kafka administration APIs. Consumer-group offsets
+remain broker-managed and are not silently reset.
+
+## Target-scoped drop ceiling
+
+```toml
+[targets.live]
+production = true
+
+[targets.live.destruction]
+max_table_size_to_drop = "100GiB"
+```
+
+The optional ceiling is a finite positive byte-size string for **each relation**, not the total
+plan size. It must be committed and cannot be overridden locally. SQLTide freezes the setting and
+server default in the reviewed plan and applies it only to reviewed destructive DROP statements.
+ClickHouse still enforces it at execution; ordinary queries keep their usual settings.
+
+After a partial failure, create a new recovery plan from the failed run's original root selection.
+SQLTide replans current ownership and dependencies rather than replaying old SQL or historical
+derived closure. The previous plan is single-use even when some drops failed.

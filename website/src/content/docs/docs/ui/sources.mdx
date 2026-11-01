@@ -1,0 +1,36 @@
+---
+title: "Sources"
+description: "Inspect landing health, retention, freshness, throughput, and partition-level Kafka lag."
+---
+
+The Sources view combines authored source definitions with records retained in ClickHouse and
+read-only Kafka metadata. Browsing source health never consumes Kafka records or advances consumer
+offsets.
+
+## Source health
+
+The Sources index summarizes every authored source. Open a managed Kafka source to inspect:
+
+- retained row count and storage
+- oldest and newest replay boundaries
+- arrival freshness and throughput
+- the effective consumer group
+- landed, committed, and broker-end offsets by partition
+
+Kafka lag and last arrival are different signals:
+
+- **Kafka lag** is the broker high-water offset minus the effective consumer group's committed
+  offset, summed across partitions.
+- **Last arrival** is the elapsed time since the newest `_replay_landed_at` value in the ClickHouse
+  landing table.
+
+Kafka metadata is loaded without joining or consuming from the group. If broker metadata or a
+required committed offset is unavailable, the UI reports Kafka lag as unavailable; it never
+substitutes last-arrival age. Broker metadata is cached and refreshed outside the main state request,
+so a first load may briefly show unavailable.
+
+<span id="topics"></span>
+<span id="retained-message-browser"></span>
+
+See [Topics](/ui/topics) for broker inventory, [Messages](/ui/messages) for retained payloads, and
+[Replay and Lineage](/concepts/replay-lineage) for normalized replay columns and boundary semantics.

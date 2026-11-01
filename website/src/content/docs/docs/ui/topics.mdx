@@ -1,0 +1,15 @@
+---
+title: "Topics"
+description: "Inspect managed Kafka topics and read-only broker metadata."
+---
+
+The Topics view reads broker metadata without consuming records. It defaults to topics managed by
+the current project and can show the wider broker inventory. Managed topic names link back to their
+SQLTide [source definitions and landing health](/ui/sources).
+
+Topic inventory and source landing state are independent. A broker metadata failure does not prevent
+the UI from showing retained ClickHouse rows or compiled source definitions. Browsing topics never
+advances a consumer-group offset.
+
+Use [Messages](/ui/messages) when you need to inspect payloads retained in ClickHouse rather than
+broker-level topic metadata.

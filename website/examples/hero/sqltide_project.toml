@@ -1,0 +1,11 @@
+name = "hero_preview"
+default_target = "local"
+
+[connection]
+host = "localhost"
+port = 18123
+username = "default"
+password = ""
+
+[targets.local]
+database = "hero_preview"

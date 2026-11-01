@@ -1,0 +1,10 @@
+sources:
+  - name: orders
+    kind: stream_table
+    table_name: orders_input
+    replay_boundary:
+      mode: offsets
+      columns:
+        _replay_partition: event_partition
+        _replay_offset: event_offset
+        _replay_timestamp: event_time

@@ -1,0 +1,30 @@
+---
+title: Constants and enums
+description: Reuse validated SQL literals without repeating them across models, tests and audits.
+---
+
+SQLTide discovers SQL declarations under `constants/` and `enums/`, validates them once per compile,
+and expands them into ClickHouse literals. These are compile-time values, not warehouse tables or
+managed UDFs.
+
+```sql title="constants/orders.sql"
+CONSTANT (name open_statuses, value ["paid", "shipped"]);
+CONSTANT (name minimum_amount_cents, value 100);
+```
+
+```sql title="enums/orders.sql"
+ENUM (name order_status, members [PAID, SHIPPED]);
+ENUM (name priority, members (LOW 1, HIGH 2));
+```
+
+Use `@const("open_statuses")` for the collection and `@enum("order_status").PAID` for a member:
+
+```sql
+WHERE status IN @const("open_statuses")
+  AND amount_cents >= @const("minimum_amount_cents")
+```
+
+The snippet is a query fragment, not a complete model. String enum members render as quoted
+strings; explicitly numbered members render as numbers. Unknown names, unknown members and
+duplicate declarations fail compilation. Keep declaration names unique and use Python macros for
+logic that needs computation rather than a literal value.

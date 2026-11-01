@@ -1,0 +1,26 @@
+---
+title: "sqt doctor"
+description: "Diagnose active virtual-environment view bindings."
+---
+
+Inspect stable views and deployment table candidates:
+
+```bash
+sqt doctor
+sqt doctor --database analytics
+```
+
+The command is read-only and emits JSON. Each `active_views` entry includes:
+
+```text
+table_name
+state_kind
+active_deployment_id
+candidate_deployment_ids
+```
+
+Use it to find missing, ambiguous, or otherwise unhealthy active bindings before choosing an
+explicit repair target.
+
+`doctor` requires virtual environments. It inspects ClickHouse state directly and does not load the
+pipeline graph.
