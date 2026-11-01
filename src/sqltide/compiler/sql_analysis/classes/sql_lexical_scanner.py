@@ -1,10 +1,13 @@
 """Shared SQL lexical scanning behavior for compiler-owned syntaxes."""
 
+from collections.abc import Callable
+
 from sqltide.compiler.sql_analysis._helpers.scanning import (
     extract_top_level_ctes_impl,
     find_matching_parenthesis,
     find_next_macro_start,
     find_next_unquoted_character,
+    run_native_scan,
     skip_trivia,
     try_consume_keyword_impl,
 )
@@ -13,6 +16,12 @@ from sqltide.compiler.sql_analysis.models import SqlTopLevelCtes
 
 class SqlLexicalScanner:
     """Find syntax outside ClickHouse comments and quoted text."""
+
+    @staticmethod
+    def scanned[T](scan: Callable[[], T]) -> T:
+        """Run one native scan, raising its failure as a SQL analysis exception."""
+
+        return run_native_scan(scan)
 
     @staticmethod
     def find_matching_parenthesis(*, sql: str, open_index: int, context: str) -> int:

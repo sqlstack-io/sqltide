@@ -178,6 +178,16 @@ from tests.unit.src.sqltide.compiler.macros.helpers import (
             expected_expanded_fragment=("SELECT '@not_a_call()' /* @also_not_a_call() */"),
         ),
         ExpandProjectSqlMacrosTestCase(
+            description="reads arguments as Python does, including NFKC names and lone surrogates",
+            macro_file_name="literal_helpers.py",
+            macro_file_contents="""
+        def show(*values: object) -> str:
+            return repr(values)
+        """,
+            sql_body="SELECT @show(Ｎone, Ｔrue, '\\ud800')",
+            expected_expanded_fragment="SELECT (None, True, '\\ud800')",
+        ),
+        ExpandProjectSqlMacrosTestCase(
             description="injects typed immutable compiler context into the first ctx parameter",
             macro_file_name="context_helpers.py",
             macro_file_contents="""
