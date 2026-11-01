@@ -833,6 +833,17 @@ class SqlTestChainRegistry:
         self, logical_name: str, mocks: set[str], assembled: set[str]
     ) -> tuple[list[str], list[str]]: ...
 
+def managed_catalog_relations(
+    relations: list[tuple[str, bool, str | None]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str, bool]]]: ...
+def root_deployment_state(
+    bindings: list[tuple[str, str, str]],
+    candidates: list[tuple[str, str, str]],
+    root_database: str | None,
+    root_name: str,
+) -> tuple[str, str | None]: ...
+def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
+def latest_object_state_positions(records: list[tuple[int | None, str, str]]) -> list[int]: ...
 def actual_state_sources(
     objects: list[tuple[int, str, str, str | None]],
     existing_names: set[str],

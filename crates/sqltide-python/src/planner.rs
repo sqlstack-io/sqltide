@@ -21,6 +21,10 @@ use sqltide_planner::direct::{
     ReplayLineage, ResourceKind, SelectionMode, plan_direct_build as plan_direct, split_lines,
 };
 use sqltide_planner::direct_fingerprint;
+use sqltide_planner::inspection::{
+    Relation, RootState, deployment_candidate_logical_name as candidate_logical_name,
+    latest_record_positions, managed_relations, root_state,
+};
 use sqltide_planner::rebuild::{
     ChangeType, ObjectChange, RebuildSubtree, SchemaChangeKind, SeedCompatibility, rebuild_subtrees,
 };
@@ -963,6 +967,34 @@ fn actual_state_sources(
     }
 }
 
+/// The position of each wanted key's latest record from `(key index when wanted, recorded at,
+/// observation ID)` stamps, ordered by each key's first record.
+#[pyfunction]
+fn latest_object_state_positions(records: Vec<(Option<usize>, String, String)>) -> Vec<usize> {
+    let stamps: Vec<(Option<usize>, &str, &str)> = records
+        .iter()
+        .map(|(key, recorded_at, observation_id)| {
+            (*key, recorded_at.as_str(), observation_id.as_str())
+        })
+        .collect();
+    latest_record_positions(&stamps)
+}
+
+/// The logical name of a deployment-suffixed model relation, excluding Kafka tables and
+/// materialized views.
+#[pyfunction]
+fn deployment_candidate_logical_name(physical_name: &str) -> Option<&str> {
+    candidate_logical_name(physical_name)
+}
+
+fn borrowed(rows: &[(String, String, String)]) -> Vec<(&str, &str, &str)> {
+    rows.iter()
+        .map(|(database, logical, physical)| {
+            (database.as_str(), logical.as_str(), physical.as_str())
+        })
+        .collect()
+}
+
 fn record_facts((is_reconcile, query): &RecordArgument) -> RecordFacts<'_> {
     RecordFacts {
         is_reconcile: *is_reconcile,
@@ -970,8 +1002,65 @@ fn record_facts((is_reconcile, query): &RecordArgument) -> RecordFacts<'_> {
     }
 }
 
+/// Stable bindings as `(logical name, physical name)` and deployment candidates as `(logical name,
+/// physical name, is view)`.
+type ManagedRelationsResult = (Vec<(String, String)>, Vec<(String, String, bool)>);
+
+/// `(stable bindings as (logical name, physical name), deployment candidates as (logical name,
+/// physical name, is view))` from `(name, is view, stable binding name)` catalog relations.
+#[pyfunction]
+fn managed_catalog_relations(
+    relations: Vec<(String, bool, Option<String>)>,
+) -> ManagedRelationsResult {
+    let relations: Vec<Relation<'_>> = relations
+        .iter()
+        .map(|(name, is_view, stable_binding_name)| Relation {
+            name,
+            is_view: *is_view,
+            stable_binding_name: stable_binding_name.as_deref(),
+        })
+        .collect();
+    let (bindings, candidates) = managed_relations(&relations);
+    (
+        bindings
+            .into_iter()
+            .map(|(logical, physical)| (logical.to_owned(), physical.to_owned()))
+            .collect(),
+        candidates
+            .into_iter()
+            .map(|(logical, physical, is_view)| (logical.to_owned(), physical.to_owned(), is_view))
+            .collect(),
+    )
+}
+
+/// `(state kind, active deployment ID)` of one managed root from `(database, logical name,
+/// physical name)` bindings and candidates.
+#[pyfunction]
+fn root_deployment_state(
+    bindings: Vec<(String, String, String)>,
+    candidates: Vec<(String, String, String)>,
+    root_database: Option<&str>,
+    root_name: &str,
+) -> (&'static str, Option<String>) {
+    let state = root_state(
+        &borrowed(&bindings),
+        &borrowed(&candidates),
+        root_database,
+        root_name,
+    );
+    let deployment_id: Option<String> = match state {
+        RootState::ActiveViewPresent(deployment_id) => Some(deployment_id.to_owned()),
+        _ => None,
+    };
+    (state.kind(), deployment_id)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(actual_state_sources, module)?)?;
+    module.add_function(wrap_pyfunction!(managed_catalog_relations, module)?)?;
+    module.add_function(wrap_pyfunction!(root_deployment_state, module)?)?;
+    module.add_function(wrap_pyfunction!(deployment_candidate_logical_name, module)?)?;
+    module.add_function(wrap_pyfunction!(latest_object_state_positions, module)?)?;
     module.add_function(wrap_pyfunction!(direct_fingerprint_record, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_drift_reasons, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_identity_metadata, module)?)?;

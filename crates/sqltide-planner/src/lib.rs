@@ -6,6 +6,7 @@ pub mod desired;
 pub mod diff;
 pub mod direct;
 pub mod direct_fingerprint;
+pub mod inspection;
 pub mod naming;
 pub mod rebuild;
 pub mod unified_diff;
