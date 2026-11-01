@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.compiler.compile.models import CompiledSource
 from sqltide.executor.auditing.models import SqlAuditResult, SqlAuditRunResult
@@ -86,7 +87,8 @@ def _replay_results(
     *, request: DirectBuildRequest, execution: WorkflowExecutionResult
 ) -> tuple[DirectRootReplayResult, ...]:
     model_name_by_segment: dict[str, str] = {
-        _step_segment(entry.model_key.name): entry.model_key.name for entry in request.plan.entries
+        _native.workflow_step_segment(entry.model_key.name): entry.model_key.name
+        for entry in request.plan.entries
     }
     results: list[DirectRootReplayResult] = []
     result: WorkflowStatementResult
@@ -110,7 +112,7 @@ def _audit_result(
 ) -> SqlAuditRunResult:
     audit_results: list[SqlAuditResult] = []
     for audit_index, audit in enumerate(request.audits, start=1):
-        prefix: str = f"audit_{audit_index}_{_step_segment(audit.name)}"
+        prefix: str = f"audit_{audit_index}_{_native.workflow_step_segment(audit.name)}"
         count_result: WorkflowStatementResult = results_by_step_id[f"{prefix}_count"]
         sample_result: WorkflowStatementResult = results_by_step_id[f"{prefix}_sample"]
         error_message: str | None = count_result.error_message or sample_result.error_message
@@ -151,9 +153,9 @@ def _created_source_names(
     return tuple(
         name
         for name in source_names
-        if f"prepare_source_{_step_segment(name)}" in results_by_step_id
-        or f"swap_source_{_step_segment(name)}" in results_by_step_id
-        or f"activate_source_{_step_segment(name)}" in results_by_step_id
+        if f"prepare_source_{_native.workflow_step_segment(name)}" in results_by_step_id
+        or f"swap_source_{_native.workflow_step_segment(name)}" in results_by_step_id
+        or f"activate_source_{_native.workflow_step_segment(name)}" in results_by_step_id
     )
 
 
@@ -191,7 +193,3 @@ def _boundary_time(
         if scalar_boundary.replay_boundary_mode != AdapterReplayBoundaryMode.OFFSETS:
             return scalar_boundary.cutoff_value
     return "warehouse"
-
-
-def _step_segment(value: str) -> str:
-    return "".join(character if character.isalnum() else "_" for character in value)

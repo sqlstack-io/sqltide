@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from hashlib import sha256
-
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
@@ -30,29 +27,12 @@ def build_direct_fingerprint_records(
 ) -> tuple[AdapterDirectFingerprintRecord, ...]:
     """Build direct fingerprint records for models known to match live relations."""
 
-    records: list[AdapterDirectFingerprintRecord] = []
-    for model in models:
-        definition_sql: str = model.query
-        definition_hash: str = DirectModelFingerprint.query_hash(definition_sql)
-        logical_identity: str = f"{database}.{model.key.name}"
-        identity_metadata: str = json.dumps(
-            DirectModelFingerprint.identity(model=model),
-            sort_keys=True,
-            separators=(",", ":"),
+    return tuple(
+        DirectModelFingerprint.record(
+            model=model, database=database, workflow_id=workflow_id, tool_version=tool_version
         )
-        fingerprint_identity: str = f"{logical_identity}:{definition_hash}:{workflow_id}"
-        records.append(
-            AdapterDirectFingerprintRecord(
-                fingerprint_id=sha256(fingerprint_identity.encode()).hexdigest(),
-                logical_model_identity=logical_identity,
-                definition_sql=definition_sql,
-                definition_hash=definition_hash,
-                identity_metadata=identity_metadata,
-                workflow_id=workflow_id,
-                tool_version=tool_version,
-            )
-        )
-    return tuple(records)
+        for model in models
+    )
 
 
 def persist_direct_fingerprint_records(

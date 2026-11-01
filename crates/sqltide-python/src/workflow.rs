@@ -3,11 +3,12 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use sqltide_executor::direct_replay;
 use sqltide_executor::direct_workflow::{
     Input as DirectInput, Recreation, RuntimeReplay, statements as direct_statements,
 };
 use sqltide_executor::virtual_workflow::{Deployment, Input, Mode, Replay, Root, statements};
-use sqltide_executor::workflow::Statement;
+use sqltide_executor::workflow::{Statement, step_segment, terminate_sql};
 
 /// `(step ID, phase, intent, SQL, continue on error)`.
 type StatementResult = (String, &'static str, &'static str, String, bool);
@@ -252,7 +253,144 @@ fn direct_workflow_statements(
     (statement_results(statements), statement_results(recovery))
 }
 
+/// `(name, ((column name, type), ...))`.
+type RelationArgument = (String, Vec<(String, String)>);
+
+fn relations(arguments: Vec<RelationArgument>) -> Vec<direct_replay::Relation> {
+    arguments
+        .into_iter()
+        .map(|(name, columns)| direct_replay::Relation { name, columns })
+        .collect()
+}
+
+/// `(model name, capture step ID, replay step ID, boundary column type)`.
+type ResolvedReplay = (String, String, String, Option<String>);
+
+/// The [`ResolvedReplay`] of each replay
+/// `(mode, anchor, target, timestamp column, landed-at column, cursor column)`. Raises
+/// `ValueError(("build", message))` or `ValueError(("exhausted",))`.
+#[pyfunction]
+fn resolve_direct_replays(
+    entries: Vec<(String, Vec<String>)>,
+    replays: Vec<(String, String, String, String, String, String)>,
+    forced_start_time: bool,
+    desired_tables: Vec<RelationArgument>,
+    catalog: Vec<RelationArgument>,
+) -> PyResult<Vec<ResolvedReplay>> {
+    let replays: Vec<direct_replay::Replay> = replays
+        .into_iter()
+        .map(
+            |(mode, anchor, target, timestamp_column, landed_at_column, cursor_column)| {
+                Ok(direct_replay::Replay {
+                    mode: Mode::parse(&mode).ok_or_else(|| {
+                        PyValueError::new_err(format!("Unknown replay mode '{mode}'"))
+                    })?,
+                    anchor,
+                    target,
+                    timestamp_column,
+                    landed_at_column,
+                    cursor_column,
+                })
+            },
+        )
+        .collect::<PyResult<_>>()?;
+    let resolved = direct_replay::resolve(&direct_replay::ResolveInput {
+        entries,
+        replays,
+        forced_start_time,
+        desired_tables: relations(desired_tables),
+        catalog: relations(catalog),
+    })
+    .map_err(|error| match error {
+        direct_replay::ResolveError::Exhausted => PyValueError::new_err(("exhausted",)),
+        direct_replay::ResolveError::Build(message) => PyValueError::new_err(("build", message)),
+    })?;
+    Ok(resolved
+        .into_iter()
+        .map(|replay| {
+            (
+                replay.model_name,
+                replay.capture_step_id,
+                replay.replay_step_id,
+                replay.boundary_column_type,
+            )
+        })
+        .collect())
+}
+
+/// `((boundary key, cutoff, inclusive, partition), ...)`, `((lower value, partition), ...)`,
+/// and `((partition, lower offset, upper offset), ...)`.
+type RealizedCapture = (
+    Vec<(String, String, bool, Option<String>)>,
+    Vec<(String, Option<String>)>,
+    Vec<(i128, i128, i128)>,
+);
+
+/// The replay inputs realized from captured `(partition, lower, cutoff, inclusive)` ranges.
+/// Raises `ValueError(("partition",))` or `ValueError(("integer", text))`.
+#[pyfunction]
+fn realize_direct_replay_capture(
+    mode: &str,
+    ranges: Vec<(Option<String>, String, String, bool)>,
+) -> PyResult<RealizedCapture> {
+    let ranges: Vec<direct_replay::CapturedRange> = ranges
+        .into_iter()
+        .map(
+            |(partition, lower, cutoff, cutoff_inclusive)| direct_replay::CapturedRange {
+                partition,
+                lower,
+                cutoff,
+                cutoff_inclusive,
+            },
+        )
+        .collect();
+    let realized = direct_replay::realize(mode, &ranges).map_err(|error| match error {
+        direct_replay::CaptureError::MissingPartition => PyValueError::new_err(("partition",)),
+        direct_replay::CaptureError::NotInteger(text) => PyValueError::new_err(("integer", text)),
+    })?;
+    Ok((
+        realized
+            .boundaries
+            .into_iter()
+            .map(|boundary| {
+                (
+                    boundary.key,
+                    boundary.cutoff,
+                    boundary.cutoff_inclusive,
+                    boundary.partition,
+                )
+            })
+            .collect(),
+        realized
+            .lower_bounds
+            .into_iter()
+            .map(|bound| (bound.value, bound.partition))
+            .collect(),
+        realized
+            .offset_ranges
+            .into_iter()
+            .map(|span| (span.partition, span.lower, span.upper))
+            .collect(),
+    ))
+}
+
+/// `value` as a step ID segment, with every non-alphanumeric character replaced by `_`.
+#[pyfunction]
+fn workflow_step_segment(value: &str) -> String {
+    step_segment(value)
+}
+
+/// `sql` ending in exactly one semicolon.
+#[pyfunction]
+fn workflow_terminate_sql(sql: &str) -> String {
+    terminate_sql(sql)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(workflow_step_segment, module)?)?;
+    module.add_function(wrap_pyfunction!(workflow_terminate_sql, module)?)?;
     module.add_function(wrap_pyfunction!(virtual_workflow_statements, module)?)?;
+    module.add_function(wrap_pyfunction!(resolve_direct_replays, module)?)?;
+    module.add_function(wrap_pyfunction!(realize_direct_replay_capture, module)?)?;
     module.add_function(wrap_pyfunction!(direct_workflow_statements, module)?)
 }

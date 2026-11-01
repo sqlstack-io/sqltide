@@ -16,6 +16,7 @@ use sqltide_planner::direct::{
     CatalogRelation, DirectInput, DirectPlan, Entry, ExternalColumns, Fingerprints, Node, NodeKind,
     ReplayLineage, ResourceKind, SelectionMode, plan_direct_build as plan_direct, split_lines,
 };
+use sqltide_planner::direct_fingerprint;
 use sqltide_planner::rebuild::{
     ChangeType, ObjectChange, RebuildSubtree, SchemaChangeKind, SeedCompatibility, rebuild_subtrees,
 };
@@ -789,7 +790,87 @@ fn plan_direct_build(
         .map_err(PyValueError::new_err)
 }
 
+/// `(engine, order by, partition by, TTL, settings)`.
+type StorageArgument = (
+    String,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+    Option<Vec<(String, String)>>,
+);
+/// `(model name, kind, relation name, ((column, type), ...), table storage)`.
+type IdentityArgument = (
+    String,
+    String,
+    String,
+    Vec<(String, String)>,
+    Option<StorageArgument>,
+);
+
+fn model_identity(argument: IdentityArgument) -> direct_fingerprint::ModelIdentity {
+    let (model_name, kind, relation_name, output_columns, storage) = argument;
+    direct_fingerprint::ModelIdentity {
+        model_name,
+        kind,
+        relation_name,
+        output_columns,
+        storage: storage.map(|(engine, order_by, partition_by, ttl, settings)| {
+            direct_fingerprint::Storage {
+                engine,
+                order_by,
+                partition_by,
+                ttl,
+                settings,
+            }
+        }),
+    }
+}
+
+/// `(fingerprint ID, logical model identity, definition hash, identity metadata)` of the
+/// record a direct build writes for one applied model.
+#[pyfunction]
+fn direct_fingerprint_record(
+    identity: IdentityArgument,
+    query: &str,
+    database: &str,
+    workflow_id: &str,
+) -> (String, String, String, String) {
+    let record =
+        direct_fingerprint::record(&model_identity(identity), query, database, workflow_id);
+    (
+        record.fingerprint_id,
+        record.logical_model_identity,
+        record.definition_hash,
+        record.identity_metadata,
+    )
+}
+
+/// The sorted, compact, ASCII-only JSON identity of one model.
+#[pyfunction]
+fn direct_model_identity_metadata(identity: IdentityArgument) -> String {
+    direct_fingerprint::identity_metadata(&model_identity(identity))
+}
+
+/// How a model drifted from its `(definition hash, identity metadata)` baseline.
+#[pyfunction]
+fn direct_model_drift_reasons(
+    identity: IdentityArgument,
+    query: &str,
+    baseline: Option<(String, String)>,
+) -> Vec<&'static str> {
+    direct_fingerprint::drift_reasons(
+        &model_identity(identity),
+        query,
+        baseline
+            .as_ref()
+            .map(|(hash, metadata)| (hash.as_str(), metadata.as_str())),
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(direct_fingerprint_record, module)?)?;
+    module.add_function(wrap_pyfunction!(direct_model_drift_reasons, module)?)?;
+    module.add_function(wrap_pyfunction!(direct_model_identity_metadata, module)?)?;
     module.add_function(wrap_pyfunction!(classify_object_changes, module)?)?;
     module.add_function(wrap_pyfunction!(unified_diff, module)?)?;
     module.add_function(wrap_pyfunction!(stage_deployment, module)?)?;

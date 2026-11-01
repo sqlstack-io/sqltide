@@ -456,7 +456,9 @@ name = "sqltide-planner"
 version = "0.55.0"
 dependencies = [
  "regex",
+ "serde_json",
  "sha2",
+ "sqltide-json",
  "sqltide-sqlanalysis",
 ]
 

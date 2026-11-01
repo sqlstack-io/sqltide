@@ -614,6 +614,55 @@ def direct_workflow_statements(
         int,
     ],
 ) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
+def direct_fingerprint_record(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+    query: str,
+    database: str,
+    workflow_id: str,
+) -> tuple[str, str, str, str]: ...
+def direct_model_drift_reasons(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+    query: str,
+    baseline: tuple[str, str] | None,
+) -> list[str]: ...
+def direct_model_identity_metadata(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+) -> str: ...
+def workflow_step_segment(value: str) -> str: ...
+def workflow_terminate_sql(sql: str) -> str: ...
+def resolve_direct_replays(
+    entries: list[tuple[str, list[str]]],
+    replays: list[tuple[str, str, str, str, str, str]],
+    forced_start_time: bool,
+    desired_tables: list[tuple[str, list[tuple[str, str]]]],
+    catalog: list[tuple[str, list[tuple[str, str]]]],
+) -> list[tuple[str, str, str, str | None]]: ...
+def realize_direct_replay_capture(
+    mode: str,
+    ranges: list[tuple[str | None, str, str, bool]],
+) -> tuple[
+    list[tuple[str, str, bool, str | None]],
+    list[tuple[str, str | None]],
+    list[tuple[int, int, int]],
+]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
