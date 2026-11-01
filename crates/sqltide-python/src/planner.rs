@@ -4,12 +4,17 @@ use std::collections::HashSet;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use sqltide_planner::deployment::{PlanKey, PlanSubtree, stage_deployment as stage};
 use sqltide_planner::desired::{
     CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectKind, ObjectType, ReplayMode,
     ReplayPolicy, ReplayRule,
 };
 use sqltide_planner::diff::{
     Classification, Column, Comparison, Differ, Kafka, Settings, Spec, Storage,
+};
+use sqltide_planner::direct::{
+    CatalogRelation, DirectInput, DirectPlan, Entry, ExternalColumns, Fingerprints, Node, NodeKind,
+    ReplayLineage, ResourceKind, SelectionMode, plan_direct_build as plan_direct, split_lines,
 };
 use sqltide_planner::rebuild::{
     ChangeType, ObjectChange, RebuildSubtree, SchemaChangeKind, SeedCompatibility, rebuild_subtrees,
@@ -383,7 +388,411 @@ impl PyDesiredGraph {
     }
 }
 
+/// `difflib.unified_diff` over `str.splitlines(keep_ends)` of both texts, with `"\n"` line
+/// terminators when the lines keep their ends and none otherwise.
+#[pyfunction]
+fn unified_diff(a: &str, b: &str, from_file: &str, to_file: &str, keep_ends: bool) -> Vec<String> {
+    sqltide_planner::unified_diff::unified_diff(
+        &split_lines(a, keep_ends),
+        &split_lines(b, keep_ends),
+        from_file,
+        to_file,
+        if keep_ends { "\n" } else { "" },
+    )
+}
+
+/// `(step ID, phase, action, root, target, physical name)`.
+type StepResult = (
+    String,
+    &'static str,
+    &'static str,
+    usize,
+    Option<usize>,
+    Option<String>,
+);
+
+/// Stage `(root, affected)` subtrees over `(object type, name, uses mutable refs)` keys into
+/// `(steps, [(key, shadow physical name)], [(root, target)] mutable-ref warnings)`.
+#[pyfunction]
+#[allow(clippy::type_complexity)]
+fn stage_deployment(
+    keys: Vec<(String, String, bool)>,
+    subtrees: Vec<(usize, Vec<usize>)>,
+    deployment_id: Option<&str>,
+) -> PyResult<(Vec<StepResult>, Vec<(usize, String)>, Vec<(usize, usize)>)> {
+    let count = keys.len();
+    if subtrees
+        .iter()
+        .any(|(root, affected)| *root >= count || affected.iter().any(|key| *key >= count))
+    {
+        return Err(PyValueError::new_err("Deployment key index out of range"));
+    }
+    let keys: Vec<PlanKey<'_>> = keys
+        .iter()
+        .map(|(object_type, name, uses_mutable_refs)| PlanKey {
+            object_type,
+            name,
+            uses_mutable_refs: *uses_mutable_refs,
+        })
+        .collect();
+    let subtrees: Vec<PlanSubtree> = subtrees
+        .into_iter()
+        .map(|(root, affected)| PlanSubtree { root, affected })
+        .collect();
+    let staged = stage(&keys, &subtrees, deployment_id);
+    Ok((
+        staged
+            .steps
+            .into_iter()
+            .map(|step| {
+                (
+                    step.step_id,
+                    step.phase,
+                    step.action,
+                    step.root,
+                    step.target,
+                    step.physical_name,
+                )
+            })
+            .collect(),
+        staged.shadow_objects,
+        staged.mutable_ref_warnings,
+    ))
+}
+
+/// `(table, aggregate, query, replay settings)` for a model.
+type ModelArgument = (bool, bool, String, Vec<(String, String)>);
+/// `(name, model, source is framework managed, relation name, [(resource name, kind)], replay
+/// lineage, shares a postgres source name, producing pipeline, [(upstream, driving)],
+/// downstream)`.
+type NodeArgument = (
+    String,
+    Option<ModelArgument>,
+    bool,
+    String,
+    Vec<(String, Option<String>)>,
+    Option<String>,
+    bool,
+    Option<String>,
+    Vec<(usize, bool)>,
+    Vec<usize>,
+);
+/// `(name, is a materialized view, columns, source relation names)`.
+type CatalogArgument = (String, bool, Vec<String>, Vec<String>);
+/// `(relation name, [partition, offset, timestamp, landed at, cursor] column overrides)`.
+type ExternalArgument = (String, [Option<String>; 5]);
+/// `(available, warning, [(identity, definition SQL, definition hash)])`.
+type FingerprintArgument = (bool, Option<String>, Vec<(String, String, String)>);
+/// `(status, current hash, previous SQL, previous hash, unified diff, warning)`.
+type SqlChangeResult = (
+    &'static str,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+/// `(key, reason, [(relation name, kind)], driving input, is replay root, SQL change)`.
+type EntryResult = (
+    usize,
+    &'static str,
+    Vec<(String, &'static str)>,
+    Option<usize>,
+    bool,
+    SqlChangeResult,
+);
+/// `(key, driving input, driving relation, [partition, offset, timestamp, landed at, cursor],
+/// lineage, propagated keys, aggregate, replay settings)`.
+type ReplayRootResult = (
+    usize,
+    usize,
+    String,
+    [String; 5],
+    &'static str,
+    Vec<usize>,
+    bool,
+    Vec<(String, String)>,
+);
+/// `(relation name, key, kind)`.
+type OperationResult = (String, usize, &'static str);
+/// `(user scope, execution scope, prerequisite execution scope, [(key, relation, present,
+/// framework managed)], entries, replay roots, teardown, creation, mutable-ref warning indexes)`.
+type DirectPlanResult = (
+    Vec<usize>,
+    Vec<usize>,
+    Vec<usize>,
+    Vec<(usize, String, bool, bool)>,
+    Vec<EntryResult>,
+    Vec<ReplayRootResult>,
+    Vec<OperationResult>,
+    Vec<OperationResult>,
+    Vec<usize>,
+);
+
+fn resource_kind(kind: Option<&str>) -> PyResult<Option<ResourceKind>> {
+    Ok(match kind {
+        None => None,
+        Some("table") => Some(ResourceKind::Table),
+        Some("materialized_view") => Some(ResourceKind::MaterializedView),
+        Some("view") => Some(ResourceKind::View),
+        Some(other) => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown direct resource kind '{other}'"
+            )));
+        }
+    })
+}
+
+fn replay_lineage(text: &str) -> PyResult<ReplayLineage> {
+    Ok(match text {
+        "offsets" => ReplayLineage::Offsets,
+        "timestamp" => ReplayLineage::Timestamp,
+        "landed_at" => ReplayLineage::LandedAt,
+        "cursor" => ReplayLineage::Cursor,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown replay lineage mode '{other}'"
+            )));
+        }
+    })
+}
+
+fn parse_selection_mode(text: &str) -> PyResult<SelectionMode> {
+    Ok(match text {
+        "all_models" => SelectionMode::AllModels,
+        "explicit" => SelectionMode::Explicit,
+        "changed" => SelectionMode::Changed,
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "Unknown direct selection mode '{other}'"
+            )));
+        }
+    })
+}
+
+fn node(argument: &NodeArgument) -> PyResult<Node<'_>> {
+    let (
+        name,
+        model,
+        framework_managed,
+        relation_name,
+        resources,
+        lineage,
+        postgres_source_name,
+        pipeline,
+        upstream,
+        downstream,
+    ) = argument;
+    Ok(Node {
+        name,
+        kind: match model {
+            None => NodeKind::Source {
+                framework_managed: *framework_managed,
+            },
+            Some((table, aggregate, query, settings)) => NodeKind::Model {
+                table: *table,
+                aggregate: *aggregate,
+                query,
+                replay_settings: settings
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str()))
+                    .collect(),
+            },
+        },
+        relation_name,
+        resources: resources
+            .iter()
+            .map(|(name, kind)| Ok((name.as_str(), resource_kind(kind.as_deref())?)))
+            .collect::<PyResult<_>>()?,
+        replay_lineage: lineage.as_deref().map(replay_lineage).transpose()?,
+        postgres_source_name: *postgres_source_name,
+        producing_pipeline: pipeline.as_deref(),
+        upstream: upstream.clone(),
+        downstream: downstream.clone(),
+    })
+}
+
+fn entry_result(entry: Entry) -> EntryResult {
+    let change = entry.sql_change;
+    let (previous_sql, previous_hash) = change.previous.unzip();
+    (
+        entry.key,
+        entry.reason,
+        entry
+            .relations
+            .into_iter()
+            .map(|(name, kind)| (name, kind.as_str()))
+            .collect(),
+        entry.driving_input,
+        entry.is_replay_root,
+        (
+            change.status,
+            change.current_hash,
+            previous_sql,
+            previous_hash,
+            change.unified_diff,
+            change.warning,
+        ),
+    )
+}
+
+fn direct_plan_result(plan: DirectPlan) -> DirectPlanResult {
+    let operations = |operations: Vec<(String, usize, ResourceKind)>| -> Vec<OperationResult> {
+        operations
+            .into_iter()
+            .map(|(name, key, kind)| (name, key, kind.as_str()))
+            .collect()
+    };
+    (
+        plan.user_scope,
+        plan.execution_scope,
+        plan.prerequisite_execution_scope,
+        plan.prerequisites
+            .into_iter()
+            .map(|item| {
+                (
+                    item.key,
+                    item.relation_name,
+                    item.present,
+                    item.framework_managed,
+                )
+            })
+            .collect(),
+        plan.entries.into_iter().map(entry_result).collect(),
+        plan.replay_roots
+            .into_iter()
+            .map(|root| {
+                let columns = root.columns;
+                (
+                    root.key,
+                    root.driving_input,
+                    root.driving_input_relation_name,
+                    [
+                        columns.partition,
+                        columns.offset,
+                        columns.timestamp,
+                        columns.landed_at,
+                        columns.cursor,
+                    ],
+                    root.lineage.as_str(),
+                    root.propagated,
+                    root.aggregate,
+                    root.replay_settings,
+                )
+            })
+            .collect(),
+        operations(plan.teardown),
+        operations(plan.creation),
+        plan.mutable_ref_warnings,
+    )
+}
+
+/// Plan the selected downstream closure over `nodes` in graph order. A violated rule raises
+/// `ValueError(message)`.
+#[pyfunction]
+#[pyo3(signature = (
+    *,
+    nodes,
+    database,
+    selection_mode,
+    selected,
+    source_drift,
+    include_missing_upstream,
+    has_start_time,
+    catalog,
+    external_columns,
+    fingerprints,
+    mutable_ref_names,
+))]
+#[allow(clippy::too_many_arguments)]
+fn plan_direct_build(
+    py: Python<'_>,
+    nodes: Vec<NodeArgument>,
+    database: &str,
+    selection_mode: &str,
+    selected: HashSet<usize>,
+    source_drift: HashSet<usize>,
+    include_missing_upstream: bool,
+    has_start_time: bool,
+    catalog: Vec<CatalogArgument>,
+    external_columns: Vec<ExternalArgument>,
+    fingerprints: FingerprintArgument,
+    mutable_ref_names: Vec<String>,
+) -> PyResult<DirectPlanResult> {
+    let count = nodes.len();
+    if nodes
+        .iter()
+        .any(|(_, _, _, _, _, _, _, _, upstream, downstream)| {
+            upstream.iter().any(|(key, _)| *key >= count)
+                || downstream.iter().any(|key| *key >= count)
+        })
+        || selected
+            .iter()
+            .chain(&source_drift)
+            .any(|key| *key >= count)
+    {
+        return Err(PyValueError::new_err("Direct plan key index out of range"));
+    }
+    let (available, warning, baselines) = &fingerprints;
+    let input = DirectInput {
+        nodes: nodes.iter().map(node).collect::<PyResult<_>>()?,
+        database,
+        selection_mode: parse_selection_mode(selection_mode)?,
+        selected,
+        source_drift,
+        include_missing_upstream,
+        has_start_time,
+        catalog: catalog
+            .iter()
+            .map(
+                |(name, materialized_view, columns, sources)| CatalogRelation {
+                    name,
+                    materialized_view: *materialized_view,
+                    columns: columns.iter().map(String::as_str).collect(),
+                    source_relation_names: sources.iter().map(String::as_str).collect(),
+                },
+            )
+            .collect(),
+        external_columns: external_columns
+            .iter()
+            .map(
+                |(name, [partition, offset, timestamp, landed_at, cursor])| {
+                    (
+                        name.as_str(),
+                        ExternalColumns {
+                            partition: partition.as_deref(),
+                            offset: offset.as_deref(),
+                            timestamp: timestamp.as_deref(),
+                            landed_at: landed_at.as_deref(),
+                            cursor: cursor.as_deref(),
+                        },
+                    )
+                },
+            )
+            .collect(),
+        fingerprints: if *available {
+            Fingerprints::Available(
+                baselines
+                    .iter()
+                    .map(|(identity, sql, hash)| (identity.as_str(), sql.as_str(), hash.as_str()))
+                    .collect(),
+            )
+        } else {
+            Fingerprints::Unavailable {
+                warning: warning.as_deref(),
+            }
+        },
+        mutable_ref_names: mutable_ref_names.iter().map(String::as_str).collect(),
+    };
+    py.detach(|| plan_direct(&input))
+        .map(direct_plan_result)
+        .map_err(PyValueError::new_err)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(classify_object_changes, module)?)?;
+    module.add_function(wrap_pyfunction!(unified_diff, module)?)?;
+    module.add_function(wrap_pyfunction!(stage_deployment, module)?)?;
+    module.add_function(wrap_pyfunction!(plan_direct_build, module)?)?;
     module.add_class::<PyDesiredGraph>()
 }

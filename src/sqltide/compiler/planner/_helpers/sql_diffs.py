@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import difflib
-
+import sqltide._native as _native
 from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.compile.constants import RAW_TABLE_NAME_PREFIX
 from sqltide.compiler.compile.models import (
@@ -143,12 +142,4 @@ def _display_object_type(
 
 
 def _build_unified_diff_lines(*, current_sql: str, desired_sql: str) -> tuple[str, ...]:
-    return tuple(
-        difflib.unified_diff(
-            current_sql.splitlines(),
-            desired_sql.splitlines(),
-            fromfile="current",
-            tofile="desired",
-            lineterm="",
-        )
-    )
+    return tuple(_native.unified_diff(current_sql, desired_sql, "current", "desired", False))
