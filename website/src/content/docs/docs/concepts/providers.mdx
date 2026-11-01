@@ -1,0 +1,99 @@
+---
+title: "Providers"
+description: "Inject validated settings and managed external clients into sensor handlers."
+---
+
+Providers are project-owned runtime dependencies discovered from `providers/`. They keep secrets,
+client construction, and resource cleanup separate from sensor logic, while preserving ordinary
+Python types at the call site.
+
+## Define a provider
+
+Create a `Provider` subclass in `providers/`:
+
+```python
+# providers/slack.py
+from pydantic import SecretStr
+from pydantic_settings import SettingsConfigDict
+
+from sqltide.providers import Provider
+
+class QualitySlack(Provider):
+    model_config = SettingsConfigDict(env_prefix="QUALITY_SLACK_")
+
+    webhook_url: SecretStr
+
+    def send(self, message: str) -> None:
+        ...
+```
+
+Provider fields use `pydantic-settings`. In this example, set
+`QUALITY_SLACK_WEBHOOK_URL` in the server environment rather than storing the webhook in
+`sqltide_project.toml`.
+
+The class name determines the provider name: `QualitySlack` becomes `quality_slack`. Set
+`provider_name` explicitly when a different lower-snake-case name is clearer.
+
+## Inject a provider
+
+Add a typed parameter with the provider's resolved name to a sensor:
+
+```python
+from providers.slack import QualitySlack
+from sqltide.events import RunCompleted
+from sqltide.sensors import EventSensorContext, event_sensor
+
+@event_sensor(on=RunCompleted)
+def announce_run(
+    ctx: EventSensorContext[RunCompleted], quality_slack: QualitySlack
+) -> None:
+    ctx.step(
+        "notify",
+        lambda: quality_slack.send(f"Run {ctx.event.invocation_id} completed"),
+    )
+```
+
+SQLTide matches `quality_slack` to the discovered provider and validates the annotation. A
+missing provider or incompatible annotation fails loudly instead of passing an untyped object into
+the handler.
+
+## Manage client lifecycle
+
+Providers are instantiated for a sensor tick but initialized only when requested. Override
+`setup(ctx)` for connections or clients and `teardown()` for cleanup:
+
+```python
+from typing import Any
+
+from sqltide.providers import Provider
+
+class IncidentApi(Provider):
+    base_url: str
+    token: str
+
+    def setup(self, ctx: Any) -> None:
+        self._client = build_client(self.base_url, self.token)
+
+    def teardown(self) -> None:
+        self._client.close()
+```
+
+Only providers used by the handler are set up. SQLTide tears them down in reverse setup order,
+including after handler failures. Provider setup or teardown failures are reported as tick failures
+so operators can inspect and retry them from the [Sensors](/concepts/sensors) page.
+
+## Choose the boundary
+
+Use a provider for dependencies that need configuration or lifecycle management, such as API
+clients, notification services, and credentials. Keep event filtering, cursor decisions, retryable
+steps, and idempotency in the sensor itself.
+
+| Concern | Put it in |
+|---|---|
+| Secret or endpoint configuration | Provider fields |
+| Client creation and cleanup | `setup()` and `teardown()` |
+| Event or polling decision | Sensor handler |
+| Retry-safe side effect | `ctx.step()` in the sensor |
+
+This split lets multiple sensors share one dependency definition without sharing mutable state
+between ticks.

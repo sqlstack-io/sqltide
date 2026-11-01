@@ -1,0 +1,89 @@
+---
+title: "ClickHouse Architecture"
+description: "Managed source objects, model relations, deployment names, and metadata."
+---
+
+SQLTide keeps authored logical identity separate from ClickHouse realization. The current
+adapter is ClickHouse only.
+
+## Managed Kafka landing
+
+For source `order_events`:
+
+SQLTide owns all three objects in this chain. The landing table carries raw `kafka_value` plus
+normalized replay columns. The Kafka engine table feeds the landing materialized view, which writes
+retained history into the raw MergeTree table.
+
+## Direct-mode model graph
+
+`tbl__*` names are physical model tables in direct mode. A build drops and recreates selected model
+tables and MVs while preserving managed source objects.
+Here the raw source feeds `mv__orders`, which writes `tbl__orders`; that table then feeds
+`mv__daily_revenue`, which writes `tbl__daily_revenue`.
+
+## Virtual-environment model graph
+
+In virtual environments, deployment-specific relations hold data and unsuffixed `tbl__*` names are
+stable ClickHouse views. Publish replaces those view bindings one relation at a time.
+The raw source feeds the deployment-specific orders MV and table. The stable `tbl__orders` view
+points to the table belonging to the published deployment.
+
+## Adopted sources
+
+An adopted `stream_table` has no Kafka table, raw table, or landing MV:
+
+SQLTide reads and validates the adopted source but does not create, drop, replace, or otherwise
+mutate it. Ownership begins only at the derived model objects: the user-owned `orders_existing`
+table feeds `mv__orders_enriched`, which writes `tbl__orders_enriched`.
+
+## Naming
+
+| Pattern | Purpose |
+|---|---|
+| `kafka__<source>` | managed Kafka engine table |
+| `raw__<source>` | managed raw landing table |
+| `mv__<model>` | direct model MV or landing MV |
+| `tbl__<model>` | direct table or virtual-environment stable view |
+| `mv__<model>__<deployment_id>` | staged model MV |
+| `tbl__<model>__<deployment_id>` | staged model table |
+
+## Metadata tables
+
+SQLTide stores metadata in the selected target database. Virtual-environment lifecycle state is
+authoritative:
+
+```text
+_sqltide_schema_versions
+_sqltide_virtual_deployments
+_sqltide_virtual_object_state
+_sqltide_virtual_replay_boundaries
+_sqltide_virtual_publications
+```
+
+Direct mode treats project declarations, the live catalog, and live data as authoritative.
+`_sqltide_direct_fingerprints` provides SQL baseline history for diffs and changed-model selection.
+Ownership-generation and target-lock records also protect mutations; a familiar object name alone
+is not deletion authority.
+
+Execution observability uses three append-only tables:
+
+```text
+_sqltide_invocations
+_sqltide_node_results
+_sqltide_run_events
+```
+
+Invocations record terminal command outcomes, node results record test and audit evidence, and run
+events record build and statement progress. Builds emit a heartbeat every 10 seconds. The dev UI
+derives `running`, `unresponsive` after 45 seconds, and `presumed_failed` after the configured
+`[defaults].run_presumed_failed_after` window (default `10m`) from the latest durable signal; those
+non-terminal states can reverse when a later event arrives.
+
+Observability rows never influence planning, replay, publication, repair, reconcile, or cleanup.
+All metadata tables are internal contracts; do not edit them manually.
+
+## Compile boundary
+
+Compilation uses Polyglot as the mandatory SQL parser and analyzer. It produces canonical ClickHouse
+SQL, exact output types, replay and aggregate facts, references, and a database-qualified adapter
+template without opening a warehouse connection.

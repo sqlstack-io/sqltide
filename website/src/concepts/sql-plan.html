@@ -1,0 +1,32 @@
+<figure class="showcase" data-showcase="plan" data-stage="1" aria-labelledby="showcase-title">
+  <div class="showcase-top"><span>Direct mode · secondary comparison</span><a href="/">Virtual lifecycle ↗</a></div>
+  <h2 id="showcase-title">One SQL change.<br>A visible rebuild path.</h2>
+  <div class="model-caption"><code>pl__orders/order_totals.sql</code><span>Direct mode</span></div>
+  <pre class="model-code" tabindex="0" aria-label="Typed model with changed filter"><code><span class="sql-key">MODEL</span> (order_by [order_id]);
+
+<span class="sql-key">SELECT</span>
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
+<span class="sql-key">FROM</span> __source("orders")
+<mark>WHERE amount_cents &gt;= 100</mark></code></pre>
+  <p class="excerpt-note">Typed outputs include the replay lineage.</p>
+  <div class="dependency-graph" aria-label="orders_input feeds order_totals, which feeds order_report">
+    <div class="graph-node source-node"><span>Preserved input</span><code>orders_input</code></div>
+    <svg class="graph-edge" viewBox="0 0 40 20" aria-hidden="true"><path d="M0 10H36m-6-5 6 5-6 5" /></svg>
+    <div class="graph-node changed-node"><span>Changed SQL</span><code>order_totals</code></div>
+    <svg class="graph-edge" viewBox="0 0 40 20" aria-hidden="true"><path d="M0 10H36m-6-5 6 5-6 5" /></svg>
+    <div class="graph-node downstream-node"><span>Downstream</span><code>order_report</code></div>
+  </div>
+  <div class="showcase-summary">
+    <code class="stage-command">sqt plan --select order_totals</code>
+    <p class="stage-description">Read-only plan: 2 models selected, 4 relations rebuilt, 1 replay root. The adopted input stays in place.</p>
+  </div>
+  <div class="showcase-steps" aria-label="Explanation steps" hidden>
+    <button type="button" data-step="0">1 · SQL</button><button type="button" data-step="1" aria-pressed="true">2 · Plan</button><button type="button" data-step="2">3 · Build</button><button type="button" data-step="3">4 · Live</button>
+  </div>
+  <div class="showcase-controls" hidden><button type="button" data-play>Play</button><button type="button" data-next>Next step</button><button type="button" data-reset>Start over</button><span class="motion-label">Illustration, not a running UI</span></div>
+  <figcaption>Direct builds replace selected derived relations and replay retained history. No automatic rollback. Delivery is at least once.</figcaption>
+</figure>

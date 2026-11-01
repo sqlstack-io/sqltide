@@ -1,0 +1,26 @@
+<figure class="showcase" data-showcase="replay" data-stage="2" aria-labelledby="showcase-title">
+  <div class="showcase-top"><span>Bounded replay · supporting detail</span><a href="/">Virtual lifecycle ↗</a></div>
+  <h2 id="showcase-title">Live and replay.<br>Two paths. One model.</h2>
+  <div class="model-caption"><span>Adopted input · one partition</span><span>Direct mode</span></div>
+  <div class="retained-input">
+    <div class="data-label"><code>orders_input</code><span>retained source rows · unchanged</span></div>
+    <div class="event-range" aria-label="Illustrative offsets 98 and 99 precede the requested start; 100 through 102 are in the replay window">
+      <div class="outside"><small>09:58</small><code>98</code></div><div class="outside"><small>09:59</small><code>99</code></div><div class="in-window"><small>10:00</small><code>100</code></div><div class="in-window"><small>10:01</small><code>101</code></div><div class="in-window cutoff-event"><small>10:02</small><code>102</code></div>
+    </div>
+    <div class="boundary-labels"><span>Before start · not replayed</span><span>Start ≤ window ≤ captured cutoff</span></div>
+  </div>
+  <div class="replay-paths">
+    <div class="delivery-path live-path"><div class="path-label"><strong>Live ingestion</strong><span>Attached materialized view</span></div><svg viewBox="0 0 280 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 12H272m-8-6 8 6-8 6" /></svg><p>New inserts flow into the derived table.</p></div>
+    <div class="delivery-path replay-path"><div class="path-label"><strong>Bounded replay</strong><span>Retained rows · 100–102</span></div><svg viewBox="0 0 280 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 12H272m-8-6 8 6-8 6" /></svg><p>Replay includes the captured cutoff.</p></div>
+  </div>
+  <div class="replay-target"><code>tbl__order_totals</code><span>Both paths can deliver the cutoff row</span><span class="overlap-mark">102 may overlap</span></div>
+  <div class="showcase-summary">
+    <code class="stage-command">sqt build --select order_totals<br>  --start-time 2026-07-01T10:00:00Z</code>
+    <p class="stage-description">Direct rebuild, bounded replay: older derived output is omitted. The source rows are preserved. This is not deduplication.</p>
+  </div>
+  <div class="showcase-steps" aria-label="Explanation steps" hidden>
+    <button type="button" data-step="0">1 · Retain</button><button type="button" data-step="1">2 · Bound</button><button type="button" data-step="2" aria-pressed="true">3 · Replay</button><button type="button" data-step="3">4 · Live</button>
+  </div>
+  <div class="showcase-controls" hidden><button type="button" data-play>Play</button><button type="button" data-next>Next step</button><button type="button" data-reset>Start over</button><span class="motion-label">Illustrative offsets · not throughput</span></div>
+  <figcaption>UTC start, inclusive upper cutoff, at-least-once overlap. SQL and storage engines own deduplication. No pre-window seeding in direct mode.</figcaption>
+</figure>

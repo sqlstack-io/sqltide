@@ -1,0 +1,123 @@
+---
+title: "Access Control"
+description: "Define fine-grained operational roles and assign them by project and target."
+---
+
+Every authenticated user can inspect project definitions and live operational state. Mutating
+operations, plus reading raw source messages, require an explicit permission. System administrators
+can perform every operation; everyone else receives permissions from project roles in `access.yml`.
+
+This keeps responsibility split cleanly:
+
+| Owner | Responsibility |
+|---|---|
+| Project authors | Define reviewable roles and grants in `access.yml` |
+| System administrators | Assign those roles to user accounts in **Users** |
+| SQLTide | Resolve the affected scope and enforce complete coverage on every request |
+
+## Define roles
+
+Commit `access.yml` at the project root:
+
+```yaml
+roles:
+  payments_operator:
+    description: Build and promote payment pipelines
+    grants:
+      - pipelines: [payments_ingestion, payments_reporting]
+        permissions:
+          - build.direct.run
+          - deployment.create
+          - deployment.promote
+          - pipeline.destroy
+
+  quality_analyst:
+    description: Run quality checks across the project
+    grants:
+      - scope: project
+        permissions:
+          - quality.test.run
+          - quality.audit.run
+
+  production_support:
+    description: Recover production automation and deployments
+    grants:
+      - scope: target
+        permissions:
+          - build.kill
+          - deployment.cleanup
+          - target.reset
+          - automation.manage
+```
+
+`sqt compile` rejects unknown roles, pipelines, permissions, keys, and invalid scopes. The built-in
+`admin` and `viewer` roles cannot be redefined. Account management and role assignment remain
+system-administrator operations and cannot be granted in this file.
+
+## Choose a scope
+
+Each grant contains exactly one scope:
+
+| Grant | Covers | Typical permissions |
+|---|---|---|
+| `pipelines: [...]` | Only the named pipelines | Build, stage, cancel, promote, destroy, tests, audits |
+| `scope: project` | The served project | Reload, project-wide quality, messages, automation |
+| `scope: target` | The selected warehouse target | Messages, force-kill, cleanup, reset, automation |
+
+The permission vocabulary is intentionally closed:
+
+| Permission | Allows |
+|---|---|
+| `project.reload` | Recompile the served project |
+| `source.messages.read` | Read retained raw source records and facets |
+| `quality.test.run` | Run SQL tests |
+| `quality.audit.run` | Run SQL audits |
+| `build.direct.run` | Execute direct pipeline writes |
+| `deployment.create` | Create a staged virtual deployment |
+| `build.cancel` | Cooperatively cancel an owned build |
+| `build.kill` | Force-kill build processes for recovery |
+| `deployment.promote` | Promote a staged deployment |
+| `deployment.cleanup` | Remove retained deployment artifacts |
+| `pipeline.destroy` | Destroy exact selected pipelines after frozen-plan confirmation |
+| `target.reset` | Reset all SQLTide-managed relations in the selected target |
+| `automation.manage` | Start, stop, reset, retry, or skip sensors |
+
+## Assign roles
+
+Open **Users**, select an account, and choose a compiled role. Leave the target empty to assign the
+role across every target, or enter one target name to constrain it.
+
+For example, assign Alice:
+
+| Role | Assignment target | Result |
+|---|---|---|
+| `payments_operator` | `prod` | Operate the two payment pipelines only when this server targets `prod` |
+| `quality_analyst` | All targets | Run project quality checks in any target |
+
+The page shows the roles compiled from `access.yml` as read-only definitions and lists Alice's
+assignments separately. Assignment changes apply on the next request. If a role is later removed
+from `access.yml`, its assignment is shown as stale and authorizes nothing.
+
+## Understand enforcement
+
+The UI disables controls the current user cannot operate, but the API is the security boundary.
+SQLTide derives the actual affected pipelines from the compiled plan or warehouse metadata; it
+does not trust pipeline names supplied by the browser.
+
+An operation must be authorized in full. If Alice selects `payments_ingestion` and an unauthorized
+`customer_exports` pipeline in one build, SQLTide rejects the whole request:
+
+```text
+Direct build writes are not permitted
+required permission: build.direct.run
+missing pipelines: customer_exports
+target: prod
+```
+
+There is no partial execution. Missing policies, missing assignments, stale roles, target
+mismatches, unknown pipeline ownership, and incomplete pipeline coverage all fail closed.
+
+<Tip>
+  Prefer several small roles that describe jobs people perform over one broad operator role. Users
+  can hold multiple roles, and their grants combine to cover an operation.
+</Tip>

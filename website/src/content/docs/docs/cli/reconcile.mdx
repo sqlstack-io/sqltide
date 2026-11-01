@@ -1,0 +1,30 @@
+---
+title: "sqt reconcile"
+description: "Adopt structurally compatible live objects into the metadata baseline."
+---
+
+Preview structurally compatible objects that can be recorded as the current metadata baseline:
+
+```bash
+sqt reconcile
+sqt reconcile --select orders
+sqt reconcile --select pipeline:order_events --json
+```
+
+The default is read-only. Eligible targets and rejected targets with reasons are shown without
+persisting metadata.
+
+Apply the previewed reconciliation explicitly:
+
+```bash
+sqt reconcile --apply
+```
+
+`--apply` still displays the preview, then prompts `Proceed with reconcile? [y/N]`. Only `y` or
+`yes` approves. There is currently no auto-approve option.
+
+Selectors accept repeatable bare model names and `pipeline:<name>`. They do not accept graph `+`
+syntax.
+
+Reconcile updates SQLTide's live object-state baseline; it does not rebuild warehouse objects.
+Only structurally compatible targets are eligible. The command requires virtual environments.

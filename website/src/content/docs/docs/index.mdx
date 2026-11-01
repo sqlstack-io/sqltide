@@ -1,0 +1,73 @@
+---
+title: "Introduction"
+description: "Declarative streaming data pipelines for ClickHouse."
+---
+
+SQLTide compiles typed SQL models into ClickHouse tables and materialized views, plans their
+dependencies, and rebuilds them from retained streaming history.
+
+These guides describe **SQLTide 0.60.0**. New to streaming SQL? Start with the
+[local quickstart](/docs/quickstart/): one adopted input table, one typed model, and a live insert.
+Upgrading an existing project? Read [From StreamBuild to SQLTide](/docs/upgrade/) before connecting.
+
+Each pipeline has an effective operational mode:
+
+- **Direct mode** is the default. `sqt build` rebuilds selected models at their ordinary names and
+  replays retained history without a publish step.
+- **Virtual environments** are an explicit opt-in. `sqt build` creates deployment-specific tables,
+  `sqt deployment audit` assesses them, promotion switches stable views, and retained publications
+  can be compared or rolled back as a complete graph.
+- **Mixed builds** stage selected virtual pipelines first, then apply selected direct pipelines in
+  the same CLI invocation. Relationships cannot cross the mode boundary.
+
+## What SQLTide manages
+
+- Strict, explicitly typed `MODEL()` SQL
+- Managed Kafka landing through ClickHouse's Kafka engine
+- Adopted ClickHouse stream tables that SQLTide does not own
+- Materialized-view dependency graphs with driving and side-reference edges
+- Inclusive, at-least-once replay across offset, timestamp, landed-at, and cursor boundaries
+- SQL-native model tests, macro tests, and data-quality audits
+- Single-process scheduled audits using the warehouse clock
+- A local UI for plans, runs, deployments, lineage, Kafka lag, topics, and retained source messages
+- Offline compile artifacts for review and automation
+
+SQLTide currently supports ClickHouse only. It does not provide dbt compatibility, authored
+seeds, UDF management, or a generic multi-warehouse abstraction.
+
+## Choose a workflow
+
+<CardGroup cols={2}>
+  <Card title="Direct-mode quickstart" icon="bolt" href="/quickstart">
+    Build a small adopted-source pipeline against local ClickHouse.
+  </Card>
+  <Card title="Direct mode" icon="arrows-rotate" href="/concepts/direct-mode">
+    Understand destructive rebuilds, replay, failure, and rerun behavior.
+  </Card>
+  <Card title="Virtual environments" icon="code-branch" href="/concepts/deployments">
+    Stage, inspect, assess, compare, promote, roll back, diagnose, and clean deployments.
+  </Card>
+  <Card title="Development UI" icon="display" href="/ui/overview">
+    Explore lineage, sources, messages, plans, quality, and durable runs.
+  </Card>
+  <Card title="Orders demo" icon="cart-shopping" href="/examples/orders-demo">
+    Run the checked-in Kafka-to-ClickHouse direct-mode example.
+  </Card>
+</CardGroup>
+
+## Core loop
+
+```bash
+sqt discover
+sqt compile
+sqt plan
+sqt build
+sqt test
+sqt audit
+sqt dev
+```
+
+Run commands from anywhere inside a project, or pass `--project-dir` explicitly.
+
+`sqt build` already runs applicable audits. Use the separate `sqt audit` command when you want to
+rerun live checks later without rebuilding.

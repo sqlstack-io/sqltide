@@ -1,0 +1,35 @@
+---
+title: "Runs"
+description: "Inspect durable execution history, progress, cancellation, and recovery state."
+---
+
+The Runs view reads durable invocation, node-result, and statement-event metadata. Each active row
+shows completed statements, total statements, and the current step. Open a run to inspect its exact
+command, scoped lineage, startup timings, outcome, and event timeline.
+
+Builds emit a heartbeat every 10 seconds. A run without a terminal fact appears as:
+
+| State | Meaning |
+|---|---|
+| `running` | A recent durable signal exists |
+| `unresponsive` | No signal has arrived for 45 seconds |
+| `presumed failed` | No signal has arrived for the configured safety window; default `10m` |
+
+These are derived display states rather than persisted outcomes. They can reverse if a delayed
+heartbeat or terminal event arrives. Configure the safety window with
+`[defaults].run_presumed_failed_after`.
+
+## Cancellation and recovery
+
+The dev server can gracefully cancel only the active build child process that it launched. If that
+does not finish, the UI can force-stop the owned child. Builds started in another terminal and
+orphaned runs remain visible but cannot be signalled by the current server.
+
+An unresponsive run blocks new builds until the safety window expires. If a start is rejected, the
+error states that no process was launched and reports the remaining wait. Recovery is always a fresh
+build from [Plans](/ui/plans); SQLTide does not resume a partial run or execute history as
+workflow state.
+
+Temporary observability read failures appear as retrying warnings without replacing already loaded
+run details. Completed start/result event pairs are collapsed into one timeline row; only the active
+unfinished start remains separate.

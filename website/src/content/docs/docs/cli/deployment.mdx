@@ -1,0 +1,85 @@
+---
+title: "sqt deployment"
+description: "Discover, inspect, compare, audit, promote, and roll back virtual deployments."
+---
+
+The deployment command family uses explicit resource operations:
+
+```bash
+DEPLOYMENT_ID="replace-with-deployment-id"
+sqt deployment list
+sqt deployment show "$DEPLOYMENT_ID"
+sqt deployment diff "$DEPLOYMENT_ID"
+sqt deployment audit "$DEPLOYMENT_ID"
+sqt deployment promote "$DEPLOYMENT_ID"
+sqt deployment rollback --previous
+```
+
+All commands accept project, target, connection, and `--json` options. Virtual environments
+must be enabled.
+
+`sqt dev` also provides deployment inventory, detail, diff, promotion preview and execution, and
+retention cleanup. Audit and rollback remain CLI operations.
+
+## List and show
+
+`deployment list` reconstructs authoritative inventory from append-only lifecycle metadata and live
+ClickHouse catalog evidence. Deployments are reported as `active`, `staged`, `superseded`,
+`incomplete`, `metadata_missing`, or `physical_missing`.
+
+`deployment show <deployment-id>` displays one deployment's persisted status, roots, physical
+relations, missing relations, active bindings, and latest publication time. Both operations are
+read-only.
+
+## Diff
+
+`deployment diff <deployment-id>` compares the active bindings with one retained deployment.
+`deployment diff <from>:<to>` compares explicit endpoints, where either endpoint may be `active`.
+It reports model presence, schema columns, physical availability, current row counts, and one of
+`added`, `removed`, `changed`, `unchanged`, or `physical_missing` for each logical relation.
+Diff is read-only.
+
+## Audit
+
+`deployment audit <deployment-id>` combines staged-versus-active comparison, replay coverage, and
+applicable SQL audits. The audit is the operation; its overall readiness assessment is `ready`,
+`caution`, or `not_ready`:
+
+- `ready` means the available evidence satisfies the configured checks and no error-severity SQL
+  audit failed.
+- `caution` means evidence is incomplete or warrants operator review.
+- `not_ready` means a stronger negative signal or error-severity SQL audit failure was found.
+
+The command does not accept `--select`. A successful command exits 0 even when the reported
+assessment is `not_ready`.
+
+<Warning>
+  Readiness is an operator safety signal, not an enforced promotion lock. Treat `not_ready` as a
+  reason to stop and investigate.
+</Warning>
+
+## Promote
+
+`deployment promote <deployment-id>` atomically replaces each stable `tbl__*` view so it points to
+the selected deployment table. The complete graph is not switched in one transaction; bindings are
+replaced one relation at a time and the command reports adapter atomicity.
+
+## Rollback
+
+`deployment rollback --previous` selects the distinct publication immediately before the active
+binding identity. `deployment rollback <deployment-id>` selects an explicitly retained publication.
+Both forms restore the complete set of stable bindings and require confirmation unless
+`--auto-approve` is supplied. `--json` requires `--auto-approve`.
+
+Rollback only accepts successfully published deployments whose complete physical binding set is
+still available. It rejects active-view drift rather than performing a partial rollback.
+
+<Warning>
+  Rollback switches definitions and bindings. It is not point-in-time data recovery: retained
+  streaming deployment tables can continue receiving rows after their original publication.
+</Warning>
+
+Show, audit, promote, and explicit rollback require a positional deployment ID. SQLTide never
+selects a sole or latest candidate implicitly. Use `deployment list` to discover generated IDs.
+Older deployment objects remain available for comparison, rollback, diagnosis, repair, and top-level
+`sqt janitor` cleanup.

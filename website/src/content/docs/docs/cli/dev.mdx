@@ -1,0 +1,53 @@
+---
+title: "sqt dev"
+description: "Serve the local SQLTide UI for one project and target."
+---
+
+Compile a project, connect to its selected ClickHouse target, and serve the packaged web UI and JSON
+API until interrupted:
+
+```bash
+sqt dev
+sqt dev --project-dir examples/orders_demo
+sqt dev --ui-host 127.0.0.1 --ui-port 8000
+```
+
+Open `http://127.0.0.1:8000` by default. `sqt dev` accepts the normal project, target, variables, and
+ClickHouse connection overrides in addition to:
+
+| Option | Purpose |
+|---|---|
+| `--ui-host VALUE` | Bind interface; defaults to `127.0.0.1` |
+| `--ui-port VALUE` | Bind port; defaults to `8000` |
+| `--auth-mode VALUE` | `disabled`, `trusted_proxy`, or `password` |
+| `--control-store-url VALUE` | SQLite or PostgreSQL account store |
+
+The UI combines authored definitions with live warehouse state. Detailed guides cover each workflow:
+
+<CardGroup cols={2}>
+  <Card title="Development UI" icon="display" href="/ui/overview">
+    Start with the page map, snapshots, and operating model.
+  </Card>
+  <Card title="Warehouse Health" icon="server" href="/ui/warehouse-health">
+    Inspect ClickHouse capacity, memory context, and current activity.
+  </Card>
+  <Card title="Sources" icon="database" href="/ui/sources">
+    Inspect landing health, retention, freshness, and Kafka lag.
+  </Card>
+  <Card title="Messages" icon="message" href="/ui/messages">
+    Search records retained in ClickHouse without consuming Kafka.
+  </Card>
+  <Card title="Plans" icon="play" href="/ui/plans">
+    Preview warehouse changes and launch builds.
+  </Card>
+  <Card title="Runs" icon="clock" href="/ui/runs">
+    Inspect durable execution, cancellation, and recovery.
+  </Card>
+  <Card title="Quality" icon="shield-check" href="/ui/quality">
+    Run tests and audits and monitor the audit scheduler.
+  </Card>
+</CardGroup>
+
+Disabled authentication is limited to loopback. See
+[Authentication](/concepts/authentication-and-access) before exposing the server, then define
+operational permissions with [Access Control](/concepts/access-control).

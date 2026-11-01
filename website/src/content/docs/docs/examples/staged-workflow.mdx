@@ -1,0 +1,208 @@
+---
+title: Stage a pipeline change
+description: Build a virtual pipeline, compare a changed version, and explicitly promote it.
+---
+
+Build two models in virtual mode, publish the first version, then change a filter without
+immediately changing the views your queries read. Virtual mode is opt-in; direct mode remains
+the default.
+
+## Set up a fresh target
+
+Install `sqltide==0.60.0` and start the local ClickHouse server described in
+[quickstart steps 1–2](/docs/quickstart/#1-install-sqltide). Use a **new database** for this guide,
+not an already-built direct-mode target: automatic mode conversion is not supported.
+
+Create the database and retained input table. These commands fail rather than overwrite existing
+resources. The local server is unauthenticated; keep it bound to loopback as in the quickstart.
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary 'CREATE DATABASE virtual_start' &&
+curl --fail-with-body 'http://localhost:18123/' --data-binary '
+CREATE TABLE virtual_start.orders_input (
+  event_partition Int32,
+  event_offset Int64,
+  event_time DateTime64(3),
+  order_id String,
+  amount_cents UInt64
+) ENGINE = MergeTree ORDER BY (event_partition, event_offset)
+' &&
+curl --fail-with-body 'http://localhost:18123/' --data-binary "
+INSERT INTO virtual_start.orders_input VALUES
+  (0, 1, now64(3), 'order-small', 75),
+  (0, 2, now64(3), 'order-large', 300)
+"
+```
+
+## 1. Write and validate
+
+Create these folders and save the four files below:
+
+```bash
+mkdir -p virtual-start/sources virtual-start/pipelines/pl__orders
+```
+
+`virtual-start/sqltide_project.toml`:
+
+```toml
+name = "virtual_start"
+default_target = "local"
+
+[connection]
+host = "localhost"
+port = 18123
+username = "default"
+password = ""
+
+[targets.local]
+database = "virtual_start"
+
+[defaults]
+pipeline_mode = "virtual"
+```
+
+`virtual-start/sources/orders.yml`:
+
+```yaml
+sources:
+  - name: orders
+    kind: stream_table
+    table_name: orders_input
+    replay_boundary:
+      mode: offsets
+      columns:
+        _replay_partition: event_partition
+        _replay_offset: event_offset
+        _replay_timestamp: event_time
+```
+
+`virtual-start/pipelines/pl__orders/order_totals.sql`:
+
+```sql
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
+FROM __source("orders")
+WHERE amount_cents >= 0
+```
+
+`virtual-start/pipelines/pl__orders/order_report.sql`:
+
+```sql
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
+FROM __ref("order_totals")
+```
+
+Run the remaining `sqt` commands from the `virtual-start` directory. Compilation checks the
+models without connecting to ClickHouse:
+
+```bash
+cd virtual-start
+sqt compile
+```
+
+## 2. Plan
+
+```bash
+sqt plan --select order_totals --full-refresh
+```
+
+This command reads warehouse state but does not change it. The selection includes the downstream
+`order_report` model. This walkthrough uses full refresh to rebuild the selected model chain.
+
+## 3. Build and inspect
+
+```bash
+sqt build --select order_totals --full-refresh
+```
+
+Review the proposed work and confirm it. Build prints a deployment ID; copy that exact ID:
+
+```bash
+DEPLOYMENT_ID="replace-with-the-printed-id"
+sqt deployment show "$DEPLOYMENT_ID"
+```
+
+Build creates version-specific tables and materialized views, and replays retained input into
+them. **It does not publish stable consumer views.** On the first build there is no current
+published version yet. Inspect the physical relation names from `show` and query their data
+directly; replace the placeholder with the displayed table name:
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary '
+SELECT order_id, amount_cents
+FROM virtual_start.REPLACE_WITH_STAGED_REPORT_TABLE
+ORDER BY order_id
+'
+```
+
+`show` describes deployment state; it does not replace checking the results your consumers need.
+`diff` requires a published baseline, so use it for the later change, not this first publication.
+This walkthrough compares data directly rather than relying on a deployment audit.
+
+## 4. Promote
+
+```bash
+sqt deployment promote "$DEPLOYMENT_ID"
+```
+
+Promotion executes explicitly when you run this command; it does not prompt for confirmation.
+Then query the newly created stable view:
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary '
+SELECT order_id, amount_cents FROM virtual_start.tbl__order_report ORDER BY order_id
+'
+```
+
+## Try a change beside the published version
+
+In `order_totals.sql`, change the filter to `WHERE amount_cents >= 100`. Repeat compile, plan
+and build, then replace `DEPLOYMENT_ID` with the **new** printed ID:
+
+```bash
+sqt compile
+sqt plan --select order_totals --full-refresh
+sqt build --select order_totals --full-refresh
+DEPLOYMENT_ID="replace-with-the-new-printed-id"
+sqt deployment show "$DEPLOYMENT_ID"
+sqt deployment diff "$DEPLOYMENT_ID"
+```
+
+Compare the new physical report table with `tbl__order_report`. The new version excludes the
+small order; the stable view still reads the previous version. New inserts reach both versions:
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary "
+INSERT INTO virtual_start.orders_input VALUES
+  (0, 3, now64(3), 'order-new-small', 50),
+  (0, 4, now64(3), 'order-new-large', 500)
+"
+```
+
+Query both versions again. When satisfied, explicitly promote the new deployment using the
+same promotion command. Your stable query stays unchanged; it now reads the filtered version.
+
+## Limits to understand
+
+- Promotion replaces one stable view at a time, **not the whole graph atomically**. A multi-model
+  promotion can stop partway through. No zero-downtime guarantee is implied.
+- Replay depends on retained input and is at least once. SQL and storage must handle duplicate
+  delivery. This example uses full refresh, not a requested replay start time.
+- Rollback is explicit; it restores retained bindings, not a historical data snapshot. Retained
+  streaming versions can keep receiving new data.
+
+Read [the deployment lifecycle](/docs/concepts/deployments/) for partial promotion, advisory
+readiness assessments and cleanup, or [compare deployment modes](/docs/concepts/direct-mode/).

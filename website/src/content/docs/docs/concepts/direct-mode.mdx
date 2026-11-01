@@ -1,0 +1,129 @@
+---
+title: "Direct Mode"
+description: "The default rebuild workflow without staged views or a publish step."
+---
+
+Direct mode is SQLTide's default operational model. It rebuilds selected model tables and
+materialized views at their ordinary names, then replays retained source history into them.
+
+```toml
+# sqltide_project.toml
+name = "analytics"
+default_target = "prod"
+
+[targets.prod]
+database = "analytics"
+```
+
+No mode setting is required. An explicit value is equivalent:
+
+```toml
+[defaults]
+pipeline_mode = "direct"
+```
+
+## Plan behavior
+
+```bash
+sqt plan
+sqt plan --select orders
+sqt plan --select pipeline:order_events
+sqt plan --select orders --start-time 2026-07-01T00:00:00Z
+```
+
+Direct plans are intentionally conservative:
+
+- no selector rebuilds every model
+- a selector includes the selected model or pipeline and all downstream models
+- upstream prerequisites outside the execution closure are preserved
+- matching warehouse state does not prune a requested rebuild
+- plans show destructive drop and create actions but make no modifications
+
+`--changed` selects changed direct models and managed-source settings drift, plus downstream scope.
+It cannot be combined with `--select`. Add `--include-missing-upstream` to include absent
+project-owned prerequisites. See [selection](/docs/cli/plan/#changed-direct-models).
+
+`--start-time` requires `--changed` or at least one selector. It plans the ordinary selected downstream closure but
+bounds replay from the effective source frontier. `--full-refresh` remains unavailable because an
+ordinary direct build already replays all retained source history.
+
+## Build behavior
+
+```bash
+sqt build
+sqt build --select orders
+sqt build --select orders --start-time 2026-07-01T00:00:00Z
+sqt build --auto-approve
+```
+
+One build:
+
+1. validates adopted sources and preserves managed Kafka landing resources
+2. rejects incompatible managed-source drift
+3. verifies retained history can satisfy the rebuild
+4. drops selected materialized views and model tables in reverse dependency order
+5. recreates model tables and views in dependency order
+6. captures inclusive replay watermarks and replays retained history
+7. runs applicable SQL audits against the rebuilt direct tables
+
+Only the selected derived closure is torn down and recreated. Source objects and source rows stay in
+place, replay repopulates the new live tables with inclusive at-least-once boundaries, and audits run
+after those rebuilt resources are already live. A later failure does not restore the previous graph.
+
+With `--start-time`, the lifecycle stays destructive and unseeded: SQLTide drops and recreates
+the same selected closure, then replays only the lower-and-upper-bounded source window. Managed and
+adopted source definitions and rows are not replaced, truncated, or deleted. Derived rows before
+the effective lower frontier are intentionally absent after success.
+
+`--start-time` is interpreted as UTC and remains an explicit UTC instant through planning and
+execution. A non-UTC ClickHouse server does not shift the boundary, including across daylight-saving
+transitions where local wall-clock hours may be skipped or repeated.
+
+Every replay input in the selected closure must already exist and expose its configured timestamp
+or landed-at lineage. Run an ordinary direct build first to create a managed source. If an
+intermediate model becomes a replay input, project time lineage through that model before requesting
+`--start-time`.
+
+Direct model names are unsuffixed:
+
+```text
+tbl__orders
+mv__orders
+```
+
+There are no deployment-specific model branches, stable logical views, or deployment promotion.
+
+## Delivery guarantee
+
+Replay is at least once around the inclusive cutoff. Rows arriving near boundary capture may be
+delivered by both the live materialized view and replay. Duplicate delivery is preferred over a
+missing interval.
+
+Use deduplicating engines, stable keys, or aggregate-idempotent model design when duplicate
+contribution would be incorrect.
+
+## Failure and rerun
+
+Direct builds are destructive and do not roll back. If a build fails after teardown, rerun
+`sqt build` after correcting the cause. Recovery is always a new invocation, never a resumed
+workflow. Each invocation inspects the live catalog and retained input again. A repeated
+`--start-time` request keeps the requested lower boundary but captures a fresh upper boundary; its
+preflight fails if the source no longer retains the requested window.
+
+An error-severity audit makes the command fail after the new resources are live; it does not revert
+the rebuild.
+
+## Authority and SQL baselines
+
+Project declarations, the live ClickHouse catalog, and live source and target data are authoritative
+in direct mode. Replay boundaries are captured for the current build, not read from a resumable
+workflow file. Ownership-generation evidence separately protects destructive operations.
+
+`_sqltide_direct_fingerprints` is optional, best-effort history of successfully applied model
+SQL. It supports query diffs and changed-model selection, but is not proof that a live object exists
+or that a replay range is safe. Connected planning checks the live catalog and retained data.
+
+## Mode ownership
+
+Automatic conversion between direct and virtual-environment layouts is not supported. Use separate
+target databases for different modes and do not switch an existing managed target between modes.

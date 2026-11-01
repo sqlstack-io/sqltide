@@ -1,0 +1,39 @@
+name: Website
+
+on:
+  workflow_call:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  website:
+    name: Website build, links, examples and accessibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Install released documentation baseline
+        run: python -m pip install sqltide==0.60.0
+      - run: python scripts/check_examples.py
+      - name: Validate production build and indexing
+        run: |
+          npm run build
+          npm run check:links
+          python scripts/check_production.py
+      - run: npx playwright install --with-deps chromium
+      - run: npm test

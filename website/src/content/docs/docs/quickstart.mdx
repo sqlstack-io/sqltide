@@ -1,0 +1,200 @@
+---
+title: "Direct-mode Quickstart"
+description: "Build a direct-mode pipeline from an adopted ClickHouse stream table."
+---
+
+This guide creates one local ClickHouse table, adopts it as a replay source, and builds a live
+materialized-view target with `sqt build`.
+
+## Prerequisites
+
+- Python 3.12 or newer
+- [Docker](https://docs.docker.com/get-docker/)
+- `curl`
+
+## 1. Install SQLTide
+
+```bash
+pip install sqltide==0.60.0
+sqt --help
+```
+
+## 2. Start ClickHouse
+
+```bash
+docker run --detach --name sqltide-clickhouse \
+  --env CLICKHOUSE_SKIP_USER_SETUP=1 \
+  --publish 127.0.0.1:18123:8123 --publish 127.0.0.1:19000:9000 \
+  clickhouse/clickhouse-server:24.8
+
+until curl --fail --silent 'http://localhost:18123/ping' >/dev/null; do
+  sleep 1
+done
+```
+
+This is a disposable, unauthenticated local server. Do not expose it on a shared interface.
+If the container name already exists, choose a new name or explicitly clean up your previous
+quickstart first; the guide does not delete an existing container automatically.
+
+Create an input table with offset and timestamp columns. ClickHouse HTTP accepts one statement per
+request. Use a fresh `quickstart` database; the following statements intentionally fail rather than
+overwrite existing data:
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' \
+  --data-binary 'CREATE DATABASE quickstart' &&
+
+curl --fail-with-body 'http://localhost:18123/' --data-binary '
+CREATE TABLE quickstart.orders_input (
+  event_partition Int32,
+  event_offset Int64,
+  event_time DateTime64(3),
+  order_id String,
+  amount_cents UInt64
+) ENGINE = MergeTree ORDER BY (event_partition, event_offset)
+' &&
+
+curl --fail-with-body 'http://localhost:18123/' --data-binary "
+INSERT INTO quickstart.orders_input VALUES
+  (0, 1, now64(3), 'order-1', 2500),
+  (0, 2, now64(3), 'order-2', 4100)
+"
+```
+
+## 3. Create the project
+
+In a separate working directory, create these folders and save the three files below:
+
+```bash
+mkdir -p quickstart/sources quickstart/pipelines/pl__orders
+```
+
+```text
+quickstart/
+  sqltide_project.toml
+  sources/
+    orders.yml
+  pipelines/
+    pl__orders/
+      order_totals.sql
+```
+
+`quickstart/sqltide_project.toml`:
+
+```toml
+name = "quickstart"
+default_target = "local"
+
+[connection]
+host = "localhost"
+port = 18123
+username = "default"
+password = ""
+
+[targets.local]
+database = "quickstart"
+```
+
+Direct mode is the default, so this file intentionally omits `[defaults].pipeline_mode`.
+
+`quickstart/sources/orders.yml`:
+
+```yaml
+sources:
+  - name: orders
+    kind: stream_table
+    table_name: orders_input
+    replay_boundary:
+      mode: offsets
+      columns:
+        _replay_partition: event_partition
+        _replay_offset: event_offset
+        _replay_timestamp: event_time
+```
+
+`quickstart/pipelines/pl__orders/order_totals.sql`:
+
+```sql
+MODEL (
+  engine "MergeTree()",
+  order_by ["order_id", "_replay_partition", "_replay_offset"],
+);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
+FROM __source("orders")
+```
+
+The direct child directory `pipelines/pl__orders/` defines the `pl__orders` pipeline. SQLTide infers
+its source by following the model's `__source("orders")` driving input to the source registry.
+Pipeline, source and model names must be distinct. The default pipeline prefix is `pl__`.
+
+## 4. Discover and compile
+
+```bash
+sqt discover --project-dir quickstart
+sqt compile --project-dir quickstart
+```
+
+Compilation is offline. Review `quickstart/target/manifest.json`,
+`quickstart/target/sqltide_dag.json`, and the generated SQL under
+`quickstart/target/compiled/`.
+
+## 5. Plan and build
+
+```bash
+sqt plan --project-dir quickstart
+sqt build --project-dir quickstart
+```
+
+Review the destructive plan and approve it with `y`. The build preserves `orders_input`, creates
+`tbl__order_totals` and `mv__order_totals`, then replays retained rows through the model.
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary \
+  'SELECT order_id, amount_cents FROM quickstart.tbl__order_totals ORDER BY order_id'
+```
+
+With ingestion idle, the result is:
+
+```text
+order-1\t2500
+order-2\t4100
+```
+
+Insert a third row into `orders_input` after the build to see the live materialized view work:
+
+```bash
+curl --fail-with-body 'http://localhost:18123/' --data-binary \
+  "INSERT INTO quickstart.orders_input VALUES (0, 3, now64(3), 'order-3', 1800)"
+```
+
+Repeat the SELECT: `order-3` should now appear with `1800`, without another build.
+
+<Note>
+  Replay uses an inclusive cutoff and is intentionally at least once around that boundary. Choose
+  model SQL and ClickHouse engines that tolerate duplicate delivery where required.
+</Note>
+
+Direct builds replace derived relations immediately and do not roll back on failure. The adopted
+input table remains yours. See [direct builds](/concepts/direct-mode) before using this on real data.
+
+## Clean up
+
+```bash
+docker rm --force --volumes sqltide-clickhouse
+```
+
+This removes the quickstart container and its anonymous ClickHouse data volume.
+
+## Next steps
+
+- [Project configuration](/concepts/project-configuration)
+- [Models and references](/concepts/models)
+- [Direct-mode behavior](/concepts/direct-mode)
+- [Kafka orders demo](/examples/orders-demo)
+- [Local development UI](/cli/dev)

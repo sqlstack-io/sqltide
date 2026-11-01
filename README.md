@@ -170,7 +170,7 @@ sources:
 ```
 
 SQLTide owns managed Kafka landing objects. It validates but never mutates adopted source
-tables. See the [pipeline documentation](https://docs.streambuild.dev/concepts/pipelines)
+tables. See the [pipeline documentation](https://sqltide.io/docs/concepts/pipelines/)
 for adopted stream-table configuration.
 
 Typed retention defaults are checked against each compiled schema. A pipeline can override the
@@ -347,7 +347,7 @@ Run observability is warehouse-backed. A silent run becomes `unresponsive` after
 until that safety window expires to prevent overlapping warehouse writes.
 
 Shared installations support trusted-proxy or password authentication with project-scoped roles.
-See the [documentation](https://docs.streambuild.dev) for access control and
+See the [documentation](https://sqltide.io/docs/) for access control and
 operational configuration.
 
 ## Guarantees
@@ -360,8 +360,8 @@ operational configuration.
 
 ## Documentation
 
-- [Documentation](https://docs.streambuild.dev)
-- [Quickstart guide](https://docs.streambuild.dev/quickstart)
+- [Documentation](https://sqltide.io/docs/)
+- [Quickstart guide](https://sqltide.io/docs/quickstart/)
 - [Runnable orders demo](examples/orders_demo/README.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)

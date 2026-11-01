@@ -1,0 +1,234 @@
+---
+title: "Sources and Pipelines"
+description: "Reusable streaming sources and the pipelines that consume them."
+---
+
+Sources are project-wide identities under `sources/*.yml`. Each direct child directory under
+`pipelines/` defines one pipeline.
+
+```text
+sqltide_project.toml
+sources/
+  order_events.yml
+pipelines/
+  pl__orders/
+    orders.sql
+    order_items.sql
+```
+
+Only direct `sources/*.yml` files are discovered. Pipeline, source, and model names share one
+project-wide namespace and must be unique.
+
+## Managed Kafka source
+
+Projects with multiple Kafka sources can set their shared broker once:
+
+```toml
+[defaults]
+kafka_broker_list = "redpanda:9092"
+```
+
+```yaml
+sources:
+  - name: order_events
+    kind: kafka
+    topic: source.order_events.live
+    consumer_group: sqltide_order_events
+    format: JSONAsString
+    ttl: _replay_landed_at + INTERVAL 30 DAY
+    settings:
+      kafka_num_consumers: "1"
+    replay_boundary:
+      mode: offsets
+```
+
+SQLTide creates:
+
+```text
+kafka__order_events   Kafka engine table
+raw__order_events     MergeTree landing table
+mv__order_events      landing materialized view
+```
+
+Managed sources support `offsets`, `timestamp`, and `landed_at`. `JSONAsString` is currently the
+only supported Kafka format. SQLTide owns these source objects and blocks incompatible source
+drift rather than silently recreating them.
+
+`broker_list` may be declared on the source or inherited from `[defaults].kafka_broker_list` in
+`sqltide_project.toml`. A source-level value takes precedence. One of the two is required for
+every managed Kafka source.
+
+`ttl` is an optional ClickHouse expression applied to the managed `raw__order_events` landing
+table. It overrides `[defaults].managed_source_ttl` from `sqltide_project.toml`. Use
+`_replay_landed_at` for ingestion-age retention, for example
+`_replay_landed_at + INTERVAL 30 DAY`. If the source and project default both omit TTL,
+SQLTide creates the landing table without a TTL clause.
+
+`format` defaults to `JSONAsString`. This example sets `consumer_group` explicitly. SQLTide appends
+the target database, normalizing hyphens to underscores, so `sqltide_order_events` in database
+`analytics_dev` uses `sqltide_order_events_analytics_dev`. Inspect compiled DDL or Sources for the
+effective identity. Existing installations must follow the [upgrade guide](/docs/upgrade/) before
+changing consumer-group configuration; a new group does not inherit another group's offsets.
+
+Typed [retention policies](/docs/concepts/retention/) provide validated project and per-source
+expiry settings in addition to free-form TTL.
+
+## PostgreSQL refresh source
+
+`kind: postgres` is a distinct refresh source, not Kafka CDC and not a PostgreSQL warehouse adapter:
+
+```yaml
+sources:
+  - name: inventory_snapshot
+    kind: postgres
+    host: postgres.example.com
+    port: 5432
+    database: inventory
+    table: products
+    user: readonly
+    password_env: INVENTORY_READONLY_PASSWORD
+    refresh: 1 HOUR
+    append: false
+```
+
+Set `INVENTORY_READONLY_PASSWORD` in the shell before compiling or building. Pair the source with
+a consuming model, for example if `products` exposes a `product_id` column:
+
+```sql title="pipelines/pl__inventory/inventory_products.sql"
+MODEL (order_by [product_id]);
+
+SELECT CAST(product_id AS UInt64) AS product_id
+FROM __source("inventory_snapshot")
+```
+
+The source uses a ClickHouse `postgresql()` table function and refreshable materialized views.
+`port` defaults to 5432; `append` defaults to true, so choose snapshot replacement versus appended
+refreshes deliberately. It does not accept streaming replay-boundary fields. The ClickHouse server
+must be able to connect to PostgreSQL and support the generated refreshable-view syntax. Inspect
+compiled DDL and verify permissions before using a connected build.
+
+## Adopted stream table
+
+Adopt an existing table without transferring ownership:
+
+```yaml
+sources:
+  - name: orders
+    kind: stream_table
+    table_name: orders_existing
+    replay_boundary:
+      mode: offsets
+      columns:
+        _replay_partition: kafka_partition
+        _replay_offset: kafka_offset
+        _replay_timestamp: kafka_timestamp
+```
+
+The table must already exist as a bare relation name in the selected target database. SQLTide
+validates its replay columns but never creates, drops, or replaces the adopted table.
+Because SQLTide does not own adopted tables, `ttl` is rejected on `stream_table` sources.
+
+| Mode | Required mappings |
+|---|---|
+| `offsets` | `_replay_partition`, `_replay_offset`, `_replay_timestamp` |
+| `timestamp` | `_replay_timestamp` |
+| `cursor` | `_replay_cursor`, `_replay_timestamp` |
+
+Integer roles must use ClickHouse integer types. Timestamp roles must use `DateTime` or
+`DateTime64`. Adopted sources do not support `landed_at`.
+
+## Pipeline directories
+
+The direct child directory name is the pipeline name. It must start with `pl__` by default. Nested
+directories organize models but do not change pipeline identity. Each model name is its SQL filename
+stem.
+
+SQLTide follows table-model `__source(...)` and untyped `__ref(...)` dependencies to infer the
+pipeline source. A pipeline with table models must resolve to one registered source. View-only
+pipelines may be source-less. Empty pipelines, multiple source roots, and duplicate logical names
+are rejected.
+
+The rule is one source per table pipeline, not one pipeline per source. Independent pipelines may
+consume the same source and share its managed landing tables.
+
+Pipelines may share sources without sharing models. Model references across pipelines are governed
+by committed dependency policy:
+
+```toml
+[dependencies]
+model_reference_scope = "pipeline"
+
+[[dependencies.allowed_cross_pipeline_references]]
+upstream_pipeline = "pl__shared_dimensions"
+downstream_pipeline = "pl__orders"
+```
+
+The default scope is `"project"` for compatibility. `"pipeline"` restricts model refs to their owning
+pipeline except for the explicit directional grants above. Both pipeline names must exist. A
+grant permits `pl__orders` to read `pl__shared_dimensions`, not the reverse. Sources remain shared
+under either policy. Neither policy permits model edges across direct/virtual mode boundaries.
+
+Configure the prefix or enforce a project-specific naming rule in `sqltide_project.toml`:
+
+```toml
+[naming]
+pipeline_prefix = "custom__" # Use "" to allow unprefixed names.
+pipeline_naming_macro = "pipeline_name"
+```
+
+```python
+from sqltide.compiler.macros.models import PipelineNamingContext
+
+def pipeline_name(ctx: PipelineNamingContext) -> str:
+    return ctx.name if ctx.source_name is None else f"pl__{ctx.source_name}"
+```
+
+The optional macro receives an immutable context with the pipeline name, source name, sorted model
+names, relative directory, and mode. It returns the required directory name. A mismatch stops
+discovery; SQLTide does not rename files during compile, plan, or build.
+
+An optional `pipeline.toml` may set virtual-environment replay policy for every model in that
+pipeline:
+
+```toml
+mode = "virtual"
+bounded_replay_fallback = "full"
+
+[replay_on_change]
+breaking = "full"
+non_breaking = "bounded-7d"
+
+[naming]
+view_prefix = "reporting__"
+```
+
+These policy fields are invalid in direct mode because direct builds always rebuild their selected
+closure. Naming overrides work in both modes and may partially override project `[naming]` values.
+Pipelines that need no pipeline-wide override omit `pipeline.toml` entirely.
+
+`mode` overrides `[defaults].pipeline_mode` for that pipeline. Relationships between direct and
+virtual pipelines are rejected symmetrically during graph validation. Same-mode cross-pipeline
+relationships also require permission under the dependency policy above; shared sources remain valid.
+
+## Protected pipelines
+
+Add a protection gate when replacing a pipeline has operational impact:
+
+```toml
+mode = "direct"
+
+[protection]
+warning = "Interrupts the protected order feed while objects are replaced."
+confirmation = "DEPLOY_ORDERS"
+```
+
+Both fields are optional. The warning defaults to a generic protected-pipeline message. Confirmation
+defaults to the pipeline name when it is already shell-safe, or a `CONFIRM_`-prefixed sanitized name
+otherwise, so an empty `[protection]` block is valid.
+Confirmation values are shell-safe tokens: they must start with a letter or number and may contain
+only letters, numbers, `.`, `_`, `:`, and `-`.
+
+Protection is available only for direct pipelines. When a build closure contains protected
+pipelines, SQLTide requires every exact confirmation value. This is independent of ordinary plan
+approval: `--auto-approve`, `--json`, and `--events` never bypass protection. Repeat `--confirm` for
+multiple protected pipelines. The Plan view shows one confirmation input for each pipeline.
