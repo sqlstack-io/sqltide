@@ -83,7 +83,7 @@ def _native_deployment(
         deployment.status == VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE,
         [
             (
-                mapping.logical_key.database,
+                mapping.logical_key.database or None,
                 mapping.logical_key.object_type
                 in {DESIRED_OBJECT_TYPE_TABLE, DESIRED_OBJECT_TYPE_VIEW},
                 mapping.logical_key.name,

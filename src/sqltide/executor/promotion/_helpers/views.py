@@ -63,7 +63,7 @@ def build_publish_binding_request(
     bindings: tuple[AdapterStableBinding, ...] = _publish_bindings(
         relations=[
             (
-                mapping.logical_key.database,
+                mapping.logical_key.database or None,
                 mapping.logical_key.object_type,
                 mapping.logical_key.name,
                 mapping.physical_name,
@@ -237,7 +237,7 @@ def _native_mappings(
 ) -> list[tuple[str | None, bool, str, str, str]]:
     return [
         (
-            mapping.logical_key.database,
+            mapping.logical_key.database or None,
             mapping.logical_key.object_type
             in {DESIRED_OBJECT_TYPE_TABLE, DESIRED_OBJECT_TYPE_VIEW},
             mapping.logical_key.name,
