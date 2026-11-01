@@ -1181,5 +1181,49 @@ pub fn inactive_pipelines(current: &[String], snapshot: &Snapshot) -> Vec<Inacti
         .collect()
 }
 
+/// One relation drop of a destruction workflow.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropStatement {
+    pub step_id: String,
+    pub display_name: String,
+    pub sql: String,
+}
+
+/// Statements dropping each `(kind, database, name)` relation in the given order, under the
+/// plan's warehouse DROP size `size_override` when it has one.
+#[must_use]
+pub fn drop_statements(
+    relations: &[(RelationKind, String, String)],
+    size_override: Option<i128>,
+) -> Vec<DropStatement> {
+    let settings: String = size_override.map_or_else(String::new, |limit| {
+        format!(" SETTINGS max_table_size_to_drop = {limit}")
+    });
+    relations
+        .iter()
+        .enumerate()
+        .map(|(index, (kind, database, name))| {
+            let keyword: &str = if *kind == RelationKind::View {
+                "VIEW"
+            } else {
+                "TABLE"
+            };
+            DropStatement {
+                step_id: format!("destroy_relation_{:04}", index + 1),
+                display_name: format!("Drop {} {database}.{name}", keyword.to_lowercase()),
+                sql: format!(
+                    "DROP {keyword} IF EXISTS {}.{} SYNC{settings};",
+                    quote_identifier(database),
+                    quote_identifier(name)
+                ),
+            }
+        })
+        .collect()
+}
+
+fn quote_identifier(value: &str) -> String {
+    format!("`{}`", value.replace('`', "``"))
+}
+
 #[cfg(test)]
 mod tests;
