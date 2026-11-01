@@ -8,6 +8,7 @@ use sqltide_executor::population::{
     BoundaryMode, BoundedOutcome, ExecutionMode, ExternalColumns, PopulationInput, ReplayPlan,
     Root, Table, View, bounded_outcome, physical_table_mappings, replay_plans, template_watermarks,
 };
+use sqltide_executor::population_scope;
 
 /// `(root key, anchor key, boundary mode, execution mode, forced start time, lookback seconds)`.
 type RootArgument = (usize, usize, String, String, Option<String>, Option<i64>);
@@ -220,7 +221,163 @@ fn bounded_replay_outcome(
     )
 }
 
+fn scope_error(error: population_scope::ScopeError) -> PyErr {
+    match error {
+        population_scope::ScopeError::MissingKey(key) => PyValueError::new_err(("key", key)),
+        population_scope::ScopeError::MissingName(name) => PyValueError::new_err(("name", name)),
+        population_scope::ScopeError::Exhausted => PyValueError::new_err(("exhausted",)),
+    }
+}
+
+/// Planned keys in creation order, from `(key, dependency keys)` in desired-state order.
+/// Raises `ValueError(("key", key))` for a planned dependency without a desired object.
+#[pyfunction]
+fn population_creation_order(
+    objects: Vec<(usize, Vec<usize>)>,
+    planned: HashSet<usize>,
+) -> PyResult<Vec<usize>> {
+    population_scope::creation_order(&objects, &planned).map_err(scope_error)
+}
+
+/// `(owner root position, root key, (target key, view key), upstream boundary key)`.
+type FanInResult = (usize, usize, (usize, usize), usize);
+
+/// The [`FanInResult`] of each
+/// fan-in catch-up root, from `(root key, affected keys)` roots, `(name, key)` desired tables,
+/// and `(key, source name, target name, dependency keys)` materialized views.
+#[pyfunction]
+fn population_fan_in_roots(
+    planned: HashSet<usize>,
+    roots: Vec<(usize, Vec<usize>)>,
+    tables: Vec<(String, usize)>,
+    views: Vec<(usize, String, String, Vec<usize>)>,
+) -> PyResult<Vec<FanInResult>> {
+    let views: Vec<population_scope::MaterializedView> = views
+        .into_iter()
+        .map(|(key, source_table_name, target_table_name, deps)| {
+            population_scope::MaterializedView {
+                key,
+                source_table_name,
+                target_table_name,
+                deps,
+            }
+        })
+        .collect();
+    let added =
+        population_scope::fan_in_roots(&planned, &roots, &tables, &views).map_err(scope_error)?;
+    Ok(added
+        .into_iter()
+        .map(|root| {
+            (
+                root.owner,
+                root.root_key,
+                (root.affected_keys[0], root.affected_keys[1]),
+                root.upstream_boundary_key,
+            )
+        })
+        .collect())
+}
+
+/// `skip`, `preserve`, `create`, or `land` for each `(kind, name, landing target)` object,
+/// where kind is `kafka`, `table`, `materialized_view`, or `view`.
+#[pyfunction]
+fn population_source_actions(
+    objects: Vec<(String, String, Option<String>)>,
+    raw_prefix: &str,
+    existing_names: HashSet<String>,
+) -> PyResult<Vec<&'static str>> {
+    let objects: Vec<population_scope::SourceObject> = objects
+        .into_iter()
+        .map(|(kind, name, target_table_name)| {
+            Ok(match (kind.as_str(), target_table_name) {
+                ("kafka", _) => population_scope::SourceObject::Kafka { name },
+                ("table", _) => population_scope::SourceObject::Table { name },
+                ("materialized_view", Some(target_table_name)) => {
+                    population_scope::SourceObject::MaterializedView {
+                        name,
+                        target_table_name,
+                    }
+                }
+                ("view", _) => population_scope::SourceObject::View,
+                _ => {
+                    return Err(PyValueError::new_err(format!(
+                        "Unknown source object kind '{kind}'"
+                    )));
+                }
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    Ok(
+        population_scope::source_actions(&objects, raw_prefix, &existing_names)
+            .into_iter()
+            .map(|action| match action {
+                population_scope::SourceAction::Skip => "skip",
+                population_scope::SourceAction::Preserve => "preserve",
+                population_scope::SourceAction::Create => "create",
+                population_scope::SourceAction::Land => "land",
+            })
+            .collect(),
+    )
+}
+
+/// `(model index, propagated model indexes, driving input relation name)`.
+type DirectRootArgument = (usize, Vec<usize>, String);
+/// `(planned keys, ((root key, affected keys, upstream boundary key), ...))`.
+type DirectPopulationResult = (Vec<usize>, Vec<(usize, Vec<usize>, usize)>);
+
+/// A direct closure's planned keys and roots. Resources are `(kind, name)` with kind
+/// `table`, `materialized_view`, `view`, or anything else to ignore.
+#[pyfunction]
+fn direct_population_scope(
+    desired: Vec<(String, usize)>,
+    resources: Vec<Vec<(String, String)>>,
+    execution_scope: Vec<usize>,
+    roots: Vec<DirectRootArgument>,
+    external_tables: Vec<(String, usize)>,
+) -> PyResult<DirectPopulationResult> {
+    let resources: Vec<Vec<(population_scope::ResourceKind, String)>> = resources
+        .into_iter()
+        .map(|model| {
+            model
+                .into_iter()
+                .map(|(kind, name)| {
+                    let kind = match kind.as_str() {
+                        "table" => population_scope::ResourceKind::Table,
+                        "materialized_view" => population_scope::ResourceKind::MaterializedView,
+                        "view" => population_scope::ResourceKind::View,
+                        _ => population_scope::ResourceKind::Other,
+                    };
+                    (kind, name)
+                })
+                .collect()
+        })
+        .collect();
+    let roots: Vec<population_scope::DirectRoot> = roots
+        .into_iter()
+        .map(|(model, propagated_models, driving_input_relation_name)| {
+            population_scope::DirectRoot {
+                model,
+                propagated_models,
+                driving_input_relation_name,
+            }
+        })
+        .collect();
+    let population = population_scope::direct_population(
+        &desired,
+        &resources,
+        &execution_scope,
+        &roots,
+        &external_tables,
+    )
+    .map_err(scope_error)?;
+    Ok((population.planned_keys, population.roots))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(population_creation_order, module)?)?;
+    module.add_function(wrap_pyfunction!(population_fan_in_roots, module)?)?;
+    module.add_function(wrap_pyfunction!(population_source_actions, module)?)?;
+    module.add_function(wrap_pyfunction!(direct_population_scope, module)?)?;
     module.add_function(wrap_pyfunction!(plan_population_replays, module)?)?;
     module.add_function(wrap_pyfunction!(bounded_replay_outcome, module)?)
 }

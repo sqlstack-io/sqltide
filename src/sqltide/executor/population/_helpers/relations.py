@@ -1,5 +1,6 @@
 """Realize one population plan through explicit physical mappings."""
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -18,6 +19,8 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.planner.main.build_shadow_adapter_resource import (
     build_shadow_adapter_resource,
 )
+from sqltide.executor.population.exceptions import PopulationScopeError
+from sqltide.executor.population.main._index_population_keys import index_population_keys
 from sqltide.executor.population.models import PopulationPlan, PopulationRealization
 
 
@@ -32,12 +35,27 @@ def plan_population_objects(
     physical_name_by_key: dict[ObjectKey, str] = {
         prepared.logical_key: prepared.physical_name for prepared in plan.objects
     }
+    index_by_key: dict[ObjectKey, int] = index_population_keys(
+        (*_object_keys(desired_state), *physical_name_by_key)
+    )
+    keys: tuple[ObjectKey, ...] = tuple(index_by_key)
+    native_objects: list[tuple[int, list[int]]] = [
+        (
+            index_by_key[object_.key],
+            _dependency_indexes(dependencies=object_.deps, index_by_key=index_by_key),
+        )
+        for object_ in desired_state.objects
+    ]
+    planned: set[int] = {index_by_key[key] for key in physical_name_by_key}
+    ordered_indexes: list[int] = []
+    try:
+        ordered_indexes = _native.population_creation_order(native_objects, planned)
+    except ValueError as error:
+        raise PopulationScopeError.from_native(error=error, keys=keys) from None
     realizations: list[PopulationRealization] = []
-    target_key: ObjectKey
-    for target_key in _ordered_creation_keys(
-        desired_state=desired_state,
-        planned_keys=frozenset(physical_name_by_key),
-    ):
+    target_index: int
+    for target_index in ordered_indexes:
+        target_key: ObjectKey = keys[target_index]
         desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView = (
             object_by_key[target_key]
         )
@@ -63,49 +81,16 @@ def plan_population_objects(
     return tuple(realizations)
 
 
-def _ordered_creation_keys(
-    *, desired_state: DesiredState, planned_keys: frozenset[ObjectKey]
-) -> tuple[ObjectKey, ...]:
-    object_by_key: dict[
-        ObjectKey, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
-    ] = {object_.key: object_ for object_ in desired_state.objects}
-    ordered_keys: tuple[ObjectKey, ...] = ()
-    visited_keys: frozenset[ObjectKey] = frozenset()
+def _object_keys(desired_state: DesiredState) -> list[ObjectKey]:
+    keys: list[ObjectKey] = []
     desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
     for desired_object in desired_state.objects:
-        ordered_keys, visited_keys = _visit_creation_key(
-            key=desired_object.key,
-            planned_keys=planned_keys,
-            object_by_key=object_by_key,
-            ordered_keys=ordered_keys,
-            visited_keys=visited_keys,
-        )
-    return ordered_keys
+        keys.append(desired_object.key)
+        keys.extend(desired_object.deps)
+    return keys
 
 
-def _visit_creation_key(
-    *,
-    key: ObjectKey,
-    planned_keys: frozenset[ObjectKey],
-    object_by_key: dict[
-        ObjectKey, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
-    ],
-    ordered_keys: tuple[ObjectKey, ...],
-    visited_keys: frozenset[ObjectKey],
-) -> tuple[tuple[ObjectKey, ...], frozenset[ObjectKey]]:
-    if key not in planned_keys or key in visited_keys:
-        return ordered_keys, visited_keys
-    updated_visited_keys: frozenset[ObjectKey] = visited_keys | {key}
-    desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView = (
-        object_by_key[key]
-    )
-    dependency_key: ObjectKey
-    for dependency_key in desired_object.deps:
-        ordered_keys, updated_visited_keys = _visit_creation_key(
-            key=dependency_key,
-            planned_keys=planned_keys,
-            object_by_key=object_by_key,
-            ordered_keys=ordered_keys,
-            visited_keys=updated_visited_keys,
-        )
-    return (*ordered_keys, key), updated_visited_keys
+def _dependency_indexes(
+    *, dependencies: tuple[ObjectKey, ...], index_by_key: dict[ObjectKey, int]
+) -> list[int]:
+    return [index_by_key[key] for key in dependencies]
