@@ -186,6 +186,75 @@ type _NativeSpec = tuple[
 def classify_object_changes(
     comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
 ) -> list[tuple[str, str | None, str | None]]: ...
+def unified_diff(a: str, b: str, from_file: str, to_file: str, keep_ends: bool) -> list[str]: ...
+def stage_deployment(
+    keys: list[tuple[str, str, bool]],
+    subtrees: list[tuple[int, list[int]]],
+    deployment_id: str | None,
+) -> tuple[
+    list[tuple[str, str, str, int, int | None, str | None]],
+    list[tuple[int, str]],
+    list[tuple[int, int]],
+]: ...
+def plan_direct_build(
+    *,
+    nodes: list[
+        tuple[
+            str,
+            tuple[bool, bool, str, list[tuple[str, str]]] | None,
+            bool,
+            str,
+            list[tuple[str, str | None]],
+            str | None,
+            bool,
+            str | None,
+            list[tuple[int, bool]],
+            list[int],
+        ]
+    ],
+    database: str,
+    selection_mode: str,
+    selected: set[int],
+    source_drift: set[int],
+    include_missing_upstream: bool,
+    has_start_time: bool,
+    catalog: list[tuple[str, bool, list[str], list[str]]],
+    external_columns: list[
+        tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]
+    ],
+    fingerprints: tuple[bool, str | None, list[tuple[str, str, str]]],
+    mutable_ref_names: list[str],
+) -> tuple[
+    list[int],
+    list[int],
+    list[int],
+    list[tuple[int, str, bool, bool]],
+    list[
+        tuple[
+            int,
+            str,
+            list[tuple[str, str]],
+            int | None,
+            bool,
+            tuple[str, str, str | None, str | None, str | None, str | None],
+        ]
+    ],
+    list[
+        tuple[
+            int,
+            int,
+            str,
+            list[str],
+            str,
+            list[int],
+            bool,
+            list[tuple[str, str]],
+        ]
+    ],
+    list[tuple[str, int, str]],
+    list[tuple[str, int, str]],
+    list[int],
+]: ...
 def resolve_variable_values(
     values: Mapping[str, object],
     environment: Mapping[str, str],

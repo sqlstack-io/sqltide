@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
+import sqltide._native as _native
 from sqltide.adapter.types import AdapterResourceRenderer
-from sqltide.compiler.compile.constants import (
-    DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
-    DESIRED_OBJECT_TYPE_VIEW,
-)
 from sqltide.compiler.compile.models import (
     DesiredMaterializedView,
     DesiredState,
@@ -18,19 +15,8 @@ from sqltide.compiler.planner._helpers.diff import classify_object_changes
 from sqltide.compiler.planner._helpers.rebuild import emit_rebuild_subtrees_from_changes
 from sqltide.compiler.planner._helpers.sql_diffs import build_planned_sql_diffs
 from sqltide.compiler.planner.constants import (
-    DEPLOYMENT_ACTION_AUDIT_SUBTREE,
-    DEPLOYMENT_ACTION_BACKFILL_SUBTREE,
-    DEPLOYMENT_ACTION_PLAN_SHADOW_MATERIALIZED_VIEW,
-    DEPLOYMENT_ACTION_PLAN_SHADOW_TABLE,
-    DEPLOYMENT_ACTION_PLAN_SHADOW_VIEW,
-    DEPLOYMENT_ACTION_PUBLISH_SUBTREE,
-    DEPLOYMENT_PHASE_AUDIT,
-    DEPLOYMENT_PHASE_BACKFILL,
-    DEPLOYMENT_PHASE_PLAN,
-    DEPLOYMENT_PHASE_PUBLISH,
-)
-from sqltide.compiler.planner.main.build_deployment_physical_name import (
-    build_deployment_physical_name,
+    MUTABLE_REF_WARNING_CODE,
+    MUTABLE_REF_WARNING_MESSAGE,
 )
 from sqltide.compiler.planner.models import (
     ActualState,
@@ -42,7 +28,6 @@ from sqltide.compiler.planner.models import (
     PreparedShadowObject,
     RebuildSubtree,
 )
-from sqltide.compiler.planner.types import DeploymentAction
 
 
 def build_deployment_plan(
@@ -69,17 +54,10 @@ def build_deployment_plan(
         desired_state=desired_state,
         object_changes=object_changes,
     )
-    prepared_shadow_objects: tuple[PreparedShadowObject, ...] = build_prepared_shadow_objects(
+    steps, prepared_shadow_objects, warnings = stage_deployment(
         desired_state=desired_state,
         rebuild_subtrees=rebuild_subtrees,
         deployment_id=deployment_id,
-    )
-    steps: tuple[DeploymentStep, ...] = emit_deployment_steps(
-        rebuild_subtrees=rebuild_subtrees,
-        physical_name_by_key=build_physical_name_by_key(prepared_shadow_objects),
-    )
-    warnings: tuple[PlannerWarning, ...] = emit_planner_warnings(
-        desired_state=desired_state, rebuild_subtrees=rebuild_subtrees
     )
     sql_diffs: tuple[PlannedSqlDiff, ...] = build_planned_sql_diffs(
         desired_state=desired_state,
@@ -99,151 +77,66 @@ def build_deployment_plan(
     )
 
 
-def emit_deployment_steps(
-    *,
-    rebuild_subtrees: tuple[RebuildSubtree, ...],
-    physical_name_by_key: dict[ObjectKey, str],
-) -> tuple[DeploymentStep, ...]:
-    """Emit deterministic staged deployment steps for rebuild subtrees."""
-
-    steps: list[DeploymentStep] = []
-    subtree_index: int
-    subtree: RebuildSubtree
-    for subtree_index, subtree in enumerate(rebuild_subtrees, start=1):
-        target_key: ObjectKey
-        for target_key in subtree.affected_keys:
-            steps.append(
-                DeploymentStep(
-                    step_id=f"plan-{subtree_index}-{target_key.object_type}-{target_key.name}",
-                    phase=DEPLOYMENT_PHASE_PLAN,
-                    action=plan_action_for_key(target_key),
-                    root_key=subtree.root_key,
-                    target_key=target_key,
-                    physical_name=physical_name_by_key.get(target_key),
-                )
-            )
-
-        root_key: ObjectKey = subtree.root_key
-        steps.extend(
-            (
-                DeploymentStep(
-                    step_id=f"backfill-{subtree_index}-{root_key.name}",
-                    phase=DEPLOYMENT_PHASE_BACKFILL,
-                    action=DEPLOYMENT_ACTION_BACKFILL_SUBTREE,
-                    root_key=root_key,
-                    physical_name=physical_name_by_key.get(root_key),
-                ),
-                DeploymentStep(
-                    step_id=f"audit-{subtree_index}-{root_key.name}",
-                    phase=DEPLOYMENT_PHASE_AUDIT,
-                    action=DEPLOYMENT_ACTION_AUDIT_SUBTREE,
-                    root_key=root_key,
-                    physical_name=physical_name_by_key.get(root_key),
-                ),
-                DeploymentStep(
-                    step_id=f"publish-{subtree_index}-{root_key.name}",
-                    phase=DEPLOYMENT_PHASE_PUBLISH,
-                    action=DEPLOYMENT_ACTION_PUBLISH_SUBTREE,
-                    root_key=root_key,
-                    physical_name=physical_name_by_key.get(root_key),
-                ),
-            )
-        )
-
-    return tuple(steps)
-
-
-def build_prepared_shadow_objects(
+def stage_deployment(
     *,
     desired_state: DesiredState,
     rebuild_subtrees: tuple[RebuildSubtree, ...],
     deployment_id: str | None,
-) -> tuple[PreparedShadowObject, ...]:
-    """Build deterministic physical shadow identities for a deployment plan."""
+) -> tuple[
+    tuple[DeploymentStep, ...], tuple[PreparedShadowObject, ...], tuple[PlannerWarning, ...]
+]:
+    """Stage rebuild subtrees into steps, shadow identities, and rollout warnings."""
 
-    if deployment_id is None:
-        return ()
-
-    prepared_shadow_objects: list[PreparedShadowObject] = []
+    index_by_key: dict[ObjectKey, int] = {}
+    native_subtrees: list[tuple[int, list[int]]] = []
+    for subtree in rebuild_subtrees:
+        for key in (subtree.root_key, *subtree.affected_keys):
+            index_by_key.setdefault(key, len(index_by_key))
+        native_subtrees.append(
+            (index_by_key[subtree.root_key], [index_by_key[key] for key in subtree.affected_keys])
+        )
+    keys: tuple[ObjectKey, ...] = tuple(index_by_key)
+    steps, shadow_objects, warnings = _native.stage_deployment(
+        [
+            (str(key.object_type), key.name, key in desired_state.mutable_ref_warning_keys)
+            for key in keys
+        ],
+        native_subtrees,
+        deployment_id,
+    )
     logical_model_name_by_key: dict[ObjectKey, str] = {
         object_.key: object_.logical_model_name
         for object_ in desired_state.objects
         if isinstance(object_, (DesiredTable, DesiredMaterializedView, DesiredView))
         and object_.logical_model_name is not None
     }
-    seen_keys: set[ObjectKey] = set()
-    subtree: RebuildSubtree
-    for subtree in rebuild_subtrees:
-        target_key: ObjectKey
-        for target_key in subtree.affected_keys:
-            if target_key in seen_keys:
-                continue
-            seen_keys.add(target_key)
-            prepared_shadow_objects.append(
-                PreparedShadowObject(
-                    logical_key=target_key,
-                    physical_name=build_shadow_physical_name(
-                        logical_name=target_key.name, deployment_id=deployment_id
-                    ),
-                    logical_model_name=logical_model_name_by_key[target_key],
-                )
+    return (
+        tuple(
+            DeploymentStep(
+                step_id=step_id,
+                phase=phase,
+                action=action,
+                root_key=keys[root],
+                target_key=None if target is None else keys[target],
+                physical_name=physical_name,
             )
-
-    return tuple(prepared_shadow_objects)
-
-
-def build_physical_name_by_key(
-    prepared_shadow_objects: tuple[PreparedShadowObject, ...],
-) -> dict[ObjectKey, str]:
-    """Build a key-to-physical-name lookup for prepared shadow objects."""
-
-    return {
-        prepared_shadow_object.logical_key: prepared_shadow_object.physical_name
-        for prepared_shadow_object in prepared_shadow_objects
-    }
-
-
-def build_shadow_physical_name(*, logical_name: str, deployment_id: str) -> str:
-    """Build a deterministic physical shadow object name."""
-
-    return build_deployment_physical_name(logical_name=logical_name, deployment_id=deployment_id)
-
-
-def plan_action_for_key(key: ObjectKey) -> DeploymentAction:
-    """Return the plan-phase action for an affected desired object key."""
-
-    if key.object_type == DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW:
-        return DEPLOYMENT_ACTION_PLAN_SHADOW_MATERIALIZED_VIEW
-    if key.object_type == DESIRED_OBJECT_TYPE_VIEW:
-        return DEPLOYMENT_ACTION_PLAN_SHADOW_VIEW
-    return DEPLOYMENT_ACTION_PLAN_SHADOW_TABLE
-
-
-def emit_planner_warnings(
-    *,
-    desired_state: DesiredState,
-    rebuild_subtrees: tuple[RebuildSubtree, ...],
-) -> tuple[PlannerWarning, ...]:
-    """Emit planner-visible warnings for staged deployment semantics."""
-
-    warnings: list[PlannerWarning] = []
-    subtree: RebuildSubtree
-    for subtree in rebuild_subtrees:
-        target_key: ObjectKey
-        for target_key in subtree.affected_keys:
-            if target_key not in desired_state.mutable_ref_warning_keys:
-                continue
-            warnings.append(
-                PlannerWarning(
-                    warning_code="mutable_ref_replay_not_guaranteed",
-                    message=(
-                        "Transform uses mutable side refs; exact historical replay equivalence "
-                        "cannot be guaranteed because side-table state may differ from the "
-                        "original processing time."
-                    ),
-                    root_key=subtree.root_key,
-                    target_key=target_key,
-                )
+            for step_id, phase, action, root, target, physical_name in steps
+        ),
+        tuple(
+            PreparedShadowObject(
+                logical_key=keys[key],
+                physical_name=physical_name,
+                logical_model_name=logical_model_name_by_key[keys[key]],
             )
-
-    return tuple(warnings)
+            for key, physical_name in shadow_objects
+        ),
+        tuple(
+            PlannerWarning(
+                warning_code=MUTABLE_REF_WARNING_CODE,
+                message=MUTABLE_REF_WARNING_MESSAGE,
+                root_key=keys[root],
+                target_key=keys[target],
+            )
+            for root, target in warnings
+        ),
+    )
