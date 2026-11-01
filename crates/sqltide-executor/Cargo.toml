@@ -8,8 +8,11 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+sqltide-clickhouse.workspace = true
+sqltide-discovery.workspace = true
 sqltide-json.workspace = true
 sqltide-planner.workspace = true
+sqltide-sqltext.workspace = true
 
 [lints]
 workspace = true

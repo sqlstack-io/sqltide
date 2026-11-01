@@ -440,8 +440,11 @@ dependencies = [
 name = "sqltide-executor"
 version = "0.53.0"
 dependencies = [
+ "sqltide-clickhouse",
+ "sqltide-discovery",
  "sqltide-json",
  "sqltide-planner",
+ "sqltide-sqltext",
 ]
 
 [[package]]

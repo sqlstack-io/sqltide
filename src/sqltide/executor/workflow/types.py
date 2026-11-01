@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from sqltide.executor.workflow.models import WarehouseStatement
 
 
+type NativeStatement = tuple[str, str, str, str, bool]
+
+
 class WorkflowMode(StrEnum):
     DIRECT = "direct"
     VIRTUAL_ENVIRONMENT = "virtual_environment"

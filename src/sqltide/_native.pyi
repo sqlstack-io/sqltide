@@ -5,6 +5,7 @@ from typing import Any, Literal
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterManifestSnapshot,
+    AdapterReplayRequest,
     CatalogSnapshot,
 )
 from sqltide.compiler.discovery.models import (
@@ -498,6 +499,121 @@ def janitor_preview(
     physical_relations: set[tuple[str, str]],
     retention: tuple[str, int, int, int],
 ) -> list[tuple[int, bool, str]]: ...
+def inspected_publish_candidates(
+    candidates: list[tuple[str, str]], deployment_id: str
+) -> list[int]: ...
+def publish_stable_bindings(
+    relations: list[tuple[str | None, str, str, str]],
+    existing: set[str],
+    default_database: str,
+    deployment_id: str,
+) -> list[tuple[str, str, str]]: ...
+def obsolete_binding_removals(
+    current: list[tuple[str | None, bool, str, str, str]],
+    deployments_argument: list[_RetainedDeployment],
+    publications: list[tuple[str, list[str]]],
+    active: list[tuple[str, str, str]],
+    default_database: str,
+) -> list[tuple[str, str]]: ...
+def binding_replacement_preview(
+    bindings: list[tuple[str, str, str]],
+    removals: list[tuple[str, str]],
+    active: list[tuple[str, str, str]],
+) -> tuple[
+    bool, list[int], list[tuple[int, str]], list[tuple[int, str]], list[tuple[str, str]]
+]: ...
+
+type _ReconcileKey = tuple[str | None, str, str]
+type _ReconcileObject = tuple[
+    str,
+    _ReconcileKey,
+    tuple[str, list[str], str | None, list[tuple[str, str, str | None]]] | None,
+    tuple[str, str] | None,
+]
+
+def classify_reconcile_targets(
+    desired: list[_ReconcileObject],
+    actual: list[_ReconcileObject],
+    selected: list[_ReconcileKey],
+) -> list[tuple[_ReconcileKey, str, tuple[int, int | None] | None, list[str]]]: ...
+def parse_deployment_diff(comparison: str, identifiers: list[str]) -> tuple[str, str]: ...
+def deployment_diff_relations(
+    from_: str,
+    to: str,
+    deployments_argument: list[_RetainedDeployment],
+    active: list[tuple[str, str, str]],
+    default_database: str,
+    /,
+) -> tuple[list[tuple[str, str, str | None, str | None]], list[str]]: ...
+def deployment_diff_count_sql(database: str, relation: str) -> str: ...
+
+type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
+
+def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
+
+type _SourceResource = tuple[str, str, list[str], list[tuple[str, str]]]
+type _SourceProject = tuple[
+    list[str],
+    list[tuple[str, str, bool, int | None, list[int], list[str]]],
+    list[int],
+    list[list[_SourceResource]],
+]
+type _SourceRelation = tuple[str, list[tuple[str, str]], list[tuple[str, str]], str | None]
+
+def plan_preserved_managed_sources(
+    plan: tuple[list[int], list[int], list[tuple[str, int]]],
+    project_argument: _SourceProject,
+    relations_argument: list[_SourceRelation],
+    database: str,
+) -> tuple[
+    list[str],
+    list[str],
+    list[str],
+    list[tuple[int, int]],
+    list[tuple[tuple[int, int], tuple[int, int], str, list[str]]],
+    list[tuple[int, int]],
+]: ...
+def drifted_managed_sources(
+    project_argument: _SourceProject, relations_argument: list[_SourceRelation]
+) -> list[tuple[int, list[str], list[str]]]: ...
+
+type _WorkflowStatement = tuple[str, str, str, str, bool]
+
+def virtual_workflow_statements(
+    context: tuple[str, str, str, tuple[str, str, str, str, str], str | None, bool, bool],
+    rendered: tuple[
+        list[tuple[str, str | None]],
+        str,
+        list[str],
+        list[tuple[str, str]],
+        list[str],
+        list[tuple[str, str]],
+        list[tuple[str, str]],
+        float,
+    ],
+    roots: list[
+        tuple[str, AdapterReplayRequest, bool, tuple[str | None, str, str], bool, list[str]]
+    ],
+) -> list[_WorkflowStatement]: ...
+def direct_workflow_statements(
+    preparation: tuple[
+        str,
+        str,
+        list[tuple[str, str]],
+        list[tuple[str, str, str, str, str]],
+        list[str],
+        list[tuple[str, str]],
+        list[tuple[str, str]],
+    ],
+    execution: tuple[
+        float,
+        list[tuple[str, bool]],
+        list[tuple[str, str]],
+        list[tuple[str, str, str, str]],
+        list[tuple[str, str]],
+        int,
+    ],
+) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
