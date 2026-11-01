@@ -386,3 +386,52 @@ fn names_first_middle_and_last_pipelines_as_challenges() {
     );
     assert!(build_challenges(&[], false).is_err());
 }
+
+#[test]
+fn drop_statements_quote_names_and_apply_the_size_override() {
+    let relations = vec![
+        (RelationKind::View, "db".to_owned(), "v`1".to_owned()),
+        (
+            RelationKind::MaterializedView,
+            "db".to_owned(),
+            "mv".to_owned(),
+        ),
+        (
+            RelationKind::ManagedSource,
+            "d`b".to_owned(),
+            "kafka".to_owned(),
+        ),
+    ];
+    let statements = drop_statements(&relations, Some(0));
+    assert_eq!(
+        statements
+            .iter()
+            .map(|statement| (
+                &*statement.step_id,
+                &*statement.display_name,
+                &*statement.sql
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                "destroy_relation_0001",
+                "Drop view db.v`1",
+                "DROP VIEW IF EXISTS `db`.`v``1` SYNC SETTINGS max_table_size_to_drop = 0;",
+            ),
+            (
+                "destroy_relation_0002",
+                "Drop table db.mv",
+                "DROP TABLE IF EXISTS `db`.`mv` SYNC SETTINGS max_table_size_to_drop = 0;",
+            ),
+            (
+                "destroy_relation_0003",
+                "Drop table d`b.kafka",
+                "DROP TABLE IF EXISTS `d``b`.`kafka` SYNC SETTINGS max_table_size_to_drop = 0;",
+            ),
+        ]
+    );
+    assert_eq!(
+        drop_statements(&relations[..1], None)[0].sql,
+        "DROP VIEW IF EXISTS `db`.`v``1` SYNC;"
+    );
+}

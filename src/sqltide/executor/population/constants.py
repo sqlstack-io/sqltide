@@ -1,3 +1,12 @@
 """Replay population constants."""
 
 STAGED_SOURCE_NAME_PREFIX: str = "_sqltide_next__"
+MISSING_KEY_SCOPE_ERROR: str = "key"
+MISSING_NAME_SCOPE_ERROR: str = "name"
+SOURCE_ACTION_SKIP: str = "skip"
+SOURCE_ACTION_PRESERVE: str = "preserve"
+SOURCE_ACTION_LAND: str = "land"
+SOURCE_OBJECT_KAFKA: str = "kafka"
+SOURCE_OBJECT_TABLE: str = "table"
+SOURCE_OBJECT_MATERIALIZED_VIEW: str = "materialized_view"
+SOURCE_OBJECT_VIEW: str = "view"

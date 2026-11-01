@@ -7,6 +7,7 @@ pub mod direct_workflow;
 pub mod janitor;
 pub mod ordering;
 pub mod population;
+pub mod population_scope;
 pub mod promotion;
 pub mod publications;
 pub mod readiness;

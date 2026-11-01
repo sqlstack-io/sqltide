@@ -646,6 +646,30 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
+def population_creation_order(
+    objects: list[tuple[int, list[int]]], planned: set[int]
+) -> list[int]: ...
+def population_fan_in_roots(
+    planned: set[int],
+    roots: list[tuple[int, list[int]]],
+    tables: list[tuple[str, int]],
+    views: list[tuple[int, str, str, list[int]]],
+) -> list[tuple[int, int, tuple[int, int], int]]: ...
+def population_source_actions(
+    objects: list[tuple[str, str, str | None]],
+    raw_prefix: str,
+    existing_names: set[str],
+) -> list[str]: ...
+def direct_population_scope(
+    desired: list[tuple[str, int]],
+    resources: list[list[tuple[str, str]]],
+    execution_scope: list[int],
+    roots: list[tuple[int, list[int], str]],
+    external_tables: list[tuple[str, int]],
+) -> tuple[list[int], list[tuple[int, list[int], int]]]: ...
+def destruction_drop_statements(
+    relations: list[tuple[str, str, str]], size_override: int | None
+) -> list[tuple[str, str, str]]: ...
 def workflow_step_segment(value: str) -> str: ...
 def workflow_terminate_sql(sql: str) -> str: ...
 def resolve_direct_replays(
