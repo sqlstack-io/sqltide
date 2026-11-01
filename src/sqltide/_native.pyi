@@ -118,6 +118,15 @@ type _NativeSpec = tuple[
 def classify_object_changes(
     comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
 ) -> list[tuple[str, str | None, str | None]]: ...
+def resolve_variable_values(
+    values: Mapping[str, object],
+    environment: Mapping[str, str],
+    field_path_prefix: str,
+    defer_missing_environment: bool,
+) -> dict[str, object]: ...
+def interpolate_config_value(
+    value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
+) -> object: ...
 def audit_readiness(
     observation: tuple[
         str,

@@ -86,7 +86,6 @@ PROTECTION_CONFIRMATION_UNSAFE_PATTERN: re.Pattern[str] = re.compile(r"[^A-Za-z0
 DEFAULT_ADAPTER_NAME: str = "clickhouse"
 PYTHON_PACKAGE_INITIALIZER_FILE_NAME: str = "__init__.py"
 FULL_REPLAY_POLICY_VALUE: str = "full"
-INTERPOLATION_NAMESPACE_SEPARATOR: str = ":"
 INTERPOLATION_TOKEN_START: str = "${"
 PROJECT_CONFIG_KEYS: frozenset[str] = frozenset(
     {
