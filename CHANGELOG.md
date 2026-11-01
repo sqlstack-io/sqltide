@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.53.0](https://github.com/sqlstack-io/sqltide/compare/v0.52.0...v0.53.0) (2026-11-01)
+
+
+### Features
+
+* add CONSTANT and ENUM declarations ([#293](https://github.com/sqlstack-io/sqltide/issues/293)) ([06373a5](https://github.com/sqlstack-io/sqltide/commit/06373a5372783d9b9e66785e2bfb484c095d6f9b))
+* expand SQL macros in Rust ([#292](https://github.com/sqlstack-io/sqltide/issues/292)) ([971ce10](https://github.com/sqlstack-io/sqltide/commit/971ce10afbe64470c61d60a0a7feae1f4031ec3b))
+* render ClickHouse SQL in Rust ([#294](https://github.com/sqlstack-io/sqltide/issues/294)) ([91a1bc8](https://github.com/sqlstack-io/sqltide/commit/91a1bc8d5913453bad9904b7d0e18b2d5d5adbd4))
+* validate sources and resolve configuration in Rust ([#289](https://github.com/sqlstack-io/sqltide/issues/289)) ([5b7e589](https://github.com/sqlstack-io/sqltide/commit/5b7e58939ad857c2409dfb887b8c8bfdbc8c9059))
+* validate SQL model headers in Rust ([#291](https://github.com/sqlstack-io/sqltide/issues/291)) ([efcf7af](https://github.com/sqlstack-io/sqltide/commit/efcf7af89baf6a04e1f32d6e9fafa1c19024cc87))
+
 ## [0.52.0](https://github.com/sqlstack-io/sqltide/compare/v0.51.0...v0.52.0) (2026-11-01)
 
 
