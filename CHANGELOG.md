@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.56.0](https://github.com/sqlstack-io/sqltide/compare/v0.55.0...v0.56.0) (2026-11-01)
+
+
+### Features
+
+* resolve direct replays and fingerprints in Rust ([#301](https://github.com/sqlstack-io/sqltide/issues/301)) ([ce57f04](https://github.com/sqlstack-io/sqltide/commit/ce57f04ac999f003f43c50f098ac40fffab8a01a))
+
 ## [0.55.0](https://github.com/sqlstack-io/sqltide/compare/v0.54.0...v0.55.0) (2026-11-01)
 
 
