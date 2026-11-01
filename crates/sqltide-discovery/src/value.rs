@@ -1,5 +1,10 @@
 //! A decoded TOML or YAML document, with each node's original Python object kept by handle.
 
+use std::collections::HashMap;
+
+use crate::errors::{ErrorKind, SpecError, SpecResult};
+use crate::interpolation;
+
 /// One decoded value; `handle` names the original object, which pass-through fields return.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Value {
@@ -89,5 +94,95 @@ impl Value {
             }
             _ => false,
         }
+    }
+}
+
+impl Value {
+    /// The interpolation value for this one; mapping keys must be strings.
+    ///
+    /// # Errors
+    ///
+    /// Returns a type error for a mapping with a key that is not a string.
+    pub fn to_interpolation(&self) -> SpecResult<interpolation::Value> {
+        Ok(match &self.kind {
+            Kind::Str(text) => interpolation::Value::Str(text.clone()),
+            Kind::List(items) | Kind::Tuple(items) => interpolation::Value::Seq(
+                items
+                    .iter()
+                    .map(Self::to_interpolation)
+                    .collect::<SpecResult<_>>()?,
+            ),
+            Kind::Dict(entries) | Kind::Mapping(entries) => interpolation::Value::Map(
+                entries
+                    .iter()
+                    .map(|(key, item)| {
+                        let key: &str = key.as_str().ok_or_else(|| {
+                            SpecError::new(
+                                ErrorKind::Type,
+                                "configuration mapping keys must be strings",
+                            )
+                        })?;
+                        Ok((key.to_owned(), item.to_interpolation()?))
+                    })
+                    .collect::<SpecResult<_>>()?,
+            ),
+            Kind::None => self.other("null"),
+            Kind::Bool(flag) => self.other(if *flag { "true" } else { "false" }),
+            _ => self.other(&self.python_str()),
+        })
+    }
+
+    fn other(&self, text: &str) -> interpolation::Value {
+        interpolation::Value::Other {
+            handle: self.handle,
+            text: text.to_owned(),
+        }
+    }
+}
+
+/// Every value in `value`'s tree, by handle.
+pub fn index<'v>(value: &'v Value, objects: &mut HashMap<usize, &'v Value>) {
+    objects.insert(value.handle, value);
+    match &value.kind {
+        Kind::List(items) | Kind::Tuple(items) => {
+            items.iter().for_each(|item| index(item, objects));
+        }
+        Kind::Dict(entries) | Kind::Mapping(entries) => {
+            for (key, item) in entries {
+                index(key, objects);
+                index(item, objects);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The decoded value an interpolation result denotes: sequences become tuples, mappings
+/// dicts, and untouched values the originals in `objects`.
+#[must_use]
+pub fn from_interpolation(
+    objects: &HashMap<usize, &Value>,
+    interpolated: interpolation::Value,
+) -> Value {
+    let created = |kind: Kind| Value {
+        handle: usize::MAX,
+        kind,
+        text: None,
+    };
+    match interpolated {
+        interpolation::Value::Str(text) => created(Kind::Str(text)),
+        interpolation::Value::Seq(items) => created(Kind::Tuple(
+            items
+                .into_iter()
+                .map(|item| from_interpolation(objects, item))
+                .collect(),
+        )),
+        interpolation::Value::Map(entries) => created(Kind::Dict(
+            entries
+                .into_iter()
+                .map(|(key, item)| (created(Kind::Str(key)), from_interpolation(objects, item)))
+                .collect(),
+        )),
+        interpolation::Value::Other { handle, .. } => objects[&handle].clone(),
     }
 }

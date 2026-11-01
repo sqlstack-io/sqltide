@@ -11,7 +11,7 @@ use crate::freshness::{Freshness, parse_freshness_policy};
 use crate::interpolation::{self, Environment};
 use crate::retention::{KafkaRetention, Retention, is_identifier, parse_kafka_retention};
 use crate::text::{decimal_digit, is_python_space, python_strip};
-use crate::value::{Kind, Value};
+use crate::value::{Kind, Value, from_interpolation, index};
 
 const SOURCE_FILE_KEYS: [&str; 1] = ["sources"];
 const SOURCE_KEYS: [&str; 20] = [
@@ -75,7 +75,7 @@ const BOUNDARY_COLUMN_KEYS: [&str; 5] = [
 const REFRESH_UNITS: [&str; 4] = ["SECOND", "MINUTE", "HOUR", "DAY"];
 const TRUE_LITERALS: [&str; 3] = ["true", "yes", "1"];
 const FALSE_LITERALS: [&str; 3] = ["false", "no", "0"];
-const DEFAULT_KAFKA_FORMAT: &str = "JSONAsString";
+pub const DEFAULT_KAFKA_FORMAT: &str = "JSONAsString";
 pub const DEFAULT_POSTGRES_PORT: i128 = 5432;
 
 /// One source file: its path and decoded payload, or the message of its decoding error.
@@ -247,59 +247,6 @@ fn discovery(message: String) -> SpecError {
     SpecError::new(ErrorKind::PipelineDiscovery, message)
 }
 
-fn index<'v>(value: &'v Value, objects: &mut HashMap<usize, &'v Value>) {
-    objects.insert(value.handle, value);
-    match &value.kind {
-        Kind::List(items) | Kind::Tuple(items) => {
-            items.iter().for_each(|item| index(item, objects));
-        }
-        Kind::Dict(entries) | Kind::Mapping(entries) => {
-            for (key, item) in entries {
-                index(key, objects);
-                index(item, objects);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// An interpolation value for `value`; mapping keys must be strings.
-fn interpolation_value(value: &Value) -> SpecResult<interpolation::Value> {
-    Ok(match &value.kind {
-        Kind::Str(text) => interpolation::Value::Str(text.clone()),
-        Kind::List(items) | Kind::Tuple(items) => interpolation::Value::Seq(
-            items
-                .iter()
-                .map(interpolation_value)
-                .collect::<SpecResult<_>>()?,
-        ),
-        Kind::Dict(entries) | Kind::Mapping(entries) => interpolation::Value::Map(
-            entries
-                .iter()
-                .map(|(key, item)| {
-                    let key: &str = key.as_str().ok_or_else(|| {
-                        SpecError::new(
-                            ErrorKind::Type,
-                            "configuration mapping keys must be strings",
-                        )
-                    })?;
-                    Ok((key.to_owned(), interpolation_value(item)?))
-                })
-                .collect::<SpecResult<_>>()?,
-        ),
-        Kind::None => other(value, "null"),
-        Kind::Bool(flag) => other(value, if *flag { "true" } else { "false" }),
-        _ => other(value, &value.python_str()),
-    })
-}
-
-fn other(value: &Value, text: &str) -> interpolation::Value {
-    interpolation::Value::Other {
-        handle: value.handle,
-        text: text.to_owned(),
-    }
-}
-
 struct Registry<'a> {
     objects: HashMap<usize, &'a Value>,
     variables: Option<SpecResult<BTreeMap<String, interpolation::Value>>>,
@@ -388,52 +335,19 @@ impl Registry<'_> {
                     .mapping_entries()
                     .unwrap_or_default()
                     .iter()
-                    .map(|(key, item)| Ok((key.python_str(), interpolation_value(item)?)))
+                    .map(|(key, item)| Ok((key.python_str(), item.to_interpolation()?)))
                     .collect()
             })
             .as_ref()
             .map_err(Clone::clone)?;
         let interpolated: interpolation::Value = interpolation::interpolate_config_value(
-            &interpolation_value(value)?,
+            &value.to_interpolation()?,
             variables,
             self.environment,
             field_path,
         )
         .map_err(|message| SpecError::new(ErrorKind::ProjectConfig, message))?;
-        Ok(self.value(interpolated))
-    }
-
-    /// The decoded value an interpolation result denotes; sequences become tuples.
-    fn value(&self, interpolated: interpolation::Value) -> Value {
-        let kind: Kind = match interpolated {
-            interpolation::Value::Str(text) => Kind::Str(text),
-            interpolation::Value::Seq(items) => {
-                Kind::Tuple(items.into_iter().map(|item| self.value(item)).collect())
-            }
-            interpolation::Value::Map(entries) => Kind::Dict(
-                entries
-                    .into_iter()
-                    .map(|(key, item)| {
-                        (
-                            Value {
-                                handle: usize::MAX,
-                                kind: Kind::Str(key),
-                                text: None,
-                            },
-                            self.value(item),
-                        )
-                    })
-                    .collect(),
-            ),
-            interpolation::Value::Other { handle, .. } => {
-                return self.objects[&handle].clone();
-            }
-        };
-        Value {
-            handle: usize::MAX,
-            kind,
-            text: None,
-        }
+        Ok(from_interpolation(&self.objects, interpolated))
     }
 
     /// An interpolated string field, which must resolve to a non-empty string.

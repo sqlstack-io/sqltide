@@ -4,6 +4,7 @@
 pub mod byte_size;
 pub mod config;
 pub mod durations;
+pub mod effective;
 pub mod errors;
 pub mod freshness;
 pub mod interpolation;

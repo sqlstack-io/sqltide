@@ -5,6 +5,7 @@ from typing import Any, Literal
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
     AuthoredProjectConfig,
+    EffectiveProjectConfiguration,
     ExecutionSettings,
     ExternalTableSourceStep,
     KafkaLandingStep,
@@ -178,6 +179,26 @@ def parse_source_registry(
     default_freshness: SourceFreshnessPolicy | None,
     derive_name: Callable[..., tuple[str, str, str]],
 ) -> list[tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...]]: ...
+
+DEFAULT_ADAPTER_NAME: str
+DEFAULT_PIPELINE_PREFIX: str
+DEFAULT_TABLE_PREFIX: str
+DEFAULT_VIEW_PREFIX: str
+RUN_UNRESPONSIVE_AFTER_SECONDS: int
+DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS: int
+DEFAULT_POSTGRES_PORT: int
+DEFAULT_KAFKA_FORMAT: str
+
+def resolve_effective_configuration(
+    project_payload: Mapping[str, object],
+    project_path: str,
+    local_payload: Mapping[str, object] | None,
+    local_path: str,
+    selected_target: str | None,
+    cli_variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    timezone_exists: Callable[[str], bool],
+) -> EffectiveProjectConfiguration: ...
 def parse_project_config(
     payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
 ) -> AuthoredProjectConfig: ...

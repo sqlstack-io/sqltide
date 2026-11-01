@@ -96,10 +96,13 @@ const MODEL_REFERENCE_SCOPES: [&str; 2] = ["project", "pipeline"];
 const FULL_REPLAY: &str = "full";
 const BOUNDED_WITHOUT_HISTORY: &str = "bounded_without_history";
 const BOUNDED_REPLAY_PREFIX: &str = "bounded-";
-const DEFAULT_ADAPTER_NAME: &str = "clickhouse";
+pub const DEFAULT_ADAPTER_NAME: &str = "clickhouse";
+pub const DEFAULT_PIPELINE_PREFIX: &str = "pl__";
+pub const DEFAULT_TABLE_PREFIX: &str = "tbl__";
+pub const DEFAULT_VIEW_PREFIX: &str = "view__";
 const DEFAULT_TIMEZONE: &str = "UTC";
-const DEFAULT_RUN_PRESUMED_FAILED_AFTER: &str = "10m";
-const DEFAULT_MAXIMUM_LAG: &str = "30s";
+pub const DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS: u64 = 600;
+const DEFAULT_MAXIMUM_LAG_SECONDS: u64 = 30;
 const DEFAULT_MINIMUM_STAGED_ROW_RATIO: f64 = 0.5;
 /// A run is unresponsive after this many seconds without a heartbeat.
 pub const RUN_UNRESPONSIVE_AFTER_SECONDS: u64 = 45;
@@ -582,14 +585,8 @@ impl Parser<'_> {
         let mapping: &Value = self.mapping(payload, "defaults")?;
         self.allowed_keys(mapping, &DEFAULTS_KEYS, "defaults")?;
         let run_presumed_failed_after_seconds: u64 = self
-            .duration(
-                mapping,
-                "run_presumed_failed_after",
-                Some(DEFAULT_RUN_PRESUMED_FAILED_AFTER),
-                "defaults",
-                false,
-            )?
-            .unwrap_or_default();
+            .duration(mapping, "run_presumed_failed_after", "defaults", false)?
+            .unwrap_or(DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS);
         if run_presumed_failed_after_seconds <= RUN_UNRESPONSIVE_AFTER_SECONDS {
             return self.error(format!(
                 "defaults.run_presumed_failed_after must be longer than {RUN_UNRESPONSIVE_AFTER_SECONDS}s"
@@ -661,14 +658,8 @@ impl Parser<'_> {
             self.mapping(field(mapping, "deployment_readiness"), readiness_label)?;
         self.allowed_keys(readiness, &DEPLOYMENT_READINESS_KEYS, readiness_label)?;
         let maximum_lag: u64 = self
-            .duration(
-                readiness,
-                "maximum_lag",
-                Some(DEFAULT_MAXIMUM_LAG),
-                readiness_label,
-                true,
-            )?
-            .unwrap_or_default();
+            .duration(readiness, "maximum_lag", readiness_label, true)?
+            .unwrap_or(DEFAULT_MAXIMUM_LAG_SECONDS);
         #[allow(clippy::cast_precision_loss)]
         let minimum_staged_row_ratio: f64 = match readiness.get("minimum_staged_row_ratio") {
             None => DEFAULT_MINIMUM_STAGED_ROW_RATIO,
@@ -707,24 +698,19 @@ impl Parser<'_> {
         })
     }
 
-    /// A duration under `key`, or `default` when absent; failures are configuration errors.
+    /// A duration under `key`, `None` when absent; failures are configuration errors.
     fn duration(
         &self,
         mapping: &Value,
         key: &str,
-        default: Option<&str>,
         label: &str,
         allow_zero: bool,
     ) -> SpecResult<Option<u64>> {
-        let text: Option<&str> = match mapping.get(key) {
-            None => match default {
-                None => return Ok(None),
-                Some(default) => Some(default),
-            },
-            Some(value) => value.as_str(),
+        let Some(value) = mapping.get(key) else {
+            return Ok(None);
         };
         parse_duration_seconds(
-            text,
+            value.as_str(),
             &format!("{} {label}.{key}", self.file_path),
             allow_zero,
         )
@@ -759,8 +745,8 @@ impl Parser<'_> {
         };
         Ok(AuditDefaults {
             severity,
-            cadence_seconds: self.duration(mapping, "every", None, label, false)?,
-            warmup_seconds: self.duration(mapping, "warmup", None, label, true)?,
+            cadence_seconds: self.duration(mapping, "every", label, false)?,
+            warmup_seconds: self.duration(mapping, "warmup", label, true)?,
         })
     }
 
