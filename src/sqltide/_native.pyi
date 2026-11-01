@@ -752,3 +752,10 @@ def render_model_retention_ttl(
     available_columns: dict[str, str],
     model_name: str,
 ) -> str | None: ...
+def resolve_audit_policies(
+    audits: list[
+        tuple[str, str, bool, bool, list[str], str, bool, int | None, int | None, bool | None]
+    ],
+    pipelines: list[tuple[tuple[str | None, int | None, int | None], list[str]]],
+    project: tuple[str | None, int | None, int | None],
+) -> list[tuple[str, int | None, int, bool]]: ...

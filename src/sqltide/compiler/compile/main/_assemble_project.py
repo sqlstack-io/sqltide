@@ -4,7 +4,6 @@ from dataclasses import replace
 
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile._helpers.audit_policy import resolve_audit_policies
-from sqltide.compiler.compile._helpers.audit_validation import validated_sql_audits
 from sqltide.compiler.compile._helpers.naming import validate_compiled_project_relation_names
 from sqltide.compiler.compile._helpers.replay_policies import (
     resolve_source_replay_lineage_mode,
@@ -70,10 +69,7 @@ def assemble_project(
     )
     audits: tuple[LoadedSqlAudit, ...] = _compiled_audits(
         audits=resolve_audit_policies(
-            audits=validated_sql_audits(
-                loaded_audits=inputs.audits,
-                compiled_pipelines=pipelines,
-            ),
+            audits=inputs.audits,
             compiled_pipelines=pipelines,
             project_defaults=_project_audit_defaults(inputs),
         ),

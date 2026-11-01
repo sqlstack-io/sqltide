@@ -1,9 +1,11 @@
-//! Python bindings for compile policy: model relation names and retention TTL rendering.
+//! Python bindings for compile policy: model relation names, retention TTL rendering, and
+//! SQL audit policies.
 
 use std::collections::HashMap;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use sqltide_compile::audits::{self, AuditDefaults, AuditPolicyInput, PipelineAuditScope};
 use sqltide_compile::relations::{self, ModelClaim, ModelNaming, ModelRelationKind, SourceClaim};
 use sqltide_compile::retention::{self, KafkaRetention, ModelRetention};
 
@@ -97,9 +99,99 @@ fn render_model_retention_ttl(
     .map_err(PyValueError::new_err)
 }
 
+/// `(file path, label, has name, is standalone, referenced model names, severity, severity is
+/// explicit, cadence override, warmup override, scheduled override)`.
+type AuditArgument = (
+    String,
+    String,
+    bool,
+    bool,
+    Vec<String>,
+    String,
+    bool,
+    Option<i128>,
+    Option<i128>,
+    Option<bool>,
+);
+/// `(severity, cadence seconds, warmup seconds, scheduled)`.
+type PolicyResult = (String, Option<i128>, i128, bool);
+/// `(severity, cadence seconds, warmup seconds)`.
+type DefaultsArgument = (Option<String>, Option<i128>, Option<i128>);
+
+fn audit_defaults((severity, cadence_seconds, warmup_seconds): DefaultsArgument) -> AuditDefaults {
+    AuditDefaults {
+        severity,
+        cadence_seconds,
+        warmup_seconds,
+    }
+}
+
+/// Each audit's `(severity, cadence seconds, warmup seconds, scheduled)` after validating its
+/// targets against `pipelines` as `(defaults, model names)`; an invalid audit raises
+/// `ValueError(message)`.
+#[pyfunction]
+#[pyo3(name = "resolve_audit_policies")]
+fn resolve_audit_policies_py(
+    audits: Vec<AuditArgument>,
+    pipelines: Vec<(DefaultsArgument, Vec<String>)>,
+    project: DefaultsArgument,
+) -> PyResult<Vec<PolicyResult>> {
+    let audits: Vec<AuditPolicyInput> = audits
+        .into_iter()
+        .map(
+            |(
+                file_path,
+                label,
+                has_name,
+                is_standalone,
+                referenced_model_names,
+                severity,
+                severity_is_explicit,
+                cadence_seconds_override,
+                warmup_seconds_override,
+                scheduled_override,
+            )| AuditPolicyInput {
+                file_path,
+                label,
+                has_name,
+                is_standalone,
+                referenced_model_names,
+                severity,
+                severity_is_explicit,
+                cadence_seconds_override,
+                warmup_seconds_override,
+                scheduled_override,
+            },
+        )
+        .collect();
+    let pipelines: Vec<PipelineAuditScope> = pipelines
+        .into_iter()
+        .map(|(defaults, model_names)| PipelineAuditScope {
+            defaults: audit_defaults(defaults),
+            model_names,
+        })
+        .collect();
+    audits::resolve_audit_policies(&audits, &pipelines, &audit_defaults(project))
+        .map(|policies| {
+            policies
+                .into_iter()
+                .map(|policy| {
+                    (
+                        policy.severity,
+                        policy.cadence_seconds,
+                        policy.warmup_seconds,
+                        policy.scheduled,
+                    )
+                })
+                .collect()
+        })
+        .map_err(PyValueError::new_err)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(resolve_model_relation_name, module)?)?;
     module.add_function(wrap_pyfunction!(validate_project_relation_names, module)?)?;
     module.add_function(wrap_pyfunction!(render_kafka_retention_ttl, module)?)?;
-    module.add_function(wrap_pyfunction!(render_model_retention_ttl, module)?)
+    module.add_function(wrap_pyfunction!(render_model_retention_ttl, module)?)?;
+    module.add_function(wrap_pyfunction!(resolve_audit_policies_py, module)?)
 }
