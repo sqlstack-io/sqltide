@@ -771,3 +771,29 @@ def validate_project_inputs(
     tests: list[tuple[str, str]],
     audits: list[tuple[str, str]],
 ) -> None: ...
+def quality_test_identity(
+    node_name: str,
+    mode: str,
+    assertion_names: list[str],
+    expected_targets: list[str],
+    authored_ctes: list[tuple[str, str]],
+    execution_sql: str,
+) -> tuple[str, str, str]: ...
+def quality_audit_identity(
+    node_name: str,
+    attached_column: str | None,
+    attached_model: str | None,
+    attachment_kind: str,
+    referenced_models: list[str],
+    severity: str,
+    definition_sql: str,
+    execution_sql: str,
+) -> tuple[str, str, str]: ...
+def build_manifest_contents(
+    project_identity: str,
+    target_name: str,
+    target_database: str,
+    is_production: bool,
+    pipeline_names: list[str],
+    logical_resources: list[tuple[str, str, list[str], list[tuple[str, str]]]],
+) -> tuple[list[str], list[list[str]], str]: ...
