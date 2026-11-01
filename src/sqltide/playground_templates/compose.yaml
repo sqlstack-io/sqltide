@@ -1,0 +1,21 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    ports:
+      - "127.0.0.1:18124:8123"
+    environment:
+      CLICKHOUSE_DB: sqltide_playground
+      CLICKHOUSE_USER: playground
+      CLICKHOUSE_PASSWORD: sqltide_playground
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - playground-data:/var/lib/clickhouse
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "playground", "--password", "sqltide_playground", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  playground-data:

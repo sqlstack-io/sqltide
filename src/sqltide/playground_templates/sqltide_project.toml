@@ -1,0 +1,14 @@
+name = "sqltide_playground"
+default_target = "local"
+
+[defaults]
+pipeline_mode = "virtual"
+
+[connection]
+host = "127.0.0.1"
+port = 18124
+username = "playground"
+password = "sqltide_playground"
+
+[targets.local]
+database = "sqltide_playground"

@@ -13,7 +13,7 @@ from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
         CliHelpBaselineTestCase(
             description="captures root help",
             argv=("--help",),
-            expected_sha256="d6ac04ba6671933c4219b09afd867136408a56af16236bedc0a548883e982a61",
+            expected_sha256="b079994e78490e17030dd3f51fe5ec6b0549faab2c0f7030c5c9321c0c72f4bd",
         ),
         CliHelpBaselineTestCase(
             description="captures admin help",

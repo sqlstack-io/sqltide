@@ -55,7 +55,11 @@ module-name = "sqltide._native"
 python-source = "src"
 features = ["extension-module"]
 # Built dev UI is gitignored but must ship in distributions (`make dist`).
-include = [{ path = "src/sqltide/dev_server/static/**/*", format = ["sdist", "wheel"] }]
+include = [
+  { path = "src/sqltide/dev_server/static/**/*", format = ["sdist", "wheel"] },
+  { path = "src/sqltide/playground_templates/**/*", format = ["sdist", "wheel"] },
+  { path = "src/sqltide/playground_templates/.gitignore", format = ["sdist", "wheel"] },
+]
 
 [tool.commitizen]
 name = "cz_conventional_commits"

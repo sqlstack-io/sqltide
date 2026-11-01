@@ -34,6 +34,23 @@ def build_cli_parser() -> argparse.ArgumentParser:
 
     _add_sql_parsers(subparsers=subparsers)
 
+    playground_parser: argparse.ArgumentParser = subparsers.add_parser(
+        "playground",
+        help="Create a self-contained virtual-workflow example",
+        description=(
+            "Create a new example project without connecting to a warehouse. "
+            "Compilation is offline; running the virtual workflow requires ClickHouse. "
+            "The project includes Docker Compose setup and a step-by-step README."
+        ),
+    )
+    playground_parser.add_argument(
+        "directory",
+        nargs="?",
+        type=Path,
+        default=Path("sqltide-playground"),
+        help="New directory to create (default: sqltide-playground); must not already exist",
+    )
+
     discover_parser: argparse.ArgumentParser = subparsers.add_parser(
         "discover",
         help="List discovered pipelines in a project",

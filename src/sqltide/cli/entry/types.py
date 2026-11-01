@@ -7,6 +7,7 @@ class CliCommand(StrEnum):
     """One top-level `sqt` subcommand as argparse reports it."""
 
     ADMIN = "admin"
+    PLAYGROUND = "playground"
     DISCOVER = "discover"
     DEV = "dev"
     COMPILE = "compile"
