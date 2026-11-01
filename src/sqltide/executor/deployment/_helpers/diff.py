@@ -1,15 +1,12 @@
 """Resolve deployment diff endpoints and compare their live physical relations."""
 
-import re
-from dataclasses import dataclass
-
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterDeploymentRecord,
     AdapterQueryResult,
-    CatalogColumn,
     CatalogRelation,
     CatalogSnapshot,
     InspectedManagedTableState,
@@ -17,10 +14,6 @@ from sqltide.adapter.models import (
 from sqltide.compiler.compile.constants import (
     DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
-)
-from sqltide.executor.deployment.constants import (
-    ACTIVE_DEPLOYMENT_DIFF_ENDPOINT,
-    EXPLICIT_DEPLOYMENT_DIFF_ENDPOINT_COUNT,
 )
 from sqltide.executor.deployment.exceptions import DeploymentDiffError
 from sqltide.executor.deployment.models import (
@@ -32,46 +25,37 @@ from sqltide.executor.deployment.models import (
 from sqltide.executor.deployment.types import DeploymentDiffStatus
 
 
-@dataclass(frozen=True)
-class _EndpointRelation:
-    database: str
-    logical_name: str
-    physical_name: str
-
-
 def execute_diff(
     *, request: DeploymentDiffRequest, client: AdapterConnection
 ) -> DeploymentDiffResult:
     """Resolve both endpoints and compare schemas and row counts."""
 
-    _validate_identifier(request.database)
-    _validate_identifier(request.metadata_database)
-    from_endpoint, to_endpoint = _parse_comparison(request.comparison)
+    try:
+        from_endpoint, to_endpoint = _native.parse_deployment_diff(
+            request.comparison, [request.database, request.metadata_database]
+        )
+    except ValueError as error:
+        raise DeploymentDiffError(str(error)) from None
     inventory: AdapterDeploymentInventory = client.load_deployment_inventory(
         request.metadata_database
     )
     managed_state: InspectedManagedTableState = client.inspect_managed_table_state(request.database)
-    from_relations: dict[tuple[str, str], _EndpointRelation] = _endpoint_relations(
-        endpoint=from_endpoint,
-        inventory=inventory,
-        managed_state=managed_state,
-        default_database=request.database,
-    )
-    to_relations: dict[tuple[str, str], _EndpointRelation] = _endpoint_relations(
-        endpoint=to_endpoint,
-        inventory=inventory,
-        managed_state=managed_state,
-        default_database=request.database,
-    )
-    relation_keys: tuple[tuple[str, str], ...] = tuple(
-        sorted(set(from_relations) | set(to_relations))
-    )
-    catalog_databases: set[str] = set()
-    for database, _logical_name in relation_keys:
-        catalog_databases.add(database)
-    catalogs: dict[str, CatalogSnapshot] = {}
-    for database in sorted(catalog_databases):
-        catalogs[database] = client.load_catalog(database)
+    try:
+        pairs, databases = _native.deployment_diff_relations(
+            from_endpoint,
+            to_endpoint,
+            [_native_deployment(deployment) for deployment in inventory.deployments],
+            [
+                (binding.database, binding.logical_name, binding.physical_name)
+                for binding in managed_state.active_bindings
+            ],
+            request.database,
+        )
+    except ValueError as error:
+        raise DeploymentDiffError(str(error)) from None
+    catalogs: dict[str, CatalogSnapshot] = {
+        database: client.load_catalog(database) for database in databases
+    }
     return DeploymentDiffResult(
         database=request.database,
         from_endpoint=from_endpoint,
@@ -80,128 +64,86 @@ def execute_diff(
             _compare_relation(
                 database=database,
                 logical_name=logical_name,
-                from_relation=from_relations.get((database, logical_name)),
-                to_relation=to_relations.get((database, logical_name)),
-                catalogs=catalogs,
+                from_physical_name=from_physical_name,
+                to_physical_name=to_physical_name,
+                catalog=catalogs[database],
                 client=client,
             )
-            for database, logical_name in relation_keys
+            for database, logical_name, from_physical_name, to_physical_name in pairs
         ),
     )
 
 
-def _parse_comparison(comparison: str) -> tuple[str, str]:
-    parts: tuple[str, ...] = tuple(comparison.split(":"))
-    if len(parts) == 1 and parts[0]:
-        endpoints: tuple[str, str] = ACTIVE_DEPLOYMENT_DIFF_ENDPOINT, parts[0]
-    elif len(parts) == EXPLICIT_DEPLOYMENT_DIFF_ENDPOINT_COUNT and all(parts):
-        endpoints = parts[0], parts[1]
-    else:
-        raise DeploymentDiffError("deployment diff expects DEPLOYMENT or FROM:TO")
-    if endpoints[0] == endpoints[1]:
-        raise DeploymentDiffError("deployment diff endpoints must be different")
-    return endpoints
-
-
-def _endpoint_relations(
-    *,
-    endpoint: str,
-    inventory: AdapterDeploymentInventory,
-    managed_state: InspectedManagedTableState,
-    default_database: str,
-) -> dict[tuple[str, str], _EndpointRelation]:
-    if endpoint == ACTIVE_DEPLOYMENT_DIFF_ENDPOINT:
-        if not managed_state.active_bindings:
-            raise DeploymentDiffError("deployment diff endpoint 'active' has no stable bindings")
-        return {
-            (binding.database, binding.logical_name): _EndpointRelation(
-                database=binding.database,
-                logical_name=binding.logical_name,
-                physical_name=binding.physical_name,
+def _native_deployment(
+    deployment: AdapterDeploymentRecord,
+) -> tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]:
+    return (
+        deployment.deployment_id,
+        deployment.created_at,
+        deployment.status == VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE,
+        [
+            (
+                mapping.logical_key.database,
+                mapping.logical_key.object_type
+                in {DESIRED_OBJECT_TYPE_TABLE, DESIRED_OBJECT_TYPE_VIEW},
+                mapping.logical_key.name,
+                mapping.physical_name,
+                mapping.logical_model_name,
             )
-            for binding in managed_state.active_bindings
-        }
-    deployment: AdapterDeploymentRecord | None = next(
-        (candidate for candidate in inventory.deployments if candidate.deployment_id == endpoint),
-        None,
+            for mapping in deployment.prepared_object_mappings
+        ],
     )
-    if deployment is None:
-        raise DeploymentDiffError(f"Unknown deployment diff endpoint '{endpoint}'")
-    if deployment.status == VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE:
-        raise DeploymentDiffError(f"Deployment diff endpoint '{endpoint}' is incomplete")
-    relations: dict[tuple[str, str], _EndpointRelation] = {}
-    for mapping in deployment.prepared_object_mappings:
-        if mapping.logical_key.object_type not in {
-            DESIRED_OBJECT_TYPE_TABLE,
-            DESIRED_OBJECT_TYPE_VIEW,
-        }:
-            continue
-        database: str = mapping.logical_key.database or default_database
-        relations[(database, mapping.logical_key.name)] = _EndpointRelation(
-            database=database,
-            logical_name=mapping.logical_key.name,
-            physical_name=mapping.physical_name,
-        )
-    if not relations:
-        raise DeploymentDiffError(f"Deployment diff endpoint '{endpoint}' has no model relations")
-    return relations
 
 
 def _compare_relation(
     *,
     database: str,
     logical_name: str,
-    from_relation: _EndpointRelation | None,
-    to_relation: _EndpointRelation | None,
-    catalogs: dict[str, CatalogSnapshot],
+    from_physical_name: str | None,
+    to_physical_name: str | None,
+    catalog: CatalogSnapshot,
     client: AdapterConnection,
 ) -> DeploymentDiffRelation:
-    from_catalog: CatalogRelation | None = _catalog_relation(
-        endpoint_relation=from_relation,
-        catalogs=catalogs,
+    from_catalog: CatalogRelation | None = (
+        None if from_physical_name is None else catalog.relation(from_physical_name)
     )
     same_physical_relation: bool = (
-        from_relation is not None
-        and to_relation is not None
-        and from_relation.database == to_relation.database
-        and from_relation.physical_name == to_relation.physical_name
+        from_physical_name is not None and from_physical_name == to_physical_name
     )
-    to_catalog: CatalogRelation | None = (
-        from_catalog
-        if same_physical_relation
-        else _catalog_relation(endpoint_relation=to_relation, catalogs=catalogs)
-    )
+    to_catalog: CatalogRelation | None = None
+    if same_physical_relation:
+        to_catalog = from_catalog
+    elif to_physical_name is not None:
+        to_catalog = catalog.relation(to_physical_name)
     from_columns: tuple[DeploymentDiffColumn, ...] = _diff_columns(from_catalog)
     to_columns: tuple[DeploymentDiffColumn, ...] = _diff_columns(to_catalog)
-    from_row_count: int | None = _row_count(
-        relation=from_catalog,
-        database=database,
-        client=client,
-    )
+    from_row_count: int | None = _row_count(relation=from_catalog, database=database, client=client)
     to_row_count: int | None = (
         from_row_count
         if same_physical_relation
-        else _row_count(
-            relation=to_catalog,
-            database=database,
-            client=client,
-        )
+        else _row_count(relation=to_catalog, database=database, client=client)
     )
     return DeploymentDiffRelation(
         database=database,
         logical_name=logical_name,
-        status=_diff_status(
-            from_relation=from_relation,
-            to_relation=to_relation,
-            from_catalog=from_catalog,
-            to_catalog=to_catalog,
-            from_columns=from_columns,
-            to_columns=to_columns,
-            from_row_count=from_row_count,
-            to_row_count=to_row_count,
+        status=DeploymentDiffStatus(
+            _native.deployment_diff_status(
+                _native_side(
+                    physical_name=from_physical_name,
+                    relation=from_catalog,
+                    columns=from_columns,
+                    row_count=from_row_count,
+                ),
+                _native_side(
+                    physical_name=to_physical_name,
+                    relation=to_catalog,
+                    columns=to_columns,
+                    row_count=to_row_count,
+                ),
+            )
         ),
-        from_physical_name=None if from_relation is None else from_relation.physical_name,
-        to_physical_name=None if to_relation is None else to_relation.physical_name,
+        from_physical_name=from_physical_name,
+        to_physical_name=to_physical_name,
         from_columns=from_columns,
         to_columns=to_columns,
         from_row_count=from_row_count,
@@ -209,27 +151,34 @@ def _compare_relation(
     )
 
 
-def _catalog_relation(
-    *, endpoint_relation: _EndpointRelation | None, catalogs: dict[str, CatalogSnapshot]
-) -> CatalogRelation | None:
+def _native_side(
+    *,
+    physical_name: str | None,
+    relation: CatalogRelation | None,
+    columns: tuple[DeploymentDiffColumn, ...],
+    row_count: int | None,
+) -> tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]:
     return (
+        physical_name is not None,
         None
-        if endpoint_relation is None
-        else catalogs[endpoint_relation.database].relation(endpoint_relation.physical_name)
+        if relation is None
+        else (
+            [(column.name, column.type, column.default_expression) for column in columns],
+            row_count,
+        ),
     )
 
 
 def _diff_columns(relation: CatalogRelation | None) -> tuple[DeploymentDiffColumn, ...]:
     if relation is None:
         return ()
-    return tuple(_diff_column(column) for column in relation.columns)
-
-
-def _diff_column(column: CatalogColumn) -> DeploymentDiffColumn:
-    return DeploymentDiffColumn(
-        name=column.name,
-        type=column.type,
-        default_expression=column.default_expression,
+    return tuple(
+        DeploymentDiffColumn(
+            name=column.name,
+            type=column.type,
+            default_expression=column.default_expression,
+        )
+        for column in relation.columns
     )
 
 
@@ -238,10 +187,11 @@ def _row_count(
 ) -> int | None:
     if relation is None:
         return None
-    result: AdapterQueryResult = client.query(
-        "SELECT count() AS row_count FROM "
-        f"{_quote_identifier(database)}.{_quote_identifier(relation.name)}"
-    )
+    try:
+        sql: str = _native.deployment_diff_count_sql(database, relation.name)
+    except ValueError as error:
+        raise DeploymentDiffError(str(error)) from None
+    result: AdapterQueryResult = client.query(sql)
     if len(result.rows) != 1 or len(result.rows[0]) != 1:
         raise DeploymentDiffError(
             f"Deployment diff count for '{relation.name}' returned an unexpected shape"
@@ -250,37 +200,3 @@ def _row_count(
     if not isinstance(value, int):
         raise DeploymentDiffError(f"Deployment diff count for '{relation.name}' was not an integer")
     return value
-
-
-def _diff_status(
-    *,
-    from_relation: _EndpointRelation | None,
-    to_relation: _EndpointRelation | None,
-    from_catalog: CatalogRelation | None,
-    to_catalog: CatalogRelation | None,
-    from_columns: tuple[DeploymentDiffColumn, ...],
-    to_columns: tuple[DeploymentDiffColumn, ...],
-    from_row_count: int | None,
-    to_row_count: int | None,
-) -> DeploymentDiffStatus:
-    if (from_relation is not None and from_catalog is None) or (
-        to_relation is not None and to_catalog is None
-    ):
-        return DeploymentDiffStatus.PHYSICAL_MISSING
-    if from_relation is None:
-        return DeploymentDiffStatus.ADDED
-    if to_relation is None:
-        return DeploymentDiffStatus.REMOVED
-    if from_columns != to_columns or from_row_count != to_row_count:
-        return DeploymentDiffStatus.CHANGED
-    return DeploymentDiffStatus.UNCHANGED
-
-
-def _quote_identifier(value: str) -> str:
-    _validate_identifier(value)
-    return f"`{value}`"
-
-
-def _validate_identifier(value: str) -> None:
-    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None:
-        raise DeploymentDiffError(f"Deployment diff cannot query invalid identifier '{value}'")

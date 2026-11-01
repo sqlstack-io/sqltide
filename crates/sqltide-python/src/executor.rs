@@ -5,6 +5,9 @@ use std::collections::HashSet;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use sqltide_executor::deployment_diff::{
+    RelationPair, Side, count_sql, identifier_error, parse_comparison, relation_pairs, status,
+};
 use sqltide_executor::janitor::{
     Decision, Deployment, Mapping, Publication as RetainedPublication, Retention, binding_activity,
     preview,
@@ -410,6 +413,88 @@ fn classify_reconcile_targets(
         .collect())
 }
 
+/// `(from, to)` endpoints of a `DEPLOYMENT` or `FROM:TO` comparison, after checking the
+/// database identifiers. Raises `ValueError(message)`.
+#[pyfunction]
+fn parse_deployment_diff(comparison: &str, identifiers: Vec<String>) -> PyResult<(String, String)> {
+    if let Some(error) = identifiers
+        .iter()
+        .find_map(|identifier| identifier_error(identifier))
+    {
+        return Err(PyValueError::new_err(error));
+    }
+    parse_comparison(comparison).map_err(PyValueError::new_err)
+}
+
+/// `([(database, logical name, from physical name, to physical name)], catalog databases)`.
+type DiffPairsResult = (
+    Vec<(String, String, Option<String>, Option<String>)>,
+    Vec<String>,
+);
+
+/// The relations a deployment diff compares, sorted, and the catalogs it reads. Raises
+/// `ValueError(message)` for an endpoint that cannot be resolved.
+#[pyfunction]
+fn deployment_diff_relations(
+    from: &str,
+    to: &str,
+    deployments_argument: Vec<DeploymentArgument>,
+    active: Vec<Binding>,
+    default_database: &str,
+) -> PyResult<DiffPairsResult> {
+    let (pairs, databases) = relation_pairs(
+        from,
+        to,
+        &deployments(deployments_argument),
+        &active,
+        default_database,
+    )
+    .map_err(PyValueError::new_err)?;
+    Ok((
+        pairs
+            .into_iter()
+            .map(
+                |RelationPair {
+                     database,
+                     logical_name,
+                     from_physical_name,
+                     to_physical_name,
+                 }| (database, logical_name, from_physical_name, to_physical_name),
+            )
+            .collect(),
+        databases,
+    ))
+}
+
+/// The query counting the rows of `database.relation`. Raises `ValueError(message)` for an
+/// invalid identifier.
+#[pyfunction]
+fn deployment_diff_count_sql(database: &str, relation: &str) -> PyResult<String> {
+    count_sql(database, relation).map_err(PyValueError::new_err)
+}
+
+/// `(bound, (columns as (name, type, default), row count) when the relation exists)`.
+type DiffSideArgument = (
+    bool,
+    Option<(Vec<(String, String, Option<String>)>, Option<i128>)>,
+);
+
+/// The status of one relation comparison.
+#[pyfunction]
+fn deployment_diff_status(from: DiffSideArgument, to: DiffSideArgument) -> &'static str {
+    status(diff_side(&from), diff_side(&to)).as_str()
+}
+
+fn diff_side(argument: &DiffSideArgument) -> Side<'_> {
+    let (bound, found) = argument;
+    (
+        *bound,
+        found
+            .as_ref()
+            .map(|(columns, row_count)| (columns.as_slice(), *row_count)),
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(audit_readiness, module)?)?;
     module.add_function(wrap_pyfunction!(select_rollback_publications, module)?)?;
@@ -422,5 +507,9 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(obsolete_binding_removals, module)?)?;
     module.add_function(wrap_pyfunction!(binding_replacement_preview, module)?)?;
     module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_deployment_diff, module)?)?;
+    module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;
+    module.add_function(wrap_pyfunction!(deployment_diff_count_sql, module)?)?;
+    module.add_function(wrap_pyfunction!(deployment_diff_status, module)?)?;
     module.add_function(wrap_pyfunction!(order_relations_for_drop, module)?)
 }
