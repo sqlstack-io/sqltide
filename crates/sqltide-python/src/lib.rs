@@ -8,6 +8,7 @@ mod config;
 mod discovery;
 mod executor;
 mod graph;
+mod macros;
 mod planner;
 mod polyglot;
 mod sql_scan;
@@ -62,6 +63,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis::register(module)?;
     artifacts::register(module)?;
     graph::register(module)?;
+    macros::register(module)?;
     discovery::register(module)?;
     config::register(module)?;
     executor::register(module)?;

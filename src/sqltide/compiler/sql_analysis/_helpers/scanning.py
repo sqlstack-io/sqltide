@@ -39,7 +39,9 @@ def scan_error(error: _native.SqlScanError) -> SqlAnalysisError:
     return SqlAnalysisError(message, span=span)
 
 
-def _scan[T](scan: Callable[[], T]) -> T:
+def run_native_scan[T](scan: Callable[[], T]) -> T:
+    """Run one native scan, raising its failure as a SQL analysis exception."""
+
     try:
         return scan()
     except _native.SqlScanError as error:
@@ -56,7 +58,9 @@ def extract_references_impl(sql: str) -> tuple[SqlReference, ...]:
             ref_type=None if ref_type is None else RefType(ref_type),
             span=SqlSourceSpan(*span),
         )
-        for name, relation_type, ref_type, span in _scan(lambda: _native.extract_references(sql))
+        for name, relation_type, ref_type, span in run_native_scan(
+            lambda: _native.extract_references(sql)
+        )
     )
 
 
@@ -65,7 +69,7 @@ def split_header_blocks(*, sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]
 
     return tuple(
         SqlHeaderBlock(start=start, body_start=body_start, header=header, body=body)
-        for start, body_start, header, body in _scan(
+        for start, body_start, header, body in run_native_scan(
             lambda: _native.split_header_blocks(sql, keyword)
         )
     )
@@ -74,7 +78,9 @@ def split_header_blocks(*, sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]
 def extract_top_level_ctes_impl(*, sql: str, context: str) -> SqlTopLevelCtes:
     """Scan one leading WITH clause and return its CTEs plus the trailing statement."""
 
-    ctes, trailing_sql, trailing_span = _scan(lambda: _native.extract_top_level_ctes(sql, context))
+    ctes, trailing_sql, trailing_span = run_native_scan(
+        lambda: _native.extract_top_level_ctes(sql, context)
+    )
     return SqlTopLevelCtes(
         ctes=tuple(
             SqlCommonTableExpression(name=name, query=query, span=SqlSourceSpan(*span))
@@ -94,45 +100,46 @@ def try_consume_keyword_impl(*, sql: str, start: int, keyword: str) -> int | Non
 def find_matching_parenthesis(*, sql: str, open_index: int, context: str) -> int:
     """Find a matching close parenthesis while skipping comments and quoted text."""
 
-    return _scan(lambda: _native.find_matching_parenthesis(sql, open_index, context))
+    return run_native_scan(lambda: _native.find_matching_parenthesis(sql, open_index, context))
 
 
 def find_next_unquoted_character(*, sql: str, character: str, start: int) -> int | None:
     """Find one character outside SQL comments and quoted text."""
 
-    return _scan(lambda: _native.find_next_unquoted_character(sql, character, start))
+    return run_native_scan(lambda: _native.find_next_unquoted_character(sql, character, start))
 
 
 def find_next_macro_start(*, sql: str, start: int) -> int | None:
     """Find the next `@name(` macro call outside comments and quoted text."""
 
-    return _scan(lambda: _native.find_next_macro_start(sql, start))
+    return run_native_scan(lambda: _native.find_next_macro_start(sql, start))
 
 
 def skip_trivia(*, sql: str, start: int) -> int:
     """Skip whitespace and SQL comments."""
 
-    return _scan(lambda: _native.skip_trivia(sql, start))
+    return run_native_scan(lambda: _native.skip_trivia(sql, start))
 
 
 def normalized_statement_sql(sql: str) -> str:
     """Remove one terminal statement delimiter while preserving trailing trivia."""
 
-    return _scan(lambda: _native.normalized_statement_sql(sql))
+    return run_native_scan(lambda: _native.normalized_statement_sql(sql))
 
 
 def outer_projection_spans(sql: str) -> tuple[SqlSourceSpan, ...]:
     """Return trimmed source spans for the outer SELECT projection list."""
 
     return tuple(
-        SqlSourceSpan(*span) for span in _scan(lambda: _native.outer_projection_spans(sql))
+        SqlSourceSpan(*span)
+        for span in run_native_scan(lambda: _native.outer_projection_spans(sql))
     )
 
 
 def outer_star_span(*, sql: str, projection_span: SqlSourceSpan) -> SqlSourceSpan:
     """Return the outer wildcard token span within one projection."""
 
-    span: _NativeSpan | None = _scan(
+    span: _NativeSpan | None = run_native_scan(
         lambda: _native.outer_star_span(sql, projection_span.start, projection_span.end)
     )
     return projection_span if span is None else SqlSourceSpan(*span)
@@ -141,7 +148,7 @@ def outer_star_span(*, sql: str, projection_span: SqlSourceSpan) -> SqlSourceSpa
 def outer_double_colon_type(*, sql: str, projection_span: SqlSourceSpan) -> str | None:
     """Return the authored outer double-colon cast type, if present."""
 
-    return _scan(
+    return run_native_scan(
         lambda: _native.outer_double_colon_type(sql, projection_span.start, projection_span.end)
     )
 
@@ -167,13 +174,13 @@ def rewrite_template_relations_impl(
 def append_template_predicate_impl(*, template: str, predicate: str) -> str:
     """Conjoin one predicate into the outer WHERE clause byte-preservingly."""
 
-    return _scan(lambda: _native.append_template_predicate(template, predicate))
+    return run_native_scan(lambda: _native.append_template_predicate(template, predicate))
 
 
 def merge_template_ctes_impl(*, template: str, named_queries: tuple[SqlNamedQuery, ...]) -> str:
     """Prepend named CTEs into one template's leading WITH clause byte-preservingly."""
 
-    return _scan(
+    return run_native_scan(
         lambda: _native.merge_template_ctes(
             template, [(named_query.name, named_query.query) for named_query in named_queries]
         )
