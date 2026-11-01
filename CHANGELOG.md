@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.55.0](https://github.com/sqlstack-io/sqltide/compare/v0.54.0...v0.55.0) (2026-11-01)
+
+
+### Features
+
+* plan destruction and population replays in Rust ([#297](https://github.com/sqlstack-io/sqltide/issues/297)) ([4988ee4](https://github.com/sqlstack-io/sqltide/commit/4988ee4f60a01a5ae4c761134747d4a65f667db8))
+* plan promotion, diffs, sources and build workflows in Rust ([#300](https://github.com/sqlstack-io/sqltide/issues/300)) ([ab40ae7](https://github.com/sqlstack-io/sqltide/commit/ab40ae7585aa4f1cb5bddeaa305f8068b0d2042f))
+
 ## [0.54.0](https://github.com/sqlstack-io/sqltide/compare/v0.53.0...v0.54.0) (2026-11-01)
 
 
