@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.59.0](https://github.com/sqlstack-io/sqltide/compare/v0.58.0...v0.59.0) (2026-11-01)
+
+
+### Features
+
+* classify SQL tests, resolve test chains and decide actual state in Rust ([#308](https://github.com/sqlstack-io/sqltide/issues/308)) ([2cf53e7](https://github.com/sqlstack-io/sqltide/commit/2cf53e7f5c1fa5f0e9e90f0798426f9a8977078e))
+* parse audit, test and model headers and decide the transform contract in Rust ([#311](https://github.com/sqlstack-io/sqltide/issues/311)) ([d83c278](https://github.com/sqlstack-io/sqltide/commit/d83c27861c489421b0dc982a6dc95b2235caf35e))
+* render audit SQL, redact run statements and classify inventory and managed roots in Rust ([#309](https://github.com/sqlstack-io/sqltide/issues/309)) ([8b9c6b3](https://github.com/sqlstack-io/sqltide/commit/8b9c6b38a26a2cd085a5eec076873d8da2b16584))
+
 ## [0.58.0](https://github.com/sqlstack-io/sqltide/compare/v0.57.0...v0.58.0) (2026-11-01)
 
 
