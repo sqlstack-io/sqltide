@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.52.0](https://github.com/sqlstack-io/sqltide/compare/v0.51.0...v0.52.0) (2026-11-01)
+
+
+### Features
+
+* validate configuration in Rust ([#287](https://github.com/sqlstack-io/sqltide/issues/287)) ([476a3e3](https://github.com/sqlstack-io/sqltide/commit/476a3e3275782611f5937e254eb5ab9319733df8))
+
 ## [0.51.0](https://github.com/sqlstack-io/sqltide/compare/v0.50.0...v0.51.0) (2026-11-01)
 
 
