@@ -12,10 +12,7 @@ from sqltide.adapter.models import (
 )
 from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.compile.main.build_model_storage_identity import (
-    build_model_storage_identity,
-)
-from sqltide.compiler.compile.models import CompiledModel
+from sqltide.compiler.compile.models import CompiledModel, CompiledTableModel
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
 from sqltide.executor.direct.main.assemble_direct_build_workflow import (
@@ -542,6 +539,12 @@ def test_given_table_model_when_persisting_fingerprint_then_storage_identity_is_
         fingerprint_by_identity[f"analytics.{test_case.model_name}"].identity_metadata
     )
     assert warning is None
-    assert metadata[test_case.expected_storage_key] == build_model_storage_identity(
-        model_by_name[test_case.model_name]
-    )
+    model: CompiledModel = model_by_name[test_case.model_name]
+    assert isinstance(model, CompiledTableModel)
+    assert metadata[test_case.expected_storage_key] == {
+        "engine": model.transform.engine,
+        "order_by": list(model.transform.order_by),
+        "partition_by": model.transform.partition_by,
+        "ttl": model.transform.ttl,
+        "settings": model.transform.settings,
+    }

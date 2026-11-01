@@ -9,7 +9,9 @@ rust-version.workspace = true
 
 [dependencies]
 regex.workspace = true
+serde_json.workspace = true
 sha2.workspace = true
+sqltide-json.workspace = true
 sqltide-sqlanalysis.workspace = true
 
 [lints]

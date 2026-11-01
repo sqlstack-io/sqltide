@@ -614,6 +614,38 @@ def direct_workflow_statements(
         int,
     ],
 ) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
+def direct_fingerprint_record(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+    query: str,
+    database: str,
+    workflow_id: str,
+) -> tuple[str, str, str, str]: ...
+def direct_model_drift_reasons(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+    query: str,
+    baseline: tuple[str, str] | None,
+) -> list[str]: ...
+def direct_model_identity_metadata(
+    identity: tuple[
+        str,
+        str,
+        str,
+        list[tuple[str, str]],
+        tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
+    ],
+) -> str: ...
 def workflow_step_segment(value: str) -> str: ...
 def workflow_terminate_sql(sql: str) -> str: ...
 def resolve_direct_replays(
