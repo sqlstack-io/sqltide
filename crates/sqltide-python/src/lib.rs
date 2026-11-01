@@ -13,6 +13,7 @@ mod graph;
 mod macros;
 mod planner;
 mod polyglot;
+mod population;
 mod sql_scan;
 
 use pyo3::exceptions::PyValueError;
@@ -73,5 +74,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     executor::register(module)?;
     planner::register(module)?;
     polyglot::register(module)?;
+    population::register(module)?;
     sql_scan::register(module)
 }

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from sqltide.adapter.models import CatalogRelation
 from sqltide.adapter.types import AdapterReplayLowerBoundMode, AdapterReplaySeedMode
 from sqltide.compiler.discovery.types import BoundedReplayFallback, ReplayLineageMode
 from sqltide.compiler.planner.types import RebuildExecutionMode
@@ -14,9 +15,12 @@ class FilterRootBackfillReportsForDeploymentTestCase:
 @dataclass(frozen=True)
 class ResolveUnsupportedBoundedReplayBehaviorTestCase:
     description: str
-    bounded_replay_fallback: BoundedReplayFallback | str
+    bounded_replay_fallback: BoundedReplayFallback
+    catalog_relations: tuple[CatalogRelation, ...]
     expected_execution_mode: RebuildExecutionMode
     expected_requested_start_time: str | None
+    expected_history_supported: bool
+    expected_resolved_fallback: BoundedReplayFallback | None
 
 
 @dataclass(frozen=True)

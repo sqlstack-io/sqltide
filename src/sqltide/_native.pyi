@@ -283,6 +283,45 @@ def destruction_plan_fingerprint(
 def list_destruction_inactive_pipelines(
     current: list[str], snapshot_object: AdapterManifestSnapshot
 ) -> list[tuple[str, int, int, str]]: ...
+def plan_population_replays(
+    *,
+    roots: list[tuple[int, int, str, str, str | None, int | None]],
+    tables: list[tuple[int, str, str | None, list[str], list[tuple[str, str]]]],
+    views: list[tuple[str, str]],
+    key_names: list[str],
+    physical_names: list[tuple[int, str]],
+    external_columns: list[
+        tuple[int, tuple[str | None, str | None, str | None, str | None, str | None]]
+    ],
+    replay_anchor_keys: set[int],
+    default_database: str,
+    boundary_time: str,
+    watermarks: list[tuple[int, str, str]] | None,
+) -> tuple[
+    list[tuple[str, str]],
+    list[
+        tuple[
+            int,
+            str,
+            str,
+            tuple[str, str, str, str],
+            int,
+            list[tuple[str, str, str | None]],
+            list[str],
+            tuple[str, str, str | None, int | None],
+            bool,
+            list[str],
+            list[tuple[str, str]],
+            bool,
+        ]
+    ],
+]: ...
+def bounded_replay_outcome(
+    mode: str | None,
+    forced_start_time: bool,
+    live_columns: set[str] | None,
+    fallback_without_history: bool,
+) -> str: ...
 def unified_diff(a: str, b: str, from_file: str, to_file: str, keep_ends: bool) -> list[str]: ...
 def stage_deployment(
     keys: list[tuple[str, str, bool]],

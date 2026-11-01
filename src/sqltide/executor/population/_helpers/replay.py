@@ -1,5 +1,6 @@
 """Build replay requests for shared population workflows."""
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterPhysicalRelationMapping,
     AdapterReplayBoundary,
@@ -14,30 +15,31 @@ from sqltide.adapter.types import (
     AdapterReplayLowerBoundMode,
     AdapterReplaySeedMode,
 )
-from sqltide.compiler.compile.constants import (
-    REPLAY_CURSOR_COLUMN_NAME,
-    REPLAY_LANDED_AT_COLUMN_NAME,
-    REPLAY_OFFSET_COLUMN_NAME,
-    REPLAY_PARTITION_COLUMN_NAME,
-    REPLAY_TIMESTAMP_COLUMN_NAME,
-)
 from sqltide.compiler.compile.models import (
     DesiredMaterializedView,
     DesiredState,
     DesiredTable,
-    ExternalSourceReplayConfig,
     ObjectKey,
 )
-from sqltide.compiler.planner.constants import (
-    REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
-    REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED,
-)
 from sqltide.compiler.planner.main.build_adapter_replay_query import build_adapter_replay_query
-from sqltide.executor.population.models import (
-    PopulationPlan,
-    PopulationRoot,
-    PopulationWatermark,
-)
+from sqltide.executor.population.models import PopulationPlan, PopulationWatermark
+
+type _NativeReplayPlan = tuple[
+    int,
+    str,
+    str,
+    tuple[str, str, str, str],
+    int,
+    list[tuple[str, str, str | None]],
+    list[str],
+    tuple[str, str, str | None, int | None],
+    bool,
+    list[str],
+    list[tuple[str, str]],
+    bool,
+]
+
+_TEMPLATE_BOUNDARY_TIME: str = "1970-01-01 00:00:00.000"
 
 
 def build_population_replay_templates(
@@ -45,30 +47,12 @@ def build_population_replay_templates(
 ) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]:
     """Build one boundary-independent full-replay template per population root."""
 
-    watermarks: list[PopulationWatermark] = []
-    root: PopulationRoot
-    for root in plan.roots:
-        mode: AdapterReplayBoundaryMode = AdapterReplayBoundaryMode(root.replay_lineage_mode)
-        boundary_key: str = {
-            AdapterReplayBoundaryMode.OFFSETS: f"{REPLAY_PARTITION_COLUMN_NAME}=0",
-            AdapterReplayBoundaryMode.CURSOR: REPLAY_CURSOR_COLUMN_NAME,
-            AdapterReplayBoundaryMode.TIMESTAMP: REPLAY_TIMESTAMP_COLUMN_NAME,
-            AdapterReplayBoundaryMode.LANDED_AT: REPLAY_LANDED_AT_COLUMN_NAME,
-        }[mode]
-        watermarks.append(
-            PopulationWatermark(
-                root_key=root.root_key,
-                anchor_key=root.upstream_boundary_key,
-                boundary_key=boundary_key,
-                cutoff_value="0",
-            )
-        )
-    return build_population_replay_requests(
+    return _build_requests(
         plan=plan,
         desired_state=desired_state,
         default_database=default_database,
-        watermarks=tuple(watermarks),
-        boundary_time="1970-01-01 00:00:00.000",
+        watermarks=None,
+        boundary_time=_TEMPLATE_BOUNDARY_TIME,
     )
 
 
@@ -80,156 +64,177 @@ def build_population_replay_requests(
     watermarks: tuple[PopulationWatermark, ...],
     boundary_time: str,
 ) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]:
-    physical_name_by_key: dict[ObjectKey, str] = {
-        prepared.logical_key: prepared.physical_name for prepared in plan.objects
-    }
-    root_table_by_key: dict[ObjectKey, DesiredTable] = {
-        object_.key: object_
-        for object_ in desired_state.objects
-        if isinstance(object_, DesiredTable)
-    }
-    materialized_view_by_target: dict[str, DesiredMaterializedView] = {
-        object_.target_table_name: object_
-        for object_ in desired_state.objects
-        if isinstance(object_, DesiredMaterializedView)
-    }
-    physical_mappings: tuple[AdapterPhysicalRelationMapping, ...] = tuple(
-        AdapterPhysicalRelationMapping(
-            logical_name=object_.name,
-            physical_name=physical_name_by_key.get(object_.key, object_.name),
-        )
-        for object_ in desired_state.objects
-        if isinstance(object_, DesiredTable)
+    return _build_requests(
+        plan=plan,
+        desired_state=desired_state,
+        default_database=default_database,
+        watermarks=watermarks,
+        boundary_time=boundary_time,
     )
-    requests: list[tuple[ObjectKey, AdapterReplayRequest]] = []
-    root: PopulationRoot
-    for root in plan.roots:
-        root_watermarks: tuple[PopulationWatermark, ...] = tuple(
-            watermark for watermark in watermarks if watermark.root_key == root.root_key
-        )
-        if not root_watermarks:
-            continue
-        root_table: DesiredTable = root_table_by_key[root.root_key]
-        view: DesiredMaterializedView = materialized_view_by_target[root_table.name]
-        database: str = root_table.key.database or default_database
-        external_config: ExternalSourceReplayConfig | None = _external_source_config(
-            desired_state=desired_state, key=root.upstream_boundary_key
-        )
-        mode: AdapterReplayBoundaryMode = AdapterReplayBoundaryMode(root.replay_lineage_mode)
-        replay_query: AdapterReplayQuery = build_adapter_replay_query(
-            query=view.query,
-            database_template=view.database_template,
-            source_relation_name=view.source_table_name,
-            database=database,
-            physical_relation_mappings=physical_mappings,
-        )
-        requests.append(
+
+
+def _build_requests(
+    *,
+    plan: PopulationPlan,
+    desired_state: DesiredState,
+    default_database: str,
+    watermarks: tuple[PopulationWatermark, ...] | None,
+    boundary_time: str,
+) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]:
+    index_by_key: dict[ObjectKey, int] = {}
+    candidate_keys: list[ObjectKey] = [
+        *(object_.key for object_ in desired_state.objects),
+        *(prepared.logical_key for prepared in plan.objects),
+        *(config.key for config in desired_state.external_source_replay_configs),
+        *(root.root_key for root in plan.roots),
+        *(root.upstream_boundary_key for root in plan.roots),
+    ]
+    for key in candidate_keys:
+        index_by_key.setdefault(key, len(index_by_key))
+    keys: tuple[ObjectKey, ...] = tuple(index_by_key)
+    tables: list[DesiredTable] = [
+        object_ for object_ in desired_state.objects if isinstance(object_, DesiredTable)
+    ]
+    views: list[DesiredMaterializedView] = [
+        object_ for object_ in desired_state.objects if isinstance(object_, DesiredMaterializedView)
+    ]
+    mappings, replay_plans = _native.plan_population_replays(
+        roots=[
             (
-                root.root_key,
-                AdapterReplayRequest(
-                    mode=mode,
-                    database=database,
-                    relations=AdapterReplayRelations(
-                        root=root_table.name,
-                        source=view.source_table_name,
-                        anchor=physical_name_by_key.get(
-                            root.upstream_boundary_key, root.upstream_boundary_key.name
-                        ),
-                        target=physical_name_by_key[root.root_key],
-                    ),
-                    replay_query=replay_query,
-                    boundaries=_adapter_boundaries(mode=mode, watermarks=root_watermarks),
-                    columns=_adapter_replay_columns(external_config),
-                    window=AdapterReplayWindow(
-                        lower_bound_mode=_lower_bound_mode(root),
-                        lower_bound_inclusive=True,
-                        boundary_time=boundary_time,
-                        forced_start_time=root.forced_start_time,
-                        lookback_seconds=root.execution_lookback_seconds,
-                    ),
-                    seed_mode=(
-                        AdapterReplaySeedMode.HISTORY_PREFIX
-                        if root.execution_mode == REBUILD_EXECUTION_MODE_SEEDED_BOUNDED
-                        else AdapterReplaySeedMode.NONE
-                    ),
-                    target_column_names=tuple(column.name for column in root_table.columns),
-                    settings=tuple(sorted((root_table.replay_settings or {}).items())),
-                    filter_boundaries_at_source=(
-                        root.root_key not in desired_state.replay_anchor_keys
-                    ),
+                index_by_key[root.root_key],
+                index_by_key[root.upstream_boundary_key],
+                str(root.replay_lineage_mode),
+                str(root.execution_mode),
+                root.forced_start_time,
+                root.execution_lookback_seconds,
+            )
+            for root in plan.roots
+        ],
+        tables=[_native_table(table=table, index=index_by_key[table.key]) for table in tables],
+        views=[(view.target_table_name, view.source_table_name) for view in views],
+        key_names=[key.name for key in keys],
+        physical_names=[
+            (index_by_key[prepared.logical_key], prepared.physical_name)
+            for prepared in plan.objects
+        ],
+        external_columns=[
+            (
+                index_by_key[config.key],
+                (
+                    config.partition_column_name,
+                    config.offset_column_name,
+                    config.timestamp_column_name,
+                    config.landed_at_column_name,
+                    config.cursor_column_name,
                 ),
             )
-        )
-    return tuple(requests)
-
-
-def _adapter_boundaries(
-    *,
-    mode: AdapterReplayBoundaryMode,
-    watermarks: tuple[PopulationWatermark, ...],
-) -> tuple[AdapterReplayBoundary, ...]:
-    if mode == AdapterReplayBoundaryMode.OFFSETS:
-        return tuple(
-            AdapterReplayBoundary(
-                boundary_key=watermark.boundary_key,
-                cutoff_value=watermark.cutoff_value,
-                cutoff_inclusive=True,
-                partition_value=watermark.boundary_key.split("=", 1)[1],
-            )
+            for config in desired_state.external_source_replay_configs
+        ],
+        replay_anchor_keys={index_by_key[key] for key in desired_state.replay_anchor_keys},
+        default_database=default_database,
+        boundary_time=boundary_time,
+        watermarks=None
+        if watermarks is None
+        else [
+            (index_by_key[watermark.root_key], watermark.boundary_key, watermark.cutoff_value)
             for watermark in watermarks
-        )
+            if watermark.root_key in index_by_key
+        ],
+    )
+    physical_mappings: tuple[AdapterPhysicalRelationMapping, ...] = tuple(
+        AdapterPhysicalRelationMapping(logical_name=logical_name, physical_name=physical_name)
+        for logical_name, physical_name in mappings
+    )
     return tuple(
-        AdapterReplayBoundary(
-            boundary_key=watermark.boundary_key,
-            cutoff_value=watermark.cutoff_value,
-            cutoff_inclusive=True,
+        _replay_request(
+            keys=keys,
+            views=views,
+            physical_mappings=physical_mappings,
+            native_plan=native_plan,
         )
-        for watermark in watermarks
+        for native_plan in replay_plans
     )
 
 
-def _adapter_replay_columns(
-    external_config: ExternalSourceReplayConfig | None,
-) -> AdapterReplayColumns:
-    if external_config is None:
-        return AdapterReplayColumns(
-            partition=REPLAY_PARTITION_COLUMN_NAME,
-            offset=REPLAY_OFFSET_COLUMN_NAME,
-            timestamp=REPLAY_TIMESTAMP_COLUMN_NAME,
-            landed_at=REPLAY_LANDED_AT_COLUMN_NAME,
-            cursor=REPLAY_CURSOR_COLUMN_NAME,
-        )
-    return AdapterReplayColumns(
-        partition=external_config.partition_column_name or REPLAY_PARTITION_COLUMN_NAME,
-        offset=external_config.offset_column_name or REPLAY_OFFSET_COLUMN_NAME,
-        timestamp=external_config.timestamp_column_name or REPLAY_TIMESTAMP_COLUMN_NAME,
-        landed_at=(
-            external_config.landed_at_column_name
-            or external_config.timestamp_column_name
-            or REPLAY_LANDED_AT_COLUMN_NAME
+def _native_table(
+    *, table: DesiredTable, index: int
+) -> tuple[int, str, str | None, list[str], list[tuple[str, str]]]:
+    column_names: list[str] = [column.name for column in table.columns]
+    return (
+        index,
+        table.name,
+        table.key.database,
+        column_names,
+        list((table.replay_settings or {}).items()),
+    )
+
+
+def _replay_request(
+    *,
+    keys: tuple[ObjectKey, ...],
+    views: list[DesiredMaterializedView],
+    physical_mappings: tuple[AdapterPhysicalRelationMapping, ...],
+    native_plan: _NativeReplayPlan,
+) -> tuple[ObjectKey, AdapterReplayRequest]:
+    (
+        root,
+        mode,
+        database,
+        (root_name, source_name, anchor_name, target_name),
+        view_index,
+        boundaries,
+        columns,
+        (lower_bound_mode, boundary_time, forced_start_time, lookback_seconds),
+        seeds_history,
+        target_column_names,
+        settings,
+        filter_boundaries_at_source,
+    ) = native_plan
+    view: DesiredMaterializedView = views[view_index]
+    replay_query: AdapterReplayQuery = build_adapter_replay_query(
+        query=view.query,
+        database_template=view.database_template,
+        source_relation_name=view.source_table_name,
+        database=database,
+        physical_relation_mappings=physical_mappings,
+    )
+    return (
+        keys[root],
+        AdapterReplayRequest(
+            mode=AdapterReplayBoundaryMode(mode),
+            database=database,
+            relations=AdapterReplayRelations(
+                root=root_name, source=source_name, anchor=anchor_name, target=target_name
+            ),
+            replay_query=replay_query,
+            boundaries=tuple(
+                AdapterReplayBoundary(
+                    boundary_key=boundary_key,
+                    cutoff_value=cutoff_value,
+                    cutoff_inclusive=True,
+                    partition_value=partition_value,
+                )
+                for boundary_key, cutoff_value, partition_value in boundaries
+            ),
+            columns=AdapterReplayColumns(
+                partition=columns[0],
+                offset=columns[1],
+                timestamp=columns[2],
+                landed_at=columns[3],
+                cursor=columns[4],
+            ),
+            window=AdapterReplayWindow(
+                lower_bound_mode=AdapterReplayLowerBoundMode(lower_bound_mode),
+                lower_bound_inclusive=True,
+                boundary_time=boundary_time,
+                forced_start_time=forced_start_time,
+                lookback_seconds=lookback_seconds,
+            ),
+            seed_mode=AdapterReplaySeedMode.HISTORY_PREFIX
+            if seeds_history
+            else AdapterReplaySeedMode.NONE,
+            target_column_names=tuple(target_column_names),
+            settings=tuple(settings),
+            filter_boundaries_at_source=filter_boundaries_at_source,
         ),
-        cursor=external_config.cursor_column_name or REPLAY_CURSOR_COLUMN_NAME,
     )
-
-
-def _lower_bound_mode(root: PopulationRoot) -> AdapterReplayLowerBoundMode:
-    if root.forced_start_time is not None:
-        return AdapterReplayLowerBoundMode.FORCED_TIME
-    if root.execution_lookback_seconds is not None:
-        return AdapterReplayLowerBoundMode.LOOKBACK
-    if root.execution_mode in {
-        REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
-        REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED,
-    }:
-        return AdapterReplayLowerBoundMode.ACTIVE_FRONTIER
-    return AdapterReplayLowerBoundMode.NONE
-
-
-def _external_source_config(
-    *, desired_state: DesiredState, key: ObjectKey
-) -> ExternalSourceReplayConfig | None:
-    config: ExternalSourceReplayConfig
-    for config in desired_state.external_source_replay_configs:
-        if config.key == key:
-            return config
-    return None

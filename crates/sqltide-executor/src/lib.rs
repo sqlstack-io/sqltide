@@ -3,5 +3,6 @@
 pub mod destruction;
 pub mod janitor;
 pub mod ordering;
+pub mod population;
 pub mod publications;
 pub mod readiness;
