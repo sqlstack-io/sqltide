@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.macros.main._expand_macro_calls import expand_macro_calls
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.test_discovery._helpers.classification import (
@@ -16,10 +16,6 @@ from sqltide.compiler.test_discovery._helpers.headers import parse_test_header
 from sqltide.compiler.test_discovery._helpers.macro_mode import (
     validate_macro_mode_restrictions,
 )
-from sqltide.compiler.test_discovery.constants import (
-    TEST_HEADER_ONLY_PATTERN,
-    TEST_HEADER_PATTERN,
-)
 from sqltide.compiler.test_discovery.exceptions import SqlTestParseError
 from sqltide.compiler.test_discovery.models import (
     LoadedSqlTest,
@@ -28,7 +24,7 @@ from sqltide.compiler.test_discovery.models import (
     SqlTestMacroPayload,
     SqlTestModelPayload,
 )
-from sqltide.compiler.test_discovery.types import SqlTestMode
+from sqltide.compiler.test_discovery.types import NativeSqlTestBlock, SqlTestMode
 
 
 def parse_sql_test_file(
@@ -41,7 +37,7 @@ def parse_sql_test_file(
     """Parse one authored SQL test file into one or more discovered test cases."""
 
     source_contents: str = file_path.read_text(encoding="utf-8") if contents is None else contents
-    raw_test_blocks: tuple[tuple[str, int], ...] = _split_sql_test_blocks(
+    raw_test_blocks: list[NativeSqlTestBlock] = _split_sql_test_blocks(
         file_path=file_path, contents=source_contents
     )
     if not raw_test_blocks:
@@ -50,14 +46,14 @@ def parse_sql_test_file(
             "as the first non-whitespace content"
         )
     loaded_tests: list[LoadedSqlTest] = []
-    raw_test_block: str
     block_start_index: int
-    for test_index, (raw_test_block, block_start_index) in enumerate(raw_test_blocks, start=1):
+    block_header: tuple[str, str, int] | None
+    for test_index, (block_start_index, block_header) in enumerate(raw_test_blocks, start=1):
         loaded_tests.append(
             _parse_single_sql_test_block(
                 file_path=file_path,
                 source_contents=source_contents,
-                raw_test_block=raw_test_block,
+                block_header=block_header,
                 block_start_index=block_start_index,
                 test_index=test_index,
                 macro_registry=macro_registry,
@@ -72,29 +68,28 @@ def _parse_single_sql_test_block(
     *,
     file_path: Path,
     source_contents: str,
-    raw_test_block: str,
+    block_header: tuple[str, str, int] | None,
     block_start_index: int,
     test_index: int,
     macro_registry: MacroRegistry | None,
     macro_context: MacroContext | None,
 ) -> LoadedSqlTest:
-    header_match: re.Match[str] | None = TEST_HEADER_PATTERN.match(raw_test_block)
-    if header_match is None:
+    if block_header is None:
         raise SqlTestParseError(
             f"SQL test '{file_path}' must start with a TEST() header as the first "
             "non-whitespace content"
         )
+    header_contents, raw_body, body_start = block_header
     header: SqlTestHeader = parse_test_header(
         file_path=file_path,
-        header_contents=header_match.group("header"),
+        header_contents=header_contents,
     )
-    raw_body: str = header_match.group("sql")
     body: str = _expand_test_body(
         sql=raw_body.strip(),
         file_path=file_path,
         macro_registry=macro_registry,
         macro_context=macro_context,
-        source_offset=block_start_index + header_match.start("sql") + _leading_length(raw_body),
+        source_offset=block_start_index + body_start + _leading_length(raw_body),
         source_contents=source_contents,
         header=header,
         raw_body=raw_body,
@@ -170,24 +165,14 @@ def _leading_length(raw_body: str) -> int:
     return len(raw_body) - len(raw_body.lstrip())
 
 
-def _split_sql_test_blocks(*, file_path: Path, contents: str) -> tuple[tuple[str, int], ...]:
-    matches: tuple[re.Match[str], ...] = tuple(TEST_HEADER_ONLY_PATTERN.finditer(contents))
-    if not matches:
-        return ()
-    if contents[: matches[0].start()].strip():
+def _split_sql_test_blocks(*, file_path: Path, contents: str) -> list[NativeSqlTestBlock]:
+    try:
+        return _native.sql_test_blocks(contents)
+    except ValueError:
         raise SqlTestParseError(
             f"SQL test '{file_path}' must start with a TEST() header as the first "
             "non-whitespace content"
-        )
-    raw_blocks: list[tuple[str, int]] = []
-    match_index: int
-    match: re.Match[str]
-    for match_index, match in enumerate(matches):
-        next_start: int = (
-            matches[match_index + 1].start() if match_index + 1 < len(matches) else len(contents)
-        )
-        raw_blocks.append((contents[match.start() : next_start].strip(), match.start()))
-    return tuple(raw_blocks)
+        ) from None
 
 
 def _source_position(*, contents: str, index: int) -> tuple[int, int]:

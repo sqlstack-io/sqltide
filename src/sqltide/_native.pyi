@@ -401,6 +401,43 @@ def resolve_variable_values(
 def interpolate_config_value(
     value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
 ) -> object: ...
+def sql_test_blocks(contents: str) -> list[tuple[int, tuple[str, str, int] | None]]: ...
+def sql_test_header_fields(
+    file_path: str, header: list[tuple[str, object]]
+) -> tuple[str | None, str]: ...
+def unsupported_audit_header_keys(
+    file_path: str, header: list[tuple[str, object]]
+) -> str | None: ...
+def audit_header_fields(
+    file_path: str, header: list[tuple[str, object]]
+) -> tuple[str, str | None, str | None, bool, int | None, int | None, bool | None]: ...
+def generic_audit_instances(
+    file_path: str,
+    raw_audits: object,
+    implicit_arguments: list[tuple[str, object]],
+    default_name_prefix: str,
+) -> list[
+    tuple[
+        str,
+        list[tuple[str, object]],
+        str,
+        str,
+        str | None,
+        bool,
+        int | None,
+        int | None,
+        bool | None,
+    ]
+]: ...
+def generic_audit_parameter_names(query: str) -> tuple[list[str], list[str]]: ...
+def render_generic_audit(
+    file_path: str,
+    definition_name: str,
+    query: str,
+    raw_parameter_names: list[str],
+    quoted_parameter_names: list[str],
+    arguments: list[tuple[str, object]],
+) -> str: ...
 def parse_duration_seconds(value: object, field_path: str, allow_zero: bool) -> int: ...
 def parse_freshness_policy(
     payload: object, label: str, file_path: str

@@ -4,19 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
 
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery._helpers.parsing import (
     parse_generic_sql_audit_definition,
 )
 from sqltide.compiler.audit_discovery.constants import (
-    ALLOWED_AUDIT_SEVERITIES,
     AUDIT_COLUMN_ARGUMENT_KEY,
-    AUDIT_EVERY_KEY,
     AUDIT_MODEL_ARGUMENT_KEY,
-    AUDIT_SCHEDULED_KEY,
-    AUDIT_SEVERITY_KEY,
-    AUDIT_WARMUP_KEY,
 )
 from sqltide.compiler.audit_discovery.exceptions import SqlAuditParseError
 from sqltide.compiler.audit_discovery.models import (
@@ -24,14 +19,19 @@ from sqltide.compiler.audit_discovery.models import (
     LoadedGenericSqlAuditInstance,
     LoadedSqlAudit,
 )
-from sqltide.compiler.audit_discovery.types import AuditAttachmentKind
+from sqltide.compiler.audit_discovery.types import (
+    AuditAttachmentKind,
+    NativeGenericAuditInstance,
+)
 from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
-from sqltide.compiler.discovery.main._parse_duration_seconds import parse_duration_seconds
 from sqltide.compiler.discovery.models import ModelColumnSpec, TransformStep, ViewStep
 from sqltide.compiler.discovery.types import SqlRelationType
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.sql_analysis.main._render_string_literal import render_string_literal
+
+_LITERAL_RENDER_FAILURE: str = "literal"
+_LITERAL_DIALECT: str = "clickhouse"
 
 
 def discover_generic_sql_audit_definitions(
@@ -179,221 +179,40 @@ def _build_generic_sql_audit_instances(
     implicit_arguments: dict[str, object],
     default_name_prefix: str,
 ) -> list[LoadedGenericSqlAuditInstance]:
-    if raw_audits in (None, []):
-        return []
-    if not isinstance(raw_audits, list):
-        raise SqlAuditParseError(f"Model '{file_path}' must define audits as a list")
-    instances: list[LoadedGenericSqlAuditInstance] = []
-    audit_index: int
-    raw_audit_entry: object
-    for audit_index, raw_audit_entry in enumerate(raw_audits, start=1):
-        explicit_arguments: dict[str, object]
-        if isinstance(raw_audit_entry, str):
-            definition_name: str = raw_audit_entry
-            explicit_arguments = {}
-        elif isinstance(raw_audit_entry, dict) and all(
-            isinstance(key, str) for key in raw_audit_entry
-        ):
-            typed_audit_entry: dict[str, Any] = cast(dict[str, Any], raw_audit_entry)
-            if len(typed_audit_entry) != 1:
-                raise SqlAuditParseError(
-                    f"Model '{file_path}' audit items must be a string or single-key mapping"
-                )
-            definition_name, raw_arguments = next(iter(typed_audit_entry.items()))
-            if raw_arguments is None:
-                explicit_arguments = {}
-            elif not isinstance(raw_arguments, dict) or not all(
-                isinstance(key, str) for key in raw_arguments
-            ):
-                raise SqlAuditParseError(
-                    f"Model '{file_path}' audit '{definition_name}' must define "
-                    "arguments as a mapping"
-                )
-            else:
-                explicit_arguments = {key: value for key, value in raw_arguments.items()}
-        else:
-            raise SqlAuditParseError(
-                f"Model '{file_path}' audit items must be a string or single-key mapping"
-            )
-        if not definition_name:
-            raise SqlAuditParseError(
-                f"Model '{file_path}' must use non-empty audit names under audits"
-            )
-        merged_arguments: dict[str, object] = _merge_implicit_and_explicit_arguments(
-            file_path=file_path,
-            definition_name=definition_name,
-            implicit_arguments=implicit_arguments,
-            explicit_arguments=explicit_arguments,
-        )
-        severity_is_explicit: bool = AUDIT_SEVERITY_KEY in explicit_arguments
-        severity: str
-        severity, merged_arguments = _pop_audit_string_argument(
-            key=AUDIT_SEVERITY_KEY,
-            arguments=merged_arguments,
-            default_value="error",
-            file_path=file_path,
-            definition_name=definition_name,
-            allowed_values=ALLOWED_AUDIT_SEVERITIES,
-        )
-        description: str | None
-        description, merged_arguments = _pop_optional_audit_string_argument(
-            key="description",
-            arguments=merged_arguments,
-            file_path=file_path,
-            definition_name=definition_name,
-        )
-        name: str | None
-        name, merged_arguments = _pop_optional_audit_string_argument(
-            key="name",
-            arguments=merged_arguments,
-            file_path=file_path,
-            definition_name=definition_name,
-        )
-        cadence_seconds: int | None
-        cadence_seconds, merged_arguments = _pop_optional_audit_duration_argument(
-            key=AUDIT_EVERY_KEY,
-            arguments=merged_arguments,
-            file_path=file_path,
-            definition_name=definition_name,
-            allow_zero=False,
-        )
-        warmup_seconds: int | None
-        warmup_seconds, merged_arguments = _pop_optional_audit_duration_argument(
-            key=AUDIT_WARMUP_KEY,
-            arguments=merged_arguments,
-            file_path=file_path,
-            definition_name=definition_name,
-            allow_zero=True,
-        )
-        scheduled: bool | None
-        scheduled, merged_arguments = _pop_optional_audit_bool_argument(
-            key=AUDIT_SCHEDULED_KEY,
-            arguments=merged_arguments,
-            file_path=file_path,
-            definition_name=definition_name,
-        )
-        if scheduled is False and cadence_seconds is not None:
-            raise SqlAuditParseError(
-                f"Model '{file_path}' audit '{definition_name}' cannot define both "
-                "scheduled false and every"
-            )
-        instances.append(
-            LoadedGenericSqlAuditInstance(
-                file_path=file_path,
-                definition_name=definition_name,
-                arguments=merged_arguments,
-                name=name or f"{default_name_prefix}.{definition_name}.{audit_index}",
-                severity=severity,
-                description=description,
-                severity_is_explicit=severity_is_explicit,
-                cadence_seconds_override=cadence_seconds,
-                warmup_seconds_override=warmup_seconds,
-                scheduled_override=scheduled,
-            )
-        )
-    return instances
-
-
-def _merge_implicit_and_explicit_arguments(
-    *,
-    file_path: Path,
-    definition_name: str,
-    implicit_arguments: dict[str, object],
-    explicit_arguments: dict[str, object],
-) -> dict[str, object]:
-    merged_arguments: dict[str, object] = dict(implicit_arguments)
-    argument_name: str
-    for argument_name, argument_value in explicit_arguments.items():
-        if (
-            argument_name in implicit_arguments
-            and implicit_arguments[argument_name] != argument_value
-        ):
-            raise SqlAuditParseError(
-                f"Model '{file_path}' audit '{definition_name}' must not override implicit "
-                f"{argument_name} from its header context"
-            )
-        merged_arguments[argument_name] = argument_value
-    return merged_arguments
-
-
-def _pop_audit_string_argument(
-    *,
-    key: str,
-    arguments: dict[str, object],
-    default_value: str,
-    file_path: Path,
-    definition_name: str,
-    allowed_values: frozenset[str],
-) -> tuple[str, dict[str, object]]:
-    remaining_arguments: dict[str, object] = dict(arguments)
-    value: object = remaining_arguments.pop(key, default_value)
-    if not isinstance(value, str) or value not in allowed_values:
-        raise SqlAuditParseError(
-            f"Model '{file_path}' audit '{definition_name}' must define {key} as one of: "
-            f"{', '.join(sorted(allowed_values))}"
-        )
-    return value, remaining_arguments
-
-
-def _pop_optional_audit_string_argument(
-    *,
-    key: str,
-    arguments: dict[str, object],
-    file_path: Path,
-    definition_name: str,
-) -> tuple[str | None, dict[str, object]]:
-    remaining_arguments: dict[str, object] = dict(arguments)
-    value: object = remaining_arguments.pop(key, None)
-    if value is None:
-        return None, remaining_arguments
-    if not isinstance(value, str) or not value.strip():
-        raise SqlAuditParseError(
-            f"Model '{file_path}' audit '{definition_name}' must define {key} as a non-empty string"
-        )
-    return value.strip(), remaining_arguments
-
-
-def _pop_optional_audit_duration_argument(
-    *,
-    key: str,
-    arguments: dict[str, object],
-    file_path: Path,
-    definition_name: str,
-    allow_zero: bool,
-) -> tuple[int | None, dict[str, object]]:
-    remaining_arguments: dict[str, object] = dict(arguments)
-    if key not in remaining_arguments:
-        return None, remaining_arguments
-    value: object = remaining_arguments.pop(key)
     try:
-        return (
-            parse_duration_seconds(
-                value=value,
-                field_path=f"Model '{file_path}' audit '{definition_name}' {key}",
-                allow_zero=allow_zero,
-            ),
-            remaining_arguments,
+        instances: list[NativeGenericAuditInstance] = _native.generic_audit_instances(
+            str(file_path),
+            raw_audits,
+            list(implicit_arguments.items()),
+            default_name_prefix,
         )
     except ValueError as error:
         raise SqlAuditParseError(str(error)) from None
-
-
-def _pop_optional_audit_bool_argument(
-    *,
-    key: str,
-    arguments: dict[str, object],
-    file_path: Path,
-    definition_name: str,
-) -> tuple[bool | None, dict[str, object]]:
-    remaining_arguments: dict[str, object] = dict(arguments)
-    if key not in remaining_arguments:
-        return None, remaining_arguments
-    value: object = remaining_arguments.pop(key)
-    if not isinstance(value, bool):
-        raise SqlAuditParseError(
-            f"Model '{file_path}' audit '{definition_name}' must define {key} as a boolean"
+    return [
+        LoadedGenericSqlAuditInstance(
+            file_path=file_path,
+            definition_name=definition_name,
+            arguments=dict(arguments),
+            name=name,
+            severity=severity,
+            description=description,
+            severity_is_explicit=severity_is_explicit,
+            cadence_seconds_override=cadence_seconds,
+            warmup_seconds_override=warmup_seconds,
+            scheduled_override=scheduled,
         )
-    return value, remaining_arguments
+        for (
+            definition_name,
+            arguments,
+            name,
+            severity,
+            description,
+            severity_is_explicit,
+            cadence_seconds,
+            warmup_seconds,
+            scheduled,
+        ) in instances
+    ]
 
 
 def _render_generic_sql_audit_query(
@@ -402,99 +221,20 @@ def _render_generic_sql_audit_query(
     arguments: dict[str, object],
     file_path: Path,
 ) -> str:
-    required_parameter_names: tuple[str, ...] = tuple(
-        dict.fromkeys(definition.raw_parameter_names + definition.quoted_parameter_names)
-    )
-    missing_parameter_names: tuple[str, ...] = tuple(
-        parameter_name
-        for parameter_name in required_parameter_names
-        if parameter_name not in arguments
-    )
-    if missing_parameter_names:
-        raise SqlAuditParseError(
-            f"Model '{file_path}' is missing arguments for generic audit "
-            f"'{definition.name}': "
-            f"{', '.join(missing_parameter_names)}"
+    try:
+        return _native.render_generic_audit(
+            str(file_path),
+            definition.name,
+            definition.query,
+            list(definition.raw_parameter_names),
+            list(definition.quoted_parameter_names),
+            list(arguments.items()),
         )
-    unknown_parameter_names: tuple[str, ...] = tuple(
-        sorted(
-            argument_name
-            for argument_name in arguments
-            if argument_name not in required_parameter_names
-        )
-    )
-    if unknown_parameter_names:
-        raise SqlAuditParseError(
-            f"Model '{file_path}' has unsupported arguments for generic audit "
-            f"'{definition.name}': "
-            f"{', '.join(unknown_parameter_names)}"
-        )
-    rendered_query: str = definition.query
-    parameter_name: str
-    for parameter_name in definition.quoted_parameter_names:
-        rendered_query = rendered_query.replace(
-            f"@'{parameter_name}'",
-            _render_quoted_generic_sql_audit_argument(
-                argument_value=arguments[parameter_name],
-                file_path=file_path,
-                parameter_name=parameter_name,
-            ),
-        )
-    for parameter_name in definition.raw_parameter_names:
-        rendered_query = rendered_query.replace(
-            f"@{parameter_name}",
-            _render_raw_generic_sql_audit_argument(
-                argument_value=arguments[parameter_name],
-                file_path=file_path,
-                parameter_name=parameter_name,
-            ),
-        )
-    return rendered_query
-
-
-def _render_raw_generic_sql_audit_argument(
-    *,
-    argument_value: object,
-    file_path: Path,
-    parameter_name: str,
-) -> str:
-    if isinstance(argument_value, list):
-        if not all(isinstance(item, (str, int, float)) for item in argument_value):
-            raise SqlAuditParseError(
-                f"Generic SQL audit arg '{parameter_name}' in '{file_path}' must be a "
-                "list of strings or numbers"
-            )
-        return ", ".join(str(item) for item in argument_value)
-    if isinstance(argument_value, (str, int, float)):
-        return str(argument_value)
-    raise SqlAuditParseError(
-        f"Generic SQL audit arg '{parameter_name}' in '{file_path}' must be a string, "
-        "number, or list"
-    )
-
-
-def _render_quoted_generic_sql_audit_argument(
-    *,
-    argument_value: object,
-    file_path: Path,
-    parameter_name: str,
-) -> str:
-    if isinstance(argument_value, list):
-        if not all(isinstance(item, str) for item in argument_value):
-            raise SqlAuditParseError(
-                f"Generic SQL audit arg '{parameter_name}' in '{file_path}' must be a "
-                "list of strings"
-            )
-        return ", ".join(
-            render_string_literal(value=cast(str, item), dialect="clickhouse")
-            for item in argument_value
-        )
-    if isinstance(argument_value, str):
-        return render_string_literal(value=argument_value, dialect="clickhouse")
-    raise SqlAuditParseError(
-        f"Generic SQL audit arg '{parameter_name}' in '{file_path}' must be a string "
-        "or list of strings"
-    )
+    except ValueError as error:
+        reason, detail = error.args
+        if reason == _LITERAL_RENDER_FAILURE:
+            render_string_literal(value=detail, dialect=_LITERAL_DIALECT)
+        raise SqlAuditParseError(detail) from None
 
 
 def _find_duplicate_names(names: tuple[str, ...]) -> tuple[str, ...]:
