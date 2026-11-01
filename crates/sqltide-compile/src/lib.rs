@@ -8,5 +8,6 @@ pub mod quality;
 pub mod relations;
 pub mod retention;
 pub mod sql_test_chain;
+pub mod sql_test_queries;
 pub mod staging;
 pub mod transforms;

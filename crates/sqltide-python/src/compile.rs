@@ -377,7 +377,44 @@ fn view_ref_type_error(
     sqltide_compile::transforms::view_ref_type_error(view_name, &references(&references_in_order))
 }
 
+/// `query` preceded by a `WITH` clause of `(name, query)` CTEs.
+#[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
+fn sql_test_wrap_with_ctes(query: &str, ctes: Vec<(String, String)>) -> String {
+    let ctes: Vec<(&str, &str)> = ctes
+        .iter()
+        .map(|(name, cte_query)| (name.as_str(), cte_query.as_str()))
+        .collect();
+    sqltide_compile::sql_test_queries::wrap_with_ctes(query, &ctes)
+}
+
+/// `(actual query, typed expected query)` of one SQL test model target. Raises
+/// `ValueError(missing column names)` when the model does not produce an expected column.
+#[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
+fn sql_test_chain_step_queries(
+    expected_column_names: Vec<String>,
+    output_columns: Vec<(String, String)>,
+    actual_cte_name: &str,
+    expected_query: &str,
+) -> PyResult<(String, String)> {
+    let expected: Vec<&str> = expected_column_names.iter().map(String::as_str).collect();
+    let outputs: Vec<(&str, &str)> = output_columns
+        .iter()
+        .map(|(name, column_type)| (name.as_str(), column_type.as_str()))
+        .collect();
+    sqltide_compile::sql_test_queries::chain_step_queries(
+        &expected,
+        &outputs,
+        actual_cte_name,
+        expected_query,
+    )
+    .map_err(|missing| PyValueError::new_err((missing,)))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(sql_test_wrap_with_ctes, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_test_chain_step_queries, module)?)?;
     module.add_function(wrap_pyfunction!(transform_contract, module)?)?;
     module.add_function(wrap_pyfunction!(view_ref_type_error, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_model_relation_name, module)?)?;
