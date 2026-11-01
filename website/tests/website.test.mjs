@@ -146,6 +146,7 @@ test('homepage explains both versions without JavaScript or playback', async ({ 
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, reducedMotion: 'reduce' });
   const page = await context.newPage();
   await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Update pipelines.No downtime.');
   const figure = page.locator('[data-showcase]');
   await expect(figure.locator('.version-a')).toHaveText('Current version');
   await expect(figure.locator('.status-a')).toHaveText('Serving queries');
