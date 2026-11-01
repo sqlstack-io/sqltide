@@ -1,11 +1,12 @@
-//! Configuration interpolation over Python values.
+//! Configuration interpolation over Python values, and pipeline source inference.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::interpolation::{self, Environment, Value};
+use sqltide_discovery::sources::{PipelineTransforms, pipeline_sources};
 
 /// Python objects that pass through interpolation untouched, by handle.
 struct Values<'py> {
@@ -158,7 +159,26 @@ fn interpolate_config_value<'py>(
     objects.object(interpolated)
 }
 
+/// The source name of each `(directory, [(transform, driving input)])` pipeline, up to the
+/// first failing one, and that pipeline's error message.
+#[pyfunction]
+fn infer_pipeline_sources(
+    pipelines: Vec<(String, Vec<(String, String)>)>,
+    inputs_by_transform: HashMap<String, String>,
+    sources: HashSet<String>,
+) -> (Vec<Option<String>>, Option<String>) {
+    let pipelines: Vec<PipelineTransforms> = pipelines
+        .into_iter()
+        .map(|(directory, transforms)| PipelineTransforms {
+            directory,
+            transforms,
+        })
+        .collect();
+    pipeline_sources(&pipelines, &inputs_by_transform, &sources)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(infer_pipeline_sources, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_variable_values, module)?)?;
     module.add_function(wrap_pyfunction!(interpolate_config_value, module)?)
 }

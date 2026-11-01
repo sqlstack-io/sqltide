@@ -127,6 +127,11 @@ def resolve_variable_values(
 def interpolate_config_value(
     value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
 ) -> object: ...
+def infer_pipeline_sources(
+    pipelines: list[tuple[str, list[tuple[str, str]]]],
+    inputs_by_transform: dict[str, str],
+    sources: set[str],
+) -> tuple[list[str | None], str | None]: ...
 def audit_readiness(
     observation: tuple[
         str,
