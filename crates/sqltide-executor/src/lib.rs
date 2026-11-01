@@ -4,6 +4,7 @@ pub mod deployment_diff;
 pub mod destruction;
 pub mod direct_replay;
 pub mod direct_workflow;
+pub mod inventory;
 pub mod janitor;
 pub mod ordering;
 pub mod population;

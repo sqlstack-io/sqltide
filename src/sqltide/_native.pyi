@@ -712,6 +712,25 @@ def realize_direct_replay_capture(
 ]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
+def deployment_inventory_summaries(
+    records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
+    physical_candidate_names: list[str],
+    active_bindings: list[tuple[str, str]],
+    publications: list[tuple[str, str]],
+    existing_names: list[str],
+) -> list[
+    tuple[
+        str,
+        str,
+        str | None,
+        str | None,
+        list[str],
+        list[str],
+        list[str],
+        list[str],
+        str | None,
+    ]
+]: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
