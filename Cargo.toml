@@ -27,6 +27,7 @@ polyglot-sql = { git = "https://github.com/sqlstack-io/polyglot.git", rev = "876
 ] }
 pyo3 = { version = "0.26", features = ["abi3-py312"] }
 pythonize = "0.26"
+regex = "1.13"
 serde = "1"
 serde_json = "1"
 sqltide-compile = { path = "crates/sqltide-compile" }

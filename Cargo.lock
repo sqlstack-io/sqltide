@@ -361,6 +361,9 @@ version = "0.42.0"
 [[package]]
 name = "sqltide-executor"
 version = "0.42.0"
+dependencies = [
+ "sqltide-planner",
+]
 
 [[package]]
 name = "sqltide-json"
@@ -370,6 +373,7 @@ version = "0.42.0"
 name = "sqltide-planner"
 version = "0.42.0"
 dependencies = [
+ "regex",
  "sqltide-sqlanalysis",
 ]
 

@@ -133,6 +133,29 @@ def audit_readiness(
     ],
     thresholds: tuple[float, float],
 ) -> tuple[str, int | None, float | None, list[str]]: ...
+def select_rollback_publications(
+    publications: list[tuple[str, tuple[int, str] | None, list[tuple[str, str, str]]]],
+    active: list[tuple[str, str, str]],
+    deployment_id: str | None,
+) -> tuple[int, int]: ...
+
+type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
+type _RetainedPublication = tuple[str, tuple[int, str], int, list[str], list[tuple[str, str, str]]]
+
+def janitor_binding_activity(
+    deployments_argument: list[_RetainedDeployment],
+    publications: list[_RetainedPublication],
+    active: list[tuple[str, str, str]],
+) -> tuple[set[str], list[tuple[str, str]]]: ...
+def janitor_preview(
+    deployments_argument: list[_RetainedDeployment],
+    publications: list[_RetainedPublication],
+    active: list[tuple[str, str, str]],
+    physical_relations: set[tuple[str, str]],
+    retention: tuple[str, int, int, int],
+) -> list[tuple[int, bool, str]]: ...
+def is_deployment_id(text: str) -> bool: ...
+def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:

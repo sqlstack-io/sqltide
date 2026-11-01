@@ -1,10 +1,9 @@
 """Fix one virtual build identity before connected planning."""
 
-import re
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqltide.compiler.planner.constants import DEPLOYMENT_ID_PATTERN
+import sqltide._native as _native
 from sqltide.executor.backfill._helpers.timing import build_current_timestamp
 from sqltide.executor.backfill.exceptions import BackfillExecutionError
 from sqltide.executor.backfill.models import BackfillDeploymentIdentity
@@ -17,7 +16,7 @@ def build_backfill_deployment_identity(*, deployment_id: str | None) -> Backfill
     resolved_deployment_id: str = deployment_id or _generated_deployment_id(
         created_at=current_timestamp
     )
-    if re.fullmatch(DEPLOYMENT_ID_PATTERN, resolved_deployment_id) is None:
+    if not _native.is_deployment_id(resolved_deployment_id):
         raise BackfillExecutionError(
             "Deployment ID must match YYYYMMDDTHHMMSSZ_<alphanumeric-suffix>"
         )

@@ -2,4 +2,5 @@
 
 pub mod desired;
 pub mod diff;
+pub mod naming;
 pub mod rebuild;
