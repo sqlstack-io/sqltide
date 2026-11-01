@@ -10,10 +10,15 @@ use sqltide_executor::janitor::{
     preview,
 };
 use sqltide_executor::ordering::{OrderingError, reverse_topological_order};
+use sqltide_executor::promotion::{
+    Preview, Staged, inspected_candidates, obsolete_removals, publish_bindings, replacement_preview,
+};
 use sqltide_executor::publications::{
     Binding, Publication, Rank, RollbackError, RollbackTarget, select_rollback,
 };
 use sqltide_executor::readiness::{Audit, Observation, OffsetSummary, Thresholds, audit};
+use sqltide_executor::reconcile::{Key, Object, Outcome, Table, Transform, classify_targets};
+use sqltide_planner::diff::Column;
 use sqltide_planner::naming::{is_deployment_id, is_deployment_physical_name};
 
 /// `(database, publishes, logical name, physical name, logical model name)`.
@@ -149,6 +154,17 @@ fn select_rollback_publications(
     })
 }
 
+fn mapping(argument: MappingArgument) -> Mapping {
+    let (database, publishes, logical_name, physical_name, logical_model_name) = argument;
+    Mapping {
+        database,
+        publishes,
+        logical_name,
+        physical_name,
+        logical_model_name,
+    }
+}
+
 fn deployments(arguments: Vec<DeploymentArgument>) -> Vec<Deployment> {
     arguments
         .into_iter()
@@ -157,20 +173,7 @@ fn deployments(arguments: Vec<DeploymentArgument>) -> Vec<Deployment> {
                 deployment_id,
                 created_at,
                 incomplete,
-                mappings: mappings
-                    .into_iter()
-                    .map(
-                        |(database, publishes, logical_name, physical_name, logical_model_name)| {
-                            Mapping {
-                                database,
-                                publishes,
-                                logical_name,
-                                physical_name,
-                                logical_model_name,
-                            }
-                        },
-                    )
-                    .collect(),
+                mappings: mappings.into_iter().map(mapping).collect(),
             },
         )
         .collect()
@@ -253,6 +256,160 @@ fn py_is_deployment_physical_name(physical_name: &str) -> bool {
     is_deployment_physical_name(physical_name)
 }
 
+/// Positions of the inspected `(physical name, object type)` candidates staged by
+/// `deployment_id` that a publish binds. Raises `ValueError(message)` when there are none.
+#[pyfunction]
+fn inspected_publish_candidates(
+    candidates: Vec<(String, String)>,
+    deployment_id: &str,
+) -> PyResult<Vec<usize>> {
+    inspected_candidates(&candidates, deployment_id).map_err(PyValueError::new_err)
+}
+
+/// The bindings publishing `deployment_id` writes from staged `(database, object type, logical
+/// name, physical name)` relations. Raises `ValueError(message)` when a relation is missing or
+/// nothing can be bound.
+#[pyfunction]
+fn publish_stable_bindings(
+    relations: Vec<(Option<String>, String, String, String)>,
+    existing: HashSet<String>,
+    default_database: &str,
+    deployment_id: &str,
+) -> PyResult<Vec<Binding>> {
+    let relations: Vec<Staged> = relations
+        .into_iter()
+        .map(
+            |(database, object_type, logical_name, physical_name)| Staged {
+                database,
+                object_type,
+                logical_name,
+                physical_name,
+            },
+        )
+        .collect();
+    publish_bindings(&relations, &existing, default_database, deployment_id)
+        .map_err(PyValueError::new_err)
+}
+
+/// The sorted `(database, logical name)` stale bindings a publish of `current` removes.
+#[pyfunction]
+fn obsolete_binding_removals(
+    current: Vec<MappingArgument>,
+    deployments_argument: Vec<DeploymentArgument>,
+    publications: Vec<(String, Vec<String>)>,
+    active: Vec<Binding>,
+    default_database: &str,
+) -> Vec<(String, String)> {
+    let current: Vec<Mapping> = current.into_iter().map(mapping).collect();
+    obsolete_removals(
+        &current,
+        &deployments(deployments_argument),
+        &publications,
+        &active,
+        default_database,
+    )
+}
+
+/// `(initial publish, additions, (binding, replaced physical name), (removal, unbound physical
+/// name), orphaned (database, physical name))`, by request position.
+type PreviewResult = (
+    bool,
+    Vec<usize>,
+    Vec<(usize, String)>,
+    Vec<(usize, String)>,
+    Vec<(String, String)>,
+);
+
+/// The live effects of replacing `active` bindings with `bindings` and `removals`.
+#[pyfunction]
+fn binding_replacement_preview(
+    bindings: Vec<Binding>,
+    removals: Vec<(String, String)>,
+    active: Vec<Binding>,
+) -> PreviewResult {
+    let Preview {
+        initial_publish,
+        additions,
+        replacements,
+        removals,
+        orphaned,
+    } = replacement_preview(&bindings, &removals, &active);
+    (initial_publish, additions, replacements, removals, orphaned)
+}
+
+/// `(engine, order by, partition by, columns as (name, type, default))`.
+type TableArgument = (
+    String,
+    Vec<String>,
+    Option<String>,
+    Vec<(String, String, Option<String>)>,
+);
+
+/// `(object type, key, table, (transform source, transform target))`.
+type ReconcileObjectArgument = (String, Key, Option<TableArgument>, Option<(String, String)>);
+
+/// `(key, name, (table position, transform position) when eligible, rejection reasons)`.
+type ReconcileOutcomeResult = (
+    Key,
+    String,
+    Option<(usize, Option<usize>)>,
+    Vec<&'static str>,
+);
+
+fn reconcile_object(argument: ReconcileObjectArgument) -> Object {
+    match argument {
+        (kind, key, Some((engine, order_by, partition_by, columns)), _) if kind == "table" => {
+            Object::Table(
+                key,
+                Table {
+                    engine,
+                    order_by,
+                    partition_by,
+                    columns: columns
+                        .into_iter()
+                        .map(|(name, type_sql, default)| Column {
+                            name,
+                            type_sql,
+                            default,
+                        })
+                        .collect(),
+                },
+            )
+        }
+        (kind, key, _, Some((source, target))) if kind == "materialized_view" => {
+            Object::MaterializedView(key, Transform { source, target })
+        }
+        (kind, key, _, _) if kind == "view" => Object::View(key),
+        _ => Object::Other,
+    }
+}
+
+/// A reconcile verdict per target. A type that cannot be normalized raises
+/// `ValueError(message)`.
+#[pyfunction]
+fn classify_reconcile_targets(
+    py: Python<'_>,
+    desired: Vec<ReconcileObjectArgument>,
+    actual: Vec<ReconcileObjectArgument>,
+    selected: Vec<Key>,
+) -> PyResult<Vec<ReconcileOutcomeResult>> {
+    let desired: Vec<Object> = desired.into_iter().map(reconcile_object).collect();
+    let actual: Vec<Object> = actual.into_iter().map(reconcile_object).collect();
+    let outcomes = py
+        .detach(|| classify_targets(&desired, &actual, &selected))
+        .map_err(|error| PyValueError::new_err(error.message))?;
+    Ok(outcomes
+        .into_iter()
+        .map(|(key, outcome)| match outcome {
+            Outcome::Eligible { table, transform } => {
+                let name: String = key.2.clone();
+                (key, name, Some((table, transform)), Vec::new())
+            }
+            Outcome::Rejected { name, reasons } => (key, name, None, reasons),
+        })
+        .collect())
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(audit_readiness, module)?)?;
     module.add_function(wrap_pyfunction!(select_rollback_publications, module)?)?;
@@ -260,5 +417,10 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(janitor_preview, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
+    module.add_function(wrap_pyfunction!(inspected_publish_candidates, module)?)?;
+    module.add_function(wrap_pyfunction!(publish_stable_bindings, module)?)?;
+    module.add_function(wrap_pyfunction!(obsolete_binding_removals, module)?)?;
+    module.add_function(wrap_pyfunction!(binding_replacement_preview, module)?)?;
+    module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
     module.add_function(wrap_pyfunction!(order_relations_for_drop, module)?)
 }

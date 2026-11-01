@@ -5,14 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqltide.compiler.compile.models import (
-    DesiredMaterializedView,
-    DesiredTable,
-    DesiredView,
     ObjectKey,
 )
 from sqltide.compiler.planner.models import (
-    ActualMaterializedView,
-    ActualTable,
     ObjectStateRecord,
 )
 
@@ -23,16 +18,6 @@ class ReconcileCandidate:
     target_key: ObjectKey
     target_name: str
     object_type: str
-
-
-@dataclass(frozen=True)
-class ReconcileObjectIndex:
-    desired_table_by_key: dict[ObjectKey, DesiredTable]
-    desired_mv_by_target_key: dict[ObjectKey, DesiredMaterializedView]
-    desired_view_by_key: dict[ObjectKey, DesiredView]
-    actual_table_by_key: dict[ObjectKey, ActualTable]
-    actual_mv_by_key: dict[ObjectKey, ActualMaterializedView]
-    target_keys: tuple[ObjectKey, ...]
 
 
 @dataclass(frozen=True)

@@ -498,6 +498,43 @@ def janitor_preview(
     physical_relations: set[tuple[str, str]],
     retention: tuple[str, int, int, int],
 ) -> list[tuple[int, bool, str]]: ...
+def inspected_publish_candidates(
+    candidates: list[tuple[str, str]], deployment_id: str
+) -> list[int]: ...
+def publish_stable_bindings(
+    relations: list[tuple[str | None, str, str, str]],
+    existing: set[str],
+    default_database: str,
+    deployment_id: str,
+) -> list[tuple[str, str, str]]: ...
+def obsolete_binding_removals(
+    current: list[tuple[str | None, bool, str, str, str]],
+    deployments_argument: list[_RetainedDeployment],
+    publications: list[tuple[str, list[str]]],
+    active: list[tuple[str, str, str]],
+    default_database: str,
+) -> list[tuple[str, str]]: ...
+def binding_replacement_preview(
+    bindings: list[tuple[str, str, str]],
+    removals: list[tuple[str, str]],
+    active: list[tuple[str, str, str]],
+) -> tuple[
+    bool, list[int], list[tuple[int, str]], list[tuple[int, str]], list[tuple[str, str]]
+]: ...
+
+type _ReconcileKey = tuple[str | None, str, str]
+type _ReconcileObject = tuple[
+    str,
+    _ReconcileKey,
+    tuple[str, list[str], str | None, list[tuple[str, str, str | None]]] | None,
+    tuple[str, str] | None,
+]
+
+def classify_reconcile_targets(
+    desired: list[_ReconcileObject],
+    actual: list[_ReconcileObject],
+    selected: list[_ReconcileKey],
+) -> list[tuple[_ReconcileKey, str, tuple[int, int | None] | None, list[str]]]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...

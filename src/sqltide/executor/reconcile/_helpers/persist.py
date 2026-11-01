@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from sqltide.adapter.constants import VIRTUAL_OBJECT_STATE_KIND_RECONCILE
 from sqltide.adapter.models import AdapterMetadataState
-from sqltide.compiler.compile.models import DesiredMaterializedView, DesiredTable, DesiredView
+from sqltide.compiler.compile.models import (
+    DesiredKafkaTable,
+    DesiredMaterializedView,
+    DesiredTable,
+    DesiredView,
+)
 from sqltide.compiler.planner.main.build_adapter_metadata_state import (
     build_adapter_metadata_state,
 )
@@ -29,7 +34,7 @@ def build_reconcile_metadata_state(preview: ReconcilePreview) -> AdapterMetadata
 
 def build_object_state_record(
     *,
-    desired_object: DesiredTable | DesiredMaterializedView | DesiredView,
+    desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
     reconcile_id: str,
     recorded_at: str,
 ) -> ObjectStateRecord:

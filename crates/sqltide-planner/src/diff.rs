@@ -273,7 +273,16 @@ impl Differ {
         })
     }
 
-    fn columns_match(&mut self, desired: &[Column], actual: &[Column]) -> Result<bool, DiffError> {
+    /// Whether ordered columns have equal names, ClickHouse-normalized types, and defaults.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DiffError`] when a type reached by the comparison cannot be normalized.
+    pub fn columns_match(
+        &mut self,
+        desired: &[Column],
+        actual: &[Column],
+    ) -> Result<bool, DiffError> {
         if desired.len() != actual.len() {
             return Ok(false);
         }
