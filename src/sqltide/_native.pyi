@@ -421,6 +421,13 @@ def unsupported_audit_header_keys(
 def audit_header_fields(
     file_path: str, header: list[tuple[str, object]]
 ) -> tuple[str, str | None, str | None, bool, int | None, int | None, bool | None]: ...
+def sql_test_wrap_with_ctes(query: str, ctes: list[tuple[str, str]]) -> str: ...
+def sql_test_chain_step_queries(
+    expected_column_names: list[str],
+    output_columns: list[tuple[str, str]],
+    actual_cte_name: str,
+    expected_query: str,
+) -> tuple[str, str]: ...
 def transform_contract(
     transform_name: str,
     source: str,

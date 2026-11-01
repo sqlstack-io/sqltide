@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
+import sqltide._native as _native
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.sql_analysis.main._extract_references import extract_references
 from sqltide.compiler.sql_analysis.models import SqlReference
@@ -17,7 +16,6 @@ from sqltide.compiler.test_discovery.models import (
     SqlTestModelPayload,
 )
 from sqltide.compiler.testing._helpers.expectations import (
-    build_typed_expected_query,
     derive_column_names,
 )
 from sqltide.compiler.testing.classes.sql_test_chain_assembler import SqlTestChainAssembler
@@ -121,42 +119,23 @@ def _build_chain_step(
         authored_ctes=authored_ctes,
         dialect=dialect,
     )
-    output_column_type_by_name: Mapping[str, str] = {
-        column.name: column.type for column in entry.output_columns
-    }
-    _reject_unknown_columns(
-        loaded_test=loaded_test,
-        target_model_name=target_model_name,
-        expected_column_names=expected_column_names,
-        output_column_type_by_name=output_column_type_by_name,
-    )
+    try:
+        actual_query, expected_query = _native.sql_test_chain_step_queries(
+            list(expected_column_names),
+            [(column.name, column.type) for column in entry.output_columns],
+            actual_cte_name,
+            expected_target.query,
+        )
+    except ValueError as error:
+        missing_columns: list[str] = error.args[0]
+        raise SqlTestAssemblyError(
+            f"SQL test '{loaded_test.file_path}' expects columns not produced by "
+            f"'{target_model_name}': {', '.join(missing_columns)}"
+        ) from None
     return SqlTestChainStep(
         target_model_name=target_model_name,
         expected_column_names=expected_column_names,
         ctes=(*authored_ctes, *assembler.assembled_ctes),
-        actual_query=("SELECT " + ", ".join(expected_column_names) + f" FROM {actual_cte_name}"),
-        expected_query=build_typed_expected_query(
-            expected_query=expected_target.query,
-            expected_column_names=expected_column_names,
-            output_column_type_by_name=output_column_type_by_name,
-        ),
+        actual_query=actual_query,
+        expected_query=expected_query,
     )
-
-
-def _reject_unknown_columns(
-    *,
-    loaded_test: LoadedSqlTest,
-    target_model_name: str,
-    expected_column_names: tuple[str, ...],
-    output_column_type_by_name: Mapping[str, str],
-) -> None:
-    missing_columns: tuple[str, ...] = tuple(
-        column_name
-        for column_name in expected_column_names
-        if column_name not in output_column_type_by_name
-    )
-    if missing_columns:
-        raise SqlTestAssemblyError(
-            f"SQL test '{loaded_test.file_path}' expects columns not produced by "
-            f"'{target_model_name}': {', '.join(missing_columns)}"
-        )
