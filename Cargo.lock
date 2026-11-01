@@ -415,7 +415,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "sqltide-clickhouse"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "regex",
  "sha2",
@@ -425,11 +425,11 @@ dependencies = [
 
 [[package]]
 name = "sqltide-compile"
-version = "0.55.0"
+version = "0.56.0"
 
 [[package]]
 name = "sqltide-discovery"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "regex",
  "sqltide-sqlanalysis",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-executor"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "sqltide-clickhouse",
  "sqltide-discovery",
@@ -449,11 +449,11 @@ dependencies = [
 
 [[package]]
 name = "sqltide-json"
-version = "0.55.0"
+version = "0.56.0"
 
 [[package]]
 name = "sqltide-planner"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "regex",
  "serde_json",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-python"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "polyglot-sql",
  "pyo3",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-sqlanalysis"
-version = "0.55.0"
+version = "0.56.0"
 dependencies = [
  "polyglot-sql",
  "serde_json",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-sqltext"
-version = "0.55.0"
+version = "0.56.0"
 
 [[package]]
 name = "stacker"
