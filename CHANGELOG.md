@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.57.0](https://github.com/sqlstack-io/sqltide/compare/v0.56.0...v0.57.0) (2026-11-01)
+
+
+### Features
+
+* decide population scope and destruction drops in Rust ([#303](https://github.com/sqlstack-io/sqltide/issues/303)) ([003dd6e](https://github.com/sqlstack-io/sqltide/commit/003dd6ee243083ddb2343dc36b4321c22aa5133e))
+* realize sources, resolve naming, retention, audit policies and project validation in Rust ([#305](https://github.com/sqlstack-io/sqltide/issues/305)) ([0c75596](https://github.com/sqlstack-io/sqltide/commit/0c75596a5e7ade49d753002c7f138d8361941caa))
+
 ## [0.56.0](https://github.com/sqlstack-io/sqltide/compare/v0.55.0...v0.56.0) (2026-11-01)
 
 
