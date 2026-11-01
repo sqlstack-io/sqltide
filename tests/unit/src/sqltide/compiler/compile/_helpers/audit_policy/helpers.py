@@ -5,11 +5,11 @@ from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
 )
 from sqltide.compiler.audit_discovery.main._discover_sql_audits import discover_sql_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile._helpers.audit_validation import validated_sql_audits
+from sqltide.compiler.compile._helpers.audit_policy import resolve_audit_policies
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.discovery.main._discover_pipelines import discover_pipelines
-from sqltide.compiler.discovery.models import TransformStep, ViewStep
+from sqltide.compiler.discovery.models import AuditDefaults, TransformStep, ViewStep
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.unit.src.sqltide.compiler.audit_discovery.helpers import write_sql_audit_file
 from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
@@ -71,7 +71,8 @@ def validate_project_sql_audits(
             generic_audit_instances=build_model_audit_instances(models=tuple(model_steps)),
         )
     )
-    return validated_sql_audits(
-        loaded_audits=loaded_audits,
+    return resolve_audit_policies(
+        audits=loaded_audits,
         compiled_pipelines=compiled_pipelines,
+        project_defaults=AuditDefaults(),
     )

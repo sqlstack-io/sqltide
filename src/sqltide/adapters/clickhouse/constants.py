@@ -37,13 +37,7 @@ CLICKHOUSE_ZERO_UUID: str = "00000000-0000-0000-0000-000000000000"
 CLICKHOUSE_DEFAULT_INDEX_GRANULARITY: tuple[str, str] = ("index_granularity", "8192")
 CLICKHOUSE_CATALOG_LOAD_ATTEMPTS: int = 3
 CLICKHOUSE_CATALOG_RETRY_DELAY_SECONDS: float = 0.05
-CLICKHOUSE_KAFKA_TABLE_NAME_PREFIX: str = "kafka__"
-CLICKHOUSE_RAW_TABLE_NAME_PREFIX: str = "raw__"
 CLICKHOUSE_MODEL_TABLE_NAME_PREFIX: str = "tbl__"
 CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX: str = "mv__"
-CLICKHOUSE_SUPPORTED_KAFKA_FORMAT: str = "JSONAsString"
-CLICKHOUSE_FRAMEWORK_KAFKA_SETTING_KEYS: frozenset[str] = frozenset(
-    {"kafka_broker_list", "kafka_topic_list", "kafka_group_name", "kafka_format"}
-)
 EMPTY_KEY_EXPRESSIONS: tuple[str, ...] = ("", "tuple()")
 EMPTY_DEFAULT_EXPRESSIONS: tuple[object, ...] = (None, "")

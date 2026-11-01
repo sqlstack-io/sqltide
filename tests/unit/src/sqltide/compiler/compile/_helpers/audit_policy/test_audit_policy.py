@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from tests.unit.src.sqltide.compiler.compile._helpers.audit_validation._test_types import (
+from tests.unit.src.sqltide.compiler.compile._helpers.audit_policy._test_types import (
     ValidateSqlAuditsErrorTestCase,
     ValidateSqlAuditsTestCase,
 )
-from tests.unit.src.sqltide.compiler.compile._helpers.audit_validation.helpers import (
+from tests.unit.src.sqltide.compiler.compile._helpers.audit_policy.helpers import (
     AUDIT_FILE_PATH,
     GENERIC_DEFINITION_FILE_PATH,
     ORDER_ITEMS_MODEL_FILE_PATH,

@@ -11,6 +11,7 @@ pub mod freshness;
 pub mod interpolation;
 pub mod model_spec;
 pub mod pipeline_config;
+pub mod project_validation;
 pub mod retention;
 pub mod source_registry;
 pub mod sources;

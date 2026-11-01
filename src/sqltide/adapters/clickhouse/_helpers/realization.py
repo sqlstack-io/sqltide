@@ -1,6 +1,6 @@
 """Realize one logical source as ClickHouse resources."""
 
-from sqltide.adapter.constants import MANAGED_SOURCE_KIND_KAFKA
+import sqltide._native as _native
 from sqltide.adapter.exceptions import AdapterConfigurationError
 from sqltide.adapter.models import (
     AdapterAdoptedSourceRealizationRequest,
@@ -10,13 +10,6 @@ from sqltide.adapter.models import (
     AdapterMaterializedView,
     AdapterSourceRealization,
     AdapterTable,
-)
-from sqltide.adapters.clickhouse.constants import (
-    CLICKHOUSE_FRAMEWORK_KAFKA_SETTING_KEYS,
-    CLICKHOUSE_KAFKA_TABLE_NAME_PREFIX,
-    CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX,
-    CLICKHOUSE_RAW_TABLE_NAME_PREFIX,
-    CLICKHOUSE_SUPPORTED_KAFKA_FORMAT,
 )
 
 _REPLAY_PARTITION_COLUMN_NAME: str = "_replay_partition"
@@ -31,10 +24,25 @@ def realize_clickhouse_source(
 
     if isinstance(request, AdapterAdoptedSourceRealizationRequest):
         return AdapterSourceRealization(relation_name=request.relation_name, resources=())
-    _validate_managed_source_request(request)
-    kafka_name: str = f"{CLICKHOUSE_KAFKA_TABLE_NAME_PREFIX}{request.logical_name}"
-    raw_name: str = f"{CLICKHOUSE_RAW_TABLE_NAME_PREFIX}{request.logical_name}"
-    consumer_group: str = request.consumer_group or _default_consumer_group(request)
+    kafka_name: str
+    raw_name: str
+    view_name: str
+    consumer_group: str
+    landing_query: str
+    try:
+        kafka_name, raw_name, view_name, consumer_group, landing_query = (
+            _native.realize_clickhouse_managed_source(
+                request.logical_name,
+                request.source_kind,
+                request.format,
+                request.consumer_group,
+                request.project_name,
+                request.target_name,
+                [key for key, _value in request.settings],
+            )
+        )
+    except ValueError as error:
+        raise AdapterConfigurationError(str(error)) from None
     return AdapterSourceRealization(
         relation_name=raw_name,
         resources=(
@@ -51,96 +59,20 @@ def realize_clickhouse_source(
             ),
             AdapterTable(
                 name=raw_name,
-                columns=_raw_landing_columns(),
+                columns=tuple(
+                    AdapterColumn(name=name, type=column_type)
+                    for name, column_type in _native.clickhouse_raw_landing_columns()
+                ),
                 engine="MergeTree()",
                 order_by=(_REPLAY_PARTITION_COLUMN_NAME, _REPLAY_OFFSET_COLUMN_NAME),
                 ttl=request.ttl,
             ),
             AdapterMaterializedView(
-                name=f"{CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX}{request.logical_name}",
+                name=view_name,
                 source_relation_name=kafka_name,
                 target_relation_name=raw_name,
-                query=_landing_query(
-                    logical_name=request.logical_name,
-                    kafka_relation_name=kafka_name,
-                ),
-                database_template=_landing_query(
-                    logical_name=request.logical_name,
-                    kafka_relation_name=kafka_name,
-                ),
+                query=landing_query,
+                database_template=landing_query,
             ),
         ),
-    )
-
-
-def _default_consumer_group(request: AdapterManagedSourceRealizationRequest) -> str:
-    """Keep the pre-rename group so existing sources resume from their committed offsets."""
-
-    segments: tuple[str, ...] = tuple(
-        segment
-        for segment in (request.project_name, request.target_name, request.logical_name)
-        if segment is not None
-    )
-    return "streambuild_" + "_".join(segments)
-
-
-def _validate_managed_source_request(request: AdapterManagedSourceRealizationRequest) -> None:
-    if request.source_kind != MANAGED_SOURCE_KIND_KAFKA:
-        raise AdapterConfigurationError(
-            f"ClickHouse cannot realize managed source kind '{request.source_kind}'"
-        )
-    if request.format != CLICKHOUSE_SUPPORTED_KAFKA_FORMAT:
-        raise AdapterConfigurationError(
-            "ClickHouse Kafka landing currently supports only the "
-            f"'{CLICKHOUSE_SUPPORTED_KAFKA_FORMAT}' format; got '{request.format}'"
-        )
-    overlapping_keys: tuple[str, ...] = tuple(
-        sorted(
-            key
-            for key, _value in request.settings
-            if key in CLICKHOUSE_FRAMEWORK_KAFKA_SETTING_KEYS
-        )
-    )
-    if overlapping_keys:
-        raise AdapterConfigurationError(
-            "Kafka settings override map cannot redefine typed Kafka settings: "
-            + ", ".join(overlapping_keys)
-        )
-
-
-def _raw_landing_columns() -> tuple[AdapterColumn, ...]:
-    return (
-        AdapterColumn(name="kafka_key", type="String"),
-        AdapterColumn(name="kafka_value", type="String"),
-        AdapterColumn(name="kafka_topic", type="String"),
-        AdapterColumn(name="kafka_partition", type="Int32"),
-        AdapterColumn(name="kafka_offset", type="Int64"),
-        AdapterColumn(name="kafka_timestamp", type="Nullable(DateTime64(3))"),
-        AdapterColumn(name=_REPLAY_PARTITION_COLUMN_NAME, type="Int32"),
-        AdapterColumn(name=_REPLAY_OFFSET_COLUMN_NAME, type="Int64"),
-        AdapterColumn(name="_replay_timestamp", type="Nullable(DateTime64(3))"),
-        AdapterColumn(name="kafka_header_keys", type="Array(String)"),
-        AdapterColumn(name="kafka_header_values", type="Array(String)"),
-        AdapterColumn(name="kafka_landed_at", type="DateTime64(3)"),
-        AdapterColumn(name="_replay_landed_at", type="DateTime64(3)"),
-    )
-
-
-def _landing_query(*, logical_name: str, kafka_relation_name: str) -> str:
-    return (
-        "SELECT\n"
-        "    _key AS kafka_key,\n"
-        "    message AS kafka_value,\n"
-        "    _topic AS kafka_topic,\n"
-        "    _partition AS kafka_partition,\n"
-        "    _offset AS kafka_offset,\n"
-        "    _timestamp_ms AS kafka_timestamp,\n"
-        "    _partition AS _replay_partition,\n"
-        "    _offset AS _replay_offset,\n"
-        "    _timestamp_ms AS _replay_timestamp,\n"
-        "    _headers.name AS kafka_header_keys,\n"
-        "    _headers.value AS kafka_header_values,\n"
-        "    now64(3) AS kafka_landed_at,\n"
-        "    now64(3) AS _replay_landed_at\n"
-        f"FROM {kafka_relation_name}"
     )

@@ -1,9 +1,10 @@
-"""Render normalized retention policies into adapter storage expressions."""
+"""Resolve retention policies and render them through the native TTL renderer."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 
+import sqltide._native as _native
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import ModelRetentionResolution
 from sqltide.compiler.compile.types import RetentionOrigin
@@ -18,19 +19,15 @@ from sqltide.compiler.discovery.types import (
     RetentionMissingBehavior,
 )
 
-_DATE_TYPE_NAMES: frozenset[str] = frozenset({"Date", "Date32"})
-_DATETIME_TYPE_PREFIX: str = "DateTime"
-
 
 def render_kafka_retention(*, policy: KafkaRetentionPolicy) -> str:
     """Render retention over SQLTide's fixed managed Kafka replay columns."""
 
-    timestamp: str = "_replay_timestamp"
-    if policy.fallback == KafkaRetentionReference.LANDED:
-        timestamp = f"ifNull({timestamp}, _replay_landed_at)"
-    if policy.cap_at == KafkaRetentionReference.LANDED:
-        timestamp = f"least({timestamp}, _replay_landed_at)"
-    return f"{timestamp} + {_interval(policy.duration_seconds)}"
+    return _native.render_kafka_retention_ttl(
+        policy.duration_seconds,
+        policy.fallback == KafkaRetentionReference.LANDED,
+        policy.cap_at == KafkaRetentionReference.LANDED,
+    )
 
 
 def render_model_retention(
@@ -38,31 +35,17 @@ def render_model_retention(
 ) -> str | None:
     """Render a model policy only when its required output columns are available."""
 
-    required: tuple[str, ...] = tuple(
-        column
-        for column in (policy.timestamp_column, policy.cap_at_column)
-        if column is not None and column not in available_columns
-    )
-    if required:
-        if policy.when_missing == RetentionMissingBehavior.SKIP:
-            return None
-        raise PipelineCompileError(
-            f"Model '{model_name}' retention requires missing output columns: {', '.join(required)}"
+    try:
+        return _native.render_model_retention_ttl(
+            policy.duration_seconds,
+            policy.timestamp_column,
+            policy.cap_at_column,
+            policy.when_missing == RetentionMissingBehavior.SKIP,
+            dict(available_columns),
+            model_name,
         )
-    incompatible: tuple[str, ...] = tuple(
-        f"{column} ({available_columns[column]})"
-        for column in (policy.timestamp_column, policy.cap_at_column)
-        if column is not None and not _is_timestamp_type(available_columns[column])
-    )
-    if incompatible:
-        raise PipelineCompileError(
-            f"Model '{model_name}' retention columns must be non-null Date or DateTime values: "
-            f"{', '.join(incompatible)}"
-        )
-    timestamp: str = policy.timestamp_column
-    if policy.cap_at_column is not None:
-        timestamp = f"least({timestamp}, {policy.cap_at_column})"
-    return f"{timestamp} + {_interval(policy.duration_seconds)}"
+    except ValueError as error:
+        raise PipelineCompileError(str(error)) from None
 
 
 def effective_model_retention(
@@ -92,21 +75,3 @@ def effective_model_retention(
             ),
         )
     return ModelRetentionResolution()
-
-
-def _interval(duration_seconds: int) -> str:
-    units: tuple[tuple[str, int], ...] = (
-        ("DAY", 86_400),
-        ("HOUR", 3_600),
-        ("MINUTE", 60),
-    )
-    for unit, seconds in units:
-        if duration_seconds % seconds == 0:
-            return f"INTERVAL {duration_seconds // seconds} {unit}"
-    return f"INTERVAL {duration_seconds} SECOND"
-
-
-def _is_timestamp_type(column_type: str) -> bool:
-    return not column_type.startswith("Nullable(") and (
-        column_type in _DATE_TYPE_NAMES or column_type.startswith(_DATETIME_TYPE_PREFIX)
-    )

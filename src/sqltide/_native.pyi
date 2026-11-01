@@ -670,6 +670,20 @@ def direct_population_scope(
 def destruction_drop_statements(
     relations: list[tuple[str, str, str]], size_override: int | None
 ) -> list[tuple[str, str, str]]: ...
+def realize_clickhouse_managed_source(
+    logical_name: str,
+    source_kind: str,
+    format: str,
+    consumer_group: str | None,
+    project_name: str | None,
+    target_name: str | None,
+    setting_keys: list[str],
+) -> tuple[str, str, str, str, str]: ...
+def clickhouse_raw_landing_columns() -> list[tuple[str, str]]: ...
+def clickhouse_external_source_relation_sql(table_name: str, columns: list[str | None]) -> str: ...
+def clickhouse_postgres_source_relation_sql(
+    host: str, port: str, database: str, table: str, user: str, password_env: str | None
+) -> str: ...
 def workflow_step_segment(value: str) -> str: ...
 def workflow_terminate_sql(sql: str) -> str: ...
 def resolve_direct_replays(
@@ -715,3 +729,45 @@ class DesiredGraph:
         changes: list[tuple[int, str, bool, str | None, str | None, str | None]],
     ) -> list[tuple[int, list[int], int, bool, str, bool, str | None, str | None, int | None]]: ...
     def nearest_replay_anchor(self, root: int, allow_root: bool, root_name: str) -> int: ...
+
+def resolve_model_relation_name(
+    logical_name: str,
+    is_table: bool,
+    exact_name: str | None,
+    pipeline_prefix: str | None,
+    project_prefix: str | None,
+) -> str: ...
+def validate_project_relation_names(
+    sources: list[tuple[str, str | None]],
+    models: list[tuple[str, str, bool]],
+) -> None: ...
+def render_kafka_retention_ttl(
+    duration_seconds: int, fallback_landed: bool, cap_at_landed: bool
+) -> str: ...
+def render_model_retention_ttl(
+    duration_seconds: int,
+    timestamp_column: str,
+    cap_at_column: str | None,
+    skip_when_missing: bool,
+    available_columns: dict[str, str],
+    model_name: str,
+) -> str | None: ...
+def resolve_audit_policies(
+    audits: list[
+        tuple[str, str, bool, bool, list[str], str, bool, int | None, int | None, bool | None]
+    ],
+    pipelines: list[tuple[tuple[str | None, int | None, int | None], list[str]]],
+    project: tuple[str | None, int | None, int | None],
+) -> list[tuple[str, int | None, int, bool]]: ...
+def validate_replay_policies(
+    project_policy: tuple[str, bool, bool, bool] | None,
+    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
+) -> None: ...
+def validate_project_inputs(
+    sources: list[tuple[str, str]],
+    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
+    project_references: tuple[str, list[tuple[str, str]]] | None,
+    project_policy: tuple[str, bool, bool, bool] | None,
+    tests: list[tuple[str, str]],
+    audits: list[tuple[str, str]],
+) -> None: ...

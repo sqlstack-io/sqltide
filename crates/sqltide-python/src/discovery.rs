@@ -6,6 +6,10 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::interpolation::{self, Environment, Value};
+use sqltide_discovery::project_validation::{
+    ModelFacts, PipelineFacts, ProjectInputFacts, ProjectPolicyFacts, ProjectReferenceFacts,
+    ReplayPolicyFacts, validate_project_inputs, validate_replay_policies,
+};
 use sqltide_discovery::sources::{PipelineTransforms, pipeline_sources};
 
 /// Python objects that pass through interpolation untouched, by handle.
@@ -177,8 +181,110 @@ fn infer_pipeline_sources(
     pipeline_sources(&pipelines, &inputs_by_transform, &sources)
 }
 
+/// `(name, is table, defines replay_on_change, defines bounded_replay_fallback)`.
+type ModelFactsArgument = (String, bool, bool, bool);
+/// `(name, file path, is virtual, defines replay_on_change, defines bounded_replay_fallback,
+/// models)`.
+type PipelineFactsArgument = (String, String, bool, bool, bool, Vec<ModelFactsArgument>);
+/// `(project file path, default mode is direct, defines replay_on_change, defines
+/// bounded_replay_fallback)`.
+type ProjectPolicyArgument = (String, bool, bool, bool);
+
+fn pipeline_facts(pipelines: Vec<PipelineFactsArgument>) -> Vec<PipelineFacts> {
+    pipelines
+        .into_iter()
+        .map(
+            |(name, file_path, is_virtual, replay_on_change, bounded_replay_fallback, models)| {
+                PipelineFacts {
+                    name,
+                    file_path,
+                    is_virtual,
+                    policy: ReplayPolicyFacts {
+                        replay_on_change,
+                        bounded_replay_fallback,
+                    },
+                    models: models
+                        .into_iter()
+                        .map(
+                            |(name, is_table, replay_on_change, bounded_replay_fallback)| {
+                                ModelFacts {
+                                    name,
+                                    is_table,
+                                    policy: ReplayPolicyFacts {
+                                        replay_on_change,
+                                        bounded_replay_fallback,
+                                    },
+                                }
+                            },
+                        )
+                        .collect(),
+                }
+            },
+        )
+        .collect()
+}
+
+fn project_policy_facts(project: Option<ProjectPolicyArgument>) -> Option<ProjectPolicyFacts> {
+    project.map(
+        |(file_path, default_mode_is_direct, replay_on_change, bounded_replay_fallback)| {
+            ProjectPolicyFacts {
+                file_path,
+                default_mode_is_direct,
+                policy: ReplayPolicyFacts {
+                    replay_on_change,
+                    bounded_replay_fallback,
+                },
+            }
+        },
+    )
+}
+
+/// Reject direct-mode replay policy; a violation raises `ValueError(message)`.
+#[pyfunction]
+#[pyo3(name = "validate_replay_policies")]
+fn validate_replay_policies_py(
+    project_policy: Option<ProjectPolicyArgument>,
+    pipelines: Vec<PipelineFactsArgument>,
+) -> PyResult<()> {
+    validate_replay_policies(
+        project_policy_facts(project_policy).as_ref(),
+        &pipeline_facts(pipelines),
+    )
+    .map_err(PyValueError::new_err)
+}
+
+/// Reject duplicate project identities and invalid replay policy; a violation raises
+/// `ValueError(message)`.
+#[pyfunction]
+#[pyo3(name = "validate_project_inputs")]
+fn validate_project_inputs_py(
+    sources: Vec<(String, String)>,
+    pipelines: Vec<PipelineFactsArgument>,
+    project_references: Option<(String, Vec<(String, String)>)>,
+    project_policy: Option<ProjectPolicyArgument>,
+    tests: Vec<(String, String)>,
+    audits: Vec<(String, String)>,
+) -> PyResult<()> {
+    validate_project_inputs(&ProjectInputFacts {
+        sources,
+        pipelines: pipeline_facts(pipelines),
+        project_references: project_references.map(
+            |(file_path, allowed_cross_pipeline_references)| ProjectReferenceFacts {
+                file_path,
+                allowed_cross_pipeline_references,
+            },
+        ),
+        project_policy: project_policy_facts(project_policy),
+        tests,
+        audits,
+    })
+    .map_err(PyValueError::new_err)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(infer_pipeline_sources, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_variable_values, module)?)?;
-    module.add_function(wrap_pyfunction!(interpolate_config_value, module)?)
+    module.add_function(wrap_pyfunction!(interpolate_config_value, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_replay_policies_py, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_project_inputs_py, module)?)
 }
