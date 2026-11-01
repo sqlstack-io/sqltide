@@ -38,15 +38,6 @@ class PhysicalCandidateSystemRow:
 
 
 @dataclass(frozen=True)
-class ClickHouseMetadataStatement:
-    """A ClickHouse metadata insert statement and its row mappings."""
-
-    table: str
-    sql: str
-    rows: tuple[dict[str, object], ...] = ()
-
-
-@dataclass(frozen=True)
 class ClickHouseDeploymentInventoryRow:
     """One persisted deployment row used by lifecycle cleanup."""
 
@@ -82,14 +73,6 @@ class ClickHousePublishEventInventoryRow:
     physical_relation_name: str
     operation: str = "promote"
     previous_deployment_id: str | None = None
-
-
-@dataclass(frozen=True)
-class ClickHouseReplayOffsetFrontier:
-    """One partition frontier used for bounded offset replay."""
-
-    partition: object
-    cutoff_offset: str
 
 
 @dataclass(frozen=True)

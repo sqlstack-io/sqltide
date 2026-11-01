@@ -14,7 +14,7 @@ use sqltide_sqlanalysis::{
     RewrittenQuery, SqlDialect, analyze_catalog, analyze_model,
     canonical_query_with_database_template, canonicalize_sql, expression_list,
     render_string_literal, rewrite_query, select_aggregate_facts, storage_column_names,
-    validate_insert_query, validate_query, validated_relation_rewrite,
+    validate_query, validated_relation_rewrite,
 };
 use sqltide_sqltext::sql_scan::SourceSpan;
 
@@ -334,11 +334,6 @@ fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
 }
 
 #[pyfunction]
-fn sql_validate_insert_query(sql: &str, dialect_name: &str) -> PyResult<()> {
-    validate_insert_query(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
-}
-
-#[pyfunction]
 fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
     canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
@@ -365,7 +360,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(sql_analyze_catalog, module)?)?;
     module.add_function(wrap_pyfunction!(sql_expression_list, module)?)?;
     module.add_function(wrap_pyfunction!(sql_validate_query, module)?)?;
-    module.add_function(wrap_pyfunction!(sql_validate_insert_query, module)?)?;
     module.add_function(wrap_pyfunction!(sql_canonicalize, module)?)?;
     module.add_function(wrap_pyfunction!(sql_render_string_literal, module)?)?;
     Ok(())

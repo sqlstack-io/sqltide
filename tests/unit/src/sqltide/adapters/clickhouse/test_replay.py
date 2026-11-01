@@ -4,10 +4,12 @@ import pytest
 
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.adapter.models import (
+    AdapterCapturedReplayRequest,
     AdapterDeploymentReplayRequest,
     AdapterPhysicalRelationMapping,
     AdapterReplayBoundary,
     AdapterReplayColumns,
+    AdapterReplayLowerBound,
     AdapterReplayRelations,
     AdapterReplayRequest,
     AdapterReplayWindow,
@@ -18,11 +20,9 @@ from sqltide.adapter.types import (
     AdapterReplaySeedMode,
 )
 from sqltide.adapters.clickhouse._helpers.replay import (
-    _render_offset_replay,
-    _render_scalar_replay,
+    render_clickhouse_replay_from_capture,
     render_clickhouse_replay_from_deployment,
 )
-from sqltide.adapters.clickhouse.models import ClickHouseReplayOffsetFrontier
 from sqltide.compiler.planner.main.build_adapter_replay_query import (
     build_adapter_replay_query,
 )
@@ -222,49 +222,52 @@ def test_given_offset_replay_query_when_rendering_then_it_rewrites_anchor_and_re
         AdapterPhysicalRelationMapping(logical_name=logical_name, physical_name=physical_name)
         for logical_name, physical_name in test_case.replay_table_name_by_logical_name.items()
     )
-    rendered_statement: str = _render_offset_replay(
-        request=AdapterReplayRequest(
-            mode=AdapterReplayBoundaryMode.OFFSETS,
-            database="orders_demo",
-            relations=AdapterReplayRelations(
-                root=test_case.target_table_name,
-                source=test_case.source_table_name,
-                anchor=test_case.anchor_table_name,
-                target=test_case.shadow_target_name,
-            ),
-            replay_query=build_adapter_replay_query(
-                query=test_case.query,
-                source_relation_name=test_case.source_table_name,
+    rendered_statement: str = render_clickhouse_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=AdapterReplayRequest(
+                mode=AdapterReplayBoundaryMode.OFFSETS,
                 database="orders_demo",
-                physical_relation_mappings=physical_mappings,
-            ),
-            boundaries=(
-                AdapterReplayBoundary(
-                    boundary_key="_replay_partition=0",
-                    cutoff_value="9709",
-                    cutoff_inclusive=True,
-                    partition_value="0",
+                relations=AdapterReplayRelations(
+                    root=test_case.target_table_name,
+                    source=test_case.source_table_name,
+                    anchor=test_case.anchor_table_name,
+                    target=test_case.shadow_target_name,
                 ),
+                replay_query=build_adapter_replay_query(
+                    query=test_case.query,
+                    source_relation_name=test_case.source_table_name,
+                    database="orders_demo",
+                    physical_relation_mappings=physical_mappings,
+                ),
+                boundaries=(
+                    AdapterReplayBoundary(
+                        boundary_key="_replay_partition=0",
+                        cutoff_value="9709",
+                        cutoff_inclusive=True,
+                        partition_value="0",
+                    ),
+                ),
+                columns=AdapterReplayColumns(
+                    partition="_replay_partition",
+                    offset="_replay_offset",
+                    timestamp="_replay_timestamp",
+                    landed_at="_replay_landed_at",
+                    cursor="_replay_cursor",
+                ),
+                window=AdapterReplayWindow(
+                    lower_bound_mode=AdapterReplayLowerBoundMode.ACTIVE_FRONTIER,
+                    lower_bound_inclusive=True,
+                    boundary_time="2026-04-08 13:00:00.000",
+                    forced_start_time=None,
+                    lookback_seconds=None,
+                ),
+                seed_mode=AdapterReplaySeedMode.NONE,
+                target_column_names=(),
+                settings=test_case.settings,
             ),
-            columns=AdapterReplayColumns(
-                partition="_replay_partition",
-                offset="_replay_offset",
-                timestamp="_replay_timestamp",
-                landed_at="_replay_landed_at",
-                cursor="_replay_cursor",
-            ),
-            window=AdapterReplayWindow(
-                lower_bound_mode=AdapterReplayLowerBoundMode.ACTIVE_FRONTIER,
-                lower_bound_inclusive=True,
-                boundary_time="2026-04-08 13:00:00.000",
-                forced_start_time=None,
-                lookback_seconds=None,
-            ),
-            seed_mode=AdapterReplaySeedMode.NONE,
-            target_column_names=(),
-            settings=test_case.settings,
-        ),
-        lower_bound_rows=(ClickHouseReplayOffsetFrontier(partition=0, cutoff_offset="9000"),),
+            boundary_column_type=None,
+            lower_bounds=(AdapterReplayLowerBound(value="9000", partition_value="0"),),
+        )
     )
 
     assert normalize_clickhouse_sql(rendered_statement) == normalize_clickhouse_sql(
@@ -317,59 +320,62 @@ def test_given_offset_replay_query_when_rendering_then_it_rewrites_anchor_and_re
 def test_given_source_filtered_offset_replay_when_rendering_then_the_physical_input_is_filtered(
     test_case: RenderSourceFilteredOffsetPhysicalBoundaryTestCase,
 ) -> None:
-    rendered_statement: str = _render_offset_replay(
-        request=AdapterReplayRequest(
-            mode=AdapterReplayBoundaryMode.OFFSETS,
-            database="orders_demo",
-            relations=AdapterReplayRelations(
-                root="tbl__order_pairs",
-                source="orders_existing",
-                anchor="orders_existing",
-                target="tbl__order_pairs__dep",
-            ),
-            replay_query=build_adapter_replay_query(
-                query=test_case.query,
-                source_relation_name="orders_existing",
+    rendered_statement: str = render_clickhouse_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=AdapterReplayRequest(
+                mode=AdapterReplayBoundaryMode.OFFSETS,
                 database="orders_demo",
-                physical_relation_mappings=(
-                    AdapterPhysicalRelationMapping(
-                        logical_name="orders_existing",
-                        physical_name="orders_existing",
+                relations=AdapterReplayRelations(
+                    root="tbl__order_pairs",
+                    source="orders_existing",
+                    anchor="orders_existing",
+                    target="tbl__order_pairs__dep",
+                ),
+                replay_query=build_adapter_replay_query(
+                    query=test_case.query,
+                    source_relation_name="orders_existing",
+                    database="orders_demo",
+                    physical_relation_mappings=(
+                        AdapterPhysicalRelationMapping(
+                            logical_name="orders_existing",
+                            physical_name="orders_existing",
+                        ),
                     ),
                 ),
-            ),
-            boundaries=(
-                AdapterReplayBoundary(
-                    boundary_key="_replay_partition=0",
-                    cutoff_value="10",
-                    cutoff_inclusive=True,
-                    partition_value="0",
+                boundaries=(
+                    AdapterReplayBoundary(
+                        boundary_key="_replay_partition=0",
+                        cutoff_value="10",
+                        cutoff_inclusive=True,
+                        partition_value="0",
+                    ),
+                    AdapterReplayBoundary(
+                        boundary_key="_replay_partition=1",
+                        cutoff_value="20",
+                        cutoff_inclusive=False,
+                        partition_value="1",
+                    ),
                 ),
-                AdapterReplayBoundary(
-                    boundary_key="_replay_partition=1",
-                    cutoff_value="20",
-                    cutoff_inclusive=False,
-                    partition_value="1",
+                columns=AdapterReplayColumns(
+                    partition="event_partition",
+                    offset="event_offset",
+                    timestamp="event_timestamp",
+                    landed_at="event_landed_at",
+                    cursor="event_cursor",
                 ),
+                window=AdapterReplayWindow(
+                    lower_bound_mode=AdapterReplayLowerBoundMode.ACTIVE_FRONTIER,
+                    lower_bound_inclusive=True,
+                    boundary_time="2026-04-08 13:00:00.000",
+                    forced_start_time=None,
+                    lookback_seconds=None,
+                ),
+                seed_mode=AdapterReplaySeedMode.NONE,
+                target_column_names=(),
             ),
-            columns=AdapterReplayColumns(
-                partition="event_partition",
-                offset="event_offset",
-                timestamp="event_timestamp",
-                landed_at="event_landed_at",
-                cursor="event_cursor",
-            ),
-            window=AdapterReplayWindow(
-                lower_bound_mode=AdapterReplayLowerBoundMode.ACTIVE_FRONTIER,
-                lower_bound_inclusive=True,
-                boundary_time="2026-04-08 13:00:00.000",
-                forced_start_time=None,
-                lookback_seconds=None,
-            ),
-            seed_mode=AdapterReplaySeedMode.NONE,
-            target_column_names=(),
-        ),
-        lower_bound_rows=(ClickHouseReplayOffsetFrontier(partition=0, cutoff_offset="5"),),
+            boundary_column_type=None,
+            lower_bounds=(AdapterReplayLowerBound(value="5", partition_value="0"),),
+        )
     )
     normalized_statement: str = normalize_clickhouse_sql(rendered_statement)
 
@@ -534,11 +540,12 @@ def test_given_scalar_replay_boundary_when_rendering_then_expected_edges_are_use
         target_column_names=("order_id",),
     )
 
-    rendered_statement: str = _render_scalar_replay(
-        request=request,
-        boundary=boundary,
-        boundary_column_type=test_case.boundary_column_type,
-        lower_bound_value=test_case.lower_bound_value,
+    rendered_statement: str = render_clickhouse_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=request,
+            boundary_column_type=test_case.boundary_column_type,
+            lower_bounds=(AdapterReplayLowerBound(value=test_case.lower_bound_value),),
+        )
     )
     normalized_statement: str = normalize_clickhouse_sql(rendered_statement)
 
@@ -614,11 +621,12 @@ def test_given_aggregate_scalar_replay_when_rendering_then_anchor_is_filtered_be
         target_column_names=(),
     )
 
-    rendered_statement: str = _render_scalar_replay(
-        request=request,
-        boundary=boundary,
-        boundary_column_type="UInt64",
-        lower_bound_value="10",
+    rendered_statement: str = render_clickhouse_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=request,
+            boundary_column_type="UInt64",
+            lower_bounds=(AdapterReplayLowerBound(value="10"),),
+        )
     )
     normalized_statement: str = normalize_clickhouse_sql(rendered_statement)
 
