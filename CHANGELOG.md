@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.62.0](https://github.com/sqlstack-io/sqltide/compare/v0.61.0...v0.62.0) (2026-11-01)
+
+
+### Features
+
+* add safe virtual workflow playground ([#318](https://github.com/sqlstack-io/sqltide/issues/318)) ([56fb3db](https://github.com/sqlstack-io/sqltide/commit/56fb3db270254d53a6e00420f107c76916cb761c))
+
+
+### Documentation
+
+* publish approved homepage headline ([#319](https://github.com/sqlstack-io/sqltide/issues/319)) ([4f6cfae](https://github.com/sqlstack-io/sqltide/commit/4f6cfae867cad53a5195878239d65b955d8d42fa))
+
+
+### Maintenance
+
+* keep local agent guidance out of version control ([#317](https://github.com/sqlstack-io/sqltide/issues/317)) ([7e7ed03](https://github.com/sqlstack-io/sqltide/commit/7e7ed0368a441b4555bc0ddd666797cc7e0054cd))
+
 ## [0.61.0](https://github.com/sqlstack-io/sqltide/compare/v0.60.0...v0.61.0) (2026-11-01)
 
 
