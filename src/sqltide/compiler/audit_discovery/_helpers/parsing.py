@@ -5,14 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sqltide.compiler.audit_discovery.constants import (
-    ALLOWED_AUDIT_KEYS,
-    ALLOWED_AUDIT_SEVERITIES,
-    AUDIT_EVERY_KEY,
-    AUDIT_SEVERITY_KEY,
-    GENERIC_AUDIT_QUOTED_PARAMETER_PATTERN,
-    GENERIC_AUDIT_RAW_PARAMETER_PATTERN,
-)
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery.exceptions import SqlAuditParseError
 from sqltide.compiler.audit_discovery.models import (
     LoadedGenericSqlAuditDefinition,
@@ -21,7 +14,6 @@ from sqltide.compiler.audit_discovery.models import (
 from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError
-from sqltide.compiler.discovery.main._parse_duration_seconds import parse_duration_seconds
 from sqltide.compiler.discovery.main._parse_sql_header import parse_sql_header
 from sqltide.compiler.discovery.types import SqlRelationType
 from sqltide.compiler.macros.main._expand_macro_calls import expand_macro_calls
@@ -141,11 +133,12 @@ def parse_generic_sql_audit_definition(
             f"Generic SQL audit definition '{file_path}' must define a query after AUDIT(...)"
         )
     _validate_single_query(file_path=file_path, sql=query)
+    raw_parameter_names, quoted_parameter_names = _native.generic_audit_parameter_names(query)
     return LoadedGenericSqlAuditDefinition(
         file_path=file_path,
         query=query,
-        raw_parameter_names=_discover_raw_generic_sql_audit_parameter_names(query),
-        quoted_parameter_names=_discover_quoted_generic_sql_audit_parameter_names(query),
+        raw_parameter_names=tuple(raw_parameter_names),
+        quoted_parameter_names=tuple(quoted_parameter_names),
         name=file_path.stem,
     )
 
@@ -185,31 +178,30 @@ def _parse_concrete_audit_block(
                 f"SQL audit '{file_path}' may only use __ref(...); __source(...) is not allowed"
             )
     referenced_model_names: tuple[str, ...] = tuple(dict.fromkeys(ref.name for ref in parsed_refs))
+    try:
+        (
+            severity,
+            description,
+            name,
+            severity_is_explicit,
+            cadence_seconds,
+            warmup_seconds,
+            scheduled,
+        ) = _native.audit_header_fields(str(file_path), list(header_values.items()))
+    except ValueError as error:
+        raise SqlAuditParseError(str(error)) from None
     return LoadedSqlAudit(
         file_path=file_path,
         query=query,
         referenced_model_names=referenced_model_names,
-        severity=_parse_audit_severity(header_values=header_values, file_path=file_path),
-        description=_parse_audit_description(header_values=header_values, file_path=file_path),
-        name=_parse_audit_name(header_values=header_values, file_path=file_path),
+        severity=severity,
+        description=description,
+        name=name,
         audit_index=audit_index,
-        severity_is_explicit=AUDIT_SEVERITY_KEY in header_values,
-        cadence_seconds_override=_parse_audit_duration(
-            header_values=header_values,
-            key=AUDIT_EVERY_KEY,
-            file_path=file_path,
-            allow_zero=False,
-        ),
-        warmup_seconds_override=_parse_audit_duration(
-            header_values=header_values,
-            key="warmup",
-            file_path=file_path,
-            allow_zero=True,
-        ),
-        scheduled_override=_parse_audit_scheduled(
-            header_values=header_values,
-            file_path=file_path,
-        ),
+        severity_is_explicit=severity_is_explicit,
+        cadence_seconds_override=cadence_seconds,
+        warmup_seconds_override=warmup_seconds,
+        scheduled_override=scheduled,
     )
 
 
@@ -250,93 +242,12 @@ def _parse_audit_header(*, header: str, file_path: Path) -> dict[str, Any]:
         raise SqlAuditParseError(
             f"AUDIT() header in '{file_path}' uses invalid SQLBuild syntax: {error}"
         ) from error
-    unknown_keys: tuple[str, ...] = tuple(
-        sorted(str(key) for key in parsed_header if key not in ALLOWED_AUDIT_KEYS)
+    unsupported_keys: str | None = _native.unsupported_audit_header_keys(
+        str(file_path), list(parsed_header.items())
     )
-    if unknown_keys:
-        raise SqlAuditParseError(
-            f"AUDIT() in '{file_path}' contains unsupported keys: {', '.join(unknown_keys)}"
-        )
+    if unsupported_keys is not None:
+        raise SqlAuditParseError(unsupported_keys)
     return parsed_header
-
-
-def _parse_audit_severity(*, header_values: dict[str, Any], file_path: Path) -> str:
-    severity_value: Any = header_values.get("severity", "error")
-    if not isinstance(severity_value, str) or severity_value not in ALLOWED_AUDIT_SEVERITIES:
-        raise SqlAuditParseError(
-            f"AUDIT() in '{file_path}' must define severity as 'error' or 'warning'"
-        )
-    return severity_value
-
-
-def _parse_audit_description(*, header_values: dict[str, Any], file_path: Path) -> str | None:
-    description_value: Any = header_values.get("description")
-    if description_value is None:
-        return None
-    if not isinstance(description_value, str) or not description_value.strip():
-        raise SqlAuditParseError(
-            f"AUDIT() in '{file_path}' must define description as a non-empty string when set"
-        )
-    return description_value.strip()
-
-
-def _parse_audit_name(*, header_values: dict[str, Any], file_path: Path) -> str | None:
-    name_value: Any = header_values.get("name")
-    if name_value is None:
-        return None
-    if not isinstance(name_value, str) or not name_value.strip():
-        raise SqlAuditParseError(
-            f"AUDIT() in '{file_path}' must define name as a non-empty string when set"
-        )
-    return name_value.strip()
-
-
-def _parse_audit_duration(
-    *,
-    header_values: dict[str, Any],
-    key: str,
-    file_path: Path,
-    allow_zero: bool,
-) -> int | None:
-    if key not in header_values:
-        return None
-    try:
-        return parse_duration_seconds(
-            value=header_values[key],
-            field_path=f"AUDIT() in '{file_path}' {key}",
-            allow_zero=allow_zero,
-        )
-    except ValueError as error:
-        raise SqlAuditParseError(str(error)) from None
-
-
-def _parse_audit_scheduled(*, header_values: dict[str, Any], file_path: Path) -> bool | None:
-    value: object | None = header_values.get("scheduled")
-    if value is None:
-        return None
-    if not isinstance(value, bool):
-        raise SqlAuditParseError(f"AUDIT() in '{file_path}' scheduled must be a boolean")
-    if value is False and AUDIT_EVERY_KEY in header_values:
-        raise SqlAuditParseError(
-            f"AUDIT() in '{file_path}' cannot define both scheduled false and every"
-        )
-    return value
-
-
-def _discover_raw_generic_sql_audit_parameter_names(query: str) -> tuple[str, ...]:
-    return tuple(
-        dict.fromkeys(
-            match.group("name") for match in GENERIC_AUDIT_RAW_PARAMETER_PATTERN.finditer(query)
-        )
-    )
-
-
-def _discover_quoted_generic_sql_audit_parameter_names(query: str) -> tuple[str, ...]:
-    return tuple(
-        dict.fromkeys(
-            match.group("name") for match in GENERIC_AUDIT_QUOTED_PARAMETER_PATTERN.finditer(query)
-        )
-    )
 
 
 def _validate_single_query(*, file_path: Path, sql: str) -> None:

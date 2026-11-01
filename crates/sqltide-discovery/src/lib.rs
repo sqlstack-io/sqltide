@@ -1,6 +1,7 @@
 //! Project discovery for SQLTide: configuration validation, interpolation, and source
 //! inference. Plain Rust with no Python dependency; decoding TOML and YAML is the caller's.
 
+pub mod audits;
 pub mod byte_size;
 pub mod config;
 pub mod declarations;
@@ -8,6 +9,7 @@ pub mod durations;
 pub mod effective;
 pub mod errors;
 pub mod freshness;
+pub mod header_blocks;
 pub mod interpolation;
 pub mod model_spec;
 pub mod pipeline_config;

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -12,9 +11,6 @@ from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.discovery._helpers.model_header import (
     parse_model_header,
-)
-from sqltide.compiler.discovery.constants import (
-    MODEL_HEADER_PATTERN,
 )
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError, PipelineDiscoveryError
 from sqltide.compiler.discovery.models import (
@@ -136,21 +132,16 @@ def parse_model_sql(
 ) -> tuple[dict[str, Any], str]:
     """Parse the required `MODEL(...)` header and SQL query body."""
 
-    header_match: re.Match[str] | None = MODEL_HEADER_PATTERN.match(contents)
-    if header_match is None:
+    header_block: tuple[str, str, int, int] | None = _native.model_header_block(contents)
+    if header_block is None:
         raise PipelineDiscoveryError(
             f"SQL model '{file_path}' must start with a MODEL(...) header as the first "
             "non-whitespace content"
         )
-
-    header_values: dict[str, Any] = _parse_model_header(
-        header=header_match.group("header"), file_path=file_path
-    )
-    query_line: int
-    query_column: int
-    query_line, query_column = _query_source_position(contents)
+    header, raw_query, query_line, query_column = header_block
+    header_values: dict[str, Any] = _parse_model_header(header=header, file_path=file_path)
     query: str = _expanded_query(
-        sql=header_match.group("sql").strip(),
+        sql=raw_query.strip(),
         file_path=file_path,
         macro_registry=macro_registry,
         macro_context=macro_context,
@@ -186,16 +177,10 @@ def _expanded_query(
 
 
 def _query_source_position(contents: str) -> tuple[int, int]:
-    header_match: re.Match[str] | None = MODEL_HEADER_PATTERN.match(contents)
-    if header_match is None:
+    header_block: tuple[str, str, int, int] | None = _native.model_header_block(contents)
+    if header_block is None:
         raise PipelineDiscoveryError("Cannot locate SQL model query after a valid MODEL header")
-    raw_query: str = header_match.group("sql")
-    leading_length: int = len(raw_query) - len(raw_query.lstrip())
-    query_index: int = header_match.start("sql") + leading_length
-    line: int = contents.count("\n", 0, query_index) + 1
-    previous_newline_index: int = contents.rfind("\n", 0, query_index)
-    column: int = query_index - previous_newline_index
-    return line, column
+    return header_block[2], header_block[3]
 
 
 def infer_transform_source(

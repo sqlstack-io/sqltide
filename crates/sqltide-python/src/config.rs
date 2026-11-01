@@ -3,9 +3,12 @@
 use std::cell::RefCell;
 
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
+use sqltide_discovery::audits::{
+    self, HeaderFields, Instance, RenderError, generic_audit_parameter_names as parameter_names,
+};
 use sqltide_discovery::config::{
     self, AuditDefaults, Build, LocalConfig, Pairs, ProjectConfig, ProjectDefaults, ProjectTarget,
     ReplayOnChange, ReplayRule, RetentionDefault, SensorsOverride, Target,
@@ -13,6 +16,7 @@ use sqltide_discovery::config::{
 use sqltide_discovery::durations;
 use sqltide_discovery::errors::{ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
+use sqltide_discovery::header_blocks::{self as test_blocks, Block, LeadingContent};
 use sqltide_discovery::pipeline_config::{self, PipelineSettings};
 use sqltide_discovery::source_registry::{
     self, Boundary, DerivedName, KafkaDefaults, KafkaRetentionChoice, Port, Source, SourceFile,
@@ -1250,7 +1254,228 @@ fn parse_source_registry<'py>(
         .collect()
 }
 
+/// `(start, (header, sql, sql start) | None)` of one SQL test block, with character offsets.
+type SqlTestBlockResult = (usize, Option<(String, String, usize)>);
+
+/// The `TEST(...);` blocks of one SQL test file. Raises `ValueError` when content precedes the
+/// first header.
+#[pyfunction]
+fn sql_test_blocks(contents: &str) -> PyResult<Vec<SqlTestBlockResult>> {
+    let blocks: Vec<Block> = test_blocks::sql_test_blocks(contents)
+        .map_err(|LeadingContent| PyValueError::new_err("leading content"))?;
+    Ok(blocks
+        .into_iter()
+        .map(|block| {
+            (
+                block.start,
+                block
+                    .header
+                    .map(|header| (header.header, header.sql, header.sql_start)),
+            )
+        })
+        .collect())
+}
+
+/// `(header, sql, query line, query column)` of a model file's leading `MODEL(...);` header,
+/// or `None`.
+#[pyfunction]
+fn model_header_block(contents: &str) -> Option<(String, String, usize, usize)> {
+    test_blocks::model_header_block(contents)
+}
+
+/// `(name, mode)` of one parsed `TEST()` header. Raises `ValueError(message)` for unsupported
+/// keys, then an invalid name, then an invalid mode.
+#[pyfunction]
+fn sql_test_header_fields(
+    py: Python<'_>,
+    file_path: &str,
+    header: Vec<(String, Bound<'_, PyAny>)>,
+) -> PyResult<(Option<String>, String)> {
+    let mut document: Document<'_> = Document::new(py)?;
+    let header: Vec<(String, Value)> = header
+        .iter()
+        .map(|(key, object)| Ok((key.clone(), document.value(object)?)))
+        .collect::<PyResult<_>>()?;
+    let header: Vec<(String, &Value)> = header
+        .iter()
+        .map(|(key, value)| (key.clone(), value))
+        .collect();
+    if let Some(message) = test_blocks::unsupported_test_header_keys(file_path, &header) {
+        return Err(PyValueError::new_err(message));
+    }
+    test_blocks::test_header_fields(file_path, &header).map_err(PyValueError::new_err)
+}
+
+/// `(severity, description, name, severity is explicit, every seconds, warmup seconds,
+/// scheduled)` of one concrete `AUDIT()` header.
+type AuditHeaderResult = (
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    Option<u64>,
+    Option<u64>,
+    Option<bool>,
+);
+
+/// The message naming a parsed `AUDIT()` header's unsupported keys, or `None`.
+#[pyfunction]
+fn unsupported_audit_header_keys(
+    py: Python<'_>,
+    file_path: &str,
+    header: Vec<(String, Bound<'_, PyAny>)>,
+) -> PyResult<Option<String>> {
+    let mut document: Document<'_> = Document::new(py)?;
+    let header: Vec<(String, Value)> = header
+        .iter()
+        .map(|(key, object)| Ok((key.clone(), document.value(object)?)))
+        .collect::<PyResult<_>>()?;
+    let header: Vec<(String, &Value)> = header
+        .iter()
+        .map(|(key, value)| (key.clone(), value))
+        .collect();
+    Ok(audits::unsupported_audit_header_keys(file_path, &header))
+}
+
+/// The settings of one parsed `AUDIT()` header. Raises `ValueError(message)` for the first
+/// invalid setting.
+#[pyfunction]
+fn audit_header_fields(
+    py: Python<'_>,
+    file_path: &str,
+    header: Vec<(String, Bound<'_, PyAny>)>,
+) -> PyResult<AuditHeaderResult> {
+    let mut document: Document<'_> = Document::new(py)?;
+    let header: Vec<(String, Value)> = header
+        .iter()
+        .map(|(key, object)| Ok((key.clone(), document.value(object)?)))
+        .collect::<PyResult<_>>()?;
+    let header: Vec<(String, &Value)> = header
+        .iter()
+        .map(|(key, value)| (key.clone(), value))
+        .collect();
+    let fields: HeaderFields =
+        audits::audit_header_fields(file_path, &header).map_err(PyValueError::new_err)?;
+    Ok((
+        fields.severity,
+        fields.description,
+        fields.name,
+        fields.severity_is_explicit,
+        fields.cadence_seconds,
+        fields.warmup_seconds,
+        fields.scheduled,
+    ))
+}
+
+/// `(definition name, (key, object) arguments, name, severity, description, severity is
+/// explicit, every seconds, warmup seconds, scheduled)` of one generic audit instance.
+type GenericAuditInstanceResult<'py> = (
+    String,
+    Vec<(String, Bound<'py, PyAny>)>,
+    String,
+    String,
+    Option<String>,
+    bool,
+    Option<u64>,
+    Option<u64>,
+    Option<bool>,
+);
+
+/// The generic audits one model or column header declares. Raises `ValueError(message)` for
+/// the first invalid entry.
+#[pyfunction]
+fn generic_audit_instances<'py>(
+    py: Python<'py>,
+    file_path: &str,
+    raw_audits: &Bound<'py, PyAny>,
+    implicit_arguments: Vec<(String, Bound<'py, PyAny>)>,
+    default_name_prefix: &str,
+) -> PyResult<Vec<GenericAuditInstanceResult<'py>>> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let raw_audits: Value = document.value(raw_audits)?;
+    let implicit: Vec<(String, Value)> = implicit_arguments
+        .iter()
+        .map(|(key, object)| Ok((key.clone(), document.value(object)?)))
+        .collect::<PyResult<_>>()?;
+    let implicit: Vec<(String, &Value)> = implicit
+        .iter()
+        .map(|(key, value)| (key.clone(), value))
+        .collect();
+    let instances: Vec<Instance<'_>> =
+        audits::generic_audit_instances(file_path, &raw_audits, &implicit, default_name_prefix)
+            .map_err(PyValueError::new_err)?;
+    Ok(instances
+        .into_iter()
+        .map(|instance| {
+            (
+                instance.definition_name,
+                instance
+                    .arguments
+                    .into_iter()
+                    .map(|(key, value)| (key, document.objects[value.handle].clone()))
+                    .collect(),
+                instance.name,
+                instance.severity,
+                instance.description,
+                instance.severity_is_explicit,
+                instance.cadence_seconds,
+                instance.warmup_seconds,
+                instance.scheduled,
+            )
+        })
+        .collect())
+}
+
+/// `(raw parameter names, quoted parameter names)` of a generic audit definition query.
+#[pyfunction]
+fn generic_audit_parameter_names(query: &str) -> (Vec<String>, Vec<String>) {
+    parameter_names(query)
+}
+
+/// The concrete query of one generic audit instance. Raises `ValueError(("invalid", message))`
+/// or `ValueError(("literal", text))` for a string the dialect could not render.
+#[pyfunction]
+fn render_generic_audit<'py>(
+    py: Python<'py>,
+    file_path: &str,
+    definition_name: &str,
+    query: &str,
+    raw_parameter_names: Vec<String>,
+    quoted_parameter_names: Vec<String>,
+    arguments: Vec<(String, Bound<'py, PyAny>)>,
+) -> PyResult<String> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let arguments: Vec<(String, Value)> = arguments
+        .iter()
+        .map(|(key, object)| Ok((key.clone(), document.value(object)?)))
+        .collect::<PyResult<_>>()?;
+    let arguments: Vec<(String, &Value)> = arguments
+        .iter()
+        .map(|(key, value)| (key.clone(), value))
+        .collect();
+    audits::render_generic_audit(
+        file_path,
+        definition_name,
+        query,
+        &raw_parameter_names,
+        &quoted_parameter_names,
+        &arguments,
+    )
+    .map_err(|error| match error {
+        RenderError::Invalid(message) => PyValueError::new_err(("invalid", message)),
+        RenderError::Literal(text) => PyValueError::new_err(("literal", text)),
+    })
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(sql_test_blocks, module)?)?;
+    module.add_function(wrap_pyfunction!(model_header_block, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_test_header_fields, module)?)?;
+    module.add_function(wrap_pyfunction!(unsupported_audit_header_keys, module)?)?;
+    module.add_function(wrap_pyfunction!(audit_header_fields, module)?)?;
+    module.add_function(wrap_pyfunction!(generic_audit_instances, module)?)?;
+    module.add_function(wrap_pyfunction!(generic_audit_parameter_names, module)?)?;
+    module.add_function(wrap_pyfunction!(render_generic_audit, module)?)?;
     module.add("DEFAULT_ADAPTER_NAME", config::DEFAULT_ADAPTER_NAME)?;
     module.add("DEFAULT_PIPELINE_PREFIX", config::DEFAULT_PIPELINE_PREFIX)?;
     module.add("DEFAULT_TABLE_PREFIX", config::DEFAULT_TABLE_PREFIX)?;

@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError
 from sqltide.compiler.discovery.main._parse_sql_header import parse_sql_header
 from sqltide.compiler.test_discovery.constants import (
     DEFAULT_SQL_TEST_MODE,
-    SUPPORTED_SQL_TEST_MODES,
-    TEST_HEADER_MODE_KEY,
-    TEST_HEADER_NAME_KEY,
-    TEST_HEADER_SUPPORTED_KEYS,
 )
 from sqltide.compiler.test_discovery.exceptions import SqlTestParseError
 from sqltide.compiler.test_discovery.models import SqlTestHeader
@@ -27,11 +24,11 @@ def parse_test_header(*, file_path: Path, header_contents: str) -> SqlTestHeader
     parsed_header: dict[str, object] = _parse_header_mapping(
         file_path=file_path, header_contents=stripped_header_contents
     )
-    _reject_unsupported_keys(file_path=file_path, parsed_header=parsed_header)
-    return SqlTestHeader(
-        name=_parse_name(file_path=file_path, value=parsed_header.get(TEST_HEADER_NAME_KEY)),
-        mode=_parse_mode(file_path=file_path, value=parsed_header.get(TEST_HEADER_MODE_KEY)),
-    )
+    try:
+        name, mode = _native.sql_test_header_fields(str(file_path), list(parsed_header.items()))
+    except ValueError as error:
+        raise SqlTestParseError(str(error)) from None
+    return SqlTestHeader(name=name, mode=SqlTestMode(mode))
 
 
 def _parse_header_mapping(*, file_path: Path, header_contents: str) -> dict[str, object]:
@@ -41,32 +38,3 @@ def _parse_header_mapping(*, file_path: Path, header_contents: str) -> dict[str,
         raise SqlTestParseError(
             f"TEST() header in '{file_path}' uses invalid SQLBuild syntax: {error}"
         ) from error
-
-
-def _reject_unsupported_keys(*, file_path: Path, parsed_header: dict[str, object]) -> None:
-    unsupported_keys: tuple[str, ...] = tuple(
-        key for key in parsed_header if key not in TEST_HEADER_SUPPORTED_KEYS
-    )
-    if unsupported_keys:
-        raise SqlTestParseError(
-            f"TEST() in '{file_path}' only supports `name` and `mode`; unsupported keys: "
-            f"{', '.join(unsupported_keys)}"
-        )
-
-
-def _parse_name(*, file_path: Path, value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise SqlTestParseError(f"TEST() name in '{file_path}' must be a non-empty string")
-    return value.strip()
-
-
-def _parse_mode(*, file_path: Path, value: object) -> SqlTestMode:
-    if value is None:
-        return DEFAULT_SQL_TEST_MODE
-    if not isinstance(value, str) or value not in {mode.value for mode in SqlTestMode}:
-        raise SqlTestParseError(
-            f"TEST() mode in '{file_path}' must be one of: {SUPPORTED_SQL_TEST_MODES}"
-        )
-    return SqlTestMode(value)
