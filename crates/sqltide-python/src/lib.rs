@@ -5,6 +5,7 @@
 mod analysis;
 mod artifacts;
 mod clickhouse;
+mod compile;
 mod config;
 mod destruction;
 mod discovery;
@@ -68,6 +69,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis::register(module)?;
     artifacts::register(module)?;
     clickhouse::register(module)?;
+    compile::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     discovery::register(module)?;

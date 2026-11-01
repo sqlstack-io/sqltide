@@ -729,3 +729,26 @@ class DesiredGraph:
         changes: list[tuple[int, str, bool, str | None, str | None, str | None]],
     ) -> list[tuple[int, list[int], int, bool, str, bool, str | None, str | None, int | None]]: ...
     def nearest_replay_anchor(self, root: int, allow_root: bool, root_name: str) -> int: ...
+
+def resolve_model_relation_name(
+    logical_name: str,
+    is_table: bool,
+    exact_name: str | None,
+    pipeline_prefix: str | None,
+    project_prefix: str | None,
+) -> str: ...
+def validate_project_relation_names(
+    sources: list[tuple[str, str | None]],
+    models: list[tuple[str, str, bool]],
+) -> None: ...
+def render_kafka_retention_ttl(
+    duration_seconds: int, fallback_landed: bool, cap_at_landed: bool
+) -> str: ...
+def render_model_retention_ttl(
+    duration_seconds: int,
+    timestamp_column: str,
+    cap_at_column: str | None,
+    skip_when_missing: bool,
+    available_columns: dict[str, str],
+    model_name: str,
+) -> str | None: ...

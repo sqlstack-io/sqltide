@@ -426,6 +426,9 @@ dependencies = [
 [[package]]
 name = "sqltide-compile"
 version = "0.56.0"
+dependencies = [
+ "sqltide-discovery",
+]
 
 [[package]]
 name = "sqltide-discovery"
