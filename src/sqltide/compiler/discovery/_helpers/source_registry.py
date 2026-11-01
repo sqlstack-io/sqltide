@@ -12,14 +12,13 @@ from typing import Literal, cast
 import yaml
 from yaml import YAMLError
 
+import sqltide._native as _native
 from sqltide.compiler.discovery._helpers.interpolation import interpolate_config_value
 from sqltide.compiler.discovery._helpers.model_header import parse_kafka_retention
 from sqltide.compiler.discovery.constants import (
     BOOLEAN_FALSE_LITERALS,
     BOOLEAN_TRUE_LITERALS,
     DEFAULT_POSTGRES_PORT,
-    FRESHNESS_DURATION_PATTERN,
-    FRESHNESS_KEYS,
     INTERPOLATION_TOKEN_START,
     KAFKA_NAMING_MACRO_TOPIC_PARAMETER,
     POSTGRES_FORBIDDEN_SOURCE_KEYS,
@@ -27,7 +26,6 @@ from sqltide.compiler.discovery.constants import (
     REFRESH_INTERVAL_PATTERN,
     REPLAY_BOUNDARY_COLUMN_KEYS,
     REPLAY_BOUNDARY_KEYS,
-    SECONDS_BY_DURATION_UNIT,
     SOURCE_FILE_KEYS,
     SOURCE_KEYS,
 )
@@ -118,59 +116,7 @@ def parse_freshness_policy(
 ) -> SourceFreshnessPolicy | None:
     """Parse one optional freshness mapping of duration-literal thresholds."""
 
-    if payload is None:
-        return None
-    if not isinstance(payload, dict) or not all(isinstance(key, str) for key in payload):
-        raise PipelineDiscoveryError(f"'{file_path}' {label} must be a mapping when set")
-    mapping: dict[str, object] = cast("dict[str, object]", payload)
-    unknown_keys: tuple[str, ...] = tuple(sorted(set(mapping) - FRESHNESS_KEYS))
-    if unknown_keys:
-        raise PipelineDiscoveryError(
-            f"'{file_path}' {label} has unknown keys: {', '.join(unknown_keys)}"
-        )
-    warn_after: str | None = _optional_duration(
-        payload=mapping, key="warn_after", label=label, file_path=file_path
-    )
-    error_after: str | None = _optional_duration(
-        payload=mapping, key="error_after", label=label, file_path=file_path
-    )
-    if warn_after is None and error_after is None:
-        raise PipelineDiscoveryError(
-            f"'{file_path}' {label} must set at least one of warn_after or error_after"
-        )
-    if (
-        warn_after is not None
-        and error_after is not None
-        and _duration_seconds(warn_after) > _duration_seconds(error_after)
-    ):
-        raise PipelineDiscoveryError(
-            f"'{file_path}' {label}.warn_after must not exceed error_after"
-        )
-    return SourceFreshnessPolicy(warn_after=warn_after, error_after=error_after)
-
-
-def _optional_duration(
-    *,
-    payload: dict[str, object],
-    key: str,
-    label: str,
-    file_path: Path,
-) -> str | None:
-    value: object = payload.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, str) or FRESHNESS_DURATION_PATTERN.fullmatch(value) is None:
-        raise PipelineDiscoveryError(
-            f"'{file_path}' {label}.{key} must be a duration like '15m', '2h', or '1d'"
-        )
-    return value
-
-
-def _duration_seconds(value: str) -> int:
-    match: re.Match[str] | None = FRESHNESS_DURATION_PATTERN.fullmatch(value)
-    if match is None:
-        raise PipelineDiscoveryError(f"invalid freshness duration literal '{value}'")
-    return int(match.group(1)) * SECONDS_BY_DURATION_UNIT[match.group(2)]
+    return _native.parse_freshness_policy(payload, label, str(file_path))
 
 
 def source_registry_by_name(

@@ -1,6 +1,20 @@
 import os
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, Literal
+
+from sqltide.compiler.discovery.models import (
+    AuditDefaults,
+    AuthoredProjectConfig,
+    ExecutionSettings,
+    KafkaRetentionPolicy,
+    LocalProjectConfig,
+    ModelRetentionPolicy,
+    PipelineNaming,
+    PipelineProtection,
+    ReplayOnChangePolicy,
+    SourceFreshnessPolicy,
+)
+from sqltide.compiler.discovery.types import BoundedReplayFallback
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -118,6 +132,48 @@ type _NativeSpec = tuple[
 def classify_object_changes(
     comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
 ) -> list[tuple[str, str | None, str | None]]: ...
+def resolve_variable_values(
+    values: Mapping[str, object],
+    environment: Mapping[str, str],
+    field_path_prefix: str,
+    defer_missing_environment: bool,
+) -> dict[str, object]: ...
+def interpolate_config_value(
+    value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
+) -> object: ...
+def parse_model_retention(
+    value: object, field_path: str
+) -> ModelRetentionPolicy | Literal[False] | None: ...
+def parse_kafka_retention(
+    value: object, field_path: str
+) -> KafkaRetentionPolicy | Literal[False] | None: ...
+def parse_duration_seconds(value: object, field_path: str, allow_zero: bool) -> int: ...
+def parse_freshness_policy(
+    payload: object, label: str, file_path: str
+) -> SourceFreshnessPolicy | None: ...
+def parse_pipeline_mode(
+    payload: Mapping[str, object], file_path: str, default_mode: str
+) -> str: ...
+def parse_pipeline_settings(
+    payload: Mapping[str, object], file_path: str, pipeline_name: str, mode: str
+) -> tuple[
+    ReplayOnChangePolicy | None,
+    BoundedReplayFallback | None,
+    PipelineNaming,
+    PipelineProtection | None,
+    AuditDefaults,
+    ExecutionSettings,
+    ModelRetentionPolicy | Literal[False] | None,
+]: ...
+def parse_project_config(
+    payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
+) -> AuthoredProjectConfig: ...
+def parse_local_config(payload: Mapping[str, object], file_path: str) -> LocalProjectConfig: ...
+def infer_pipeline_sources(
+    pipelines: list[tuple[str, list[tuple[str, str]]]],
+    inputs_by_transform: dict[str, str],
+    sources: set[str],
+) -> tuple[list[str | None], str | None]: ...
 def audit_readiness(
     observation: tuple[
         str,
