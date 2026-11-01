@@ -444,6 +444,7 @@ dependencies = [
  "sqltide-discovery",
  "sqltide-json",
  "sqltide-planner",
+ "sqltide-sqltext",
 ]
 
 [[package]]

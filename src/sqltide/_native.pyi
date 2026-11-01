@@ -5,6 +5,7 @@ from typing import Any, Literal
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterManifestSnapshot,
+    AdapterReplayRequest,
     CatalogSnapshot,
 )
 from sqltide.compiler.discovery.models import (
@@ -575,6 +576,44 @@ def plan_preserved_managed_sources(
 def drifted_managed_sources(
     project_argument: _SourceProject, relations_argument: list[_SourceRelation]
 ) -> list[tuple[int, list[str], list[str]]]: ...
+
+type _WorkflowStatement = tuple[str, str, str, str, bool]
+
+def virtual_workflow_statements(
+    context: tuple[str, str, str, tuple[str, str, str, str, str], str | None, bool, bool],
+    rendered: tuple[
+        list[tuple[str, str | None]],
+        str,
+        list[str],
+        list[tuple[str, str]],
+        list[str],
+        list[tuple[str, str]],
+        list[tuple[str, str]],
+        float,
+    ],
+    roots: list[
+        tuple[str, AdapterReplayRequest, bool, tuple[str | None, str, str], bool, list[str]]
+    ],
+) -> list[_WorkflowStatement]: ...
+def direct_workflow_statements(
+    preparation: tuple[
+        str,
+        str,
+        list[tuple[str, str]],
+        list[tuple[str, str, str, str, str]],
+        list[str],
+        list[tuple[str, str]],
+        list[tuple[str, str]],
+    ],
+    execution: tuple[
+        float,
+        list[tuple[str, bool]],
+        list[tuple[str, str]],
+        list[tuple[str, str, str, str]],
+        list[tuple[str, str]],
+        int,
+    ],
+) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
