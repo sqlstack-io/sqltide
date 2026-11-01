@@ -9,3 +9,4 @@ pub mod promotion;
 pub mod publications;
 pub mod readiness;
 pub mod reconcile;
+pub mod sources;

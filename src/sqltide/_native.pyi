@@ -549,6 +549,32 @@ def deployment_diff_count_sql(database: str, relation: str) -> str: ...
 type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
 
 def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
+
+type _SourceResource = tuple[str, str, list[str], list[tuple[str, str]]]
+type _SourceProject = tuple[
+    list[str],
+    list[tuple[str, str, bool, int | None, list[int], list[str]]],
+    list[int],
+    list[list[_SourceResource]],
+]
+type _SourceRelation = tuple[str, list[tuple[str, str]], list[tuple[str, str]], str | None]
+
+def plan_preserved_managed_sources(
+    plan: tuple[list[int], list[int], list[tuple[str, int]]],
+    project_argument: _SourceProject,
+    relations_argument: list[_SourceRelation],
+    database: str,
+) -> tuple[
+    list[str],
+    list[str],
+    list[str],
+    list[tuple[int, int]],
+    list[tuple[tuple[int, int], tuple[int, int], str, list[str]]],
+    list[tuple[int, int]],
+]: ...
+def drifted_managed_sources(
+    project_argument: _SourceProject, relations_argument: list[_SourceRelation]
+) -> list[tuple[int, list[str], list[str]]]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
