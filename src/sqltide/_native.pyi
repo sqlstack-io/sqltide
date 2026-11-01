@@ -145,12 +145,6 @@ def resolve_variable_values(
 def interpolate_config_value(
     value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
 ) -> object: ...
-def parse_model_retention(
-    value: object, field_path: str
-) -> ModelRetentionPolicy | Literal[False] | None: ...
-def parse_kafka_retention(
-    value: object, field_path: str
-) -> KafkaRetentionPolicy | Literal[False] | None: ...
 def parse_duration_seconds(value: object, field_path: str, allow_zero: bool) -> int: ...
 def parse_freshness_policy(
     payload: object, label: str, file_path: str
@@ -188,7 +182,12 @@ RUN_UNRESPONSIVE_AFTER_SECONDS: int
 DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS: int
 DEFAULT_POSTGRES_PORT: int
 DEFAULT_KAFKA_FORMAT: str
+DEFAULT_SQL_MODEL_ENGINE: str
 
+def check_model_header_keys(header: Mapping[str, object], file_path: str) -> None: ...
+def parse_model_spec(
+    header: Mapping[str, object], file_path: str, check_query: Callable[..., str | None]
+) -> tuple[str, dict[str, Any]]: ...
 def resolve_effective_configuration(
     project_payload: Mapping[str, object],
     project_path: str,

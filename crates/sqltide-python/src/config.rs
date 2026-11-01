@@ -24,8 +24,10 @@ use sqltide_discovery::interpolation;
 use sqltide_discovery::value::index;
 use std::collections::HashMap;
 
+use sqltide_discovery::model_spec::{self, ColumnSpec, ModelSpec};
+
 use crate::discovery::PyEnvironment;
-use sqltide_discovery::retention::{self, KafkaRetention, ModelRetention, Retention};
+use sqltide_discovery::retention::{KafkaRetention, ModelRetention, Retention};
 use sqltide_discovery::value::{Kind, Value};
 
 const MODELS_MODULE: &str = "sqltide.compiler.discovery.models";
@@ -585,36 +587,6 @@ fn retention_object<'py, T>(
     }
 }
 
-/// A model retention choice: `None`, `False`, or a `ModelRetentionPolicy`.
-#[pyfunction]
-fn parse_model_retention<'py>(
-    py: Python<'py>,
-    value: &Bound<'py, PyAny>,
-    field_path: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let mut document: Document<'py> = Document::new(py)?;
-    let value: Value = document.value(value)?;
-    let parsed: Retention<ModelRetention> =
-        retention::parse_model_retention(Some(&value), field_path)
-            .map_err(|error| spec_error(py, error))?;
-    retention_object(py, parsed, |policy| document.model_retention(policy))
-}
-
-/// A managed Kafka retention choice: `None`, `False`, or a `KafkaRetentionPolicy`.
-#[pyfunction]
-fn parse_kafka_retention<'py>(
-    py: Python<'py>,
-    value: &Bound<'py, PyAny>,
-    field_path: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let mut document: Document<'py> = Document::new(py)?;
-    let value: Value = document.value(value)?;
-    let parsed: Retention<KafkaRetention> =
-        retention::parse_kafka_retention(Some(&value), field_path)
-            .map_err(|error| spec_error(py, error))?;
-    retention_object(py, parsed, |policy| document.kafka_retention(policy))
-}
-
 /// Seconds in one `<int><s|m|h|d>` duration.
 #[pyfunction]
 fn parse_duration_seconds(
@@ -1069,6 +1041,140 @@ fn resolve_effective_configuration<'py>(
     document.effective(&resolved)
 }
 
+impl<'py> Document<'py> {
+    fn handles(&self, handles: &[usize]) -> PyResult<Bound<'py, PyAny>> {
+        self.object(PyTuple::new(
+            self.py,
+            handles.iter().map(|handle| self.objects[*handle].clone()),
+        )?)
+    }
+
+    fn pairs_dict(&self, pairs: &[(String, String)]) -> PyResult<Bound<'py, PyAny>> {
+        let dict: Bound<'py, PyDict> = PyDict::new(self.py);
+        for (key, value) in pairs {
+            dict.set_item(key, value)?;
+        }
+        Ok(dict.into_any())
+    }
+
+    fn column(&self, column: &ColumnSpec) -> PyResult<Bound<'py, PyAny>> {
+        self.model(
+            "ModelColumnSpec",
+            &[
+                ("name", self.object(&column.name)?),
+                ("description", self.object(column.description.as_deref())?),
+                ("audits", self.handles(&column.audits)?),
+            ],
+        )
+    }
+}
+
+/// Reject `MODEL(...)` header keys outside the model schema.
+#[pyfunction]
+fn check_model_header_keys(
+    py: Python<'_>,
+    header: &Bound<'_, PyAny>,
+    file_path: &str,
+) -> PyResult<()> {
+    let mut document: Document<'_> = Document::new(py)?;
+    let header: Value = document.value(header)?;
+    model_spec::check_model_header_keys(&header, file_path).map_err(|error| spec_error(py, error))
+}
+
+/// Validate a parsed `MODEL(...)` header into `(kind, fields)`, the keyword arguments of a
+/// `ViewStep` or `TransformStep` besides its name, query, and position. `check_query(kind=)`
+/// validates a view's references or returns a table's driving input.
+#[pyfunction]
+fn parse_model_spec<'py>(
+    py: Python<'py>,
+    header: &Bound<'py, PyAny>,
+    file_path: &str,
+    check_query: &Bound<'py, PyAny>,
+) -> PyResult<(String, Bound<'py, PyDict>)> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let header: Value = document.value(header)?;
+    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
+    let mut check = |kind: &str| -> Result<Option<String>, SpecError> {
+        let kwargs: Bound<'py, PyDict> = PyDict::new(py);
+        kwargs
+            .set_item("kind", kind)
+            .and_then(|()| check_query.call((), Some(&kwargs)))
+            .and_then(|result| result.extract::<Option<String>>())
+            .map_err(|failure| {
+                callback_error.replace(Some(failure));
+                SpecError::new(ErrorKind::PipelineDiscovery, String::new())
+            })
+    };
+    let spec = model_spec::model_spec(&header, file_path, &mut check);
+    if let Some(failure) = callback_error.take() {
+        return Err(failure);
+    }
+    let spec: ModelSpec = spec.map_err(|error| spec_error(py, error))?;
+    let (common, table) = match &spec {
+        ModelSpec::View(common) => (common, None),
+        ModelSpec::Table(common, table) => (common, Some(table)),
+    };
+    let fields: Bound<'py, PyDict> = PyDict::new(py);
+    fields.set_item("relation_name", common.relation_name.as_deref())?;
+    fields.set_item("description", common.description.as_deref())?;
+    fields.set_item(
+        "columns",
+        PyTuple::new(
+            py,
+            common
+                .columns
+                .iter()
+                .map(|column| document.column(column))
+                .collect::<PyResult<Vec<_>>>()?,
+        )?,
+    )?;
+    fields.set_item("audits", document.handles(&common.audits)?)?;
+    let Some(table) = table else {
+        return Ok(("view".to_owned(), fields));
+    };
+    fields.set_item("source", &table.source)?;
+    fields.set_item("engine", &table.engine)?;
+    fields.set_item("order_by", PyList::new(py, &table.order_by)?)?;
+    fields.set_item("partition_by", table.partition_by.as_deref())?;
+    fields.set_item("ttl", table.ttl.as_deref())?;
+    fields.set_item(
+        "retention",
+        retention_object(py, table.retention.clone(), |policy| {
+            document.model_retention(policy)
+        })?,
+    )?;
+    fields.set_item(
+        "settings",
+        match &table.settings {
+            None => document.object(None::<u8>)?,
+            Some(settings) => document.pairs_dict(settings)?,
+        },
+    )?;
+    fields.set_item(
+        "execution_settings",
+        document.model(
+            "ExecutionSettings",
+            &[(
+                "replay",
+                match &table.replay_settings {
+                    None => document.object(None::<u8>)?,
+                    Some(settings) => document.pairs_dict(settings)?,
+                },
+            )],
+        )?,
+    )?;
+    fields.set_item("replay_anchor", &table.replay_anchor)?;
+    fields.set_item(
+        "replay_on_change",
+        document.replay_on_change(table.replay_on_change)?,
+    )?;
+    fields.set_item(
+        "bounded_replay_fallback",
+        table.bounded_replay_fallback.as_deref(),
+    )?;
+    Ok(("table".to_owned(), fields))
+}
+
 /// Parse `[(path, payload, decode_error)]` source files in order into one tuple of sources
 /// per file. `derive_name(topic=, label=, file_path=)` runs the Kafka naming macro and returns
 /// `(name, macro_name, fingerprint)`.
@@ -1165,12 +1271,16 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "DEFAULT_KAFKA_FORMAT",
         source_registry::DEFAULT_KAFKA_FORMAT,
     )?;
+    module.add(
+        "DEFAULT_SQL_MODEL_ENGINE",
+        model_spec::DEFAULT_SQL_MODEL_ENGINE,
+    )?;
+    module.add_function(wrap_pyfunction!(check_model_header_keys, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_model_spec, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_effective_configuration, module)?)?;
     module.add_function(wrap_pyfunction!(parse_source_registry, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_model_retention, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_kafka_retention, module)?)?;
     module.add_function(wrap_pyfunction!(parse_duration_seconds, module)?)?;
     module.add_function(wrap_pyfunction!(parse_freshness_policy, module)?)?;
     module.add_function(wrap_pyfunction!(parse_project_config, module)?)?;

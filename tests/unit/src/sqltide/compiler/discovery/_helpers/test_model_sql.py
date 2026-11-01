@@ -8,6 +8,7 @@ from sqltide.compiler.discovery._helpers.model_sql import (
     load_transform_from_sql_file,
     parse_model_sql,
 )
+from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import TransformStep, ViewStep
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from tests.unit.src.sqltide.compiler.discovery._helpers._test_types import (
@@ -272,6 +273,39 @@ def test_given_unsupported_execution_phase_when_loading_model_then_it_fails_befo
     model_path.write_text(test_case.contents, encoding="utf-8")
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
+        load_transform_from_sql_file(file_path=model_path)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ParseModelSqlHeaderErrorTestCase(
+            description="rejects a list replay anchor",
+            contents=(
+                "MODEL (replay_anchor [auto]); "
+                'SELECT kafka_key::String AS order_id FROM __source("orders")'
+            ),
+            expected_error_fragment="must define 'replay_anchor' as 'auto' or 'never'",
+        ),
+        ParseModelSqlHeaderErrorTestCase(
+            description="rejects a mapping bounded replay fallback",
+            contents=(
+                "MODEL (bounded_replay_fallback (mode fail)); "
+                'SELECT kafka_key::String AS order_id FROM __source("orders")'
+            ),
+            expected_error_fragment="unsupported bounded_replay_fallback",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_non_scalar_replay_choice_when_loading_model_then_it_raises_discovery_error(
+    test_case: ParseModelSqlHeaderErrorTestCase,
+    tmp_path: Path,
+) -> None:
+    model_path: Path = tmp_path / "orders.sql"
+    model_path.write_text(test_case.contents, encoding="utf-8")
+
+    with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
         load_transform_from_sql_file(file_path=model_path)
 
 

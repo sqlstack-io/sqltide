@@ -8,6 +8,7 @@ pub mod effective;
 pub mod errors;
 pub mod freshness;
 pub mod interpolation;
+pub mod model_spec;
 pub mod pipeline_config;
 pub mod retention;
 pub mod source_registry;
