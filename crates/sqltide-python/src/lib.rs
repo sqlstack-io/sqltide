@@ -45,8 +45,8 @@ fn value_object<'py>(py: Python<'py>, value: &HeaderValue) -> PyResult<Bound<'py
             .getattr("int")?
             .call1((digits.as_str(),))?,
         HeaderValue::Float(number) => PyFloat::new(py, *number).into_any(),
-        HeaderValue::Text(text) => text.into_pyobject(py)?.into_any(),
-        HeaderValue::List(items) => {
+        HeaderValue::Text(text) | HeaderValue::Word(text) => text.into_pyobject(py)?.into_any(),
+        HeaderValue::List(items) | HeaderValue::Set(items) => {
             let list = PyList::empty(py);
             for item in items {
                 list.append(value_object(py, item)?)?;

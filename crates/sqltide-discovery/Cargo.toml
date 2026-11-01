@@ -9,6 +9,8 @@ rust-version.workspace = true
 
 [dependencies]
 regex.workspace = true
+sqltide-sqlanalysis.workspace = true
+sqltide-sqltext.workspace = true
 
 [lints]
 workspace = true

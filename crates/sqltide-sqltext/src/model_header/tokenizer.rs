@@ -36,7 +36,7 @@ fn quote_name(character: char) -> Option<&'static str> {
     }
 }
 
-pub(super) fn tokenize(characters: &[char]) -> Result<Vec<Token>, String> {
+pub(super) fn tokenize(characters: &[char], sets: bool) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut index: usize = 0;
     while index < characters.len() {
@@ -45,13 +45,13 @@ pub(super) fn tokenize(characters: &[char]) -> Result<Vec<Token>, String> {
             index += 1;
             continue;
         }
-        if is_brace(character) {
+        if is_brace(character) && !sets {
             return Err(format!(
                 "YAML-like brace mappings are not supported at position {index}; use SQLBuild \
                  parenthesized mapping syntax"
             ));
         }
-        if is_symbol(character) || character == KEY_VALUE_SEPARATOR {
+        if is_symbol(character) || is_brace(character) || character == KEY_VALUE_SEPARATOR {
             tokens.push(Token {
                 kind: TokenKind::Symbol,
                 value: character.to_string(),

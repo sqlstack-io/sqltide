@@ -677,3 +677,5 @@ class DiscoveredProjectInputs:
     audit_files: tuple[DiscoveredProjectFile, ...]
     macro_files: tuple[DiscoveredProjectFile, ...]
     access_file: DiscoveredProjectFile | None = None
+    constant_files: tuple[DiscoveredProjectFile, ...] = ()
+    enum_files: tuple[DiscoveredProjectFile, ...] = ()

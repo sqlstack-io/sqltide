@@ -52,13 +52,20 @@ fn ctes_report_missing_with_and_duplicates() {
 
 #[test]
 fn projections_split_at_outer_commas_only() {
-    let sql = chars("SELECT f(a, b)::Int32 AS x, 'p,q' AS y FROM t");
+    let sql = chars("SELECT f(a, b)::Int32 AS x, 'p,q' AS y, [1, 2]::Array(UInt8) AS z FROM t");
     let spans = outer_projection_spans(&sql).expect("valid");
     let texts: Vec<String> = spans
         .iter()
         .map(|s| sql[s.start..s.end].iter().collect())
         .collect();
-    assert_eq!(texts, ["f(a, b)::Int32 AS x", "'p,q' AS y"]);
+    assert_eq!(
+        texts,
+        [
+            "f(a, b)::Int32 AS x",
+            "'p,q' AS y",
+            "[1, 2]::Array(UInt8) AS z"
+        ]
+    );
     let cast = outer_double_colon_type(&sql, spans[0].start, spans[0].end).expect("valid");
     assert_eq!(cast.as_deref(), Some("Int32"));
 }

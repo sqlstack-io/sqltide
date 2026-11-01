@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 from sqltide.compiler.discovery.models import DiscoveredProjectFile
+from sqltide.compiler.macros.constants import RESERVED_MACRO_NAMES
 from sqltide.compiler.macros.exceptions import MacroError
 from sqltide.compiler.macros.models import LoadedMacro, MacroRegistry
 from sqltide.diagnostics.models import RelatedDiagnosticLocation, SourceLocation
@@ -29,6 +30,12 @@ def load_project_macros(*, macro_files: tuple[DiscoveredProjectFile, ...]) -> Ma
             module=module,
             macro_file=macro_file,
         ):
+            if loaded_macro.name in RESERVED_MACRO_NAMES:
+                raise MacroError(
+                    f"Macro '{loaded_macro.name}' in '{macro_file.file_path}' uses a reserved "
+                    "name; @const and @enum read project constants and enums",
+                    location=_definition_location(loaded_macro),
+                )
             existing_macro: LoadedMacro | None = loaded_macros.get(loaded_macro.name)
             if existing_macro is not None:
                 collision_paths: str = f"'{macro_file.file_path}' and '{existing_macro.file_path}'"

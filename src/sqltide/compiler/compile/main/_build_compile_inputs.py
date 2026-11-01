@@ -1,5 +1,6 @@
 """Apache-2.0: SQLBuild compiler/compile/main/_build_compile_inputs.py@7e3b2f854f05."""
 
+from dataclasses import replace
 from pathlib import Path
 
 from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
@@ -33,6 +34,7 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import ModelReferenceScope, PipelineMode
 from sqltide.compiler.macros.main._build_macro_context import build_macro_context
+from sqltide.compiler.macros.main._load_declarations import load_declarations
 from sqltide.compiler.macros.main._load_macro_registry import load_macro_registry
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
@@ -80,11 +82,17 @@ def build_compile_inputs(
         if effective_configuration is None
         else effective_configuration.defaults.pipeline_mode == PipelineMode.VIRTUAL
     )
-    macro_registry: MacroRegistry = (
-        load_macro_registry(macro_files=discovered_inputs.macro_files)
-        if discovered_inputs.loaded_project is None
-        or discovered_inputs.loaded_project.macro_registry is None
-        else discovered_inputs.loaded_project.macro_registry
+    macro_registry: MacroRegistry = replace(
+        (
+            load_macro_registry(macro_files=discovered_inputs.macro_files)
+            if discovered_inputs.loaded_project is None
+            or discovered_inputs.loaded_project.macro_registry is None
+            else discovered_inputs.loaded_project.macro_registry
+        ),
+        declarations=load_declarations(
+            constant_files=discovered_inputs.constant_files,
+            enum_files=discovered_inputs.enum_files,
+        ),
     )
     macro_context: MacroContext = build_macro_context(
         adapter_name=adapter_profile.identity.name,

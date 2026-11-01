@@ -52,6 +52,7 @@ def expand_sql_body_macros(
             ),
             partial(_macro_error, registry=registry, locate=locate),
             partial(_located_macro_error, registry=registry, locate=locate),
+            registry.declarations,
         )
     )
 
@@ -117,7 +118,7 @@ def _located_macro_error(
     *,
     error: BaseException,
     index: int,
-    name: str,
+    name: str | None,
     registry: MacroRegistry,
     locate: partial[SourceLocation],
 ) -> BaseException:
@@ -126,7 +127,9 @@ def _located_macro_error(
     located: MacroError = MacroError(
         str(error),
         location=locate(index=index),
-        related_locations=_definition_related_location(registry.macros[name]),
+        related_locations=(
+            () if name is None else _definition_related_location(registry.macros[name])
+        ),
     )
     located.__cause__ = error
     return located

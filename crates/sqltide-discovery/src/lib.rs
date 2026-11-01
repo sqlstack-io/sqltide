@@ -3,6 +3,7 @@
 
 pub mod byte_size;
 pub mod config;
+pub mod declarations;
 pub mod durations;
 pub mod effective;
 pub mod errors;
