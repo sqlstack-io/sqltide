@@ -1,9 +1,13 @@
 //! Python bindings for deployment planning over desired state.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use sqltide_planner::actual::{
+    ActualSource, ActualStateLookup, DesiredFacts, DesiredObjectFacts, InspectionFacts,
+    RecordFacts, RootFacts, actual_sources,
+};
 use sqltide_planner::deployment::{PlanKey, PlanSubtree, stage_deployment as stage};
 use sqltide_planner::desired::{
     CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectKind, ObjectType, ReplayMode,
@@ -867,7 +871,107 @@ fn direct_model_drift_reasons(
     )
 }
 
+/// `(key index, name, kind, materialized view target)` for one desired object.
+type ActualObjectArgument = (usize, String, String, Option<String>);
+/// `(is reconcile, normalized query)`.
+type RecordArgument = (bool, Option<String>);
+/// `None`, or `(source, active table or query)` with source `desired`, `active_table`, `query`.
+type ActualSourceResult = Option<(&'static str, Option<String>)>;
+
+/// Each desired object's actual source. A missing required lookup raises
+/// `ValueError(("root", key index) | ("physical_name", name) | ("table_spec", name))`.
+#[pyfunction]
+#[allow(clippy::needless_pass_by_value)]
+fn actual_state_sources(
+    objects: Vec<ActualObjectArgument>,
+    existing_names: HashSet<String>,
+    roots: HashMap<usize, (bool, Option<String>)>,
+    records_by_deployment_and_key: HashMap<(String, usize), RecordArgument>,
+    latest_records: HashMap<usize, RecordArgument>,
+    active_physical_names: HashMap<String, String>,
+    active_table_spec_names: HashSet<String>,
+) -> PyResult<Vec<ActualSourceResult>> {
+    let facts: Vec<DesiredObjectFacts<'_>> = objects
+        .iter()
+        .map(|(key, name, kind, target)| {
+            let kind: DesiredFacts<'_> = match (kind.as_str(), target) {
+                ("kafka_table", _) => DesiredFacts::KafkaTable,
+                ("table", _) => DesiredFacts::Table,
+                ("materialized_view", Some(target)) => DesiredFacts::MaterializedView {
+                    target_table_name: target,
+                },
+                ("view", _) => DesiredFacts::View,
+                _ => {
+                    return Err(PyValueError::new_err(format!(
+                        "Unknown desired object kind '{kind}'"
+                    )));
+                }
+            };
+            Ok(DesiredObjectFacts {
+                key: *key,
+                name,
+                kind,
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    let inspection = InspectionFacts {
+        existing_names: existing_names.iter().map(String::as_str).collect(),
+        roots: roots
+            .iter()
+            .map(|(key, (present, id))| {
+                (
+                    *key,
+                    RootFacts {
+                        active_view_present: *present,
+                        active_deployment_id: id.as_deref(),
+                    },
+                )
+            })
+            .collect(),
+        records_by_deployment_and_key: records_by_deployment_and_key
+            .iter()
+            .map(|((id, key), value)| ((id.as_str(), *key), record_facts(value)))
+            .collect(),
+        latest_records: latest_records
+            .iter()
+            .map(|(key, value)| (*key, record_facts(value)))
+            .collect(),
+        active_physical_names: active_physical_names
+            .iter()
+            .map(|(logical, physical)| (logical.as_str(), physical.as_str()))
+            .collect(),
+        active_table_spec_names: active_table_spec_names.iter().map(String::as_str).collect(),
+    };
+    match actual_sources(&facts, &inspection) {
+        Ok(sources) => Ok(sources
+            .into_iter()
+            .map(|source| {
+                source.map(|source| match source {
+                    ActualSource::Desired => ("desired", None),
+                    ActualSource::ActiveTable(name) => ("active_table", Some(name.to_owned())),
+                    ActualSource::Query(query) => ("query", Some(query.to_owned())),
+                })
+            })
+            .collect()),
+        Err(ActualStateLookup::Root(key)) => Err(PyValueError::new_err(("root", key))),
+        Err(ActualStateLookup::PhysicalName(name)) => {
+            Err(PyValueError::new_err(("physical_name", name.to_owned())))
+        }
+        Err(ActualStateLookup::TableSpec(name)) => {
+            Err(PyValueError::new_err(("table_spec", name.to_owned())))
+        }
+    }
+}
+
+fn record_facts((is_reconcile, query): &RecordArgument) -> RecordFacts<'_> {
+    RecordFacts {
+        is_reconcile: *is_reconcile,
+        normalized_query: query.as_deref(),
+    }
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(actual_state_sources, module)?)?;
     module.add_function(wrap_pyfunction!(direct_fingerprint_record, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_drift_reasons, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_identity_metadata, module)?)?;

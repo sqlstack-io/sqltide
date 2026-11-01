@@ -1,5 +1,6 @@
 //! Deployment planning for SQLTide. Plain Rust with no Python dependency.
 
+pub mod actual;
 pub mod deployment;
 pub mod desired;
 pub mod diff;
