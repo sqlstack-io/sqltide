@@ -7,6 +7,7 @@ pub mod durations;
 pub mod errors;
 pub mod freshness;
 pub mod interpolation;
+pub mod pipeline_config;
 pub mod retention;
 pub mod sources;
 pub mod text;

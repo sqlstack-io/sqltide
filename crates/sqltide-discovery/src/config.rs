@@ -835,6 +835,7 @@ impl Parser<'_> {
         static EMPTY: Value = Value {
             handle: usize::MAX,
             kind: Kind::Dict(Vec::new()),
+            text: None,
         };
         let Some(payload) = payload.filter(|payload| !payload.is_none()) else {
             return Ok(&EMPTY);

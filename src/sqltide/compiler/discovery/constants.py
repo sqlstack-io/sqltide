@@ -56,32 +56,11 @@ LEGACY_PROJECT_CONFIG_FILE_NAME: str = "streambuild_project.toml"
 LEGACY_LOCAL_CONFIG_FILE_NAME: str = "streambuild_local.toml"
 
 PIPELINE_CONFIG_FILE_NAME: str = "pipeline.toml"
-PIPELINE_CONFIG_KEYS: frozenset[str] = frozenset(
-    {
-        "mode",
-        "replay_on_change",
-        "bounded_replay_fallback",
-        "naming",
-        "protection",
-        "audit_defaults",
-        "execution",
-        "defaults",
-    }
-)
 EXECUTION_SETTING_NAME_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 EXECUTION_SETTINGS_KEYS: frozenset[str] = frozenset({"replay"})
-PIPELINE_EXECUTION_KEYS: frozenset[str] = frozenset({"replay"})
-PIPELINE_REPLAY_EXECUTION_KEYS: frozenset[str] = frozenset({"settings"})
-NAMING_KEYS: frozenset[str] = frozenset({"table_prefix", "view_prefix"})
-PROTECTION_KEYS: frozenset[str] = frozenset({"warning", "confirmation"})
-PROTECTION_CONFIRMATION_PATTERN: re.Pattern[str] = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
-PROTECTION_CONFIRMATION_UNSAFE_PATTERN: re.Pattern[str] = re.compile(r"[^A-Za-z0-9._:-]")
 DEFAULT_ADAPTER_NAME: str = "clickhouse"
 PYTHON_PACKAGE_INITIALIZER_FILE_NAME: str = "__init__.py"
-FULL_REPLAY_POLICY_VALUE: str = "full"
 INTERPOLATION_TOKEN_START: str = "${"
-MODEL_DEFAULT_KEYS: frozenset[str] = frozenset({"retention"})
-PIPELINE_DEFAULT_KEYS: frozenset[str] = frozenset({"models"})
 KAFKA_NAMING_MACRO_TOPIC_PARAMETER: str = "topic"
 SOURCE_FILE_KEYS: frozenset[str] = frozenset({"sources"})
 SOURCE_KEYS: frozenset[str] = frozenset(
@@ -137,10 +116,6 @@ REPLAY_BOUNDARY_COLUMN_KEYS: frozenset[str] = frozenset(
     }
 )
 MODEL_COLUMN_KEYS: frozenset[str] = frozenset({"description", "audits"})
-AUDIT_DEFAULT_KEYS: frozenset[str] = frozenset({"severity", "every", "warmup"})
-AUDIT_SEVERITIES: frozenset[str] = frozenset({"error", "warning"})
-AUDIT_DEFAULT_EVERY_KEY: str = "every"
-AUDIT_DEFAULT_WARMUP_KEY: str = "warmup"
 SECONDS_BY_DURATION_UNIT: dict[str, int] = {
     "d": 24 * 60 * 60,
     "h": 60 * 60,

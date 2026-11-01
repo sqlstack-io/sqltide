@@ -3,12 +3,18 @@ from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
 from sqltide.compiler.discovery.models import (
+    AuditDefaults,
     AuthoredProjectConfig,
+    ExecutionSettings,
     KafkaRetentionPolicy,
     LocalProjectConfig,
     ModelRetentionPolicy,
+    PipelineNaming,
+    PipelineProtection,
+    ReplayOnChangePolicy,
     SourceFreshnessPolicy,
 )
+from sqltide.compiler.discovery.types import BoundedReplayFallback
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -145,6 +151,20 @@ def parse_duration_seconds(value: object, field_path: str, allow_zero: bool) -> 
 def parse_freshness_policy(
     payload: object, label: str, file_path: str
 ) -> SourceFreshnessPolicy | None: ...
+def parse_pipeline_mode(
+    payload: Mapping[str, object], file_path: str, default_mode: str
+) -> str: ...
+def parse_pipeline_settings(
+    payload: Mapping[str, object], file_path: str, pipeline_name: str, mode: str
+) -> tuple[
+    ReplayOnChangePolicy | None,
+    BoundedReplayFallback | None,
+    PipelineNaming,
+    PipelineProtection | None,
+    AuditDefaults,
+    ExecutionSettings,
+    ModelRetentionPolicy | Literal[False] | None,
+]: ...
 def parse_project_config(
     payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
 ) -> AuthoredProjectConfig: ...

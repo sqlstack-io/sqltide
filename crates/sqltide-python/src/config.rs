@@ -7,11 +7,12 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::config::{
     self, AuditDefaults, Build, LocalConfig, Pairs, ProjectConfig, ProjectDefaults, ProjectTarget,
-    ReplayRule, RetentionDefault, SensorsOverride, Target,
+    ReplayOnChange, ReplayRule, RetentionDefault, SensorsOverride, Target,
 };
 use sqltide_discovery::durations;
 use sqltide_discovery::errors::{ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
+use sqltide_discovery::pipeline_config::{self, PipelineSettings};
 use sqltide_discovery::retention::{self, KafkaRetention, ModelRetention, Retention};
 use sqltide_discovery::value::{Kind, Value};
 
@@ -58,10 +59,17 @@ impl<'py> Document<'py> {
         } else {
             Kind::Other(object.str()?.to_string())
         };
+        let text: Option<String> = match kind {
+            Kind::List(_) | Kind::Tuple(_) | Kind::Dict(_) | Kind::Mapping(_) => {
+                Some(object.str()?.to_string())
+            }
+            _ => None,
+        };
         self.objects.push(object.clone());
         Ok(Value {
             handle: self.objects.len() - 1,
             kind,
+            text,
         })
     }
 
@@ -316,6 +324,30 @@ impl<'py> Document<'py> {
         }
     }
 
+    fn replay_on_change(&self, policy: Option<ReplayOnChange>) -> PyResult<Bound<'py, PyAny>> {
+        match policy {
+            None => self.object(None::<u8>),
+            Some(policy) => self.model(
+                "ReplayOnChangePolicy",
+                &[
+                    ("breaking", self.replay_rule(policy.breaking)?),
+                    ("non_breaking", self.replay_rule(policy.non_breaking)?),
+                ],
+            ),
+        }
+    }
+
+    fn bounded_replay_fallback(&self, fallback: Option<&str>) -> PyResult<Bound<'py, PyAny>> {
+        match fallback {
+            None => self.object(None::<u8>),
+            Some(fallback) => self
+                .py
+                .import(TYPES_MODULE)?
+                .getattr("BoundedReplayFallback")?
+                .call1((fallback,)),
+        }
+    }
+
     fn freshness(&self, freshness: Option<&Freshness>) -> PyResult<Bound<'py, PyAny>> {
         match freshness {
             None => self.object(None::<u8>),
@@ -400,24 +432,10 @@ impl<'py> Document<'py> {
     }
 
     fn defaults(&self, defaults: &ProjectDefaults) -> PyResult<Bound<'py, PyAny>> {
-        let replay_on_change: Bound<'py, PyAny> = match defaults.replay_on_change {
-            None => self.object(None::<u8>)?,
-            Some(policy) => self.model(
-                "ReplayOnChangePolicy",
-                &[
-                    ("breaking", self.replay_rule(policy.breaking)?),
-                    ("non_breaking", self.replay_rule(policy.non_breaking)?),
-                ],
-            )?,
-        };
-        let bounded_replay_fallback: Bound<'py, PyAny> = match &defaults.bounded_replay_fallback {
-            None => self.object(None::<u8>)?,
-            Some(fallback) => self
-                .py
-                .import(TYPES_MODULE)?
-                .getattr("BoundedReplayFallback")?
-                .call1((fallback,))?,
-        };
+        let replay_on_change: Bound<'py, PyAny> =
+            self.replay_on_change(defaults.replay_on_change)?;
+        let bounded_replay_fallback: Bound<'py, PyAny> =
+            self.bounded_replay_fallback(defaults.bounded_replay_fallback.as_deref())?;
         let kafka: [(&str, Bound<'py, PyAny>); 2] = self
             .retention(&defaults.kafka_retention, |policy| {
                 self.kafka_retention(policy)
@@ -616,7 +634,86 @@ fn parse_freshness_policy<'py>(
     document.freshness(parsed.as_ref())
 }
 
+/// Check `pipeline.toml`'s keys and return its mode, `default_mode` when unset.
+#[pyfunction]
+fn parse_pipeline_mode(
+    py: Python<'_>,
+    payload: &Bound<'_, PyAny>,
+    file_path: &str,
+    default_mode: &str,
+) -> PyResult<String> {
+    let mut document: Document<'_> = Document::new(py)?;
+    let payload: Value = document.value(payload)?;
+    pipeline_config::parse_pipeline_mode(&payload, file_path, default_mode)
+        .map_err(|error| spec_error(py, error))
+}
+
+/// `pipeline.toml`'s other settings: `(replay_on_change, bounded_replay_fallback, naming,
+/// protection, audit_defaults, execution_settings, model_retention)`.
+#[pyfunction]
+fn parse_pipeline_settings<'py>(
+    py: Python<'py>,
+    payload: &Bound<'py, PyAny>,
+    file_path: &str,
+    pipeline_name: &str,
+    mode: &str,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let payload: Value = document.value(payload)?;
+    let settings: PipelineSettings =
+        pipeline_config::parse_pipeline_settings(&payload, file_path, pipeline_name, mode)
+            .map_err(|error| spec_error(py, error))?;
+    let protection: Bound<'py, PyAny> = match &settings.protection {
+        None => document.object(None::<u8>)?,
+        Some((warning, confirmation)) => document.model(
+            "PipelineProtection",
+            &[
+                ("warning", document.object(warning)?),
+                ("confirmation", document.object(confirmation)?),
+            ],
+        )?,
+    };
+    let replay: Bound<'py, PyAny> = match &settings.replay_settings {
+        None => document.object(None::<u8>)?,
+        Some(pairs) => {
+            let replay: Bound<'py, PyDict> = PyDict::new(py);
+            for (name, value) in pairs {
+                replay.set_item(name, value)?;
+            }
+            replay.into_any()
+        }
+    };
+    PyTuple::new(
+        py,
+        [
+            document.replay_on_change(settings.replay_on_change)?,
+            document.bounded_replay_fallback(settings.bounded_replay_fallback.as_deref())?,
+            document.model(
+                "PipelineNaming",
+                &[
+                    (
+                        "table_prefix",
+                        document.object(settings.table_prefix.as_deref())?,
+                    ),
+                    (
+                        "view_prefix",
+                        document.object(settings.view_prefix.as_deref())?,
+                    ),
+                ],
+            )?,
+            protection,
+            document.audits(&settings.audit_defaults)?,
+            document.model("ExecutionSettings", &[("replay", replay)])?,
+            retention_object(py, settings.model_retention, |policy| {
+                document.model_retention(policy)
+            })?,
+        ],
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
     module.add_function(wrap_pyfunction!(parse_model_retention, module)?)?;
     module.add_function(wrap_pyfunction!(parse_kafka_retention, module)?)?;
     module.add_function(wrap_pyfunction!(parse_duration_seconds, module)?)?;

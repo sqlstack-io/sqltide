@@ -5,6 +5,8 @@
 pub struct Value {
     pub handle: usize,
     pub kind: Kind,
+    /// Python `str(value)` of a list, tuple, or mapping, which messages and settings embed.
+    pub text: Option<String>,
 }
 
 /// The shape of one value, distinguished as the Python checks distinguish it.
@@ -68,7 +70,9 @@ impl Value {
             Kind::Int(_, text) | Kind::Float(_, text) | Kind::Str(text) | Kind::Other(text) => {
                 text.clone()
             }
-            Kind::List(_) | Kind::Tuple(_) | Kind::Dict(_) | Kind::Mapping(_) => String::new(),
+            Kind::List(_) | Kind::Tuple(_) | Kind::Dict(_) | Kind::Mapping(_) => {
+                self.text.clone().unwrap_or_default()
+            }
         }
     }
 
