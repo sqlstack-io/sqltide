@@ -1,13 +1,8 @@
 """Classify one managed root from neutral inspected warehouse state."""
 
+import sqltide._native as _native
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.compiler.compile.models import ObjectKey
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
-    deployment_id_from_physical_name,
-)
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
-    is_deployment_physical_name,
-)
 from sqltide.compiler.planner.models import RootDeploymentInspection
 from sqltide.compiler.planner.types import RootDeploymentStateKind
 
@@ -19,38 +14,20 @@ def inspect_root_deployment_state(
 ) -> RootDeploymentInspection:
     """Classify one managed root as active, greenfield, or damaged."""
 
-    active_binding_physical_names: tuple[str, ...] = tuple(
-        binding.physical_name
-        for binding in inspected_state.active_bindings
-        if binding.logical_name == root_key.name
-        and binding.database == (root_key.database or binding.database)
+    state_kind, active_deployment_id = _native.root_deployment_state(
+        [
+            (binding.database, binding.logical_name, binding.physical_name)
+            for binding in inspected_state.active_bindings
+        ],
+        [
+            (candidate.database, candidate.logical_name, candidate.physical_name)
+            for candidate in inspected_state.physical_candidates
+        ],
+        root_key.database,
+        root_key.name,
     )
-    physical_candidate_names: tuple[str, ...] = tuple(
-        candidate.physical_name
-        for candidate in inspected_state.physical_candidates
-        if candidate.logical_name == root_key.name
-        and candidate.database == (root_key.database or candidate.database)
-    )
-    if len(active_binding_physical_names) == 1:
-        if not is_deployment_physical_name(active_binding_physical_names[0]):
-            return RootDeploymentInspection(
-                root_key=root_key,
-                state_kind=RootDeploymentStateKind.INVALID_ACTIVE_VIEW,
-                active_deployment_id=None,
-            )
-        return RootDeploymentInspection(
-            root_key=root_key,
-            state_kind=RootDeploymentStateKind.ACTIVE_VIEW_PRESENT,
-            active_deployment_id=deployment_id_from_physical_name(active_binding_physical_names[0]),
-        )
-    if not physical_candidate_names:
-        return RootDeploymentInspection(
-            root_key=root_key,
-            state_kind=RootDeploymentStateKind.GREENFIELD,
-            active_deployment_id=None,
-        )
     return RootDeploymentInspection(
         root_key=root_key,
-        state_kind=RootDeploymentStateKind.LOGICAL_VIEW_MISSING,
-        active_deployment_id=None,
+        state_kind=RootDeploymentStateKind(state_kind),
+        active_deployment_id=active_deployment_id,
     )

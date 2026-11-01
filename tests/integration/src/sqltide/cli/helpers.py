@@ -607,7 +607,7 @@ def write_audit_project_files(project_dir: Path) -> None:
 
         SELECT order_id, line_total
         FROM __ref("order_items")
-        WHERE line_total < 0
+        WHERE line_total < 0 -- a trailing comment must not swallow the wrapper
         """,
     )
 

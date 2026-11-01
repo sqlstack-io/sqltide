@@ -460,7 +460,7 @@ fn json_optional(value: Option<&str>) -> String {
     value.map_or_else(|| "null".to_owned(), json_string)
 }
 
-fn sha256_hex(text: &str) -> String {
+pub(crate) fn sha256_hex(text: &str) -> String {
     Sha256::digest(text.as_bytes())
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -614,6 +614,29 @@ pub fn latest_fingerprints_query(database: &str, logical_model_identities: &[Str
          GROUP BY logical_model_identity) ORDER BY logical_model_identity",
         DIRECT_FINGERPRINTS_TABLE.0,
         identities.join(", ")
+    )
+}
+
+/// Every persisted object-state row, aliased to the planner's snapshot columns.
+#[must_use]
+pub fn object_state_records_query(database: &str) -> String {
+    format!(
+        "SELECT state_id AS deployment_id, observation_id, state_kind, \
+         logical_database_name AS database_name, logical_object_type AS object_type, \
+         logical_object_name AS object_name, object_fingerprint AS normalized_fingerprint, \
+         canonical_query AS normalized_query, observed_at AS recorded_at FROM {database}.{}",
+        OBJECT_STATE_TABLE.0
+    )
+}
+
+/// The persisted statement hashes of one invocation, in statement order.
+#[must_use]
+pub fn run_statement_verification_query(database: &str, invocation_id: &str) -> String {
+    format!(
+        "SELECT statement_sequence, toString(sql_sha256), toString(workflow_sha256) FROM \
+         `{database}`.`{}` FINAL WHERE invocation_id = {} ORDER BY statement_sequence",
+        RUN_STATEMENTS_TABLE.0,
+        text_literal(invocation_id)
     )
 }
 

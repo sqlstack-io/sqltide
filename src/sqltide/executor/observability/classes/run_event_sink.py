@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import sys
 import threading
 from hashlib import sha256
 from typing import TextIO
 from uuid import uuid4
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.constants import (
-    METADATA_RUN_STATEMENTS_TABLE_NAME,
-    REDACTED_SECRET_PLACEHOLDER,
-)
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
     AdapterQueryResult,
@@ -43,21 +39,6 @@ _STATEMENT_COMPLETED_KIND: str = "statement_completed"
 _RUN_HEARTBEAT_KIND: str = "run_heartbeat"
 _AUDIT_STARTED_KIND: str = "audit_started"
 _AUDIT_COMPLETED_KIND: str = "audit_completed"
-_KAFKA_ENGINE_PATTERN: re.Pattern[str] = re.compile(r"\bENGINE\s*=\s*Kafka\b", re.IGNORECASE)
-_QUOTED_SETTING_PATTERN: re.Pattern[str] = re.compile(
-    r"(?P<prefix>\b(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*)"
-    r"'(?P<value>(?:\\.|''|[^'])*)'"
-)
-_SENSITIVE_SETTING_FRAGMENTS: tuple[str, ...] = (
-    "credential",
-    "password",
-    "private_key",
-    "sasl",
-    "secret",
-    "token",
-)
-_KAFKA_BROKER_LIST_SETTING: str = "kafka_broker_list"
-_BROKER_USERINFO_SEPARATOR: str = "@"
 
 
 def _replay_offset_progress_payload(*, statement: WarehouseStatement) -> dict[str, object] | None:
@@ -225,16 +206,8 @@ class RunEventSink:
         if not statements:
             return
         next_revision: int = self._workflow_revision + 1
-        redacted_sql: tuple[str, ...] = tuple(
-            _redacted_statement_sql(statement.sql) for statement in statements
-        )
-        persisted_workflow_sha256: str = (
-            workflow_sha256
-            if all(
-                persisted_sql == statement.sql
-                for statement, persisted_sql in zip(statements, redacted_sql, strict=True)
-            )
-            else sha256("\n".join(redacted_sql).encode()).hexdigest()
+        redacted_sql, persisted_workflow_sha256 = _native.redact_clickhouse_workflow_statements(
+            [statement.sql for statement in statements], workflow_sha256
         )
         records: tuple[AdapterRunStatementRecord, ...] = tuple(
             AdapterRunStatementRecord(
@@ -275,11 +248,10 @@ class RunEventSink:
     def _verify_workflow_statements(
         self, *, records: tuple[AdapterRunStatementRecord, ...]
     ) -> None:
-        invocation_id: str = self._invocation_id.replace("\\", "\\\\").replace("'", "\\'")
         result: AdapterQueryResult = self._connection.query(
-            "SELECT statement_sequence, toString(sql_sha256), toString(workflow_sha256) "
-            f"FROM `{self._database}`.`{METADATA_RUN_STATEMENTS_TABLE_NAME}` FINAL "
-            f"WHERE invocation_id = '{invocation_id}' ORDER BY statement_sequence"
+            _native.render_clickhouse_run_statement_verification_query(
+                self._database, self._invocation_id
+            )
         )
         observed: tuple[tuple[int, str, str], ...] = tuple(
             (int(str(row[0])), str(row[1]), str(row[2])) for row in result.rows
@@ -422,26 +394,3 @@ class RunEventSink:
                     pass
                 self._persistence_warning_emitted = True
             return
-
-
-def _redacted_statement_sql(sql: str) -> str:
-    """Remove credential-bearing Kafka settings from durable SQL text."""
-
-    if _KAFKA_ENGINE_PATTERN.search(sql) is None:
-        return sql
-
-    def replace_setting(match: re.Match[str]) -> str:
-        key: str = match.group("key")
-        value: str = match.group("value")
-        broker_list_with_userinfo: bool = (
-            key.lower() == _KAFKA_BROKER_LIST_SETTING and _BROKER_USERINFO_SEPARATOR in value
-        )
-        sensitive: bool = (
-            any(fragment in key.lower() for fragment in _SENSITIVE_SETTING_FRAGMENTS)
-            or broker_list_with_userinfo
-        )
-        if not sensitive:
-            return match.group(0)
-        return f"{match.group('prefix')}'{REDACTED_SECRET_PLACEHOLDER}'"
-
-    return _QUOTED_SETTING_PATTERN.sub(replace_setting, sql)

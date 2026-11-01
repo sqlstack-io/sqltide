@@ -22,3 +22,17 @@ class DeploymentDiffStatus(StrEnum):
     CHANGED = "changed"
     UNCHANGED = "unchanged"
     PHYSICAL_MISSING = "physical_missing"
+
+
+type NativeInventoryRecord = tuple[str, str, str, list[str], list[tuple[str, str]]]
+type NativeDeploymentSummary = tuple[
+    str,
+    str,
+    str | None,
+    str | None,
+    list[str],
+    list[str],
+    list[str],
+    list[str],
+    str | None,
+]

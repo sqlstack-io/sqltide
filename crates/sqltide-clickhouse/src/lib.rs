@@ -1,9 +1,11 @@
 //! ClickHouse SQL rendering for SQLTide's adapter. Python keeps the adapter protocol, the
 //! connection, and credential substitution; these functions only build SQL text.
 
+pub mod audit;
 pub mod comparison;
 pub mod metadata;
 pub mod realization;
+pub mod redaction;
 pub mod replay;
 pub mod resources;
 

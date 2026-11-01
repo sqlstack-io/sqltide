@@ -1,15 +1,13 @@
 """Project one immutable warehouse snapshot into planner assembly inputs."""
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
-    CatalogRelation,
     CatalogSnapshot,
     InspectedActiveTableBinding,
     InspectedManagedTableState,
     InspectedPhysicalTableCandidate,
 )
 from sqltide.compiler.compile.constants import (
-    KAFKA_TABLE_NAME_PREFIX,
-    MATERIALIZED_VIEW_NAME_PREFIX,
     RAW_TABLE_NAME_PREFIX,
 )
 from sqltide.compiler.compile.models import (
@@ -28,12 +26,6 @@ from sqltide.compiler.planner._helpers.warehouse_catalog import (
 from sqltide.compiler.planner.main.inspect_root_deployment_state import (
     inspect_root_deployment_state,
 )
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
-    is_deployment_physical_name,
-)
-from sqltide.compiler.planner.main.logical_name_from_physical_name import (
-    logical_name_from_physical_name,
-)
 from sqltide.compiler.planner.models import (
     ActualStateInspection,
     ObjectStateRecord,
@@ -47,34 +39,30 @@ def build_inspected_managed_table_state_from_catalog(
     *, catalog: CatalogSnapshot
 ) -> InspectedManagedTableState:
     database: str = catalog.identity.database
-    active_bindings: list[InspectedActiveTableBinding] = []
-    physical_candidates: list[InspectedPhysicalTableCandidate] = []
-    relation: CatalogRelation
-    for relation in catalog.relations:
-        logical_name: str = logical_name_from_physical_name(relation.name)
-        if is_deployment_physical_name(relation.name) and not logical_name.startswith(
-            (KAFKA_TABLE_NAME_PREFIX, MATERIALIZED_VIEW_NAME_PREFIX)
-        ):
-            physical_candidates.append(
-                InspectedPhysicalTableCandidate(
-                    database=database,
-                    logical_name=logical_name,
-                    physical_name=relation.name,
-                    object_type="view" if relation.query_sql is not None else "table",
-                )
-            )
-            continue
-        if relation.stable_binding_name is not None:
-            active_bindings.append(
-                InspectedActiveTableBinding(
-                    database=database,
-                    logical_name=relation.name,
-                    physical_name=relation.stable_binding_name,
-                )
-            )
+    bindings, candidates = _native.managed_catalog_relations(
+        [
+            (relation.name, relation.query_sql is not None, relation.stable_binding_name)
+            for relation in catalog.relations
+        ]
+    )
     return InspectedManagedTableState(
-        active_bindings=tuple(active_bindings),
-        physical_candidates=tuple(physical_candidates),
+        active_bindings=tuple(
+            InspectedActiveTableBinding(
+                database=database,
+                logical_name=logical_name,
+                physical_name=physical_name,
+            )
+            for logical_name, physical_name in bindings
+        ),
+        physical_candidates=tuple(
+            InspectedPhysicalTableCandidate(
+                database=database,
+                logical_name=logical_name,
+                physical_name=physical_name,
+                object_type="view" if is_view else "table",
+            )
+            for logical_name, physical_name, is_view in candidates
+        ),
     )
 
 
@@ -178,18 +166,14 @@ def _latest_object_state_records_by_keys(
     keys: tuple[ObjectKey, ...],
     records: tuple[ObjectStateRecord, ...],
 ) -> dict[ObjectKey, ObjectStateRecord]:
-    latest_records: dict[ObjectKey, ObjectStateRecord] = {}
-    record: ObjectStateRecord
-    for record in records:
-        if record.key not in keys:
-            continue
-        current_record: ObjectStateRecord | None = latest_records.get(record.key)
-        if current_record is None or (record.recorded_at, record.observation_id) > (
-            current_record.recorded_at,
-            current_record.observation_id,
-        ):
-            latest_records[record.key] = record
-    return latest_records
+    index_by_key: dict[ObjectKey, int] = {key: index for index, key in enumerate(keys)}
+    positions: list[int] = _native.latest_object_state_positions(
+        [
+            (index_by_key.get(record.key), record.recorded_at, record.observation_id)
+            for record in records
+        ]
+    )
+    return {records[position].key: records[position] for position in positions}
 
 
 def _transform_view_keys(desired_state: DesiredState) -> tuple[ObjectKey, ...]:

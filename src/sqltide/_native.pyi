@@ -45,6 +45,15 @@ def render_clickhouse_metadata_state(database: str, state: object) -> list[str]:
 def render_clickhouse_latest_fingerprints_query(
     database: str, logical_model_identities: list[str]
 ) -> str: ...
+def render_clickhouse_object_state_records_query(database: str) -> str: ...
+def render_clickhouse_run_statement_verification_query(
+    database: str, invocation_id: str
+) -> str: ...
+def render_clickhouse_audit_count_query(query: str) -> str: ...
+def render_clickhouse_audit_sample_query(query: str, limit: int) -> str: ...
+def redact_clickhouse_workflow_statements(
+    sqls: list[str], workflow_sha256: str
+) -> tuple[list[str], str]: ...
 def render_clickhouse_direct_fingerprint_observations(
     database: str, fingerprints: tuple[object, ...]
 ) -> list[str]: ...
@@ -703,6 +712,25 @@ def realize_direct_replay_capture(
 ]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
+def deployment_inventory_summaries(
+    records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
+    physical_candidate_names: list[str],
+    active_bindings: list[tuple[str, str]],
+    publications: list[tuple[str, str]],
+    existing_names: list[str],
+) -> list[
+    tuple[
+        str,
+        str,
+        str | None,
+        str | None,
+        list[str],
+        list[str],
+        list[str],
+        list[str],
+        str | None,
+    ]
+]: ...
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
@@ -805,6 +833,17 @@ class SqlTestChainRegistry:
         self, logical_name: str, mocks: set[str], assembled: set[str]
     ) -> tuple[list[str], list[str]]: ...
 
+def managed_catalog_relations(
+    relations: list[tuple[str, bool, str | None]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str, bool]]]: ...
+def root_deployment_state(
+    bindings: list[tuple[str, str, str]],
+    candidates: list[tuple[str, str, str]],
+    root_database: str | None,
+    root_name: str,
+) -> tuple[str, str | None]: ...
+def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
+def latest_object_state_positions(records: list[tuple[int | None, str, str]]) -> list[int]: ...
 def actual_state_sources(
     objects: list[tuple[int, str, str, str | None]],
     existing_names: set[str],

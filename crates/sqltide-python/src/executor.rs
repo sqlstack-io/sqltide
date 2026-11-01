@@ -8,6 +8,7 @@ use pyo3::prelude::*;
 use sqltide_executor::deployment_diff::{
     RelationPair, Side, count_sql, identifier_error, parse_comparison, relation_pairs, status,
 };
+use sqltide_executor::inventory::{Evidence, Record, deployment_summaries};
 use sqltide_executor::janitor::{
     Decision, Deployment, Mapping, Publication as RetainedPublication, Retention, binding_activity,
     preview,
@@ -495,6 +496,69 @@ fn diff_side(argument: &DiffSideArgument) -> Side<'_> {
     )
 }
 
+/// `(deployment ID, created at, status, selected root names, (logical name, physical name)
+/// mappings)`.
+type InventoryRecordArgument = (String, String, String, Vec<String>, Vec<(String, String)>);
+
+/// `(deployment ID, state, created at, persisted status, root names, physical relation names,
+/// missing physical relation names, active binding names, latest published at)`.
+type DeploymentSummaryResult = (
+    String,
+    &'static str,
+    Option<String>,
+    Option<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Option<String>,
+);
+
+/// Every deployment's lifecycle summary, newest deployment ID first.
+#[pyfunction]
+fn deployment_inventory_summaries(
+    records: Vec<InventoryRecordArgument>,
+    physical_candidate_names: Vec<String>,
+    active_bindings: Vec<(String, String)>,
+    publications: Vec<(String, String)>,
+    existing_names: Vec<String>,
+) -> Vec<DeploymentSummaryResult> {
+    let evidence = Evidence {
+        records: records
+            .into_iter()
+            .map(
+                |(deployment_id, created_at, status, selected_root_names, mappings)| Record {
+                    deployment_id,
+                    created_at,
+                    status,
+                    selected_root_names,
+                    mappings,
+                },
+            )
+            .collect(),
+        physical_candidate_names,
+        active_bindings,
+        publications,
+        existing_names,
+    };
+    deployment_summaries(&evidence)
+        .into_iter()
+        .map(|summary| {
+            (
+                summary.deployment_id,
+                summary.state.as_str(),
+                summary.created_at,
+                summary.persisted_status,
+                summary.root_names,
+                summary.physical_relation_names,
+                summary.missing_physical_relation_names,
+                summary.active_binding_names,
+                summary.latest_published_at,
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(audit_readiness, module)?)?;
     module.add_function(wrap_pyfunction!(select_rollback_publications, module)?)?;
@@ -511,5 +575,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_count_sql, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_status, module)?)?;
+    module.add_function(wrap_pyfunction!(deployment_inventory_summaries, module)?)?;
     module.add_function(wrap_pyfunction!(order_relations_for_drop, module)?)
 }

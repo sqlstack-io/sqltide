@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     InspectedActiveTableBinding,
@@ -13,16 +14,6 @@ from sqltide.adapters.clickhouse.constants import CLICKHOUSE_VIEW_ENGINE
 from sqltide.adapters.clickhouse.models import (
     ActiveBindingSystemRow,
     PhysicalCandidateSystemRow,
-)
-from sqltide.compiler.compile.constants import (
-    KAFKA_TABLE_NAME_PREFIX,
-    MATERIALIZED_VIEW_NAME_PREFIX,
-)
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
-    is_deployment_physical_name,
-)
-from sqltide.compiler.planner.main.logical_name_from_physical_name import (
-    logical_name_from_physical_name,
 )
 
 
@@ -49,8 +40,8 @@ def build_inspected_managed_table_state(
     physical_candidates: list[InspectedPhysicalTableCandidate] = []
     row: ActiveBindingSystemRow
     for row in active_binding_rows:
-        logical_name: str = _logical_name_from_physical_name(row.name)
-        if is_deployment_physical_name(row.name) and _is_model_relation_name(logical_name):
+        logical_name: str | None = _native.deployment_candidate_logical_name(row.name)
+        if logical_name is not None:
             physical_candidates.append(
                 InspectedPhysicalTableCandidate(
                     database=database,
@@ -76,15 +67,15 @@ def build_inspected_managed_table_state(
 
     physical_candidate_row: PhysicalCandidateSystemRow
     for physical_candidate_row in physical_candidate_rows:
-        logical_name: str = _logical_name_from_physical_name(physical_candidate_row.name)
-        if not is_deployment_physical_name(physical_candidate_row.name):
-            continue
-        if not _is_model_relation_name(logical_name):
+        candidate_logical_name: str | None = _native.deployment_candidate_logical_name(
+            physical_candidate_row.name
+        )
+        if candidate_logical_name is None:
             continue
         physical_candidates.append(
             InspectedPhysicalTableCandidate(
                 database=database,
-                logical_name=logical_name,
+                logical_name=candidate_logical_name,
                 physical_name=physical_candidate_row.name,
                 object_type="table",
             )
@@ -94,14 +85,6 @@ def build_inspected_managed_table_state(
         active_bindings=tuple(active_bindings),
         physical_candidates=tuple(physical_candidates),
     )
-
-
-def _logical_name_from_physical_name(physical_name: str) -> str:
-    return logical_name_from_physical_name(physical_name)
-
-
-def _is_model_relation_name(logical_name: str) -> bool:
-    return not logical_name.startswith((KAFKA_TABLE_NAME_PREFIX, MATERIALIZED_VIEW_NAME_PREFIX))
 
 
 def _decode_active_binding_system_row(row: Mapping[str, object]) -> ActiveBindingSystemRow:
