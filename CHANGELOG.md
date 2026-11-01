@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.58.0](https://github.com/sqlstack-io/sqltide/compare/v0.57.0...v0.58.0) (2026-11-01)
+
+
+### Features
+
+* compute quality identities and manifest contents in Rust ([#306](https://github.com/sqlstack-io/sqltide/issues/306)) ([85ba050](https://github.com/sqlstack-io/sqltide/commit/85ba050bf52d9a066a0c4fd3946ccf5bcbc9a017))
+
 ## [0.57.0](https://github.com/sqlstack-io/sqltide/compare/v0.56.0...v0.57.0) (2026-11-01)
 
 
