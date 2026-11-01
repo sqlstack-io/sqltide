@@ -85,14 +85,6 @@ class ClickHousePublishEventInventoryRow:
 
 
 @dataclass(frozen=True)
-class ClickHouseReplayOffsetFrontier:
-    """One partition frontier used for bounded offset replay."""
-
-    partition: object
-    cutoff_offset: str
-
-
-@dataclass(frozen=True)
 class ClickHouseReplayColumn:
     """One ClickHouse relation column needed during replay realization."""
 

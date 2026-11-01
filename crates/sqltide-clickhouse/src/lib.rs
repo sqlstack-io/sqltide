@@ -2,6 +2,7 @@
 //! connection, and credential substitution; these functions only build SQL text.
 
 pub mod comparison;
+pub mod replay;
 pub mod resources;
 
 /// One rendering request the adapter cannot express in ClickHouse.
