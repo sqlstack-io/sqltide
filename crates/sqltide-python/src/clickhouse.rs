@@ -1,7 +1,7 @@
 //! ClickHouse SQL rendering for the Python adapter: reads the neutral adapter dataclasses and
 //! returns SQL text.
 
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyFloat, PyInt, PyString};
 use sqltide_clickhouse::CapabilityError;
@@ -14,6 +14,7 @@ use sqltide_clickhouse::metadata::{
     migration_workflow, run_event_inserts, run_statement_inserts, sensor_retention_cleanup,
     sensor_state_inserts,
 };
+use sqltide_clickhouse::realization;
 use sqltide_clickhouse::replay::{
     Boundary, BoundaryMode, Columns, DeploymentReplay, LowerBound, LowerBoundMode, Relations,
     Replay, ReplayError, Window, coverage_query, replay_from_capture, replay_from_deployment,
@@ -673,7 +674,78 @@ fn render_clickhouse_latest_node_status_query(
     ))
 }
 
+/// `(Kafka table, raw table, materialized view, consumer group, landing query)` names one
+/// managed source realizes as. Raises `ValueError(message)` for an unrealizable source.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn realize_clickhouse_managed_source(
+    logical_name: &str,
+    source_kind: &str,
+    format: &str,
+    consumer_group: Option<&str>,
+    project_name: Option<&str>,
+    target_name: Option<&str>,
+    setting_keys: Vec<String>,
+) -> PyResult<(String, String, String, String, String)> {
+    let realization = realization::realize_managed_source(&realization::ManagedSourceRequest {
+        logical_name,
+        source_kind,
+        format,
+        consumer_group,
+        project_name,
+        target_name,
+        setting_keys: setting_keys.iter().map(String::as_str).collect(),
+    })
+    .map_err(PyValueError::new_err)?;
+    Ok((
+        realization.kafka_table_name,
+        realization.raw_table_name,
+        realization.materialized_view_name,
+        realization.consumer_group,
+        realization.landing_query,
+    ))
+}
+
+/// The raw landing table's `(name, type)` columns.
+#[pyfunction]
+fn clickhouse_raw_landing_columns() -> Vec<(&'static str, &'static str)> {
+    realization::RAW_LANDING_COLUMNS.to_vec()
+}
+
+/// The relation SQL an adopted table is read through, from its authored
+/// `(partition, offset, timestamp, landed at, cursor)` lineage columns.
+#[pyfunction]
+fn clickhouse_external_source_relation_sql(
+    table_name: &str,
+    columns: [Option<String>; 5],
+) -> String {
+    realization::external_source_relation_sql(table_name, columns.each_ref().map(Option::as_deref))
+}
+
+/// The `postgresql()` table function a refresh source reads.
+#[pyfunction]
+fn clickhouse_postgres_source_relation_sql(
+    host: &str,
+    port: &str,
+    database: &str,
+    table: &str,
+    user: &str,
+    password_env: Option<&str>,
+) -> String {
+    realization::postgres_source_relation_sql(host, port, database, table, user, password_env)
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(realize_clickhouse_managed_source, module)?)?;
+    module.add_function(wrap_pyfunction!(clickhouse_raw_landing_columns, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        clickhouse_external_source_relation_sql,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        clickhouse_postgres_source_relation_sql,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(render_clickhouse_resource, module)?)?;
     module.add_function(wrap_pyfunction!(
         render_clickhouse_set_difference_comparison,

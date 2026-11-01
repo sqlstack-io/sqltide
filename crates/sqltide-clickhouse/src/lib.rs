@@ -3,6 +3,7 @@
 
 pub mod comparison;
 pub mod metadata;
+pub mod realization;
 pub mod replay;
 pub mod resources;
 

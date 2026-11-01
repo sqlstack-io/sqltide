@@ -2,9 +2,8 @@
 
 from dataclasses import replace
 
+import sqltide._native as _native
 from sqltide.adapter.constants import (
-    ADAPTER_SECRET_PLACEHOLDER_PREFIX,
-    ADAPTER_SECRET_PLACEHOLDER_SUFFIX,
     MANAGED_SOURCE_KIND_KAFKA,
 )
 from sqltide.adapter.models import (
@@ -25,11 +24,6 @@ from sqltide.compiler.compile.constants import (
     DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
     DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
-    REPLAY_CURSOR_COLUMN_NAME,
-    REPLAY_LANDED_AT_COLUMN_NAME,
-    REPLAY_OFFSET_COLUMN_NAME,
-    REPLAY_PARTITION_COLUMN_NAME,
-    REPLAY_TIMESTAMP_COLUMN_NAME,
 )
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.main._render_kafka_retention import render_kafka_retention
@@ -61,6 +55,7 @@ from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
     PostgresRefreshSourceStep,
     ReplayBoundary,
+    ReplayBoundaryColumns,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
 from sqltide.compiler.pipeline.models import RealizedProject
@@ -224,18 +219,13 @@ def _relation_sql_by_logical_name(
 def _postgres_source_relation_sql(source: PostgresRefreshSourceStep) -> str:
     """Render the postgres table function, keeping any credential out of the artifact."""
 
-    password: str = (
-        ""
-        if source.password_env is None
-        else (
-            f"{ADAPTER_SECRET_PLACEHOLDER_PREFIX}"
-            f"{source.password_env}"
-            f"{ADAPTER_SECRET_PLACEHOLDER_SUFFIX}"
-        )
-    )
-    return (
-        f"postgresql('{source.host}:{source.port}', '{source.database}', "
-        f"'{source.table}', '{source.user}', '{password}')"
+    return _native.clickhouse_postgres_source_relation_sql(
+        source.host,
+        str(source.port),
+        source.database,
+        source.table,
+        source.user,
+        source.password_env,
     )
 
 
@@ -250,31 +240,11 @@ def _postgres_refresh_by_source_name(
 
 
 def _external_source_relation_sql(source: ExternalTableSourceStep) -> str:
-    alias_expressions: list[str] = []
-    if source.replay_boundary.columns.partition not in {None, REPLAY_PARTITION_COLUMN_NAME}:
-        alias_expressions.append(
-            f"{source.replay_boundary.columns.partition} AS {REPLAY_PARTITION_COLUMN_NAME}"
-        )
-    if source.replay_boundary.columns.offset not in {None, REPLAY_OFFSET_COLUMN_NAME}:
-        alias_expressions.append(
-            f"{source.replay_boundary.columns.offset} AS {REPLAY_OFFSET_COLUMN_NAME}"
-        )
-    if source.replay_boundary.columns.timestamp not in {None, REPLAY_TIMESTAMP_COLUMN_NAME}:
-        alias_expressions.append(
-            f"{source.replay_boundary.columns.timestamp} AS {REPLAY_TIMESTAMP_COLUMN_NAME}"
-        )
-    if source.replay_boundary.columns.landed_at not in {None, REPLAY_LANDED_AT_COLUMN_NAME}:
-        alias_expressions.append(
-            f"{source.replay_boundary.columns.landed_at} AS {REPLAY_LANDED_AT_COLUMN_NAME}"
-        )
-    if source.replay_boundary.columns.cursor not in {None, REPLAY_CURSOR_COLUMN_NAME}:
-        alias_expressions.append(
-            f"{source.replay_boundary.columns.cursor} AS {REPLAY_CURSOR_COLUMN_NAME}"
-        )
-    if not alias_expressions:
-        return source.table_name
-    alias_projection_sql: str = ",\n    ".join(alias_expressions)
-    return f"(SELECT\n    *,\n    {alias_projection_sql}\nFROM {source.table_name})"
+    columns: ReplayBoundaryColumns = source.replay_boundary.columns
+    return _native.clickhouse_external_source_relation_sql(
+        source.table_name,
+        [columns.partition, columns.offset, columns.timestamp, columns.landed_at, columns.cursor],
+    )
 
 
 def _model_request(
