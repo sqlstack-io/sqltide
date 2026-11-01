@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 from types import MappingProxyType
 
+import sqltide._native as _native
 from sqltide.compiler.discovery.main._immutable_config_pairs import immutable_config_pairs
 from sqltide.compiler.discovery.types import PipelineMode
 from sqltide.compiler.macros.types import MacroFunction
@@ -38,6 +39,7 @@ class MacroRegistry:
     """One deeply immutable invocation-scoped macro registry."""
 
     macros: Mapping[str, LoadedMacro] = field(default_factory=dict)
+    declarations: _native.Declarations | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "macros", MappingProxyType(dict(self.macros)))

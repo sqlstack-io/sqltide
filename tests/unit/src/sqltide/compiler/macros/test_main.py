@@ -3,13 +3,17 @@ from typing import cast
 
 import pytest
 
+from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.macros.exceptions import MacroError
 from sqltide.compiler.macros.main._build_macro_context import build_macro_context
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from tests.unit.src.sqltide.compiler.macros._test_types import (
+    DeclarationReferenceErrorTestCase,
+    DeclarationReferenceTestCase,
     ExpandProjectSqlMacrosCollisionTestCase,
     ExpandProjectSqlMacrosErrorTestCase,
     ExpandProjectSqlMacrosTestCase,
+    InvalidDeclarationTestCase,
     MacroDescriptionTestCase,
     MacroExecutionDiagnosticTestCase,
     MacroImportDiagnosticTestCase,
@@ -19,6 +23,7 @@ from tests.unit.src.sqltide.compiler.macros._test_types import (
 from tests.unit.src.sqltide.compiler.macros.helpers import (
     build_test_macro_runtime,
     expand_project_sql_macros,
+    expand_with_declarations,
     write_macro_file,
     write_project_file,
     write_sql_file,
@@ -755,3 +760,119 @@ def test_given_macro_docstring_when_loading_then_description_is_first_paragraph(
     registry, _context = build_test_macro_runtime(tmp_path)
 
     assert registry.macros[test_case.macro_name].description == test_case.expected_description
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DeclarationReferenceTestCase(
+            description="list constant renders a value list",
+            sql_body='status IN @const("statuses")',
+            expected_sql="status IN ('paid', 'shipped')",
+        ),
+        DeclarationReferenceTestCase(
+            description="set constant renders a sorted native array",
+            sql_body='@const("codes")',
+            expected_sql="[1, 2, 3]",
+        ),
+        DeclarationReferenceTestCase(
+            description="decimal constant keeps its scale",
+            sql_body='@const("threshold")',
+            expected_sql="toDecimal128('2500.00', 2)",
+        ),
+        DeclarationReferenceTestCase(
+            description="string constant escapes quotes",
+            sql_body='@const("label")',
+            expected_sql="'it''s'",
+        ),
+        DeclarationReferenceTestCase(
+            description="object constant renders a JSON string",
+            sql_body='@const("settings")',
+            expected_sql="""'{"mode":"fast","retries":3}'""",
+        ),
+        DeclarationReferenceTestCase(
+            description="shorthand enum member renders its name",
+            sql_body='@enum("order_status").SHIPPED',
+            expected_sql="'SHIPPED'",
+        ),
+        DeclarationReferenceTestCase(
+            description="integer enum member renders its value",
+            sql_body='@enum("priority").HIGH',
+            expected_sql="2",
+        ),
+        DeclarationReferenceTestCase(
+            description="constant passed to a macro arrives as a Python value",
+            sql_body='@doubled(@const("amount_column"))',
+            expected_sql="amount * 2",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_declarations_when_expanding_then_references_render_clickhouse_literals(
+    test_case: DeclarationReferenceTestCase, tmp_path: Path
+) -> None:
+    assert expand_with_declarations(tmp_path, test_case.sql_body) == test_case.expected_sql
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DeclarationReferenceErrorTestCase(
+            description="unknown constant",
+            sql_body='SELECT @const("missing")',
+            expected_error_fragment="missing",
+        ),
+        DeclarationReferenceErrorTestCase(
+            description="unknown enum member",
+            sql_body='SELECT @enum("priority").MEDIUM',
+            expected_error_fragment="MEDIUM",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_unknown_declaration_reference_when_expanding_then_it_raises_located_error(
+    test_case: DeclarationReferenceErrorTestCase, tmp_path: Path
+) -> None:
+    with pytest.raises(MacroError, match=test_case.expected_error_fragment) as error_info:
+        expand_with_declarations(tmp_path, test_case.sql_body)
+
+    assert error_info.value.diagnostic.location is not None
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        InvalidDeclarationTestCase(
+            description="duplicate set value",
+            constants="CONSTANT (name s, value {1, 1});",
+            enums=None,
+            expected_error_fragment="duplicate set value",
+        ),
+        InvalidDeclarationTestCase(
+            description="mixed list element types",
+            constants='CONSTANT (name s, value [1, "a"]);',
+            enums=None,
+            expected_error_fragment="expected integer",
+        ),
+        InvalidDeclarationTestCase(
+            description="lowercase enum member",
+            constants=None,
+            enums="ENUM (name e, members [paid]);",
+            expected_error_fragment="must be uppercase",
+        ),
+        InvalidDeclarationTestCase(
+            description="duplicate constant name",
+            constants="CONSTANT (name s, value 1);\nCONSTANT (name s, value 2);",
+            enums=None,
+            expected_error_fragment="Duplicate constant 's'",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_invalid_declarations_when_loading_then_it_raises_discovery_error(
+    test_case: InvalidDeclarationTestCase, tmp_path: Path
+) -> None:
+    with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
+        expand_with_declarations(
+            tmp_path, "SELECT 1", constants=test_case.constants, enums=test_case.enums
+        )

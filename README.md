@@ -225,6 +225,10 @@ Models must project explicit output types. Table models preserve replay lineage 
 
 Python functions under `macros/` are available in model, test, and audit SQL as `@function_name()`.
 
+`CONSTANT (name ..., value ...)` declarations under `constants/` and `ENUM (name ..., members ...)`
+declarations under `enums/` are validated once per compile and render as ClickHouse literals through
+`@const("name")` and `@enum("name").MEMBER`, for example `status IN @const("open_statuses")`.
+
 ## Workflow
 
 ```bash

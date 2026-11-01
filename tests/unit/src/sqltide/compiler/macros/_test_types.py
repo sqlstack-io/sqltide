@@ -71,3 +71,25 @@ class MacroDescriptionTestCase:
     macro_file_contents: str
     macro_name: str
     expected_description: str | None
+
+
+@dataclass(frozen=True)
+class DeclarationReferenceTestCase:
+    description: str
+    sql_body: str
+    expected_sql: str
+
+
+@dataclass(frozen=True)
+class DeclarationReferenceErrorTestCase:
+    description: str
+    sql_body: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class InvalidDeclarationTestCase:
+    description: str
+    constants: str | None
+    enums: str | None
+    expected_error_fragment: str

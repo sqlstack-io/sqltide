@@ -21,8 +21,20 @@ pub const MAX_HEADER_NESTING_DEPTH: usize = 128;
 /// Returns the syntax error message for malformed header text.
 pub fn parse_model_header(header: &str) -> Result<Vec<(String, HeaderValue)>, String> {
     let characters: Vec<char> = header.chars().collect();
-    let tokens = tokenizer::tokenize(&characters)?;
-    parser::parse(&tokens)
+    let tokens = tokenizer::tokenize(&characters, false)?;
+    parser::parse(&tokens, false)
+}
+
+/// Parse the text between `CONSTANT (` or `ENUM (` and its closing `)`: the MODEL grammar plus
+/// `{...}` sets, with bare non-literal words kept as `HeaderValue::Word`.
+///
+/// # Errors
+///
+/// Returns the syntax error message for malformed header text.
+pub fn parse_declaration_header(header: &str) -> Result<Vec<(String, HeaderValue)>, String> {
+    let characters: Vec<char> = header.chars().collect();
+    let tokens = tokenizer::tokenize(&characters, true)?;
+    parser::parse(&tokens, true)
 }
 
 #[cfg(test)]

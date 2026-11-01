@@ -10,12 +10,18 @@ const OPEN_PAREN: &str = "(";
 const CLOSE_PAREN: &str = ")";
 const OPEN_BRACKET: &str = "[";
 const CLOSE_BRACKET: &str = "]";
+const OPEN_BRACE: &str = "{";
+const CLOSE_BRACE: &str = "}";
 
-pub(super) fn parse(tokens: &[Token]) -> Result<Vec<(String, HeaderValue)>, String> {
+pub(super) fn parse(
+    tokens: &[Token],
+    declaration: bool,
+) -> Result<Vec<(String, HeaderValue)>, String> {
     let mut parser = Parser {
         tokens,
         index: 0,
         depth: 0,
+        declaration,
     };
     if parser.peek().kind == TokenKind::End {
         return Ok(Vec::new());
@@ -29,6 +35,7 @@ struct Parser<'a> {
     tokens: &'a [Token],
     index: usize,
     depth: usize,
+    declaration: bool,
 }
 
 impl Parser<'_> {
@@ -80,11 +87,14 @@ impl Parser<'_> {
                     let entries = self.nested(|parser| parser.parse_map(Some(CLOSE_PAREN)))?;
                     return Ok(HeaderValue::Map(vec![(word, HeaderValue::Map(entries))]));
                 }
-                Ok(word_value(&word))
+                Ok(word_value(&word, self.declaration))
             }
-            _ if self.match_symbol(OPEN_BRACKET) => {
-                self.nested(Self::parse_list).map(HeaderValue::List)
-            }
+            _ if self.match_symbol(OPEN_BRACKET) => self
+                .nested(|parser| parser.parse_list(CLOSE_BRACKET))
+                .map(HeaderValue::List),
+            _ if self.match_symbol(OPEN_BRACE) => self
+                .nested(|parser| parser.parse_list(CLOSE_BRACE))
+                .map(HeaderValue::Set),
             _ if self.match_symbol(OPEN_PAREN) => self
                 .nested(|parser| parser.parse_map(Some(CLOSE_PAREN)))
                 .map(HeaderValue::Map),
@@ -92,16 +102,16 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_list(&mut self) -> Result<Vec<HeaderValue>, String> {
+    fn parse_list(&mut self, close: &str) -> Result<Vec<HeaderValue>, String> {
         let mut values: Vec<HeaderValue> = Vec::new();
-        while !self.is_at_end_symbol(Some(CLOSE_BRACKET)) {
+        while !self.is_at_end_symbol(Some(close)) {
             if self.match_symbol(COMMA) {
                 continue;
             }
             values.push(self.parse_value()?);
             self.match_symbol(COMMA);
         }
-        self.consume_symbol(CLOSE_BRACKET)?;
+        self.consume_symbol(close)?;
         Ok(values)
     }
 

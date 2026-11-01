@@ -8,15 +8,62 @@ use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
+use sqltide_discovery::declarations::{
+    ConstantValue, Declarations, EnumValue, load_declarations as load,
+};
 use sqltide_sqltext::macro_arguments::{
     ArgumentHost, CallArguments, Failure, Node, NumberToken, parse_macro_arguments,
 };
 use sqltide_sqltext::python_text::{python_isalnum, python_isspace, python_strip};
 use sqltide_sqltext::sql_scan::{find_matching_parenthesis, find_next_macro_start};
 
+use crate::config::spec_error;
 use crate::sql_scan::raise;
 
 const MACRO_CALL_CONTEXT: &str = "Macro call";
+const CONSTANT_CALL: &str = "const";
+const ENUM_CALL: &str = "enum";
+
+/// A project's validated constants and enums, which `@const` and `@enum` read.
+#[pyclass(name = "Declarations", module = "sqltide._native", frozen)]
+pub(crate) struct PyDeclarations {
+    declarations: Declarations,
+}
+
+#[pymethods]
+impl PyDeclarations {
+    /// The rendered SQL of constant `name`, as `@const(name)` expands.
+    fn render_constant(&self, py: Python<'_>, name: &str, file_path: &str) -> PyResult<String> {
+        self.declarations
+            .render_constant(name, file_path)
+            .map_err(|error| spec_error(py, error))
+    }
+
+    /// The rendered SQL of one enum member, as `@enum(name).MEMBER` expands.
+    fn render_enum_member(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        member: &str,
+        file_path: &str,
+    ) -> PyResult<String> {
+        self.declarations
+            .render_enum_member(name, member, file_path)
+            .map_err(|error| spec_error(py, error))
+    }
+}
+
+/// Parse and validate the `(path, contents)` files under `constants/` and `enums/`.
+#[pyfunction]
+fn load_declarations(
+    py: Python<'_>,
+    constant_files: Vec<(String, String)>,
+    enum_files: Vec<(String, String)>,
+) -> PyResult<PyDeclarations> {
+    load(&constant_files, &enum_files)
+        .map(|declarations| PyDeclarations { declarations })
+        .map_err(|error| spec_error(py, error))
+}
 
 /// `unicodedata` answers character names and identifier normalization as CPython does.
 struct UnicodeHost<'py> {
@@ -70,6 +117,7 @@ struct Expansion<'a, 'py> {
     py: Python<'py>,
     names: HashSet<String>,
     sorted_names: &'a [String],
+    declarations: &'a Declarations,
     file_path: &'a str,
     host: UnicodeHost<'py>,
     /// `call(name=, args=, kwargs=, index=)` runs one macro body.
@@ -113,7 +161,7 @@ impl<'py> Expansion<'_, 'py> {
         built.map_or_else(|error| error, PyErr::from_value)
     }
 
-    fn located(&self, error: PyErr, index: usize, name: &str) -> PyErr {
+    fn located(&self, error: PyErr, index: usize, name: Option<&str>) -> PyErr {
         let relocated: PyResult<Bound<'py, PyAny>> = (|| {
             let kwargs: Bound<'py, PyDict> = self.kwargs(&[
                 ("error", error.value(self.py).clone().into_any()),
@@ -158,6 +206,9 @@ impl<'py> Expansion<'_, 'py> {
     ) -> PyResult<(Bound<'py, PyAny>, usize)> {
         let name: String = macro_name(text, start);
         let index: usize = offset + start;
+        if name == CONSTANT_CALL || name == ENUM_CALL {
+            return self.declaration_call(text, (start, offset), top_level, &name);
+        }
         if !self.names.contains(&name) {
             let available: String = if self.sorted_names.is_empty() {
                 "none".to_owned()
@@ -181,7 +232,7 @@ impl<'py> Expansion<'_, 'py> {
             .map_err(|error| self.error(&error.message, Some(index), Some(&name)))?;
         let (args, kwargs) = self
             .call_arguments(&text[open + 1..close], offset + open + 1)
-            .map_err(|error| self.located(error, index, &name))?;
+            .map_err(|error| self.located(error, index, Some(&name)))?;
         let call_kwargs: Bound<'py, PyDict> = self.kwargs(&[
             ("name", PyString::new(self.py, &name).into_any()),
             ("args", args.into_any()),
@@ -217,6 +268,98 @@ impl<'py> Expansion<'_, 'py> {
             return Err(self.error(&message, Some(index), Some(&name)));
         }
         Ok((result, close + 1))
+    }
+
+    /// `@const("name")` or `@enum("name").MEMBER` at `start`: rendered SQL at the top level,
+    /// or the declared value as an argument of another macro.
+    fn declaration_call(
+        &self,
+        text: &[char],
+        (start, offset): (usize, usize),
+        top_level: bool,
+        name: &str,
+    ) -> PyResult<(Bound<'py, PyAny>, usize)> {
+        let index: usize = offset + start;
+        let open: usize = skip_whitespace(text, start + 1 + name.chars().count());
+        let close: usize = find_matching_parenthesis(text, open, MACRO_CALL_CONTEXT)
+            .map_err(|error| self.error(&error.message, Some(index), None))?;
+        let (args, kwargs) = self
+            .call_arguments(&text[open + 1..close], offset + open + 1)
+            .map_err(|error| self.located(error, index, None))?;
+        let kind: &str = if name == CONSTANT_CALL {
+            "constant"
+        } else {
+            "enum"
+        };
+        let declared: Option<String> = (kwargs.is_empty() && args.len() == 1)
+            .then(|| args.get_item(0).ok()?.downcast_into::<PyString>().ok())
+            .flatten()
+            .map(|declared| declared.to_string());
+        let Some(declared) = declared else {
+            return Err(self.error(
+                &format!(
+                    "@{name}(...) in '{}' takes one quoted {kind} name",
+                    self.file_path
+                ),
+                Some(index),
+                None,
+            ));
+        };
+        let failed = |error: sqltide_discovery::errors::SpecError| {
+            self.error(&error.message, Some(index), None)
+        };
+        if name == CONSTANT_CALL {
+            let value: Bound<'py, PyAny> = if top_level {
+                let rendered: String = self
+                    .declarations
+                    .render_constant(&declared, self.file_path)
+                    .map_err(failed)?;
+                PyString::new(self.py, &rendered).into_any()
+            } else {
+                let constant = self
+                    .declarations
+                    .constant(&declared, self.file_path)
+                    .map_err(failed)?;
+                constant_object(self.py, &constant.value)?
+            };
+            return Ok((value, close + 1));
+        }
+        let member: String = if text.get(close + 1) == Some(&'.') {
+            text[close + 2..]
+                .iter()
+                .take_while(|character| character.is_ascii_alphanumeric() || **character == '_')
+                .collect()
+        } else {
+            String::new()
+        };
+        if member.is_empty() {
+            return Err(self.error(
+                &format!(
+                    "@enum(\"{declared}\") in '{}' must be followed by .MEMBER",
+                    self.file_path
+                ),
+                Some(index),
+                None,
+            ));
+        }
+        let next: usize = close + 2 + member.chars().count();
+        let value: Bound<'py, PyAny> = if top_level {
+            let rendered: String = self
+                .declarations
+                .render_enum_member(&declared, &member, self.file_path)
+                .map_err(failed)?;
+            PyString::new(self.py, &rendered).into_any()
+        } else {
+            match self
+                .declarations
+                .enum_member(&declared, &member, self.file_path)
+                .map_err(failed)?
+            {
+                EnumValue::Text(text) => PyString::new(self.py, text).into_any(),
+                EnumValue::Integer(number) => number.into_bound_py_any(self.py)?,
+            }
+        };
+        Ok((value, next))
     }
 
     /// The positional and keyword values of one call's argument text, nested calls first.
@@ -352,6 +495,42 @@ impl<'py> Expansion<'_, 'py> {
     }
 }
 
+/// A constant as the Python value macros receive: sets as tuples in canonical order, and
+/// decimals as `decimal.Decimal`.
+fn constant_object<'py>(py: Python<'py>, value: &ConstantValue) -> PyResult<Bound<'py, PyAny>> {
+    Ok(match value {
+        ConstantValue::Null => py.None().into_bound(py),
+        ConstantValue::Boolean(flag) => PyBool::new(py, *flag).to_owned().into_any(),
+        ConstantValue::Integer(number) => number.into_bound_py_any(py)?,
+        ConstantValue::Float(number) => number.into_bound_py_any(py)?,
+        ConstantValue::Decimal(text) => py.import("decimal")?.getattr("Decimal")?.call1((text,))?,
+        ConstantValue::String(text) => PyString::new(py, text).into_any(),
+        ConstantValue::List(items) => PyList::new(
+            py,
+            items
+                .iter()
+                .map(|item| constant_object(py, item))
+                .collect::<PyResult<Vec<_>>>()?,
+        )?
+        .into_any(),
+        ConstantValue::Set(items) => PyTuple::new(
+            py,
+            items
+                .iter()
+                .map(|item| constant_object(py, item))
+                .collect::<PyResult<Vec<_>>>()?,
+        )?
+        .into_any(),
+        ConstantValue::Object(entries) => {
+            let object: Bound<'py, PyDict> = PyDict::new(py);
+            for (key, item) in entries {
+                object.set_item(key, constant_object(py, item)?)?;
+            }
+            object.into_any()
+        }
+    })
+}
+
 /// The string of `codes`, built by Python's `chr` when it holds lone surrogates.
 fn python_string<'py>(py: Python<'py>, codes: &[u32]) -> PyResult<Bound<'py, PyAny>> {
     let text: Option<String> = codes.iter().map(|code| char::from_u32(*code)).collect();
@@ -429,9 +608,11 @@ fn skip_whitespace(text: &[char], start: usize) -> usize {
         .map_or(text.len(), |offset| start + offset)
 }
 
-/// Expand every authored macro call in `sql`. `macro_names` are the known macros, sorted;
-/// `call`, `fail` and `locate` are the Python callbacks `Expansion` describes.
+/// Expand every authored macro call and `@const`/`@enum` reference in `sql`. `macro_names` are
+/// the known macros, sorted; `call`, `fail` and `locate` are the Python callbacks `Expansion`
+/// describes.
 #[pyfunction]
+#[allow(clippy::too_many_arguments)]
 fn expand_macro_calls<'py>(
     py: Python<'py>,
     sql: &str,
@@ -440,11 +621,16 @@ fn expand_macro_calls<'py>(
     call: &Bound<'py, PyAny>,
     fail: &Bound<'py, PyAny>,
     locate: &Bound<'py, PyAny>,
+    declarations: Option<PyRef<'py, PyDeclarations>>,
 ) -> PyResult<String> {
+    let empty: Declarations = Declarations::default();
     let expansion: Expansion<'_, 'py> = Expansion {
         py,
         names: macro_names.iter().cloned().collect(),
         sorted_names: &macro_names,
+        declarations: declarations
+            .as_ref()
+            .map_or(&empty, |declarations| &declarations.declarations),
         file_path,
         host: UnicodeHost {
             unicodedata: py.import("unicodedata")?,
@@ -457,8 +643,8 @@ fn expand_macro_calls<'py>(
     expansion.expand(&sql.chars().collect::<Vec<char>>())
 }
 
-/// Unique top-level macro call names in encounter order, and the error of a call whose
-/// parentheses do not close.
+/// Unique top-level macro call names in encounter order, without `@const` and `@enum`, and the
+/// error of a call whose parentheses do not close.
 #[pyfunction]
 fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
     let sql: Vec<char> = sql.chars().collect();
@@ -470,7 +656,7 @@ fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
         };
         let name: String = macro_name(&sql, start);
         let open: usize = skip_whitespace(&sql, start + 1 + name.chars().count());
-        if !names.contains(&name) {
+        if !names.contains(&name) && name != CONSTANT_CALL && name != ENUM_CALL {
             names.push(name);
         }
         if sql.get(open) != Some(&'(') {
@@ -487,5 +673,7 @@ fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(expand_macro_calls, module)?)?;
     module.add_function(wrap_pyfunction!(find_macro_call_names, module)?)?;
+    module.add_function(wrap_pyfunction!(load_declarations, module)?)?;
+    module.add_class::<PyDeclarations>()?;
     Ok(())
 }

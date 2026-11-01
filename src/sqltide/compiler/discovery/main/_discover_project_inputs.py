@@ -14,6 +14,7 @@ from sqltide.compiler.discovery.models import (
     DiscoveredSourceFile,
     LoadedProject,
 )
+from sqltide.compiler.macros.constants import CONSTANTS_DIRECTORY_NAME, ENUMS_DIRECTORY_NAME
 from sqltide.compiler.macros.main._discover_macro_files import discover_macro_files
 
 
@@ -62,4 +63,12 @@ def discover_project_inputs(
         audit_files=audit_files,
         macro_files=macro_files,
         access_file=access_files[0] if access_files else None,
+        constant_files=read_discovered_files(
+            file_paths=tuple((project_dir / CONSTANTS_DIRECTORY_NAME).rglob("*.sql")),
+            project_dir=project_dir,
+        ),
+        enum_files=read_discovered_files(
+            file_paths=tuple((project_dir / ENUMS_DIRECTORY_NAME).rglob("*.sql")),
+            project_dir=project_dir,
+        ),
     )

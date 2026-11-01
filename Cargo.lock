@@ -363,6 +363,8 @@ name = "sqltide-discovery"
 version = "0.42.0"
 dependencies = [
  "regex",
+ "sqltide-sqlanalysis",
+ "sqltide-sqltext",
 ]
 
 [[package]]

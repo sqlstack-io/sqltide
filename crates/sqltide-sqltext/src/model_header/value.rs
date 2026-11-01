@@ -11,10 +11,14 @@ pub enum HeaderValue {
     Text(String),
     List(Vec<HeaderValue>),
     Map(Vec<(String, HeaderValue)>),
+    /// A bare word that is not a literal; only declaration headers keep it apart from `Text`.
+    Word(String),
+    /// A `{...}` set; only declaration headers accept braces.
+    Set(Vec<HeaderValue>),
 }
 
-/// Convert a bare word into a literal, or keep it as text.
-pub(super) fn word_value(word: &str) -> HeaderValue {
+/// Convert a bare word into a literal, or keep it as text, or as a `Word` in a declaration.
+pub(super) fn word_value(word: &str, declaration: bool) -> HeaderValue {
     match word {
         "true" => HeaderValue::Bool(true),
         "false" => HeaderValue::Bool(false),
@@ -23,6 +27,7 @@ pub(super) fn word_value(word: &str) -> HeaderValue {
         _ if is_float(word) => word
             .parse::<f64>()
             .map_or_else(|_| HeaderValue::Text(word.to_owned()), HeaderValue::Float),
+        _ if declaration => HeaderValue::Word(word.to_owned()),
         _ => HeaderValue::Text(word.to_owned()),
     }
 }
