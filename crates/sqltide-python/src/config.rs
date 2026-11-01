@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 
 use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::config::{
@@ -13,6 +14,17 @@ use sqltide_discovery::durations;
 use sqltide_discovery::errors::{ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
 use sqltide_discovery::pipeline_config::{self, PipelineSettings};
+use sqltide_discovery::source_registry::{
+    self, Boundary, DerivedName, KafkaDefaults, KafkaRetentionChoice, Port, Source, SourceFile,
+    SourceKind,
+};
+
+use sqltide_discovery::effective::{self, EffectiveConfig, Invocation};
+use sqltide_discovery::interpolation;
+use sqltide_discovery::value::index;
+use std::collections::HashMap;
+
+use crate::discovery::PyEnvironment;
 use sqltide_discovery::retention::{self, KafkaRetention, ModelRetention, Retention};
 use sqltide_discovery::value::{Kind, Value};
 
@@ -506,6 +518,7 @@ pub(crate) fn spec_error(py: Python<'_>, error: SpecError) -> PyErr {
         ErrorKind::DurationParse => "DurationParseError",
         ErrorKind::RetentionConfig => "RetentionConfigError",
         ErrorKind::PipelineDiscovery => "PipelineDiscoveryError",
+        ErrorKind::Type => return PyTypeError::new_err(error.message),
     };
     match py
         .import(EXCEPTIONS_MODULE)
@@ -711,7 +724,449 @@ fn parse_pipeline_settings<'py>(
     )
 }
 
+impl<'py> Document<'py> {
+    fn boundary(&self, boundary: &Boundary) -> PyResult<Bound<'py, PyAny>> {
+        let [partition, offset, timestamp, landed_at, cursor] = &boundary.columns.0;
+        self.model(
+            "ReplayBoundary",
+            &[
+                ("mode", self.object(&boundary.mode)?),
+                (
+                    "columns",
+                    self.model(
+                        "ReplayBoundaryColumns",
+                        &[
+                            ("partition", self.object(partition.as_deref())?),
+                            ("offset", self.object(offset.as_deref())?),
+                            ("timestamp", self.object(timestamp.as_deref())?),
+                            ("landed_at", self.object(landed_at.as_deref())?),
+                            ("cursor", self.object(cursor.as_deref())?),
+                        ],
+                    )?,
+                ),
+            ],
+        )
+    }
+
+    fn source(
+        &self,
+        source: &Source,
+        default_retention: &Bound<'py, PyAny>,
+        default_freshness: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let freshness: Bound<'py, PyAny> = match &source.freshness {
+            Some(_) => self.freshness(source.freshness.as_ref())?,
+            None => default_freshness.clone(),
+        };
+        match &source.kind {
+            SourceKind::Kafka(kafka) => {
+                let (retention, origin): (Bound<'py, PyAny>, Option<&str>) = match &kafka.retention
+                {
+                    KafkaRetentionChoice::Source(retention) => (
+                        retention_object(self.py, retention.clone(), |policy| {
+                            self.kafka_retention(policy)
+                        })?,
+                        Some("source"),
+                    ),
+                    KafkaRetentionChoice::Project => (default_retention.clone(), Some("project")),
+                    KafkaRetentionChoice::None => (self.object(None::<u8>)?, None),
+                };
+                let settings: Bound<'py, PyAny> = if kafka.settings.is_empty() {
+                    self.object(None::<u8>)?
+                } else {
+                    let settings: Bound<'py, PyDict> = PyDict::new(self.py);
+                    for (key, value) in &kafka.settings {
+                        settings.set_item(key, value)?;
+                    }
+                    settings.into_any()
+                };
+                let (macro_name, fingerprint) = match &kafka.derived {
+                    Some((macro_name, fingerprint)) => {
+                        (Some(macro_name.as_str()), Some(fingerprint.as_str()))
+                    }
+                    None => (None, None),
+                };
+                self.model(
+                    "KafkaLandingStep",
+                    &[
+                        ("name", self.object(&kafka.name)?),
+                        (
+                            "kafka",
+                            self.model(
+                                "KafkaSettings",
+                                &[
+                                    ("broker_list", self.object(&kafka.broker_list)?),
+                                    ("topic", self.object(&kafka.topic)?),
+                                    (
+                                        "consumer_group",
+                                        self.object(kafka.consumer_group.as_deref())?,
+                                    ),
+                                    ("format", self.object(&kafka.format)?),
+                                    ("ttl", self.object(kafka.ttl.as_deref())?),
+                                    ("settings", settings),
+                                    ("retention", retention),
+                                    ("retention_origin", self.object(origin)?),
+                                ],
+                            )?,
+                        ),
+                        ("replay_boundary", self.boundary(&kafka.replay_boundary)?),
+                        ("freshness", freshness),
+                        (
+                            "name_origin",
+                            self.object(if kafka.derived.is_some() {
+                                "derived"
+                            } else {
+                                "explicit"
+                            })?,
+                        ),
+                        ("naming_macro", self.object(macro_name)?),
+                        ("naming_macro_fingerprint", self.object(fingerprint)?),
+                    ],
+                )
+            }
+            SourceKind::Adopted {
+                name,
+                table_name,
+                replay_boundary,
+            } => self.model(
+                "ExternalTableSourceStep",
+                &[
+                    ("name", self.object(name)?),
+                    ("kind", self.object("stream_table")?),
+                    ("table_name", self.object(table_name)?),
+                    ("replay_boundary", self.boundary(replay_boundary)?),
+                    ("freshness", freshness),
+                ],
+            ),
+            SourceKind::Postgres(postgres) => self.model(
+                "PostgresRefreshSourceStep",
+                &[
+                    ("name", self.object(&postgres.name)?),
+                    ("kind", self.object("postgres")?),
+                    ("host", self.object(&postgres.host)?),
+                    ("database", self.object(&postgres.database)?),
+                    ("table", self.object(&postgres.table)?),
+                    ("user", self.object(&postgres.user)?),
+                    ("refresh", self.object(&postgres.refresh)?),
+                    (
+                        "port",
+                        match postgres.port {
+                            Port::Number(number) => self.object(number)?,
+                            Port::Handle(handle) => self.objects[handle].clone(),
+                        },
+                    ),
+                    (
+                        "password_env",
+                        self.object(postgres.password_env.as_deref())?,
+                    ),
+                    ("append", self.object(postgres.append)?),
+                    ("freshness", freshness),
+                ],
+            ),
+        }
+    }
+}
+
+impl<'py> Document<'py> {
+    fn interpolated(&self, value: &interpolation::Value) -> PyResult<Bound<'py, PyAny>> {
+        Ok(match value {
+            interpolation::Value::Str(text) => self.object(text)?,
+            interpolation::Value::Seq(items) => self.object(PyTuple::new(
+                self.py,
+                items
+                    .iter()
+                    .map(|item| self.interpolated(item))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )?)?,
+            interpolation::Value::Map(entries) => {
+                let dict: Bound<'py, PyDict> = PyDict::new(self.py);
+                for (key, item) in entries {
+                    dict.set_item(key, self.interpolated(item)?)?;
+                }
+                dict.into_any()
+            }
+            interpolation::Value::Other { handle, .. } => self.objects[*handle].clone(),
+        })
+    }
+
+    fn effective(&self, config: &EffectiveConfig) -> PyResult<Bound<'py, PyAny>> {
+        let variables: Vec<Bound<'py, PyTuple>> = config
+            .variables
+            .iter()
+            .map(|(name, value)| {
+                PyTuple::new(self.py, [self.object(name)?, self.interpolated(value)?])
+            })
+            .collect::<PyResult<_>>()?;
+        let references: Vec<Bound<'py, PyAny>> = config
+            .dependencies
+            .allowed_cross_pipeline_references
+            .iter()
+            .map(|(upstream, downstream)| {
+                self.model(
+                    "AllowedCrossPipelineReference",
+                    &[
+                        ("upstream_pipeline", self.object(upstream)?),
+                        ("downstream_pipeline", self.object(downstream)?),
+                    ],
+                )
+            })
+            .collect::<PyResult<_>>()?;
+        self.model(
+            "EffectiveProjectConfiguration",
+            &[
+                ("name", self.object(&config.name)?),
+                ("adapter", self.object(&config.adapter)?),
+                ("target_name", self.object(&config.target_name)?),
+                ("database", self.object(config.database.as_deref())?),
+                ("connection", self.connection(&config.connection)?),
+                ("variables", self.object(PyTuple::new(self.py, variables)?)?),
+                ("defaults", self.defaults(&config.defaults)?),
+                (
+                    "naming",
+                    self.model(
+                        "ProjectNaming",
+                        &[
+                            (
+                                "pipeline_prefix",
+                                self.object(&config.naming.pipeline_prefix)?,
+                            ),
+                            (
+                                "pipeline_naming_macro",
+                                self.object(config.naming.pipeline_naming_macro.as_deref())?,
+                            ),
+                            ("table_prefix", self.object(&config.naming.table_prefix)?),
+                            ("view_prefix", self.object(&config.naming.view_prefix)?),
+                        ],
+                    )?,
+                ),
+                (
+                    "audit_scheduler",
+                    self.model(
+                        "AuditSchedulerConfig",
+                        &[("enabled", self.object(config.audit_scheduler_enabled)?)],
+                    )?,
+                ),
+                (
+                    "sensors",
+                    self.model(
+                        "SensorAutomationConfig",
+                        &[
+                            ("enabled", self.object(config.sensors.enabled)?),
+                            (
+                                "tick_retention_days",
+                                self.object(config.sensors.tick_retention_days)?,
+                            ),
+                            (
+                                "maximum_event_age_seconds",
+                                self.object(config.sensors.maximum_event_age_seconds)?,
+                            ),
+                        ],
+                    )?,
+                ),
+                ("build", self.build(config.build)?),
+                (
+                    "destruction",
+                    self.model(
+                        "DestructionConfig",
+                        &[(
+                            "max_table_size_to_drop_bytes",
+                            self.object(config.max_table_size_to_drop_bytes)?,
+                        )],
+                    )?,
+                ),
+                (
+                    "ui",
+                    self.model(
+                        "UiConfig",
+                        &[("timezone", self.object(&config.ui_timezone)?)],
+                    )?,
+                ),
+                ("production_target", self.object(config.production_target)?),
+                (
+                    "dependencies",
+                    self.model(
+                        "ProjectDependencies",
+                        &[
+                            (
+                                "model_reference_scope",
+                                self.object(&config.dependencies.model_reference_scope)?,
+                            ),
+                            (
+                                "allowed_cross_pipeline_references",
+                                self.object(PyTuple::new(self.py, references)?)?,
+                            ),
+                        ],
+                    )?,
+                ),
+            ],
+        )
+    }
+}
+
+/// Resolve the effective configuration for a target from the decoded project and optional
+/// local configuration, command-line variables, and the environment.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn resolve_effective_configuration<'py>(
+    py: Python<'py>,
+    project_payload: &Bound<'py, PyAny>,
+    project_path: &str,
+    local_payload: &Bound<'py, PyAny>,
+    local_path: &str,
+    selected_target: Option<&str>,
+    cli_variables: &Bound<'py, PyAny>,
+    environment: Bound<'py, PyAny>,
+    timezone_exists: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let project_payload: Value = document.value(project_payload)?;
+    let local_payload: Value = if local_payload.is_none() {
+        document.value(PyDict::new(py).as_any())?
+    } else {
+        document.value(local_payload)?
+    };
+    let cli_variables: Value = document.value(cli_variables)?;
+    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
+    let mut exists = |name: &str| match timezone_exists
+        .call1((name,))
+        .and_then(|found| found.is_truthy())
+    {
+        Ok(found) => found,
+        Err(failure) => {
+            callback_error.replace(Some(failure));
+            false
+        }
+    };
+    let project_config = config::parse_project_config(&project_payload, project_path, &mut exists);
+    if let Some(failure) = callback_error.take() {
+        return Err(failure);
+    }
+    let project_config: ProjectConfig = project_config.map_err(|error| spec_error(py, error))?;
+    let local: LocalConfig = config::parse_local_config(&local_payload, local_path)
+        .map_err(|error| spec_error(py, error))?;
+    let mut objects: HashMap<usize, &Value> = HashMap::new();
+    index(&project_payload, &mut objects);
+    index(&local_payload, &mut objects);
+    index(&cli_variables, &mut objects);
+    let cli: Vec<(String, &Value)> = cli_variables
+        .mapping_entries()
+        .unwrap_or_default()
+        .iter()
+        .map(|(key, value)| (key.python_str(), value))
+        .collect();
+    let resolved: EffectiveConfig = effective::resolve_effective_config(
+        &project_config,
+        &local,
+        &objects,
+        &Invocation {
+            selected_target,
+            cli_variables: &cli,
+            environment: &PyEnvironment(environment),
+            project_path,
+        },
+    )
+    .map_err(|error| spec_error(py, error))?;
+    document.effective(&resolved)
+}
+
+/// Parse `[(path, payload, decode_error)]` source files in order into one tuple of sources
+/// per file. `derive_name(topic=, label=, file_path=)` runs the Kafka naming macro and returns
+/// `(name, macro_name, fingerprint)`.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn parse_source_registry<'py>(
+    py: Python<'py>,
+    files: Vec<(String, Bound<'py, PyAny>, Option<String>)>,
+    variables: &Bound<'py, PyAny>,
+    environment: Bound<'py, PyAny>,
+    default_ttl: Option<String>,
+    default_retention: Bound<'py, PyAny>,
+    default_broker_list: Option<String>,
+    default_freshness: Bound<'py, PyAny>,
+    derive_name: &Bound<'py, PyAny>,
+) -> PyResult<Vec<Bound<'py, PyTuple>>> {
+    let mut document: Document<'py> = Document::new(py)?;
+    let variables: Value = document.value(variables)?;
+    let source_files: Vec<SourceFile> = files
+        .iter()
+        .map(|(path, payload, decode_error)| {
+            Ok(SourceFile {
+                path: path.clone(),
+                payload: match decode_error {
+                    Some(message) => Err(message.clone()),
+                    None => Ok(document.value(payload)?),
+                },
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    let defaults: KafkaDefaults = KafkaDefaults {
+        ttl: default_ttl,
+        retention_set: !default_retention.is_none(),
+        broker_list: default_broker_list,
+    };
+    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
+    let mut derive =
+        |topic: &str, label: &str, file_path: &str| -> Result<DerivedName, SpecError> {
+            let kwargs: Bound<'py, PyDict> = PyDict::new(py);
+            kwargs
+                .set_item("topic", topic)
+                .and_then(|()| kwargs.set_item("label", label))
+                .and_then(|()| kwargs.set_item("file_path", file_path))
+                .and_then(|()| derive_name.call((), Some(&kwargs)))
+                .and_then(|result| result.extract::<DerivedName>())
+                .map_err(|failure| {
+                    callback_error.replace(Some(failure));
+                    SpecError::new(ErrorKind::PipelineDiscovery, String::new())
+                })
+        };
+    let parsed = source_registry::parse_source_registry(
+        &source_files,
+        &variables,
+        &PyEnvironment(environment),
+        &defaults,
+        &mut derive,
+    );
+    if let Some(failure) = callback_error.take() {
+        return Err(failure);
+    }
+    parsed
+        .map_err(|error| spec_error(py, error))?
+        .iter()
+        .map(|sources| {
+            PyTuple::new(
+                py,
+                sources
+                    .iter()
+                    .map(|source| document.source(source, &default_retention, &default_freshness))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add("DEFAULT_ADAPTER_NAME", config::DEFAULT_ADAPTER_NAME)?;
+    module.add("DEFAULT_PIPELINE_PREFIX", config::DEFAULT_PIPELINE_PREFIX)?;
+    module.add("DEFAULT_TABLE_PREFIX", config::DEFAULT_TABLE_PREFIX)?;
+    module.add("DEFAULT_VIEW_PREFIX", config::DEFAULT_VIEW_PREFIX)?;
+    module.add(
+        "RUN_UNRESPONSIVE_AFTER_SECONDS",
+        config::RUN_UNRESPONSIVE_AFTER_SECONDS,
+    )?;
+    module.add(
+        "DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS",
+        config::DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS,
+    )?;
+    module.add(
+        "DEFAULT_POSTGRES_PORT",
+        source_registry::DEFAULT_POSTGRES_PORT,
+    )?;
+    module.add(
+        "DEFAULT_KAFKA_FORMAT",
+        source_registry::DEFAULT_KAFKA_FORMAT,
+    )?;
+    module.add_function(wrap_pyfunction!(resolve_effective_configuration, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_source_registry, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
     module.add_function(wrap_pyfunction!(parse_model_retention, module)?)?;

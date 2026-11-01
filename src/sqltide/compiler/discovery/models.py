@@ -10,6 +10,7 @@ from typing import Literal
 
 from sqltide.compiler.discovery.constants import (
     DEFAULT_ADAPTER_NAME,
+    DEFAULT_KAFKA_FORMAT,
     DEFAULT_PIPELINE_PREFIX,
     DEFAULT_POSTGRES_PORT,
     DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS,
@@ -400,7 +401,7 @@ class KafkaSettings:
     broker_list: str
     topic: str
     consumer_group: str | None = None
-    format: str = "JSONAsString"
+    format: str = DEFAULT_KAFKA_FORMAT
     ttl: str | None = None
     settings: Mapping[str, str] | None = None
     retention: KafkaRetentionPolicy | Literal[False] | None = None

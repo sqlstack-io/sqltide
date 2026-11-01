@@ -94,7 +94,7 @@ impl<'py> Values<'py> {
 }
 
 /// The caller's environment mapping, read with `in` and then indexing.
-struct PyEnvironment<'py>(Bound<'py, PyAny>);
+pub(crate) struct PyEnvironment<'py>(pub(crate) Bound<'py, PyAny>);
 
 impl Environment for PyEnvironment<'_> {
     fn get(&self, name: &str) -> Option<String> {

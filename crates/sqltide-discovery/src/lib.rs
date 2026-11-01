@@ -4,11 +4,13 @@
 pub mod byte_size;
 pub mod config;
 pub mod durations;
+pub mod effective;
 pub mod errors;
 pub mod freshness;
 pub mod interpolation;
 pub mod pipeline_config;
 pub mod retention;
+pub mod source_registry;
 pub mod sources;
 pub mod text;
 pub mod value;

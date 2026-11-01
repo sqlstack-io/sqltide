@@ -42,7 +42,7 @@ def load_project_configuration(*, project_dir: Path) -> LoadedProjectConfigurati
     project: AuthoredProjectConfig = _native.parse_project_config(
         project_payload,
         str(project_path),
-        _timezone_exists,
+        timezone_exists,
     )
     local_path: Path = project_dir / LOCAL_CONFIG_FILE_NAME
     if not local_path.exists():
@@ -121,7 +121,9 @@ def _parse_toml_source(source: DiscoveredProjectFile) -> dict[str, object]:
     return cast(dict[str, object], payload)
 
 
-def _timezone_exists(name: str) -> bool:
+def timezone_exists(name: str) -> bool:
+    """Whether the host's timezone database can load the IANA timezone `name`."""
+
     try:
         ZoneInfo(name)
     except ZoneInfoNotFoundError:

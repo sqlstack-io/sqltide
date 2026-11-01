@@ -7,6 +7,8 @@ pub enum ErrorKind {
     DurationParse,
     RetentionConfig,
     PipelineDiscovery,
+    /// A Python `TypeError`.
+    Type,
 }
 
 impl ErrorKind {
@@ -17,6 +19,7 @@ impl ErrorKind {
             Self::DurationParse => "duration_parse",
             Self::RetentionConfig => "retention_config",
             Self::PipelineDiscovery => "pipeline_discovery",
+            Self::Type => "type",
         }
     }
 }
