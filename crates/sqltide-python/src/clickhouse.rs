@@ -16,6 +16,7 @@ use sqltide_clickhouse::metadata::{
     run_statement_verification_query, sensor_retention_cleanup, sensor_state_inserts,
 };
 use sqltide_clickhouse::realization;
+use sqltide_clickhouse::redaction::redact_workflow_statements;
 use sqltide_clickhouse::replay::{
     Boundary, BoundaryMode, Columns, DeploymentReplay, LowerBound, LowerBoundMode, Relations,
     Replay, ReplayError, Window, coverage_query, replay_from_capture, replay_from_deployment,
@@ -552,6 +553,15 @@ fn render_clickhouse_audit_sample_query(query: &str, limit: usize) -> String {
     audit_sample_query(query, limit)
 }
 
+/// The credential-redacted SQL of one workflow and the hash it is persisted under.
+#[pyfunction]
+fn redact_clickhouse_workflow_statements(
+    sqls: Vec<String>,
+    workflow_sha256: &str,
+) -> (Vec<String>, String) {
+    redact_workflow_statements(&sqls, workflow_sha256)
+}
+
 /// Schema initialization and inserts for `AdapterDirectFingerprintRecord`s.
 #[pyfunction]
 fn render_clickhouse_direct_fingerprint_observations(
@@ -810,6 +820,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         wrap_pyfunction!(render_clickhouse_run_statement_verification_query, module)?,
         wrap_pyfunction!(render_clickhouse_audit_count_query, module)?,
         wrap_pyfunction!(render_clickhouse_audit_sample_query, module)?,
+        wrap_pyfunction!(redact_clickhouse_workflow_statements, module)?,
     ] {
         module.add_function(function)?;
     }

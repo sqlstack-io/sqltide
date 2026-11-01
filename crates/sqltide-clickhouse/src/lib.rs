@@ -5,6 +5,7 @@ pub mod audit;
 pub mod comparison;
 pub mod metadata;
 pub mod realization;
+pub mod redaction;
 pub mod replay;
 pub mod resources;
 
