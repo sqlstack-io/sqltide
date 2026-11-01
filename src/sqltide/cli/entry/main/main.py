@@ -112,6 +112,13 @@ def _main_with_dependencies(
     try:
         require_interactive_destruction(args=args)
         resolved_database: str | None = None
+        if args.command == CliCommand.PLAYGROUND:
+            from sqltide.cli.playground.main._run_playground import run_playground
+
+            return run_playground(
+                directory=args.directory,
+                working_directory=Path.cwd() if working_directory is None else working_directory,
+            )
         if args.command == CliCommand.ADMIN:
             return run_admin_command(
                 args=args,

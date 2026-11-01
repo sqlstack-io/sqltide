@@ -1,0 +1,10 @@
+sources:
+  - name: orders
+    kind: stream_table
+    table_name: playground_orders
+    replay_boundary:
+      mode: offsets
+      columns:
+        _replay_partition: _replay_partition
+        _replay_offset: _replay_offset
+        _replay_timestamp: _replay_timestamp
