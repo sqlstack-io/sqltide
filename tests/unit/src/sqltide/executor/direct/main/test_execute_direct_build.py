@@ -1,4 +1,6 @@
 import json
+import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -15,7 +17,7 @@ from sqltide.compiler.compile.main.build_model_storage_identity import (
 )
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.executor.direct.exceptions import DirectWorkflowExecutionError
+from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
 from sqltide.executor.direct.main.assemble_direct_build_workflow import (
     assemble_direct_build_workflow,
 )
@@ -36,6 +38,7 @@ from sqltide.executor.workflow.models import (
     WarehouseStatement,
 )
 from sqltide.executor.workflow.types import StatementIntent, WorkflowMode, WorkflowPhase
+from tests.unit.src.sqltide.compiler.planner.helpers import build_direct_snapshot
 from tests.unit.src.sqltide.executor.direct.main._test_types import (
     DirectCaptureValidationTestCase,
     DirectDistinctCaptureTestCase,
@@ -445,6 +448,39 @@ def test_given_partitionless_offset_capture_when_executing_then_replay_fails_clo
 
     assert isinstance(raised.value.cause, AdapterResultError)
     assert test_case.expected_error_fragment in str(raised.value.cause)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DirectCaptureValidationTestCase(
+            description="forced start time requires the replay input to exist",
+            expected_error_fragment=(
+                "Direct --start-time requires existing replay input 'tbl__alpha' for model 'beta'"
+            ),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_forced_start_time_without_replay_input_when_assembling_then_build_is_refused(
+    test_case: DirectCaptureValidationTestCase,
+    tmp_path: Path,
+) -> None:
+    request: DirectBuildRequest = build_direct_execution_request(
+        project_root=tmp_path,
+        selected_model_names=("beta",),
+    )
+    bounded_request: DirectBuildRequest = replace(
+        request, plan=replace(request.plan, effective_start_time="2026-04-08 13:00:00")
+    )
+
+    with pytest.raises(DirectBuildError, match=re.escape(test_case.expected_error_fragment)):
+        _ = assemble_direct_build_workflow(
+            request=bounded_request,
+            client=RecordingDirectBuildConnection(),
+            snapshot=build_direct_snapshot(relation_names=("mv__alpha",)),
+            plan_json=render_direct_plan_json(plan=request.plan, adapter_name="clickhouse"),
+        )
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,6 @@
 """Assemble virtual build output from authoritative workflow evidence."""
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterMutationResult, AdapterQueryResult
 from sqltide.compiler.compile.models import ObjectKey
 from sqltide.compiler.planner.models import DeploymentPlan
@@ -63,7 +64,7 @@ def _boundary_time(execution: WorkflowExecutionResult) -> str:
 
 
 def _root_written_rows(*, execution: WorkflowExecutionResult, root_key: ObjectKey) -> int | None:
-    segment: str = _step_segment(root_key.name)
+    segment: str = _native.workflow_step_segment(root_key.name)
     results: tuple[WorkflowStatementResult, ...] = tuple(
         result
         for result in execution.statement_results
@@ -109,7 +110,3 @@ def _created_at(request: BackfillBootstrapRequest) -> str:
     if request.created_at is None:
         raise BackfillExecutionError("Virtual execution result requires a creation timestamp")
     return request.created_at
-
-
-def _step_segment(value: str) -> str:
-    return "".join(character if character.isalnum() else "_" for character in value)

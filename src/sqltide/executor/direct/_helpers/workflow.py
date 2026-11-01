@@ -15,19 +15,16 @@ from sqltide.adapter.models import (
     AdapterReplayOffsetProgressRequest,
     AdapterReplayOffsetRange,
     AdapterReplayRequest,
-    CatalogRelation,
+    CatalogColumn,
 )
-from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.compiler.compile.models import (
-    DesiredKafkaTable,
+    Column,
     DesiredMaterializedView,
     DesiredTable,
-    DesiredView,
     ObjectKey,
 )
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import (
-    DirectPlanEntry,
     DirectWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import DirectResourceKind
@@ -35,12 +32,15 @@ from sqltide.executor.auditing.constants import AUDIT_SAMPLE_LIMIT
 from sqltide.executor.direct._helpers.population_plan import build_direct_population_plan
 from sqltide.executor.direct._helpers.preflight import reject_incapable_adapter
 from sqltide.executor.direct._helpers.sources import plan_preserved_managed_sources
+from sqltide.executor.direct.constants import (
+    DIRECT_REPLAY_BUILD_ERROR,
+    MISSING_REPLAY_PARTITION_ERROR,
+)
 from sqltide.executor.direct.exceptions import DirectBuildError
 from sqltide.executor.direct.models import (
     DirectBuildRequest,
     DirectBuildWorkflow,
     DirectReplayCapture,
-    DirectReplayRange,
     DirectRuntimeReplay,
 )
 from sqltide.executor.population.main._build_population_replay_templates import (
@@ -110,15 +110,6 @@ def assemble_direct_build_workflow(
     replay_templates: tuple[AdapterReplayRequest, ...] = tuple(
         template for _key, template in replay_template_pairs
     )
-    replay_by_model_name: dict[str, AdapterReplayRequest] = {
-        _model_name_for_target(request=request, target=replay.relations.target): replay
-        for replay in replay_templates
-    }
-    _assert_bounded_replay_inputs(
-        request=request,
-        snapshot=snapshot,
-        replay_by_model_name=replay_by_model_name,
-    )
     runtime_replays: tuple[DirectRuntimeReplay, ...] = _runtime_replays(
         request=request,
         snapshot=snapshot,
@@ -139,7 +130,8 @@ def assemble_direct_build_workflow(
     recreated_sources: tuple[PopulationSourceRecreation, ...] = tuple(
         recreation
         for recreation in source_preparation.recreated_sources
-        if f"swap_source_{_step_segment(recreation.managed_source.resource.name)}" in step_ids
+        if f"swap_source_{_native.workflow_step_segment(recreation.managed_source.resource.name)}"
+        in step_ids
     )
     return DirectBuildWorkflow(
         template=BuildWorkflow(
@@ -314,62 +306,70 @@ def realize_direct_replay_statement(
 ) -> WarehouseStatement:
     """Replace one direct replay template with SQL from its in-memory capture."""
 
+    boundaries: list[tuple[str, str, bool, str | None]]
+    lower_bounds: list[tuple[str, str | None]]
+    offset_ranges: list[tuple[int, int, int]]
+    try:
+        boundaries, lower_bounds, offset_ranges = _native.realize_direct_replay_capture(
+            str(capture.boundary_mode),
+            [
+                (
+                    replay_range.partition_value,
+                    replay_range.lower_value,
+                    replay_range.replay_cutoff_value,
+                    replay_range.cutoff_inclusive,
+                )
+                for replay_range in capture.ranges
+            ],
+        )
+    except ValueError as error:
+        reason: tuple[str, ...] = error.args
+        if reason[0] == MISSING_REPLAY_PARTITION_ERROR:
+            raise DirectBuildError("Captured offset replay range has no partition") from None
+        int(reason[1])
+        raise
     replay: AdapterReplayRequest = replace(
         runtime_replay.replay,
-        boundaries=_captured_boundaries(capture=capture),
+        boundaries=tuple(
+            AdapterReplayBoundary(
+                boundary_key=boundary_key,
+                cutoff_value=cutoff_value,
+                cutoff_inclusive=cutoff_inclusive,
+                partition_value=partition_value,
+            )
+            for boundary_key, cutoff_value, cutoff_inclusive, partition_value in boundaries
+        ),
     )
     rendered_sql: str = client.render_replay_from_capture(
         AdapterCapturedReplayRequest(
             replay=replay,
             boundary_column_type=runtime_replay.boundary_column_type,
-            lower_bounds=_captured_lower_bounds(capture=capture),
+            lower_bounds=tuple(
+                AdapterReplayLowerBound(value=value, partition_value=partition_value)
+                for value, partition_value in lower_bounds
+            ),
         )
     )
     return replace(
         template_statement,
-        sql=_terminate_sql(rendered_sql),
-        replay_offset_progress=_replay_offset_progress_request(replay=replay, capture=capture),
+        sql=_native.workflow_terminate_sql(rendered_sql),
+        replay_offset_progress=(
+            AdapterReplayOffsetProgressRequest(
+                database=replay.database,
+                relation=replay.relations.target,
+                partition_column=replay.columns.partition,
+                offset_column=replay.columns.offset,
+                ranges=tuple(
+                    AdapterReplayOffsetRange(
+                        partition=partition, lower_offset=lower_offset, upper_offset=upper_offset
+                    )
+                    for partition, lower_offset, upper_offset in offset_ranges
+                ),
+            )
+            if offset_ranges
+            else None
+        ),
     )
-
-
-def _replay_offset_progress_request(
-    *, replay: AdapterReplayRequest, capture: DirectReplayCapture
-) -> AdapterReplayOffsetProgressRequest | None:
-    if capture.boundary_mode != AdapterReplayBoundaryMode.OFFSETS:
-        return None
-    bounds_by_partition: dict[int, tuple[int, int]] = {}
-    for replay_range in capture.ranges:
-        partition: int = int(_required_partition(replay_range=replay_range))
-        lower_offset: int = int(replay_range.lower_value)
-        upper_offset: int = int(replay_range.replay_cutoff_value)
-        previous: tuple[int, int] | None = bounds_by_partition.get(partition)
-        bounds_by_partition[partition] = (
-            lower_offset if previous is None else min(previous[0], lower_offset),
-            upper_offset if previous is None else max(previous[1], upper_offset),
-        )
-    ranges: tuple[AdapterReplayOffsetRange, ...] = tuple(
-        AdapterReplayOffsetRange(
-            partition=partition,
-            lower_offset=bounds_by_partition[partition][0],
-            upper_offset=bounds_by_partition[partition][1],
-        )
-        for partition in sorted(bounds_by_partition)
-    )
-    if not ranges:
-        return None
-    return AdapterReplayOffsetProgressRequest(
-        database=replay.database,
-        relation=replay.relations.target,
-        partition_column=replay.columns.partition,
-        offset_column=replay.columns.offset,
-        ranges=ranges,
-    )
-
-
-def _required_partition(*, replay_range: DirectReplayRange) -> str:
-    if replay_range.partition_value is None:
-        raise DirectBuildError("Captured offset replay range has no partition")
-    return replay_range.partition_value
 
 
 def _runtime_replays(
@@ -378,82 +378,55 @@ def _runtime_replays(
     snapshot: DirectWarehouseSnapshot,
     replay_templates: tuple[AdapterReplayRequest, ...],
 ) -> tuple[DirectRuntimeReplay, ...]:
-    runtime_replays: list[DirectRuntimeReplay] = []
-    replay: AdapterReplayRequest
-    for replay in replay_templates:
-        model_name: str = _model_name_for_target(request=request, target=replay.relations.target)
-        segment: str = _step_segment(model_name)
-        runtime_replays.append(
-            DirectRuntimeReplay(
-                model_name=model_name,
-                capture_step_id=f"capture_replay_{segment}",
-                replay_step_id=f"replay_{segment}",
-                replay=replay,
-                boundary_column_type=_boundary_column_type(
-                    request=request,
-                    replay=replay,
-                    snapshot=snapshot,
-                ),
-            )
+    resolved: list[tuple[str, str, str, str | None]]
+    try:
+        resolved = _native.resolve_direct_replays(
+            [(entry.model_key.name, list(entry.relation_names)) for entry in request.plan.entries],
+            [
+                (
+                    str(replay.mode),
+                    replay.relations.anchor,
+                    replay.relations.target,
+                    replay.columns.timestamp,
+                    replay.columns.landed_at,
+                    replay.columns.cursor,
+                )
+                for replay in replay_templates
+            ],
+            request.effective_start_time is not None,
+            [
+                (desired.name, _native_columns(desired.columns))
+                for desired in request.realized_project.desired_state.objects
+                if isinstance(desired, DesiredTable)
+            ],
+            [
+                (relation.name, _native_columns(relation.columns))
+                for relation in snapshot.catalog.relations
+            ],
         )
-    return tuple(runtime_replays)
-
-
-def _captured_boundaries(*, capture: DirectReplayCapture) -> tuple[AdapterReplayBoundary, ...]:
-    if capture.boundary_mode != AdapterReplayBoundaryMode.OFFSETS:
-        return tuple(
-            AdapterReplayBoundary(
-                boundary_key=f"_replay_{capture.boundary_mode}",
-                cutoff_value=replay_range.replay_cutoff_value,
-                cutoff_inclusive=replay_range.cutoff_inclusive,
-            )
-            for replay_range in capture.ranges[:1]
-        )
-    cutoff_by_partition: dict[str, int] = {}
-    for replay_range in capture.ranges:
-        if replay_range.partition_value is None:
-            raise DirectBuildError("Captured offset replay range has no partition")
-        cutoff_value: int = int(replay_range.replay_cutoff_value)
-        cutoff_by_partition[replay_range.partition_value] = max(
-            cutoff_value,
-            cutoff_by_partition.get(replay_range.partition_value, cutoff_value),
-        )
+    except ValueError as error:
+        reason: tuple[str, ...] = error.args
+        if reason[0] == DIRECT_REPLAY_BUILD_ERROR:
+            raise DirectBuildError(reason[1]) from None
+        raise StopIteration from None
     return tuple(
-        AdapterReplayBoundary(
-            boundary_key=f"_replay_partition={partition_value}",
-            cutoff_value=str(cutoff_by_partition[partition_value]),
-            cutoff_inclusive=True,
-            partition_value=partition_value,
+        DirectRuntimeReplay(
+            model_name=model_name,
+            capture_step_id=capture_step_id,
+            replay_step_id=replay_step_id,
+            replay=replay,
+            boundary_column_type=boundary_column_type,
         )
-        for partition_value in sorted(cutoff_by_partition, key=_partition_order)
+        for replay, (model_name, capture_step_id, replay_step_id, boundary_column_type) in zip(
+            replay_templates, resolved, strict=True
+        )
     )
 
 
-def _captured_lower_bounds(*, capture: DirectReplayCapture) -> tuple[AdapterReplayLowerBound, ...]:
-    if not capture.ranges:
-        return ()
-    if capture.boundary_mode != AdapterReplayBoundaryMode.OFFSETS:
-        return (AdapterReplayLowerBound(value=capture.ranges[0].lower_value),)
-    lower_by_partition: dict[str, int] = {}
-    for replay_range in capture.ranges:
-        if replay_range.partition_value is None:
-            raise DirectBuildError("Captured offset replay range has no partition")
-        lower_value: int = int(replay_range.lower_value)
-        lower_by_partition[replay_range.partition_value] = min(
-            lower_value,
-            lower_by_partition.get(replay_range.partition_value, lower_value),
-        )
-    return tuple(
-        AdapterReplayLowerBound(
-            value=str(lower_by_partition[partition_value]),
-            partition_value=partition_value,
-        )
-        for partition_value in sorted(lower_by_partition, key=_partition_order)
-    )
-
-
-def _partition_order(value: str) -> int:
-    return int(value)
+def _native_columns(
+    columns: tuple[Column, ...] | tuple[CatalogColumn, ...],
+) -> list[tuple[str, str]]:
+    return [(column.name, column.type) for column in columns]
 
 
 def assemble_direct_fingerprint_statements(
@@ -467,104 +440,7 @@ def assemble_direct_fingerprint_statements(
             step_id=f"record_direct_fingerprint_{index}",
             phase=WorkflowPhase.FINALIZATION,
             intent=StatementIntent.MUTATION,
-            sql=_terminate_sql(sql),
+            sql=_native.workflow_terminate_sql(sql),
         )
         for index, sql in enumerate(rendered, start=1)
     )
-
-
-def _assert_bounded_replay_inputs(
-    *,
-    request: DirectBuildRequest,
-    snapshot: DirectWarehouseSnapshot,
-    replay_by_model_name: dict[str, AdapterReplayRequest],
-) -> None:
-    if request.effective_start_time is None:
-        return
-    model_name: str
-    replay: AdapterReplayRequest
-    for model_name, replay in replay_by_model_name.items():
-        relation: CatalogRelation | None = snapshot.catalog.relation(replay.relations.anchor)
-        if relation is None:
-            raise DirectBuildError(
-                f"Direct --start-time requires existing replay input "
-                f"'{replay.relations.anchor}' for model '{model_name}'; run an ordinary direct "
-                "build first to create managed sources and retained lineage."
-            )
-        time_column: str = _forced_time_column(replay=replay)
-        if time_column not in {column.name for column in relation.columns}:
-            raise DirectBuildError(
-                f"Direct --start-time cannot bound model '{model_name}' because replay input "
-                f"'{replay.relations.anchor}' does not expose time-lineage column "
-                f"'{time_column}'. Project replay timestamp or landed-at lineage through the "
-                "intermediate model before selecting this closure."
-            )
-
-
-def _forced_time_column(*, replay: AdapterReplayRequest) -> str:
-    return {
-        AdapterReplayBoundaryMode.OFFSETS: replay.columns.landed_at or replay.columns.timestamp,
-        AdapterReplayBoundaryMode.CURSOR: replay.columns.timestamp,
-        AdapterReplayBoundaryMode.TIMESTAMP: replay.columns.timestamp,
-        AdapterReplayBoundaryMode.LANDED_AT: replay.columns.landed_at,
-    }[replay.mode]
-
-
-def _boundary_column_type(
-    *,
-    request: DirectBuildRequest,
-    replay: AdapterReplayRequest,
-    snapshot: DirectWarehouseSnapshot,
-) -> str | None:
-    if replay.mode == AdapterReplayBoundaryMode.OFFSETS:
-        return None
-    position_column: str = {
-        AdapterReplayBoundaryMode.CURSOR: replay.columns.cursor,
-        AdapterReplayBoundaryMode.TIMESTAMP: replay.columns.timestamp,
-        AdapterReplayBoundaryMode.LANDED_AT: replay.columns.landed_at,
-    }[replay.mode]
-    desired: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
-    for desired in request.realized_project.desired_state.objects:
-        if isinstance(desired, DesiredTable) and desired.name == replay.relations.anchor:
-            return next(column.type for column in desired.columns if column.name == position_column)
-    relation: CatalogRelation | None = snapshot.catalog.relation(replay.relations.anchor)
-    if relation is not None:
-        return next(column.type for column in relation.columns if column.name == position_column)
-    raise DirectBuildError(
-        f"Cannot resolve boundary type for {replay.relations.anchor}.{position_column}"
-    )
-
-
-def _model_name_for_target(*, request: DirectBuildRequest, target: str) -> str:
-    return next(
-        entry.model_key.name for entry in request.plan.entries if target in entry.relation_names
-    )
-
-
-def _retired_relation_names(*, request: DirectBuildRequest) -> tuple[str, ...]:
-    current_names: frozenset[str] = frozenset(_entry_relation_names(request=request))
-    return tuple(
-        operation.relation_name
-        for operation in request.plan.teardown_operations
-        if operation.relation_name not in current_names
-    )
-
-
-def _terminate_sql(sql: str) -> str:
-    return f"{sql.rstrip().rstrip(';')};"
-
-
-def _escape_literal(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("'", "\\'")
-
-
-def _step_segment(value: str) -> str:
-    return "".join(character if character.isalnum() else "_" for character in value)
-
-
-def _entry_relation_names(*, request: DirectBuildRequest) -> tuple[str, ...]:
-    names: list[str] = []
-    entry: DirectPlanEntry
-    for entry in request.plan.entries:
-        names.extend(entry.relation_names)
-    return tuple(names)
