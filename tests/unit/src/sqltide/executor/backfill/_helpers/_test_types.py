@@ -52,3 +52,13 @@ class ReplayRequestConstructionTestCase:
     execution_mode: RebuildExecutionMode
     expected_seed_mode: AdapterReplaySeedMode
     expected_lower_bound_mode: AdapterReplayLowerBoundMode
+
+
+@dataclass(frozen=True)
+class ExternalReplayAnchorTestCase:
+    description: str
+    replay_mode: ReplayLineageMode
+    anchor_name: str
+    boundary_key: str
+    cutoff_value: str
+    expected_request_count: int

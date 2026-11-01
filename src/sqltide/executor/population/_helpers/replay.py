@@ -130,7 +130,9 @@ def _build_requests(
             )
             for config in desired_state.external_source_replay_configs
         ],
-        replay_anchor_keys={index_by_key[key] for key in desired_state.replay_anchor_keys},
+        replay_anchor_keys={
+            index_by_key[key] for key in desired_state.replay_anchor_keys if key in index_by_key
+        },
         default_database=default_database,
         boundary_time=boundary_time,
         watermarks=None
