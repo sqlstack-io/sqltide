@@ -8,7 +8,9 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+sha2.workspace = true
 sqltide-discovery.workspace = true
+sqltide-json.workspace = true
 
 [lints]
 workspace = true

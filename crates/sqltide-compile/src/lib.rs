@@ -2,7 +2,9 @@
 
 pub mod audits;
 pub mod graph;
+pub mod manifest;
 pub mod paths;
+pub mod quality;
 pub mod relations;
 pub mod retention;
 pub mod staging;
