@@ -11,7 +11,7 @@ use crate::retention::{ModelRetention, Retention, is_identifier, parse_model_ret
 use crate::text::python_strip;
 use crate::value::{Kind, Value};
 
-const ALLOWED_MODEL_KEYS: [&str; 15] = [
+const ALLOWED_MODEL_KEYS: [&str; 16] = [
     "kind",
     "description",
     "columns",
@@ -27,6 +27,7 @@ const ALLOWED_MODEL_KEYS: [&str; 15] = [
     "replay_anchor",
     "replay_on_change",
     "bounded_replay_fallback",
+    "sql_analysis",
 ];
 const VIEW_FORBIDDEN_KEYS: [&str; 10] = [
     "engine",
@@ -106,6 +107,13 @@ struct Parser<'a> {
 ///
 /// Returns a discovery error listing the sorted unknown keys.
 pub fn check_model_header_keys(header: &Value, file_path: &str) -> SpecResult<()> {
+    if let Some(value) = header.get("sql_analysis")
+        && !matches!(value.kind, Kind::Bool(_))
+    {
+        return Err(discovery(format!(
+            "MODEL(...) in '{file_path}' sql_analysis must be a boolean"
+        )));
+    }
     let mut unknown: Vec<String> = header
         .mapping_entries()
         .unwrap_or_default()

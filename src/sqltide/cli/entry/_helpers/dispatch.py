@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -36,6 +37,15 @@ def dispatch_cli_command(
 ) -> int:
     args: argparse.Namespace = invocation.args
     adapter_profile: CompilerAdapterProfile = build_compiler_adapter_profile(invocation.adapter)
+    if getattr(args, "no_sql_analysis", False):
+        adapter_profile = replace(adapter_profile, run_sql_rules=False)
+    if args.command in (CliCommand.LINT, CliCommand.FORMAT):
+        from sqltide.cli.sql.main._run_sql import run_sql
+
+        return run_sql(
+            invocation=invocation,
+            adapter_profile=adapter_profile,
+        )
     if args.command == CliCommand.DISCOVER:
         return handlers.run_discover(
             pipelines_root=invocation.pipelines_root,

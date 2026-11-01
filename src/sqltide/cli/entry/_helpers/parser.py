@@ -9,6 +9,7 @@ from sqltide.auth.types import (
     AuthenticationSource,
     UnknownUserPolicy,
 )
+from sqltide.cli.entry.types import CliCommand
 from sqltide.dev_server.constants import (
     DEFAULT_DEV_SERVER_HOST,
     DEFAULT_DEV_SERVER_PORT,
@@ -30,6 +31,8 @@ def build_cli_parser() -> argparse.ArgumentParser:
     )
 
     _add_admin_parser(subparsers=subparsers)
+
+    _add_sql_parsers(subparsers=subparsers)
 
     discover_parser: argparse.ArgumentParser = subparsers.add_parser(
         "discover",
@@ -264,6 +267,28 @@ def build_cli_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_sql_parsers(*, subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    for command in (CliCommand.LINT, CliCommand.FORMAT):
+        sql_parser: argparse.ArgumentParser = subparsers.add_parser(
+            command, help=f"{command.capitalize()} project SQL with SQLClean"
+        )
+        _add_project_dir_arg(parser=sql_parser)
+        _add_compilation_config_args(parser=sql_parser)
+        sql_parser.add_argument(
+            "paths", nargs="*", type=Path, help="Project SQL files or directories"
+        )
+        sql_parser.add_argument("--json", action="store_true", help="Machine-readable results")
+        sql_parser.add_argument("--select", nargs="+", help="Exact SQLClean codes or SQLCLEAN")
+        if command == CliCommand.FORMAT:
+            sql_parser.add_argument("--check", action="store_true", help="Check without writing")
+            sql_parser.add_argument(
+                "--diff", action="store_true", help="Show changes without writing"
+            )
+            sql_parser.add_argument(
+                "--fix", action="store_true", help="Also apply compiler-verified Rule fixes"
+            )
+
+
 def _add_build_parser(
     *, subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]"
 ) -> argparse.ArgumentParser:
@@ -481,6 +506,12 @@ def _add_compilation_config_args(
 ) -> None:
     default_target: object = argparse.SUPPRESS if suppress_defaults else None
     default_variables: object = argparse.SUPPRESS if suppress_defaults else {}
+    parser.add_argument(
+        "--no-sql-analysis",
+        action="store_true",
+        default=argparse.SUPPRESS if suppress_defaults else False,
+        help="Skip configurable SQL Rules; mandatory compiler validation still applies",
+    )
     parser.add_argument("--target", default=default_target, help="Named project target to use")
     parser.add_argument(
         "--vars",

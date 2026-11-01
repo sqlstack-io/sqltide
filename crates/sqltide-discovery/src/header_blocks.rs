@@ -132,7 +132,7 @@ pub fn unsupported_test_header_keys(
     let unsupported: Vec<&str> = header
         .iter()
         .map(|(key, _)| key.as_str())
-        .filter(|key| *key != NAME_KEY && *key != MODE_KEY)
+        .filter(|key| *key != NAME_KEY && *key != MODE_KEY && *key != "sql_analysis")
         .collect();
     (!unsupported.is_empty()).then(|| {
         format!(
@@ -158,6 +158,14 @@ pub fn test_header_fields(
             .map(|(_, value)| *value)
             .filter(|value| !value.is_none())
     };
+    if header
+        .iter()
+        .any(|(key, value)| key == "sql_analysis" && !matches!(value.kind, Kind::Bool(_)))
+    {
+        return Err(format!(
+            "TEST() in '{file_path}' sql_analysis must be a boolean"
+        ));
+    }
     let name: Option<String> = match get(NAME_KEY) {
         None => None,
         Some(value) => match value.as_str().map(python_strip) {

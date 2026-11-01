@@ -95,6 +95,88 @@ SQLTide follows `__source()` and `__ref()` dependencies to compile the model gra
 materialized views keep it current; retained replay columns let a later build reconstruct the
 affected scope after SQL changes.
 
+## SQL Rules and formatting
+
+SQLTide uses [SQLClean](https://github.com/sqlstack-io/sqlclean) in process for SQL Rules and
+layout formatting. Default SQL Rules run during compilation, including compile, plan, build,
+and development-server compilation. Findings stop compilation before new artifacts are written;
+these commands never rewrite source. Models, SQL tests, and audits are checked in the adapter's
+dialect, using the same effective target, variables, declarations, and macro results as compilation.
+Diagnostics point back to authored SQL, including macro call sites.
+
+```bash
+sqt lint --project-dir .
+sqt lint --project-dir . --json
+sqt format --project-dir . --check
+sqt format --project-dir . --diff
+sqt format --project-dir .
+sqt format --project-dir . --fix
+```
+
+`lint` is read-only and needs no warehouse connection. Both commands accept project-relative SQL
+paths or directories and `--target` / `--vars`. `format --check` exits nonzero when layout changes
+are needed; `--diff` previews without writing. Plain `format` changes layout only, preserving
+headers, strings, comments, and opaque template calls. SQLClean's token-preservation and
+idempotence checks remain enabled.
+
+`format --fix` also attempts conservative model-only Rule fixes. The eligible codes are
+SQLCLEAN002, 003, 005, 006, 008, 017, 025, and 042; SQLCLEAN003 requires the Snowflake dialect,
+so it is not applied to ClickHouse. SQLClean042 additionally requires row-neutrality proof.
+Each candidate must recompile with identical output columns/types/nullability, dependencies,
+storage/aggregation semantics, replay lineage, and other models' SQL and diagnostics. Generated
+macro text, tests, and audits are not auto-fixed. Unsafe or unproven fixes are left for the author;
+remaining findings produce a nonzero exit even if safe layout changes were written.
+
+Configure Rules in `sqltide_project.toml`:
+
+```toml
+[rules]
+# Omit select for SQLClean's defaults; [] disables configurable Rules.
+# Explicit SQLCLEAN selects the whole family, including opt-in Rules.
+ignore = ["SQLCLEAN004"]
+
+[rules.thresholds]
+max_literal_length = 120
+max_ranking_order_by = 2
+
+[[rules.rule_exceptions]]
+rule = "SQLCLEAN038"
+path = "pipelines/pl__orders/order_summary.sql"
+reason = "Reviewed cross join to one aggregate row"
+relation = "order_totals"
+```
+
+`select` and `ignore` accept exact published SQLCLEAN codes or `SQLCLEAN`; `lint` and `format`
+also accept `--select`. Reviewed exceptions require an exact code, an existing project-relative
+file (not a glob), and a nonempty reason. Only SQLCLEAN038 supports `relation` and optional `cte`
+scoping; these names match ASCII case-insensitively. When an evaluated Rule's exception no longer
+suppresses a finding, remove or update that stale exception. Duplicate or overlapping exact
+exceptions are rejected.
+
+For deliberate broader path policy, use a separate reasoned ignore (not a glob exception):
+
+```toml
+[[rules.rule_ignores]]
+rules = ["SQLCLEAN004"]
+paths = ["pipelines/pl__previews/**"]
+reason = "Preview queries intentionally use bounded unordered samples"
+```
+
+Path scopes use repository-relative POSIX globs; unlike exact exceptions, these ignores may
+match no current finding. Alternatively, use `selectors = ["model:order_summary"]` or
+`selectors = ["pipeline:pl__orders"]`. Selectors resolve only explicitly named resources:
+`model:` covers only that model; `pipeline:` covers all its own models, **not dependent
+pipelines**. Execution's downstream closure does not broaden ignore scope. Existing bare-name
+and whitespace-union selector syntax also works; unknown, empty or deleted scopes fail validation. Paths and
+selectors in one entry form a union. Layout formatting validates selector ownership through
+connection-free compilation before writing; ignores also exclude semantic fixes.
+Inline `sqt: ignore` / `sqb: ignore` comments are rejected, not treated as suppressions.
+
+Intentional opt-outs are `sql_analysis false` in a MODEL, TEST, or AUDIT header,
+`[settings] sql_analysis = false` in project configuration, or `--no-sql-analysis` for one
+command. They skip configurable SQL Rules, **not** mandatory type inference, dependency,
+replay, or realization validation. Layout-only formatting remains available for opted-out SQL.
+
 ## Project
 
 ```text

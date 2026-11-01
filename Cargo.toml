@@ -20,6 +20,9 @@ publish = false
 rust-version = "1.88"
 
 [workspace.dependencies]
+fensu-policy = "=0.22.0"
+# Published SQLClean 0.4.2; its Polyglot revision matches the compiler below.
+sqlclean = { git = "https://github.com/sqlstack-io/sqlclean.git", rev = "571e40a746b3d8d20d6118620f05428eca45243c" }
 # The SQL engine, pinned to the revision SQLBuild uses so both products parse ClickHouse alike.
 polyglot-sql = { git = "https://github.com/sqlstack-io/polyglot.git", rev = "8767d688c5b504ad609645e27ab77a260d91c5a1", default-features = false, features = [
     "dialect-clickhouse",

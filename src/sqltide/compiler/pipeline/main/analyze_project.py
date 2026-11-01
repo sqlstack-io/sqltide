@@ -1,6 +1,7 @@
 """Apache-2.0: SQLBuild cli/commands/_helpers/compile/pipeline.py@7e3b2f854f05."""
 
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 from sqltide.compiler.access.main._compile_access_policy import compile_access_policy
@@ -22,12 +23,14 @@ from sqltide.compiler.graph.main._build_project_graph import (
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.pipeline._helpers.collection_tuning import deferred_cycle_collection
 from sqltide.compiler.pipeline._helpers.sensor_names import reserved_sensor_names
+from sqltide.compiler.pipeline._helpers.source_overrides import override_sources
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import (
     CompilationTimings,
     CompileAnalysis,
     RealizedProject,
 )
+from sqltide.compiler.rules.main._evaluate_project_rules import evaluate_project_rules
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
     SqlReferenceRewriter,
@@ -44,6 +47,9 @@ def analyze_project(
     pipelines_root: Path,
     loaded_project: LoadedProject | None,
     adapter_profile: CompilerAdapterProfile,
+    enforce_rules: bool = True,
+    source_overrides: Mapping[Path, str] | None = None,
+    rule_selection: tuple[str, ...] | None = None,
 ) -> CompileAnalysis:
     """Discover, attach, compile, and graph one project without opening a connection."""
 
@@ -53,6 +59,10 @@ def analyze_project(
             pipelines_root=pipelines_root,
             loaded_project=loaded_project,
         )
+        if source_overrides:
+            discovered_inputs = override_sources(
+                inputs=discovered_inputs, overrides=source_overrides
+            )
     except Exception as error:
         _ = attach_error_diagnostic(
             error=error,
@@ -152,23 +162,27 @@ def analyze_project(
         )
         raise
     realization_ms: int = _elapsed_ms(realization_start)
-    return CompileAnalysis(
-        discovered_inputs=discovered_inputs,
-        compile_inputs=compile_inputs,
-        adapter_profile=adapter_profile,
-        compiled_project=compiled_project,
-        realized_project=realized_project,
-        graph=graph,
-        diagnostics=(),
-        timings=CompilationTimings(
-            discovery_ms=discovery_ms,
-            compile_inputs_ms=compile_inputs_ms,
-            assembly_ms=assembly_ms,
-            graph_ms=graph_ms,
-            realization_ms=realization_ms,
+    return evaluate_project_rules(
+        analysis=CompileAnalysis(
+            discovered_inputs=discovered_inputs,
+            compile_inputs=compile_inputs,
+            adapter_profile=adapter_profile,
+            compiled_project=compiled_project,
+            realized_project=realized_project,
+            graph=graph,
+            diagnostics=(),
+            timings=CompilationTimings(
+                discovery_ms=discovery_ms,
+                compile_inputs_ms=compile_inputs_ms,
+                assembly_ms=assembly_ms,
+                graph_ms=graph_ms,
+                realization_ms=realization_ms,
+            ),
+            access_policy=access_policy,
+            sensors=sensors,
         ),
-        access_policy=access_policy,
-        sensors=sensors,
+        enforce=enforce_rules,
+        selection=rule_selection,
     )
 
 

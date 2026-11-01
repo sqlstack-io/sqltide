@@ -924,7 +924,7 @@ def test_given_absent_local_toml_when_loading_then_returns_typed_defaults(
                 'name = "analytics"\ndefault_target = "dev"\n'
                 "[settings]\nvirtual_environments = true\n[targets.dev]\n"
             ),
-            expected_error_fragment="project contains unsupported keys: settings",
+            expected_error_fragment="settings contains unsupported keys: virtual_environments",
         ),
         ProjectConfigurationErrorTestCase(
             description="rejects an unknown default pipeline mode",

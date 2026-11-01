@@ -20,13 +20,14 @@ const SCHEDULED_KEY: &str = "scheduled";
 const DEFAULT_SEVERITY: &str = "error";
 const ALLOWED_SEVERITIES: [&str; 2] = ["error", "warning"];
 const LITERAL_DIALECT: &str = "clickhouse";
-const ALLOWED_HEADER_KEYS: [&str; 6] = [
+const ALLOWED_HEADER_KEYS: [&str; 7] = [
     SEVERITY_KEY,
     DESCRIPTION_KEY,
     NAME_KEY,
     EVERY_KEY,
     WARMUP_KEY,
     SCHEDULED_KEY,
+    "sql_analysis",
 ];
 
 static QUOTED_PARAMETER: LazyLock<Regex> = LazyLock::new(|| {
@@ -108,6 +109,11 @@ pub fn audit_header_fields(
             .find(|(name, _)| name == key)
             .map(|(_, value)| *value)
     };
+    if let Some(value) = get("sql_analysis")
+        && !matches!(value.kind, Kind::Bool(_))
+    {
+        return Err(format!("{prefix} sql_analysis must be a boolean"));
+    }
     let severity: String = match get(SEVERITY_KEY) {
         None => DEFAULT_SEVERITY.to_owned(),
         Some(value) => match value.as_str() {

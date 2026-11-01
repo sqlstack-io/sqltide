@@ -10,6 +10,8 @@ class CliCommand(StrEnum):
     DISCOVER = "discover"
     DEV = "dev"
     COMPILE = "compile"
+    LINT = "lint"
+    FORMAT = "format"
     TEST = "test"
     PLAN = "plan"
     BUILD = "build"

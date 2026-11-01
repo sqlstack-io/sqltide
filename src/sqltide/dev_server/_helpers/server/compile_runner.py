@@ -92,6 +92,7 @@ def _timings_payload(timings: CompilationTimings | None) -> dict[str, int] | Non
         "assemblyMs": timings.assembly_ms,
         "graphMs": timings.graph_ms,
         "realizationMs": timings.realization_ms,
+        "rulesMs": timings.rules_ms,
     }
 
 

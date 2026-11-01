@@ -454,6 +454,7 @@ class CompilerAdapterProfile:
     realize_model: AdapterModelRealizer
     render_resource: AdapterResourceRenderer
     render_set_difference_comparison: AdapterSetDifferenceComparisonRenderer
+    run_sql_rules: bool = True
 
 
 @dataclass(frozen=True)
