@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.60.0](https://github.com/sqlstack-io/sqltide/compare/v0.59.0...v0.60.0) (2026-11-01)
+
+
+### Features
+
+* render SQL test assembly queries in Rust ([#312](https://github.com/sqlstack-io/sqltide/issues/312)) ([d8eecd1](https://github.com/sqlstack-io/sqltide/commit/d8eecd16f782ea254d2e2e4d09b28fffb4fe3992))
+
 ## [0.59.0](https://github.com/sqlstack-io/sqltide/compare/v0.58.0...v0.59.0) (2026-11-01)
 
 
