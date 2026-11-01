@@ -64,3 +64,6 @@ src/sqltide/dev_server/static/
 # Rust
 /target/
 *.so
+
+# Local agent instructions
+/AGENTS.md
