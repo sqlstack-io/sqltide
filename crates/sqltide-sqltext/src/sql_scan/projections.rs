@@ -90,8 +90,8 @@ fn split_projection_spans(sql: &[char], start: usize, end: usize) -> ScanResult<
             continue;
         }
         match sql[index] {
-            '(' => depth += 1,
-            ')' => depth -= 1,
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
             ',' if depth == 0 => {
                 spans.push(trimmed_span(sql, projection_start, index));
                 projection_start = index + 1;
