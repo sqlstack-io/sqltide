@@ -1,10 +1,7 @@
 """Compile-phase constants."""
 
-from collections.abc import Mapping
-
 from sqltide.compiler.compile.models import Column
 from sqltide.compiler.compile.types import DesiredObjectType
-from sqltide.compiler.discovery.types import ReplayBoundaryMode, ReplayLineageMode
 
 DESIRED_OBJECT_TYPE_KAFKA_TABLE: DesiredObjectType = DesiredObjectType(
     DesiredObjectType.KAFKA_TABLE
@@ -92,13 +89,6 @@ FRAMEWORK_OWNED_KAFKA_SETTING_KEYS: frozenset[str] = frozenset(
         "kafka_format",
     }
 )
-
-LINEAGE_MODE_BY_REPLAY_BOUNDARY: Mapping[str, ReplayLineageMode] = {
-    ReplayBoundaryMode.OFFSETS: ReplayLineageMode.OFFSETS,
-    ReplayBoundaryMode.TIMESTAMP: ReplayLineageMode.TIMESTAMP,
-    ReplayBoundaryMode.LANDED_AT: ReplayLineageMode.LANDED_AT,
-    ReplayBoundaryMode.CURSOR: ReplayLineageMode.CURSOR,
-}
 
 REF_TYPE_KEYWORD: str = "ref_type"
 VALID_REF_ARGUMENT_COUNTS: frozenset[int] = frozenset({1, 2})

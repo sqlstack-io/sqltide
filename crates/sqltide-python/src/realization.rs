@@ -13,7 +13,7 @@ const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
 const DISCOVERY_MODELS: &str = "sqltide.compiler.discovery.models";
 const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const PIPELINE_MODELS: &str = "sqltide.compiler.pipeline.models";
-const KAFKA_RETENTION: &str = "sqltide.compiler.compile.main._render_kafka_retention";
+const KAFKA_RETENTION_REFERENCE: &str = "KafkaRetentionReference";
 
 /// The Python classes, constants and callables realization reads, imported once per call.
 struct Realizer<'py> {
@@ -260,11 +260,20 @@ impl<'py> Realizer<'py> {
         let ttl: Bound<'py, PyAny> = if unset.contains(&retention)? {
             kafka.getattr("ttl")?
         } else {
-            let render: Bound<'py, PyAny> = self
+            let landed: Bound<'py, PyAny> = self
                 .py
-                .import(KAFKA_RETENTION)?
-                .getattr("render_kafka_retention")?;
-            self.call(&render, &[("policy", retention)])?
+                .import(DISCOVERY_TYPES)?
+                .getattr(KAFKA_RETENTION_REFERENCE)?
+                .getattr("LANDED")?;
+            sqltide_compile::retention::render_kafka_retention(
+                &sqltide_compile::retention::KafkaRetention {
+                    duration_seconds: retention.getattr("duration_seconds")?.extract()?,
+                    fallback_landed: retention.getattr("fallback")?.eq(&landed)?,
+                    cap_at_landed: retention.getattr("cap_at")?.eq(&landed)?,
+                },
+            )
+            .into_pyobject(self.py)?
+            .into_any()
         };
         self.build(
             &self.adapter,
