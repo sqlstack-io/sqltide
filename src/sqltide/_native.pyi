@@ -1,5 +1,5 @@
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,6 +10,7 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
 )
 from sqltide.compiler.access.models import CompiledAccessPolicy
+from sqltide.compiler.compile.models import DesiredState, ObjectKey
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
     EffectiveProjectConfiguration,
@@ -26,6 +27,7 @@ from sqltide.compiler.discovery.models import (
     SourceFreshnessPolicy,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
+from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -809,29 +811,14 @@ def deployment_inventory_summaries(
 def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
-    def __init__(
-        self,
-        keys: list[tuple[str, str]],
-        objects: list[
-            tuple[
-                int,
-                list[int],
-                str,
-                int | None,
-                str | None,
-                tuple[tuple[str, int | None] | None, tuple[str, int | None] | None] | None,
-            ]
-        ],
-        replay_anchors: list[int],
-    ) -> None: ...
-    def reverse_deps(self) -> list[tuple[int, list[int]]]: ...
-    def order(self, included: set[int]) -> list[int]: ...
-    def descendants(self, root: int) -> list[int]: ...
+    def __init__(self, desired_state: DesiredState) -> None: ...
+    def reverse_deps(self) -> dict[ObjectKey, tuple[ObjectKey, ...]]: ...
+    def order(self, included_keys: Iterable[ObjectKey]) -> tuple[ObjectKey, ...]: ...
+    def descendants(self, root_key: ObjectKey) -> tuple[ObjectKey, ...]: ...
+    def nearest_replay_anchor(self, root_key: ObjectKey, allow_root_key: bool) -> ObjectKey: ...
     def rebuild_subtrees(
-        self,
-        changes: list[tuple[int, str, bool, str | None, str | None, str | None]],
-    ) -> list[tuple[int, list[int], int, bool, str, bool, str | None, str | None, int | None]]: ...
-    def nearest_replay_anchor(self, root: int, allow_root: bool, root_name: str) -> int: ...
+        self, object_changes: Iterable[PlannedObjectChange]
+    ) -> tuple[RebuildSubtree, ...]: ...
 
 def resolve_model_relation_name(
     logical_name: str,
