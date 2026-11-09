@@ -155,6 +155,7 @@ QUALITY_MODULE_PREFIX: tuple[str, ...] = ("sqltide", "quality")
 OBSERVABILITY_QUERY_CALL_NAMES: frozenset[str] = frozenset({"render_latest_node_status_query"})
 OBSERVABILITY_TABLE_CONSTANT_NAMES: frozenset[str] = frozenset(
     {
+        "METADATA_DEAD_LETTERS_TABLE_NAME",
         "METADATA_INVOCATIONS_TABLE_NAME",
         "METADATA_NODE_RESULTS_TABLE_NAME",
         "METADATA_RUN_EVENTS_TABLE_NAME",
@@ -167,6 +168,7 @@ OBSERVABILITY_TABLE_CONSTANT_NAMES: frozenset[str] = frozenset(
 )
 OBSERVABILITY_TABLE_NAMES: frozenset[str] = frozenset(
     {
+        "_sqltide_dead_letters",
         "_sqltide_invocations",
         "_sqltide_node_results",
         "_sqltide_run_events",

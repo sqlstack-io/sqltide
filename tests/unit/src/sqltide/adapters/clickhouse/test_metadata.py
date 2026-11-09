@@ -414,11 +414,11 @@ def test_given_metadata_migration_when_rendering_then_manifest_ddl_and_legacy_dr
     "test_case",
     [
         ManifestMigrationWorkflowTestCase(
-            description="records schema version seven last",
+            description="records schema version eight last",
             expected_last_statement=(
                 "INSERT INTO metadata._sqltide_schema_versions (version, applied_at) "
-                "SELECT 7, now64(3, 'UTC') WHERE NOT EXISTS (SELECT 1 FROM "
-                "metadata._sqltide_schema_versions WHERE version = 7);"
+                "SELECT 8, now64(3, 'UTC') WHERE NOT EXISTS (SELECT 1 FROM "
+                "metadata._sqltide_schema_versions WHERE version = 8);"
             ),
         )
     ],

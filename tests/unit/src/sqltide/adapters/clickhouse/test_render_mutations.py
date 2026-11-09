@@ -38,11 +38,11 @@ from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
         RenderMetadataMutationSqlTestCase(
             description="renders database and metadata mutations as exact executable SQL",
             expected_database_sql="CREATE DATABASE IF NOT EXISTS metadata;",
-            expected_migration_statement_count=20,
+            expected_migration_statement_count=21,
             expected_migration_last_sql=(
                 "INSERT INTO metadata._sqltide_schema_versions "
-                "(version, applied_at) SELECT 7, now64(3, 'UTC') WHERE NOT EXISTS ("
-                "SELECT 1 FROM metadata._sqltide_schema_versions WHERE version = 7);"
+                "(version, applied_at) SELECT 8, now64(3, 'UTC') WHERE NOT EXISTS ("
+                "SELECT 1 FROM metadata._sqltide_schema_versions WHERE version = 8);"
             ),
             expected_persistence_first_sql=(
                 "INSERT INTO metadata._sqltide_virtual_object_state "

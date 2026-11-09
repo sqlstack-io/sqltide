@@ -324,5 +324,5 @@ def expected_metadata_table_state(
 ) -> tuple[frozenset[str], tuple[tuple[int, ...], ...]]:
     return (
         frozenset(table_prefix + name.removeprefix("_sqltide_") for name in metadata_tables),
-        ((7,),),
+        ((8,),),
     )

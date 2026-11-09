@@ -161,6 +161,7 @@ class _InsertNewSourceRowBeforeAssertion:
             expected_shadow_materialized_view_name="mv__orders_enriched__20260409T120000Z_ab12cd",
             expected_deployment_status="backfilling",
             expected_full_layout=(
+                ("_sqltide_dead_letters", "MergeTree"),
                 ("_sqltide_direct_fingerprints", "MergeTree"),
                 ("_sqltide_invocations", "MergeTree"),
                 ("_sqltide_manifests", "MergeTree"),
@@ -196,6 +197,7 @@ class _InsertNewSourceRowBeforeAssertion:
             expected_shadow_materialized_view_name="mv__orders_enriched__20260409T120500Z_ef34gh",
             expected_deployment_status="backfilling",
             expected_full_layout=(
+                ("_sqltide_dead_letters", "MergeTree"),
                 ("_sqltide_direct_fingerprints", "MergeTree"),
                 ("_sqltide_invocations", "MergeTree"),
                 ("_sqltide_manifests", "MergeTree"),
