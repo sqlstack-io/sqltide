@@ -7,12 +7,6 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class CompactChangedTargetSummary:
-    target_name: str
-    detail_lines: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class PlanCommandOptions:
     """Every operator-supplied option for one `sqt plan` invocation."""
 

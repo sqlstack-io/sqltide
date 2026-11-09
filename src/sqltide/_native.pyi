@@ -415,6 +415,15 @@ def bounded_replay_outcome(
     live_columns: set[str] | None,
     fallback_without_history: bool,
 ) -> str: ...
+def render_plan_text(
+    *,
+    plan: DeploymentPlan,
+    desired_state: DesiredState,
+    database: str,
+    verbose: bool,
+    use_color: bool,
+) -> str: ...
+def render_plan_json(*, plan: DeploymentPlan, adapter_name: str) -> str: ...
 def plan_deployment(
     *,
     desired_state: DesiredState,
