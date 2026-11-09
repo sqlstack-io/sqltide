@@ -1,5 +1,6 @@
 """Direct-mode reconcile execution entrypoint."""
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.compile.constants import RAW_TABLE_NAME_PREFIX
@@ -12,9 +13,6 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.planner.models import ActualState
 from sqltide.executor.direct.main._persist_reconciled_direct_fingerprints import (
     persist_reconciled_direct_fingerprints,
-)
-from sqltide.executor.reconcile._helpers.direct_actual_state import (
-    build_direct_reconcile_actual_state,
 )
 from sqltide.executor.reconcile._helpers.preview import build_reconcile_preview
 from sqltide.executor.reconcile.exceptions import ReconcileError
@@ -36,10 +34,9 @@ def execute_direct_reconcile(
 ) -> ReconcilePreview | ReconcileResult:
     """Preview or persist structurally compatible direct model baselines."""
 
-    actual_state: ActualState = build_direct_reconcile_actual_state(
+    actual_state: ActualState = _native.build_direct_reconcile_actual_state(
         desired_state=desired_state,
         catalog=catalog,
-        database=target_database,
     )
     preview: ReconcilePreview = build_reconcile_preview(
         metadata_database=metadata_database,

@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod access;
+mod actual_state;
 mod adopted_sources;
 mod analysis;
 mod artifacts;
@@ -74,6 +75,7 @@ fn value_object<'py>(py: Python<'py>, value: &HeaderValue) -> PyResult<Bound<'py
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(parse_model_header, module)?)?;
     access::register(module)?;
+    actual_state::register(module)?;
     adopted_sources::register(module)?;
     analysis::register(module)?;
     artifacts::register(module)?;

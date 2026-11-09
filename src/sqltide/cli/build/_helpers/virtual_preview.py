@@ -18,9 +18,6 @@ from sqltide.compiler.discovery.models import LoadedPipeline
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.graph.models import DependencyEdge
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.main.load_actual_state_from_snapshot import (
-    load_actual_state_from_snapshot,
-)
 from sqltide.compiler.planner.main.load_planning_warehouse_snapshot import (
     load_planning_warehouse_snapshot,
 )
@@ -84,7 +81,7 @@ def build_virtual_build_preview(
         selection.replay_lineage_mode or ReplayLineageMode.OFFSETS
     )
     desired_state: DesiredState = selection.desired_state
-    actual_state: ActualState = load_actual_state_from_snapshot(
+    actual_state: ActualState = _native.load_actual_state_from_snapshot(
         snapshot=snapshot,
         desired_state=desired_state,
         database=resolved_database,

@@ -47,6 +47,7 @@ from sqltide.compiler.planner.models import (
     DirectSourceDriftSelection,
     DirectWarehouseSnapshot,
     PlannedObjectChange,
+    PlanningWarehouseSnapshot,
     RebuildSubtree,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
@@ -961,13 +962,9 @@ def root_deployment_state(
     root_name: str,
 ) -> tuple[str, str | None]: ...
 def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
-def latest_object_state_positions(records: list[tuple[int | None, str, str]]) -> list[int]: ...
-def actual_state_sources(
-    objects: list[tuple[int, str, str, str | None]],
-    existing_names: set[str],
-    roots: dict[int, tuple[bool, str | None]],
-    records_by_deployment_and_key: dict[tuple[str, int], tuple[bool, str | None]],
-    latest_records: dict[int, tuple[bool, str | None]],
-    active_physical_names: dict[str, str],
-    active_table_spec_names: set[str],
-) -> list[tuple[str, str | None] | None]: ...
+def load_actual_state_from_snapshot(
+    *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
+) -> ActualState: ...
+def build_direct_reconcile_actual_state(
+    *, desired_state: DesiredState, catalog: CatalogSnapshot
+) -> ActualState: ...
