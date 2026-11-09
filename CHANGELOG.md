@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.3](https://github.com/sqlstack-io/sqltide/compare/v0.65.2...v0.65.3) (2026-11-09)
+
+
+### Refactoring
+
+* assemble direct plans natively ([#342](https://github.com/sqlstack-io/sqltide/issues/342)) ([0bacf73](https://github.com/sqlstack-io/sqltide/commit/0bacf7385675612129fdd5b6a7773a141a68a7ec))
+* render virtual deployment plans natively ([#340](https://github.com/sqlstack-io/sqltide/issues/340)) ([31c6918](https://github.com/sqlstack-io/sqltide/commit/31c69185bc89db8d76bd3ccc245b1f3b1632b959))
+
 ## [0.65.2](https://github.com/sqlstack-io/sqltide/compare/v0.65.1...v0.65.2) (2026-11-09)
 
 
