@@ -23,12 +23,9 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine, RowMapping
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from sqltide._native import deserialize_destruction_plan, serialize_destruction_plan
 from sqltide.auth.constants import SQLITE_MEMORY_PATH
 from sqltide.auth.main.rename_streambuild_tables import rename_streambuild_tables
-from sqltide.executor.destruction._helpers.plan_serialization import (
-    deserialize_destruction_plan,
-    serialize_destruction_plan,
-)
 from sqltide.executor.destruction.constants import DESTRUCTION_PLAN_PAYLOAD_VERSION
 from sqltide.executor.destruction.exceptions import (
     DestructionChallengeError,

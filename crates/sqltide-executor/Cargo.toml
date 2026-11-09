@@ -8,6 +8,11 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+speedate.workspace = true
+strum.workspace = true
 sqltide-clickhouse.workspace = true
 sqltide-discovery.workspace = true
 sqltide-json.workspace = true
