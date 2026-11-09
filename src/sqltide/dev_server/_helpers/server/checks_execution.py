@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_NODE_RESULTS_TABLE_NAME
 from sqltide.adapter.models import (
@@ -25,9 +26,6 @@ from sqltide.executor.auditing.main.load_materialized_model_names import (
     load_materialized_model_names,
 )
 from sqltide.executor.auditing.main.load_model_anchors import load_model_anchors
-from sqltide.executor.auditing.main.resolve_audit_warmup_states import (
-    resolve_audit_warmup_states,
-)
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult
 from sqltide.executor.auditing.types import AuditSeverity
 from sqltide.executor.observability.main.build_invocation_record import (

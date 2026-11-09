@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
 from sqltide.cli.audit._helpers.referenced_models import referenced_model_names
@@ -19,9 +20,6 @@ from sqltide.executor.auditing.main.load_materialized_model_names import (
     load_materialized_model_names,
 )
 from sqltide.executor.auditing.main.load_model_anchors import load_model_anchors
-from sqltide.executor.auditing.main.resolve_audit_warmup_states import (
-    resolve_audit_warmup_states,
-)
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import AuditSeverity
 from sqltide.executor.observability.main.build_invocation_record import (

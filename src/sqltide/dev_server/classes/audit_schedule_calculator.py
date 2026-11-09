@@ -1,8 +1,8 @@
 """Calculate audit due states from compiled policy and warehouse metadata."""
 
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqltide._native import audit_schedule_entry, resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -11,17 +11,12 @@ from sqltide.dev_server._helpers.queries.runs_query import (
     read_latest_direct_build_materialization,
 )
 from sqltide.dev_server._helpers.server.checks_execution import build_checks_status_payload
-from sqltide.dev_server.constants import IDENTITY_DRIFT_STATUSES
 from sqltide.dev_server.types import AuditScheduleState
 from sqltide.executor.auditing.main.load_materialized_model_names import (
     load_materialized_model_names,
 )
 from sqltide.executor.auditing.main.load_model_anchors import load_model_anchors
-from sqltide.executor.auditing.main.resolve_audit_warmup_states import (
-    resolve_audit_warmup_states,
-)
 from sqltide.executor.auditing.models import AuditWarmupState
-from sqltide.executor.auditing.types import QualityResultStatus
 from sqltide.executor.observability.main.logical_project_identity import (
     logical_project_identity,
 )
@@ -91,7 +86,7 @@ class AuditScheduleCalculator:
             if status["kind"] == QualityNodeKind.AUDIT
         }
         audit_states: list[dict[str, object]] = [
-            self._audit_schedule_payload(
+            audit_schedule_entry(
                 audit=audit,
                 warmup=warmup_states[audit.name or audit.file_path.stem],
                 status=status_by_name.get(audit.name or audit.file_path.stem),
@@ -131,96 +126,9 @@ class AuditScheduleCalculator:
             "audits": audit_states,
         }
 
-    def _audit_schedule_payload(
-        self,
-        *,
-        audit: LoadedSqlAudit,
-        warmup: AuditWarmupState,
-        status: dict[str, object] | None,
-        warehouse_now: str,
-        anchors: dict[str, str],
-    ) -> dict[str, object]:
-        now: datetime = self._timestamp(warehouse_now)
-        eligible_at: datetime = self._timestamp(warmup.eligible_at or warehouse_now)
-        completed_at_value: str | None = (
-            None if status is None else self._optional_string(status.get("completedAt"))
-        )
-        status_value: str = "never_run" if status is None else str(status["status"])
-        if warmup.missing_model_names:
-            scheduled_for: datetime | None = None
-            state: AuditScheduleState = AuditScheduleState.NOT_MATERIALIZED
-        elif not warmup.eligible:
-            scheduled_for = eligible_at
-            state: AuditScheduleState = AuditScheduleState.WARMING_UP
-        elif completed_at_value is None:
-            scheduled_for = (
-                eligible_at
-                if warmup.anchor is not None
-                else self._cadence_slot(now=now, cadence_seconds=audit.cadence_seconds)
-            )
-            state = AuditScheduleState.DUE if now >= scheduled_for else AuditScheduleState.SCHEDULED
-        else:
-            completed_at: datetime = self._timestamp(completed_at_value)
-            newest_anchor: datetime | None = max(
-                (
-                    self._timestamp(anchors[name])
-                    for name in audit.referenced_model_names
-                    if name in anchors
-                ),
-                default=None,
-            )
-            if status_value in IDENTITY_DRIFT_STATUSES:
-                scheduled_for = max(
-                    self._cadence_slot(now=now, cadence_seconds=audit.cadence_seconds),
-                    eligible_at,
-                )
-            elif status_value == QualityResultStatus.DEFERRED or (
-                newest_anchor is not None and newest_anchor > completed_at
-            ):
-                scheduled_for = eligible_at
-            else:
-                scheduled_for = max(
-                    completed_at + timedelta(seconds=int(audit.cadence_seconds or 0)),
-                    eligible_at,
-                )
-            state = AuditScheduleState.DUE if now >= scheduled_for else AuditScheduleState.SCHEDULED
-        return {
-            "name": audit.name or audit.file_path.stem,
-            "state": state,
-            "scheduledFor": (
-                None if scheduled_for is None else self._render_timestamp(scheduled_for)
-            ),
-            "eligibleAt": warmup.eligible_at,
-            "anchor": warmup.anchor,
-            "cadenceSeconds": audit.cadence_seconds,
-            "warmupSeconds": audit.warmup_seconds,
-            "lastStatus": status_value,
-            "referencedModels": list(audit.referenced_model_names),
-            "missingRelations": list(warmup.missing_model_names),
-        }
-
-    @staticmethod
-    def _optional_string(value: object) -> str | None:
-        return value if isinstance(value, str) and value else None
-
     @staticmethod
     def _referenced_model_names(audits: tuple[LoadedSqlAudit, ...]) -> tuple[str, ...]:
         model_names: set[str] = set()
         for audit in audits:
             model_names.update(audit.referenced_model_names)
         return tuple(sorted(model_names))
-
-    @staticmethod
-    def _timestamp(value: str) -> datetime:
-        parsed: datetime = datetime.fromisoformat(value.replace(" ", "T").replace("Z", "+00:00"))
-        return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
-
-    @staticmethod
-    def _render_timestamp(value: datetime) -> str:
-        return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-    @staticmethod
-    def _cadence_slot(*, now: datetime, cadence_seconds: int | None) -> datetime:
-        cadence: int = int(cadence_seconds or 1)
-        slot_timestamp: int = int(now.timestamp()) // cadence * cadence
-        return datetime.fromtimestamp(slot_timestamp, tz=UTC)

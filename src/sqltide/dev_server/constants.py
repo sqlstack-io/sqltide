@@ -20,9 +20,6 @@ STATIC_ASSETS_DIRECTORY_NAME: str = "static"
 HTTP_RESPONSE_START_MESSAGE_TYPE: str = "http.response.start"
 CHECK_KIND_TEST: str = "test"
 CHECK_KIND_AUDIT: str = "audit"
-IDENTITY_DRIFT_STATUSES: frozenset[str] = frozenset(
-    {"binding_changed", "definition_changed", "execution_changed"}
-)
 CANCEL_GRACE_SECONDS: float = 15.0
 TERMINATE_GRACE_SECONDS: float = 3.0
 BUILD_CANCELLATION_FAILED_STATUS: str = "cancellation_failed"
