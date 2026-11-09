@@ -9,11 +9,6 @@ from sqltide.compiler.compile.models import (
     TableStorage,
     ViewSpec,
 )
-from sqltide.compiler.planner._helpers.diff import (
-    classify_object_change_type,
-    classify_table_schema_change_kind,
-    classify_table_seed_compatibility,
-)
 from sqltide.compiler.planner.constants import (
     PLANNED_CHANGE_TYPE_NO_OP,
     PLANNED_CHANGE_TYPE_REBUILD,
@@ -22,11 +17,16 @@ from sqltide.compiler.planner.constants import (
     TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE,
     TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE,
 )
-from sqltide.compiler.planner.models import ActualTable, ActualView
+from sqltide.compiler.planner.models import (
+    ActualTable,
+    ActualView,
+    PlannedObjectChange,
+)
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerTableSchemaClassificationTestCase,
     PlannerViewQueryClassificationTestCase,
 )
+from tests.unit.src.sqltide.compiler.planner.helpers import planned_change
 
 
 @pytest.mark.parametrize(
@@ -186,18 +186,13 @@ def test_given_table_column_changes_when_classifying_then_it_returns_expected_sc
         ),
     )
 
-    assert (
-        classify_object_change_type(desired_object=desired_table, actual_object=actual_table)
-        == test_case.expected_change_type
+    change: PlannedObjectChange = planned_change(
+        desired_object=desired_table, actual_object=actual_table
     )
-    assert (
-        classify_table_schema_change_kind(desired_object=desired_table, actual_object=actual_table)
-        == test_case.expected_schema_change_kind
-    )
-    assert (
-        classify_table_seed_compatibility(desired_object=desired_table, actual_object=actual_table)
-        == test_case.expected_seed_compatibility
-    )
+
+    assert change.change_type == test_case.expected_change_type
+    assert change.schema_change_kind == test_case.expected_schema_change_kind
+    assert change.seed_compatibility == test_case.expected_seed_compatibility
 
 
 @pytest.mark.parametrize(
@@ -223,11 +218,16 @@ def test_given_deployed_view_query_when_classifying_then_formatting_is_not_a_cha
 ) -> None:
     key: ObjectKey = ObjectKey(name="vw__orders", object_type="view", database=None)
     desired_view: DesiredView = DesiredView(
-        key=key, deps=(), spec=ViewSpec(query=test_case.desired_query)
+        key=key,
+        deps=(),
+        spec=ViewSpec(query=test_case.desired_query, database_template=test_case.desired_query),
     )
-    actual_view: ActualView = ActualView(key=key, spec=ViewSpec(query=test_case.actual_query))
+    actual_view: ActualView = ActualView(
+        key=key,
+        spec=ViewSpec(query=test_case.actual_query, database_template=test_case.actual_query),
+    )
 
     assert (
-        classify_object_change_type(desired_object=desired_view, actual_object=actual_view)
+        planned_change(desired_object=desired_view, actual_object=actual_view).change_type
         == test_case.expected_change_type
     )

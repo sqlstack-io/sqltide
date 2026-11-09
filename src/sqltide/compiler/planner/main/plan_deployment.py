@@ -1,8 +1,8 @@
 """Primary planner entrypoints."""
 
+import sqltide._native as _native
 from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
-from sqltide.compiler.planner._helpers.deployment import build_deployment_plan
 from sqltide.compiler.planner.models import ActualState, DeploymentPlan
 
 
@@ -19,7 +19,7 @@ def plan_deployment(
 ) -> DeploymentPlan:
     """Build a conservative staged deployment plan from desired and actual state."""
 
-    return build_deployment_plan(
+    return _native.plan_deployment(
         desired_state=desired_state,
         actual_state=actual_state,
         default_database=default_database,

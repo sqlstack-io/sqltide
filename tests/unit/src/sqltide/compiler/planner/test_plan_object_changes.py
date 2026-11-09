@@ -1,7 +1,8 @@
 import pytest
 
+from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import DesiredState
-from sqltide.compiler.planner._helpers.diff import classify_object_changes
+from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import ActualState, PlannedObjectChange
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerObjectChangeTestCase,
@@ -35,9 +36,12 @@ def test_given_desired_and_actual_state_when_planning_changes_then_it_returns_ex
     desired_state: DesiredState = build_example_desired_state()
     actual_state: ActualState = build_example_actual_state()
 
-    object_changes: tuple[PlannedObjectChange, ...] = classify_object_changes(
-        desired_state=desired_state, actual_state=actual_state
-    )
+    object_changes: tuple[PlannedObjectChange, ...] = plan_deployment(
+        desired_state=desired_state,
+        actual_state=actual_state,
+        default_database="analytics",
+        render_resource=ClickHouseAdapter().render_resource,
+    ).object_changes
 
     assert tuple((key_parts(change.key), change.change_type) for change in object_changes) == (
         test_case.expected_changes
