@@ -9,9 +9,10 @@ from sqltide.adapter.models import (
     AdapterView,
     AdapterViewRealizationRequest,
 )
-from sqltide.adapters.clickhouse.constants import CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX
-
-_DEAD_LETTERS_VIEW_SUFFIX: str = "__dead_letters"
+from sqltide.adapters.clickhouse.constants import (
+    CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX,
+    CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX,
+)
 
 
 def realize_clickhouse_model(
@@ -37,7 +38,7 @@ def realize_clickhouse_model(
         if request.dead_letter_query is None or request.dead_letter_database_template is None
         else (
             AdapterMaterializedView(
-                name=f"{view_name}{_DEAD_LETTERS_VIEW_SUFFIX}",
+                name=f"{view_name}{CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX}",
                 source_relation_name=request.source_relation_name,
                 target_relation_name=METADATA_DEAD_LETTERS_TABLE_NAME,
                 query=request.dead_letter_query,

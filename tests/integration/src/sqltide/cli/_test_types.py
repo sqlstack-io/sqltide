@@ -484,8 +484,7 @@ class QuarantineReplayIntegrationTestCase:
     history_values_sql: str
     expected_order_ids: tuple[str, ...]
     expected_dead_letter_count: int
-    expected_sql_fragment: str | None
-    expected_absent_sql_fragment: str | None
+    expected_dedupe: bool
 
 
 @dataclass(frozen=True)

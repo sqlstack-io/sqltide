@@ -44,3 +44,4 @@ CLICKHOUSE_MODEL_TABLE_NAME_PREFIX: str = "tbl__"
 CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX: str = "mv__"
 EMPTY_KEY_EXPRESSIONS: tuple[str, ...] = ("", "tuple()")
 EMPTY_DEFAULT_EXPRESSIONS: tuple[object, ...] = (None, "")
+CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX: str = "__dead_letters"

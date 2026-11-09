@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Project } from '$lib/domain/types';
 
-import { deadLetterSummary } from './derive';
+import { deadLetterSummary } from '$lib/domain/_helpers/derive';
 
 function project(deadLetters: unknown): Project {
 	return { warehouseHealth: deadLetters === undefined ? undefined : { deadLetters } } as Project;

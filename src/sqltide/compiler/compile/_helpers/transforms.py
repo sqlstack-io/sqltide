@@ -21,6 +21,7 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.constants import DEFAULT_SQL_MODEL_ENGINE
 from sqltide.compiler.discovery.models import (
+    LoadedPipeline,
     ModelRetentionPolicy,
     ReplayOnChangePolicy,
     TransformStep,
@@ -246,3 +247,15 @@ def _resolve_on_row_error(
             f"Transform '{transform.name}' sets on_row_error = quarantine, but {ineligible_reason}"
         )
     return RowErrorPolicy.FAIL
+
+
+def inherited_row_error_policy(*, loaded_pipeline: LoadedPipeline) -> RowErrorPolicy | None:
+    """Return the pipeline value, else the project value, for a model that sets neither."""
+
+    pipeline_policy: RowErrorPolicy | str | None = loaded_pipeline.pipeline.model_on_row_error
+    if pipeline_policy is not None:
+        return RowErrorPolicy(pipeline_policy)
+    if loaded_pipeline.project is None:
+        return None
+    project_policy: RowErrorPolicy | str | None = loaded_pipeline.project.model_on_row_error
+    return None if project_policy is None else RowErrorPolicy(project_policy)

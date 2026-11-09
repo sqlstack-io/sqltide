@@ -16,6 +16,7 @@ from sqltide.compiler.compile._helpers.retention import effective_model_retentio
 from sqltide.compiler.compile._helpers.transforms import (
     compile_model,
     compile_view,
+    inherited_row_error_policy,
 )
 from sqltide.compiler.compile.exceptions import (
     PipelineCompileError,
@@ -36,7 +37,7 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import PipelineMode, ReplayLineageMode, RowErrorPolicy
+from sqltide.compiler.discovery.types import PipelineMode, ReplayLineageMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
 from sqltide.diagnostics.types import DiagnosticPhase, DiagnosticSeverity
@@ -145,7 +146,9 @@ def _compile_models(
                         transform=transform,
                     ),
                     row_error_context=RowErrorContext(
-                        inherited_policy=_inherited_row_error_policy(loaded_pipeline),
+                        inherited_policy=inherited_row_error_policy(
+                            loaded_pipeline=loaded_pipeline
+                        ),
                         pipeline_mode=PipelineMode(loaded_pipeline.pipeline.mode),
                     ),
                 )
@@ -166,17 +169,6 @@ def _compile_models(
             raise
         compiled_models.append(compiled_model)
     return tuple(compiled_models)
-
-
-def _inherited_row_error_policy(loaded_pipeline: LoadedPipeline) -> RowErrorPolicy | None:
-    """Return the pipeline value, else the project value, for a model that sets neither."""
-
-    pipeline_policy: RowErrorPolicy | str | None = loaded_pipeline.pipeline.model_on_row_error
-    if pipeline_policy is not None:
-        return RowErrorPolicy(pipeline_policy)
-    if loaded_pipeline.project is None:
-        return None
-    return loaded_pipeline.project.model_on_row_error
 
 
 def _transform_error_location(

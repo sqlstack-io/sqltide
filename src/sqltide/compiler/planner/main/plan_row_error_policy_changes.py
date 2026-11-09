@@ -11,11 +11,7 @@ from sqltide.compiler.planner.models import DirectPlan, DirectRowErrorPolicyChan
 def plan_row_error_policy_changes(
     *, analysis: CompileAnalysis, plan: DirectPlan, relations: tuple[CatalogRelation, ...]
 ) -> tuple[DirectRowErrorPolicyChange, ...]:
-    """Return view-only changes for models the plan does not otherwise rebuild.
-
-    The policy a live model was built with is read from its materialized view definition, because
-    that definition is what the warehouse actually runs.
-    """
+    """Return view-only changes, reading each live policy from its view definition."""
 
     query_by_view: dict[str, str] = {
         relation.name: relation.query_sql or ""

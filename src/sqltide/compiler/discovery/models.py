@@ -598,7 +598,7 @@ class Project:
     audit_scheduler: AuditSchedulerConfig = field(default_factory=AuditSchedulerConfig)
     model_retention: ModelRetentionPolicy | Literal[False] | None = None
     dependencies: ProjectDependencies = field(default_factory=ProjectDependencies)
-    model_on_row_error: RowErrorPolicy | None = None
+    model_on_row_error: RowErrorPolicy | str | None = None
 
     def __post_init__(self) -> None:
         if self.bounded_replay_fallback is not None:

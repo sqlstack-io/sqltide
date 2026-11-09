@@ -83,9 +83,7 @@ def assemble_direct_build_workflow(
         catalog=snapshot.catalog,
         database=request.database,
     )
-    policy_landing_view_names: frozenset[str] = frozenset(
-        name for change in request.row_error_policy_changes for name in change.landing_view_names
-    )
+    policy_landing_view_names: frozenset[str] = _policy_landing_view_names(request=request)
     preserved_landing_views: tuple[DesiredMaterializedView, ...] = tuple(
         desired
         for desired in request.realized_project.desired_state.objects
@@ -244,6 +242,13 @@ def _assemble_statements(
         ),
     )
     return _warehouse_statements(statements), _warehouse_statements(recovery)
+
+
+def _policy_landing_view_names(*, request: DirectBuildRequest) -> frozenset[str]:
+    names: set[str] = set()
+    for change in request.row_error_policy_changes:
+        names.update(change.landing_view_names)
+    return frozenset(names)
 
 
 def _policy_change_views(

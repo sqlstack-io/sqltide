@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -102,7 +103,7 @@ def test_given_quarantine_model_when_bad_rows_arrive_then_they_become_dead_lette
         order_ids: tuple[str, ...] = direct_build_order_ids(
             clickhouse_client=clickhouse_client, database=clickhouse_database
         )
-        dead_letters = clickhouse_client.query(
+        dead_letters: Sequence[Sequence[object]] = clickhouse_client.query(
             "SELECT model_name, failed_columns, kafka_offset "
             f"FROM {clickhouse_database}._sqltide_dead_letters ORDER BY kafka_offset"
         ).result_rows
@@ -171,16 +172,14 @@ def test_given_default_policy_when_a_bad_row_arrives_then_the_insert_errors(
             ),
             expected_order_ids=("order-1", "order-3"),
             expected_dead_letter_count=0,
-            expected_sql_fragment=_DEDUPE_FRAGMENT,
-            expected_absent_sql_fragment=None,
+            expected_dedupe=True,
         ),
         QuarantineReplayIntegrationTestCase(
             description="replay without repeated offsets stays undeduplicated",
             history_values_sql=(f"('order-1', '1', 0, 1, {_TS}), ('order-3', '3', 0, 2, {_TS})"),
             expected_order_ids=("order-1", "order-3"),
             expected_dead_letter_count=0,
-            expected_sql_fragment=None,
-            expected_absent_sql_fragment=_DEDUPE_FRAGMENT,
+            expected_dedupe=False,
         ),
     ],
     ids=lambda case: case.description,
@@ -244,10 +243,7 @@ def test_given_retained_history_when_building_quarantine_model_then_replay_uses_
     assert order_ids == test_case.expected_order_ids
     assert order_ids_after_rerun == test_case.expected_order_ids
     assert dead_letter_count == test_case.expected_dead_letter_count
-    if test_case.expected_sql_fragment is not None:
-        assert test_case.expected_sql_fragment in replay_statements
-    if test_case.expected_absent_sql_fragment is not None:
-        assert test_case.expected_absent_sql_fragment not in replay_statements
+    assert (_DEDUPE_FRAGMENT in replay_statements) is test_case.expected_dedupe
 
 
 @pytest.mark.integration
@@ -302,11 +298,10 @@ def test_given_built_model_when_policy_changes_then_only_its_views_are_recreated
             start_time="2026-07-28T00:00:00Z",
         )
         table_uuid: object = clickhouse_client.query(uuid_query).result_rows[0][0]
-        invocations_before: frozenset[str] = frozenset(
-            str(row[0])
-            for row in clickhouse_client.query(
-                f"SELECT DISTINCT invocation_id FROM {clickhouse_database}._sqltide_run_statements"
-            ).result_rows
+        recorded_before: str = str(
+            clickhouse_client.query(
+                f"SELECT max(recorded_at) FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows[0][0]
         )
         capsys.readouterr()
         model_path.write_text(_QUARANTINE_MODEL, encoding="utf-8")
@@ -324,11 +319,11 @@ def test_given_built_model_when_policy_changes_then_only_its_views_are_recreated
             changed=True,
         )
         enable_statements: tuple[str, ...] = tuple(
-            str(row[1])
+            str(row[0])
             for row in clickhouse_client.query(
-                f"SELECT invocation_id, sql FROM {clickhouse_database}._sqltide_run_statements"
+                f"SELECT sql FROM {clickhouse_database}._sqltide_run_statements "
+                f"WHERE recorded_at > toDateTime64('{recorded_before}', 3)"
             ).result_rows
-            if str(row[0]) not in invocations_before
         )
         clickhouse_client.command(
             f"INSERT INTO {clickhouse_database}.orders_existing "
@@ -418,11 +413,10 @@ def test_given_managed_source_when_policy_changes_then_consumer_is_paused_and_re
         second_exit: int = run_direct_build(
             project_root=tmp_path, database=clickhouse_database, connection=connection
         )
-        known: frozenset[str] = frozenset(
-            str(row[0])
-            for row in clickhouse_client.query(
-                f"SELECT DISTINCT invocation_id FROM {clickhouse_database}._sqltide_run_statements"
-            ).result_rows
+        recorded_before: str = str(
+            clickhouse_client.query(
+                f"SELECT max(recorded_at) FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows[0][0]
         )
         model_path.write_text(
             model_path.read_text(encoding="utf-8").replace(
@@ -437,11 +431,11 @@ def test_given_managed_source_when_policy_changes_then_consumer_is_paused_and_re
             changed=True,
         )
         step_ids: tuple[str, ...] = tuple(
-            str(row[1])
+            str(row[0])
             for row in clickhouse_client.query(
-                f"SELECT invocation_id, step_id FROM {clickhouse_database}._sqltide_run_statements"
+                f"SELECT step_id FROM {clickhouse_database}._sqltide_run_statements "
+                f"WHERE recorded_at > toDateTime64('{recorded_before}', 3)"
             ).result_rows
-            if str(row[0]) not in known
         )
         insert_landing_rows(
             clickhouse_client=clickhouse_client,
