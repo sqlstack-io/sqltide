@@ -1,7 +1,7 @@
 [package]
 name = "sqltide-config"
 version.workspace = true
-description = "Authored configuration for SQLTide: PyYAML-compatible YAML loading and the access policy."
+description = "Authored configuration for SQLTide: strict YAML loading and the access policy."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 regex.workspace = true
+saphyr-parser.workspace = true
 sha2.workspace = true
 sqltide-json.workspace = true
 sqltide-sqltext.workspace = true

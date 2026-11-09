@@ -7,10 +7,13 @@ use sha2::{Digest, Sha256};
 use sqltide_json::{JsonDialect, JsonKey, JsonValue, StdlibJsonOptions, dumps};
 use sqltide_sqltext::python_text::python_strip;
 
-use crate::yaml::composer::{Composer, MERGE_TAG, Node, NodeValue};
-use crate::yaml::constructor::construct_document;
-use crate::yaml::parser::{Event, EventKind};
-use crate::yaml::{Value, YamlError, parser};
+use crate::errors::{ConfigError, ConfigErrorKind};
+use crate::yaml::Value;
+use crate::yaml::composer::compose;
+use crate::yaml::constructor::construct;
+use crate::yaml::models::{Node, NodeContent};
+use crate::yaml::reader::check_characters;
+use crate::yaml::resolver::MERGE_TAG;
 
 /// The operations SQLTide authorizes, by their authored names.
 pub const PERMISSIONS: [&str; 15] = [
@@ -107,12 +110,12 @@ fn fail<T>(message: String) -> Compiled<T> {
     })
 }
 
-impl From<YamlError> for AccessPolicyError {
-    fn from(error: YamlError) -> Self {
+impl From<ConfigError> for AccessPolicyError {
+    fn from(error: ConfigError) -> Self {
         Self {
-            message: error.problem,
-            line: error.mark.line + 1,
-            column: error.mark.column + 1,
+            message: error.message,
+            line: error.line.unwrap_or(1),
+            column: error.column.unwrap_or(1),
         }
     }
 }
@@ -128,77 +131,44 @@ pub fn compile_access_policy(
     Ok(AccessPolicy { roles, fingerprint })
 }
 
-fn strict_error(problem: &str, event: &Event) -> YamlError {
-    YamlError::marked(problem, event.start)
-}
-
-/// One safely loaded document, rejecting aliases, anchors, merge keys, non-scalar keys and
-/// duplicate keys, which make a security policy ambiguous.
-fn load_strict_yaml(contents: &str) -> Result<Value, YamlError> {
-    let mut parser = parser(contents)?;
-    let mut events: Vec<Event> = Vec::new();
-    let mut documents: usize = 0;
-    while let Some(event) = parser.next_event()? {
-        match event.kind {
-            EventKind::DocumentStart => {
-                documents += 1;
-                if documents > 1 {
-                    return Err(strict_error(
-                        "multiple YAML documents are not allowed",
-                        &event,
-                    ));
-                }
-            }
-            EventKind::Alias => {
-                return Err(strict_error("YAML aliases are not allowed", &event));
-            }
-            EventKind::Scalar { .. }
-            | EventKind::SequenceStart { .. }
-            | EventKind::MappingStart { .. }
-                if event.anchor.is_some() =>
-            {
-                return Err(strict_error("YAML anchors are not allowed", &event));
-            }
-            _ => {}
-        }
-        events.push(event);
-    }
-    let Some(node) = Composer::new(events.into_iter()).single_node()? else {
+/// One safely loaded document. Composition rejects anchors, aliases and a second document;
+/// merge keys, non-scalar keys and duplicate keys are rejected before any value is built,
+/// because each makes a security policy ambiguous.
+fn load_strict_yaml(contents: &str) -> Result<Value, ConfigError> {
+    check_characters(contents)?;
+    // PyYAML skips one byte order mark at the start of the stream without counting a column.
+    let contents: &str = contents.strip_prefix('\u{feff}').unwrap_or(contents);
+    let Some(root) = compose(contents)? else {
         return Ok(Value::None);
     };
-    validate_node(&node)?;
-    construct_document(&node)
+    validate_node(&root)?;
+    construct(&root)
 }
 
-fn validate_node(node: &Node) -> Result<(), YamlError> {
-    match &node.value {
-        NodeValue::Mapping(pairs) => {
+fn strict_error(message: impl Into<String>, node: &Node) -> ConfigError {
+    ConfigError::new(ConfigErrorKind::Syntax, message).at(node.position.0, node.position.1)
+}
+
+fn validate_node(node: &Node) -> Result<(), ConfigError> {
+    match &node.content {
+        NodeContent::Mapping(pairs) => {
             let mut seen: HashSet<(&str, &str)> = HashSet::new();
             for (key, value) in pairs {
                 if key.tag == MERGE_TAG {
-                    return Err(YamlError::marked(
-                        "YAML merge keys are not allowed",
-                        key.start,
-                    ));
+                    return Err(strict_error("YAML merge keys are not allowed", key));
                 }
-                let NodeValue::Scalar(text) = &key.value else {
-                    return Err(YamlError::marked(
-                        "mapping keys must be scalar values",
-                        key.start,
-                    ));
+                let NodeContent::Scalar(text) = &key.content else {
+                    return Err(strict_error("mapping keys must be scalar values", key));
                 };
                 if !seen.insert((&key.tag, text)) {
-                    return Err(YamlError::marked(
-                        format!("duplicate mapping key '{text}'"),
-                        key.start,
-                    ));
+                    return Err(strict_error(format!("duplicate mapping key '{text}'"), key));
                 }
                 validate_node(value)?;
             }
             Ok(())
         }
-        NodeValue::Sequence(items) => items.iter().try_for_each(validate_node),
-        NodeValue::Scalar(_) => Ok(()),
+        NodeContent::Sequence(items) => items.iter().try_for_each(validate_node),
+        NodeContent::Scalar(_) => Ok(()),
     }
 }
 
@@ -244,7 +214,7 @@ fn reject_unknown_keys(
 
 fn sequence<'a>(value: Option<&'a Value>, context: &str) -> Compiled<&'a [Value]> {
     match value {
-        Some(Value::List(items) | Value::Tuple(items)) => Ok(items),
+        Some(Value::List(items)) => Ok(items),
         _ => fail(format!("{context} must be a sequence")),
     }
 }
