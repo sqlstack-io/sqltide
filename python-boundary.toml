@@ -1,0 +1,185 @@
+# Python that stays once Rust hosts SQLTide. Every other Python file under src/sqltide is
+# migration work that moves to Rust. `remaining_lines` must equal the current count of that work:
+# a PR that moves code lowers it, and adding movable Python fails the check.
+# Each `[[stays]]` entry names the one rule that keeps it Python and a note with the evidence:
+# 1 = executor or adapter runtime and the shapes it consumes; 2 = thin shim that invokes user
+# Python; 3 = public facade (facade only); 4 = glue around a Python-only third-party library.
+# A file is listed only once it holds nothing but that role: a runtime, shim or facade file that
+# still carries planning, validation, rendering or other movable logic counts as movable until
+# that logic moves to Rust.
+# Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
+remaining_lines = 64537
+
+[[stays]]
+path = "adapter/classes/adapter.py"
+rule = 1
+note = "Rule 1: The abstract Adapter contract the runtime calls to open warehouse connections; ClickHouseAdapter implements it. No logic."
+
+[[stays]]
+path = "adapter/classes/adapter_connection.py"
+rule = 1
+note = "Rule 1: The AdapterConnection contract every warehouse read and write goes through (query, workflow statements, locks, catalog loads). Defaults are capability stubs and row-decoding wrappers; the SQL its render methods return is rendered natively."
+
+[[stays]]
+path = "adapter/exceptions.py"
+rule = 1
+note = "Rule 1: Data-only AdapterError hierarchy the ClickHouse driver connection raises and the runtime catches."
+
+[[stays]]
+path = "adapter/types.py"
+rule = 1
+note = "Rule 1: Data-only enums and logic-free protocols the adapter contract and the ClickHouse connection consume."
+
+[[stays]]
+path = "adapters/clickhouse/types.py"
+rule = 1
+note = "Rule 1: Logic-free protocols describing the clickhouse-connect client and query result the ClickHouse connection wraps."
+
+[[stays]]
+path = "compiler/macros/constants.py"
+rule = 2
+note = "Rule 2: Data-only names the user macro loader and invoker read: the ctx parameter, the context annotation names, the macro sigil and reserved names."
+
+[[stays]]
+path = "compiler/macros/types.py"
+rule = 2
+note = "Rule 2: Data-only alias for the live user macro functions the loader holds and the invoker calls."
+
+[[stays]]
+path = "events/__init__.py"
+rule = 3
+note = "Rule 3: Public sqltide.events facade that documented sensors import; re-exports only."
+
+[[stays]]
+path = "events/types.py"
+rule = 3
+note = "Rule 3: Public AuditTransition and ObservedCommand enums and the SensorEvent alias re-exported by sqltide.events; data only."
+
+[[stays]]
+path = "executor/kafka_admin/models.py"
+rule = 1
+note = "Rule 1: Data-only consumer group offset reset result the Kafka admin I/O returns."
+
+[[stays]]
+path = "executor/kafka_admin/types.py"
+rule = 1
+note = "Rule 1: Logic-free protocols for the kafka-python admin client and its factory, consumed by the Kafka admin I/O."
+
+[[stays]]
+path = "executor/workflow/exceptions.py"
+rule = 1
+note = "Rule 1: Data-only WorkflowExecutionError carrying the partial result, raised by the warehouse statement runner."
+
+[[stays]]
+path = "executor/workflow/main/_execute_observation_workflow.py"
+rule = 1
+note = "Rule 1: Entry into the warehouse statement runner for metadata-store observation writes."
+
+[[stays]]
+path = "executor/workflow/main/_execute_warehouse_workflow.py"
+rule = 1
+note = "Rule 1: The warehouse statement runner: executes each statement through the adapter connection in order, emits progress and keeps partial results on failure."
+
+[[stays]]
+path = "executor/workflow/main/execute_build_workflow.py"
+rule = 1
+note = "Rule 1: Entry into the warehouse statement runner for a published build workflow."
+
+[[stays]]
+path = "executor/workflow/main/execute_sensor_state_workflow.py"
+rule = 1
+note = "Rule 1: Entry into the warehouse statement runner for sensor state writes."
+
+[[stays]]
+path = "executor/workflow/main/target_mutation_lock.py"
+rule = 1
+note = "Rule 1: Acquires and releases the warehouse target mutation lock through the adapter connection around one operation."
+
+[[stays]]
+path = "executor/workflow/types.py"
+rule = 1
+note = "Rule 1: Logic-free statement phase and intent enums and the event emitter protocol the warehouse statement runner consumes."
+
+[[stays]]
+path = "provider/_helpers/injection.py"
+rule = 2
+note = "Rule 2: Inspects the signatures and annotations of user sensor functions and calls them with the context and provider instances."
+
+[[stays]]
+path = "provider/classes/container.py"
+rule = 2
+note = "Rule 2: Name-based access to the live user provider instances handed to user sensor code."
+
+[[stays]]
+path = "provider/classes/session.py"
+rule = 2
+note = "Rule 2: Calls user Provider.setup and Provider.teardown on live provider instances for each tick."
+
+[[stays]]
+path = "provider/exceptions.py"
+rule = 2
+note = "Rule 2: Data-only errors raised by the provider import, injection and session shims."
+
+[[stays]]
+path = "provider/main/build_provider_session.py"
+rule = 2
+note = "Rule 2: Instantiates user Provider subclasses into a session."
+
+[[stays]]
+path = "provider/main/discover_provider_classes.py"
+rule = 2
+note = "Rule 2: Entry point of the shim that imports project provider modules."
+
+[[stays]]
+path = "provider/main/invoke_with_providers.py"
+rule = 2
+note = "Rule 2: Entry point that calls a user sensor function with provider injection."
+
+[[stays]]
+path = "provider/models.py"
+rule = 2
+note = "Rule 2: Record holding a live user Provider class and its settings instance."
+
+[[stays]]
+path = "sensors/__init__.py"
+rule = 3
+note = "Rule 3: Public sqltide.sensors facade that documented sensors import; re-exports only."
+
+[[stays]]
+path = "sensors/_helpers/evaluation.py"
+rule = 2
+note = "Rule 2: Runs one user sensor handler on a worker thread with its timeout and provider injection."
+
+[[stays]]
+path = "sensors/classes/event_sensor_context.py"
+rule = 3
+note = "Rule 3: EventSensorContext that user event sensors receive, re-exported by sqltide.sensors; step() delegates to the runner."
+
+[[stays]]
+path = "sensors/classes/polling_sensor_context.py"
+rule = 3
+note = "Rule 3: PollingSensorContext that user polling sensors receive, re-exported by sqltide.sensors; read-only properties."
+
+[[handled_native_errors]]
+location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_direct_fingerprints"
+note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
+
+[[handled_native_errors]]
+location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_manifests"
+note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
+
+[[handled_native_errors]]
+location = "compiler/planner/_helpers/warehouse_metadata.py::load_all_object_state_records"
+note = "Catches AdapterRelationNotFoundError for an absent metadata table only; a native rendering failure raises ValueError and propagates."
+
+[[handled_native_errors]]
+location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"
+note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."
+
+[[handled_native_errors]]
+location = "executor/destruction/_helpers/planning.py::plan_destruction"
+note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
+
+[[handled_native_errors]]
+location = "executor/destruction/_helpers/planning.py::build_destruction_challenges"
+note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
