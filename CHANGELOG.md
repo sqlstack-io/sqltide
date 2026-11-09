@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.65.0](https://github.com/sqlstack-io/sqltide/compare/v0.64.0...v0.65.0) (2026-11-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* in access.yml, a quoted value that spans several lines must indent its continuation lines further than its key. A continuation line at or left of the key now fails to load, and the error points to that line.
+
+### Refactoring
+
+* compile the access policy natively ([241d743](https://github.com/sqlstack-io/sqltide/commit/241d7437f1509e18c0c62a8e0b9895b2533a219c))
+* load TOML config natively with toml_edit ([8ae7379](https://github.com/sqlstack-io/sqltide/commit/8ae7379793a9ef28b17264ff0d5ceeaa5f413a3f))
+
 ## [0.64.0](https://github.com/sqlstack-io/sqltide/compare/v0.63.0...v0.64.0) (2026-11-09)
 
 
