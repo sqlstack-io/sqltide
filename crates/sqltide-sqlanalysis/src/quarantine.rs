@@ -28,7 +28,7 @@ const NULLABLE_CAST_TYPE_PREFIXES: [&str; 10] = [
     "ipv6",
 ];
 /// Types where a `Nullable` cast raises but `accurateCastOrNull` agrees with `CAST`.
-const ACCURATE_TYPE_PREFIXES: [&str; 2] = ["decimal", "fixedstring"];
+const ACCURATE_TYPE_PREFIXES: [&str; 3] = ["bool", "decimal", "fixedstring"];
 /// Type names `accurateCastOrNull` cannot return and a model cannot sensibly skip.
 const UNCHECKABLE_TYPE_PREFIXES: [&str; 8] = [
     "nested(",
@@ -535,7 +535,11 @@ mod tests {
                 .good_query
                 .contains("accurateCastOrNull(__sqt_value_1, 'FixedString(2)')")
         );
-        assert!(!generated.good_query.contains("__sqt_value_2 AS Nullable"));
+        assert!(
+            generated
+                .good_query
+                .contains("accurateCastOrNull(__sqt_value_2, 'Bool')")
+        );
         assert!(!generated.good_query.contains("__sqt_value_3 AS Nullable"));
         assert!(
             generated

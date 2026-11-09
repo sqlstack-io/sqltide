@@ -520,6 +520,8 @@ class DirectRowErrorPolicyChange:
     dead_letter_view_name: str
     desired_policy: RowErrorPolicy
     landing_view_names: tuple[str, ...]
+    logical_view_name: str = ""
+    logical_dead_letter_view_name: str = ""
 
 
 @dataclass(frozen=True)

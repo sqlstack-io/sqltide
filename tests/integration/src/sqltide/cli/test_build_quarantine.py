@@ -546,6 +546,13 @@ def test_given_separate_metadata_database_when_rows_fail_then_dead_letters_live_
             expected_dead_letter_view_count=1,
         ),
         QuarantineRepairIntegrationTestCase(
+            description="disable failed with the model view missing",
+            desired_model=_FAIL_MODEL,
+            live_model=_QUARANTINE_MODEL,
+            break_statements=(_DROP_MODEL_VIEW,),
+            expected_dead_letter_view_count=0,
+        ),
+        QuarantineRepairIntegrationTestCase(
             description="disable left the dead-letter view behind",
             desired_model=_FAIL_MODEL,
             live_model=_QUARANTINE_MODEL,

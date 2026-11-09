@@ -25,9 +25,6 @@ from sqltide.compiler.planner.main.load_direct_warehouse_snapshot import (
     load_direct_warehouse_snapshot,
 )
 from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
-from sqltide.compiler.planner.main.plan_row_error_policy_changes import (
-    plan_row_error_policy_changes,
-)
 from sqltide.compiler.planner.models import (
     DirectPlan,
     DirectRowErrorPolicyChange,
@@ -35,6 +32,9 @@ from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
+from sqltide.compiler.row_error_policy.main.plan_row_error_policy_changes import (
+    plan_row_error_policy_changes,
+)
 from sqltide.executor.direct.main.drifted_managed_sources import drifted_managed_sources
 from sqltide.executor.direct.models import DriftedManagedSource
 

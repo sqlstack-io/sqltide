@@ -183,6 +183,10 @@ def execute_virtual_build_command(
             client=client,
             sink=sink,
         )
+    if _is_policy_only(preparation):
+        return _finish_policy_only_build(
+            started=started, preparation=preparation, options=options, client=client, sink=sink
+        )
     try:
         result: BackfillExecutionResult = build_virtual_execution_result(
             request=preparation.request,
@@ -217,6 +221,37 @@ def execute_virtual_build_command(
             json_output=options.json_output,
         )
     )
+    return 0
+
+
+def _is_policy_only(preparation: VirtualWorkflowPreparation) -> bool:
+    """Return whether the build only switches policy on live views, creating no deployment."""
+
+    return bool(preparation.preview.row_error_policy_changes) and not (
+        preparation.preview.plan.rebuild_subtrees
+    )
+
+
+def _finish_policy_only_build(
+    *,
+    started: tuple[str, str, int],
+    preparation: VirtualWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    sink: RunEventSink,
+) -> int:
+    _persist_virtual_invocation(
+        started=started,
+        preparation=preparation,
+        options=options,
+        client=client,
+        outcome="succeeded",
+        exit_code=0,
+        materialized_outcome="applied",
+        error_message=None,
+    )
+    sink.run_completed(outcome="succeeded", exit_code=0, error_message=None)
+    print(preparation.plan_text)
     return 0
 
 
@@ -293,7 +328,9 @@ def _persist_virtual_invocation(
             outcome=outcome,
             exit_code=exit_code,
             materialized_outcome=materialized_outcome,
-            deployment_id=preparation.preview.deployment_id,
+            deployment_id=None
+            if _is_policy_only(preparation)
+            else preparation.preview.deployment_id,
             workflow_id=None,
             selected_node_count=len(preparation.preview.run_execution_scope),
             error_message=error_message,

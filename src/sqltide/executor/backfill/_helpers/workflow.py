@@ -33,6 +33,9 @@ from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import DeploymentPlan
 from sqltide.executor.backfill._helpers.metadata import build_deployment_metadata_state
+from sqltide.executor.backfill._helpers.row_error_policy import (
+    virtual_row_error_policy_statements,
+)
 from sqltide.executor.backfill.exceptions import BackfillExecutionError
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.backfill.types import NativeVirtualRoot
@@ -118,6 +121,15 @@ def assemble_virtual_build_workflow(
         population_plan=population_plan,
         replay_templates=replay_templates,
     )
+    if request.row_error_policy_changes:
+        policy_statements: list[NativeStatement] = virtual_row_error_policy_statements(
+            request=request, client=client, target_catalog=target_catalog
+        )
+        statements = _warehouse_statements(
+            native_statements=policy_statements,
+            start=len(statements) + 1 if deployment_plan.rebuild_subtrees else 1,
+            existing=statements if deployment_plan.rebuild_subtrees else (),
+        )
     return BuildWorkflow(
         mode=WorkflowMode.VIRTUAL_ENVIRONMENT,
         plan_json=plan_json,
@@ -483,3 +495,27 @@ def _prepared_relation_names(request: BackfillBootstrapRequest) -> tuple[str, ..
 
 def _boundary_type_expression(mode: AdapterReplayBoundaryMode) -> str:
     return "UInt64" if mode == AdapterReplayBoundaryMode.CURSOR else "DateTime64(3, 'UTC')"
+
+
+def _warehouse_statements(
+    *,
+    native_statements: list[NativeStatement],
+    start: int,
+    existing: tuple[WarehouseStatement, ...],
+) -> tuple[WarehouseStatement, ...]:
+    return (
+        *existing,
+        *(
+            WarehouseStatement(
+                sequence=sequence,
+                step_id=step_id,
+                phase=WorkflowPhase(phase),
+                intent=StatementIntent(intent),
+                sql=sql,
+                continue_on_error=continue_on_error,
+            )
+            for sequence, (step_id, phase, intent, sql, continue_on_error) in enumerate(
+                native_statements, start=start
+            )
+        ),
+    )

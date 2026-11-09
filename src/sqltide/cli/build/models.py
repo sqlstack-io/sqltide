@@ -99,6 +99,7 @@ class VirtualBuildPreviewContext:
     execution_logical_model_keys: frozenset[LogicalResourceKey] = frozenset()
     run_execution_scope: tuple[LogicalResourceKey, ...] = ()
     run_context_scope: tuple[LogicalResourceKey, ...] = ()
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
 
 
 @dataclass(frozen=True)

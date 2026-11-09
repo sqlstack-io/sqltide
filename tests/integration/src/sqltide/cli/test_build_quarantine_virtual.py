@@ -13,6 +13,8 @@ from sqltide.executor.promotion.main.execute_deployment_promotion import execute
 from sqltide.executor.promotion.models import PublishRequest
 from tests.integration.src.sqltide.cli._test_types import (
     VirtualDedupeIntegrationTestCase,
+    VirtualPolicyRepairIntegrationTestCase,
+    VirtualPolicySwitchIntegrationTestCase,
     VirtualQuarantineIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
@@ -22,6 +24,7 @@ from tests.integration.src.sqltide.cli.helpers import (
     relation_names_like,
     run_direct_plan,
     run_new_virtual_environment_deployment,
+    run_virtual_environment_build,
     write_direct_adopted_source_project,
     write_direct_build_project,
 )
@@ -279,6 +282,211 @@ def test_given_virtual_replay_when_raw_has_repeats_then_dedupe_follows_them(
 
     assert order_ids == test_case.expected_order_ids
     assert ("LIMIT 1 BY" in statements) is test_case.expected_dedupe
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        VirtualPolicySwitchIntegrationTestCase(
+            description="plain build switches policy on the live deployment only",
+            bad_values_sql=f"(NULL, '2', 0, 2, {_TS}), ('order-3', '3', 0, 3, {_TS})",
+            expected_order_ids=("order-1", "order-3"),
+            expected_failed_columns=(("order_id",),),
+            expected_deployment_count=1,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_published_model_when_policy_changes_then_views_switch_in_place(
+    test_case: VirtualPolicySwitchIntegrationTestCase,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_FAIL
+    )
+    make_project_virtual(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing "
+            f"VALUES ('order-1', '1', 0, 1, {_TS})"
+        )
+        deployment: AdapterDeploymentRecord = run_new_virtual_environment_deployment(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            clickhouse_client=clickhouse_client,
+        )
+        execute_publish(
+            request=PublishRequest(
+                deployment_id=deployment.deployment_id,
+                metadata_database=clickhouse_database,
+                default_database=clickhouse_database,
+            ),
+            client=connection,
+        )
+        physical: str = f"tbl__orders_enriched__{deployment.deployment_id}"
+        uuid_query: str = (
+            f"SELECT uuid FROM system.tables WHERE database = '{clickhouse_database}' "
+            f"AND name = '{physical}'"
+        )
+        table_uuid: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+        model_path.write_text(_QUARANTINE, encoding="utf-8")
+        capsys.readouterr()
+        plan_exit: int = run_direct_plan(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        plan_output: str = capsys.readouterr().out
+        enable_exit: int = run_virtual_environment_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing VALUES {test_case.bad_values_sql}"
+        )
+        order_ids: tuple[str, ...] = tuple(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT order_id FROM {clickhouse_database}.{physical} ORDER BY order_id"
+            ).result_rows
+        )
+        failed: tuple[tuple[str, ...], ...] = tuple(
+            tuple(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT failed_columns FROM {clickhouse_database}._sqltide_dead_letters"
+            ).result_rows
+        )
+        dead_letter_views_on: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client,
+            database=clickhouse_database,
+            pattern="mv\\_\\_orders\\_enriched\\_\\_dead\\_letters%",
+        )
+        uuid_after_enable: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+        model_path.write_text(_FAIL, encoding="utf-8")
+        disable_exit: int = run_virtual_environment_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        dead_letter_views_off: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client,
+            database=clickhouse_database,
+            pattern="mv\\_\\_orders\\_enriched\\_\\_dead\\_letters%",
+        )
+        deployments: int = len(
+            connection.load_deployment_inventory(clickhouse_database).deployments
+        )
+        uuid_after_disable: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+    finally:
+        connection.close()
+
+    payload: dict[str, object] = json.loads(plan_output)
+    assert (plan_exit, enable_exit, disable_exit) == (0, 0, 0)
+    assert payload["rebuild_subtrees"] == []
+    assert "view_only" in plan_output
+    assert order_ids == test_case.expected_order_ids
+    assert failed == test_case.expected_failed_columns
+    assert len(dead_letter_views_on) == 1
+    assert dead_letter_views_off == ()
+    assert table_uuid == uuid_after_enable == uuid_after_disable
+    assert deployments == test_case.expected_deployment_count
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        VirtualPolicyRepairIntegrationTestCase(
+            description="enable left the model view missing",
+            desired_model=_QUARANTINE,
+            live_model=_QUARANTINE,
+            dropped_view_template="mv__orders_enriched__{deployment_id}",
+            expected_dead_letter_view_count=1,
+        ),
+        VirtualPolicyRepairIntegrationTestCase(
+            description="enable left the dead-letter view missing",
+            desired_model=_QUARANTINE,
+            live_model=_QUARANTINE,
+            dropped_view_template="mv__orders_enriched__dead_letters__{deployment_id}",
+            expected_dead_letter_view_count=1,
+        ),
+        VirtualPolicyRepairIntegrationTestCase(
+            description="disable failed with the model view missing",
+            desired_model=_FAIL,
+            live_model=_QUARANTINE,
+            dropped_view_template="mv__orders_enriched__{deployment_id}",
+            expected_dead_letter_view_count=0,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_half_applied_virtual_switch_when_building_then_it_repairs(
+    test_case: VirtualPolicyRepairIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=test_case.live_model
+    )
+    make_project_virtual(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        deployment: AdapterDeploymentRecord = run_new_virtual_environment_deployment(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            clickhouse_client=clickhouse_client,
+        )
+        execute_publish(
+            request=PublishRequest(
+                deployment_id=deployment.deployment_id,
+                metadata_database=clickhouse_database,
+                default_database=clickhouse_database,
+            ),
+            client=connection,
+        )
+        dropped: str = test_case.dropped_view_template.format(
+            deployment_id=deployment.deployment_id
+        )
+        clickhouse_client.command(f"DROP TABLE {clickhouse_database}.{dropped} SYNC")
+        model_path.write_text(test_case.desired_model, encoding="utf-8")
+        repair_exit: int = run_virtual_environment_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        model_views: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client,
+            database=clickhouse_database,
+            pattern=f"mv\\_\\_orders\\_enriched\\_\\_{deployment.deployment_id}",
+        )
+        dead_letter_views: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client,
+            database=clickhouse_database,
+            pattern="mv\\_\\_orders\\_enriched\\_\\_dead\\_letters%",
+        )
+    finally:
+        connection.close()
+
+    assert repair_exit == 0
+    assert len(model_views) == 1
+    assert len(dead_letter_views) == test_case.expected_dead_letter_view_count
 
 
 if __name__ == "__main__":

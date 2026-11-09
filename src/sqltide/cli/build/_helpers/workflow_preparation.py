@@ -300,6 +300,28 @@ def prepare_virtual_build_workflow(
         )
     )
     serialized_plan_payload["deployment_created_at"] = preview.created_at
+    if preview.row_error_policy_changes:
+        serialized_plan_payload["row_error_policy_changes"] = [
+            {
+                "model_key": change.model_key.name,
+                "desired_policy": str(change.desired_policy),
+                "view": change.view_name,
+                "dead_letter_view": change.dead_letter_view_name,
+                "operation": "view_only",
+                "replay_roots": 0,
+            }
+            for change in preview.row_error_policy_changes
+        ]
+        plan_text = "\n".join(
+            [
+                plan_text,
+                *(
+                    f"view-only  {change.model_key.name}: on_row_error -> "
+                    f"{change.desired_policy}, recreate {change.view_name}, no replay"
+                    for change in preview.row_error_policy_changes
+                ),
+            ]
+        )
     request: BackfillBootstrapRequest = BackfillBootstrapRequest(
         desired_state=preview.desired_state,
         default_database=preview.database,
@@ -313,6 +335,7 @@ def prepare_virtual_build_workflow(
         created_at=preview.created_at,
         confirmed_target_catalog=preview.target_catalog,
         confirmed_metadata_catalog=preview.metadata_catalog,
+        row_error_policy_changes=preview.row_error_policy_changes,
     )
     workflow: BuildWorkflow = assemble_virtual_build_workflow(
         request=request,

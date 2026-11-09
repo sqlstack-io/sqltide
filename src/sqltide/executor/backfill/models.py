@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.planner.models import DeploymentPlan
+from sqltide.compiler.planner.models import DeploymentPlan, DirectRowErrorPolicyChange
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class BackfillBootstrapRequest:
     stabilization_seconds: float = 5.0
     confirmed_target_catalog: CatalogSnapshot | None = None
     confirmed_metadata_catalog: CatalogSnapshot | None = None
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "replay_lineage_mode", ReplayLineageMode(self.replay_lineage_mode))

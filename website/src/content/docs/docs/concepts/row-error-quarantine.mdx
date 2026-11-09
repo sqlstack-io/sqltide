@@ -45,7 +45,7 @@ the kept-rows query: they never fail on invalid rows and never write dead letter
 In a virtual pipeline each deployment gets its own views with deployment-suffixed names. They record
 the model's logical name, so dead letters survive promotion and rollback, and cleaning up a
 deployment drops its dead-letter view with its other relations. While two deployments are both
-attached to a source, each writes its own dead letters for the same bad row.
+attached to a source, overlapping deployments each write their own dead letter for the same bad row.
 
 `LowCardinality(T)` columns are checked against `T`.
 
@@ -53,7 +53,7 @@ Some columns are not checked, so **a failure in one of them still raises exactly
 `fail`**, while the model's other columns are checked:
 
 - `Array(...)`, `Map(...)` and `Tuple(...)`
-- `Bool`, `Enum`, `JSON`, `Variant`, and any other type a check cannot evaluate without raising
+- `Enum`, `JSON`, `Variant`, and any other type a check cannot evaluate without raising
 - `Nullable(T)`: no check is added, so a Nullable `Enum`, `FixedString` or `Decimal` can still raise
 
 ## Eligibility
@@ -84,10 +84,10 @@ Use the `OrNull` form so the failure reaches the check as a `NULL`.
 ## Changing the policy
 
 Switching a live model between `fail` and `quarantine` does not count as a model change: it does not
-drop the target table, create a deployment, or replay. A virtual deployment picks up the policy the
-next time its model is deployed. For a direct model, `sqt build --changed` applies it in place by pausing the
+drop the target table, create a deployment, or replay. Plain `sqt build` applies it to a virtual
+model's live deployment, and `sqt build --changed` applies it to a direct model, in place by pausing the
 source's consumer, recreating `mv__<target>`, creating or dropping `mv__<target>__dead_letters`, and
-resuming. `sqt plan --changed` shows it as a view-only change with no replay roots. A model that
+resuming. `sqt plan` for virtual models and `sqt plan --changed` for direct models show it as a view-only change with no replay roots. A model that
 also has a real SQL change takes the normal rebuild, using the desired policy.
 
 Adopted sources have no consumer to pause, so rows inserted while the views are being swapped are

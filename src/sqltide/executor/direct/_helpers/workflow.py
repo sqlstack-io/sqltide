@@ -49,6 +49,9 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._row_error_policy_view_steps import (
+    row_error_policy_view_steps,
+)
 from sqltide.executor.population.main._with_metadata_dead_letter_target import (
     with_metadata_dead_letter_target,
 )
@@ -284,36 +287,16 @@ def _policy_change_views(
         for desired in request.realized_project.desired_state.objects
         if isinstance(desired, DesiredMaterializedView)
     }
-    teardown: list[tuple[str, bool]] = []
-    realizations: list[tuple[str, str]] = []
-    for change in request.row_error_policy_changes:
-        drop_view: str = f"DROP TABLE IF EXISTS {request.database}.{change.view_name} SYNC"
-        dead_letter_view: DesiredMaterializedView | None = desired_views.get(
-            change.dead_letter_view_name
-        )
-        if dead_letter_view is not None:
-            teardown.append((change.dead_letter_view_name, False))
-            realizations.append(
-                (
-                    change.dead_letter_view_name,
-                    _render_view(view=dead_letter_view, request=request, client=client),
-                )
-            )
-        realizations.append((f"replace_{change.view_name}", drop_view))
-        realizations.append(
-            (
-                change.view_name,
-                _render_view(view=desired_views[change.view_name], request=request, client=client),
-            )
-        )
-        if dead_letter_view is None:
-            realizations.append(
-                (
-                    f"retire_{change.dead_letter_view_name}",
-                    f"DROP TABLE IF EXISTS {request.database}.{change.dead_letter_view_name} SYNC",
-                )
-            )
-    return teardown, realizations
+
+    def render_view(name: str) -> str | None:
+        view: DesiredMaterializedView | None = desired_views.get(name)
+        return None if view is None else _render_view(view=view, request=request, client=client)
+
+    return row_error_policy_view_steps(
+        changes=request.row_error_policy_changes,
+        database=request.database,
+        render_view=render_view,
+    )
 
 
 def _warehouse_statements(statements: list[NativeStatement]) -> tuple[WarehouseStatement, ...]:

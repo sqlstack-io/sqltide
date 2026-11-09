@@ -555,3 +555,21 @@ class VirtualDedupeIntegrationTestCase:
     history_rows: tuple[tuple[str, int, int], ...]
     expected_order_ids: tuple[str, ...]
     expected_dedupe: bool
+
+
+@dataclass(frozen=True)
+class VirtualPolicySwitchIntegrationTestCase:
+    description: str
+    bad_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_deployment_count: int
+
+
+@dataclass(frozen=True)
+class VirtualPolicyRepairIntegrationTestCase:
+    description: str
+    desired_model: str
+    live_model: str
+    dropped_view_template: str
+    expected_dead_letter_view_count: int
