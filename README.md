@@ -86,12 +86,6 @@ sqt dev         # local UI at 127.0.0.1:8000
 The [orders demo](examples/orders_demo/README.md) runs the whole workflow locally with Redpanda and
 ClickHouse. See the [quickstart](https://sqltide.io/docs/quickstart/) to start your own project.
 
-## Upgrading from StreamBuild
-
-SQLTide is the new name for StreamBuild. Follow the
-[upgrade guide](https://sqltide.io/docs/upgrade/). Upgrade every machine and CI job that writes to
-a target together.
-
 ## Documentation
 
 - [Models](https://sqltide.io/docs/concepts/models/) and [pipelines](https://sqltide.io/docs/concepts/pipelines/)
