@@ -8,6 +8,7 @@ members = [
     "crates/sqltide-executor",
     "crates/sqltide-clickhouse",
     "crates/sqltide-discovery",
+    "crates/sqltide-config",
     "crates/sqltide-python",
 ]
 resolver = "2"
@@ -38,6 +39,7 @@ sha2 = "0.10"
 serde_json = "1"
 sqltide-clickhouse = { path = "crates/sqltide-clickhouse" }
 sqltide-compile = { path = "crates/sqltide-compile" }
+sqltide-config = { path = "crates/sqltide-config" }
 sqltide-discovery = { path = "crates/sqltide-discovery" }
 sqltide-executor = { path = "crates/sqltide-executor" }
 sqltide-json = { path = "crates/sqltide-json" }
