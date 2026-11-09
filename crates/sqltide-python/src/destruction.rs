@@ -5,12 +5,18 @@ use std::collections::{BTreeSet, HashMap};
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use sqltide_executor::destruction::{
     Binding, CatalogRelation, Deployment, DestructionError, Evidence, Inventory, Key, Manifest,
     ManifestResource, Mapping, Operation, OwnedRelation, Ownership, PlanIdentity, Project,
     PublishEvent, RelationKind, Request, Snapshot, available_pipeline_names, build_challenges,
     build_evidence, drop_statements, inactive_pipelines, plan_fingerprint, plan_scope,
     resolve_selection,
+};
+use sqltide_executor::destruction_plan_payload::{
+    PayloadError, PlanPayload, RelationPayload, Timestamp, deserialize_plan, serialize_plan,
 };
 
 /// `(keys as (name, is source, model pipeline, [(resource name, kind)]), upstream, downstream,
@@ -527,7 +533,226 @@ fn destruction_drop_statements(
         .collect())
 }
 
+const DESTRUCTION_MODELS: &str = "sqltide.executor.destruction.models";
+const DESTRUCTION_TYPES: &str = "sqltide.executor.destruction.types";
+const DESTRUCTION_EXCEPTIONS: &str = "sqltide.executor.destruction.exceptions";
+
+/// A stored enum from a Python string or string enum value.
+fn stored_enum<T: DeserializeOwned>(value: &Bound<'_, PyAny>) -> PyResult<T> {
+    let text: String = value.extract()?;
+    serde_json::from_value(serde_json::Value::String(text))
+        .map_err(|error| invalid(error.to_string()))
+}
+
+/// The Python enum `class_name` holding a stored enum's string value.
+fn python_enum<'py, T: Serialize>(
+    types: &Bound<'py, PyModule>,
+    class_name: &str,
+    value: &T,
+) -> PyResult<Bound<'py, PyAny>> {
+    let text: serde_json::Value =
+        serde_json::to_value(value).map_err(|error| invalid(error.to_string()))?;
+    types.getattr(class_name)?.call1((text.as_str(),))
+}
+
+fn timestamp(object: &Bound<'_, PyAny>, name: &str) -> PyResult<Timestamp> {
+    let value: Bound<'_, PyAny> = object.getattr(name)?;
+    let offset: Bound<'_, PyAny> = value.call_method0("utcoffset")?;
+    let utc_offset_seconds: Option<i32> = if offset.is_none() {
+        None
+    } else {
+        Some(field::<i32>(&offset, "days")? * 86_400 + field::<i32>(&offset, "seconds")?)
+    };
+    Ok(Timestamp {
+        year: field(&value, "year")?,
+        month: field(&value, "month")?,
+        day: field(&value, "day")?,
+        hour: field(&value, "hour")?,
+        minute: field(&value, "minute")?,
+        second: field(&value, "second")?,
+        microsecond: field(&value, "microsecond")?,
+        utc_offset_seconds,
+    })
+}
+
+/// An aware UTC `datetime`; stored plans are always read back in UTC.
+fn utc_datetime<'py>(py: Python<'py>, value: Timestamp) -> PyResult<Bound<'py, PyAny>> {
+    let datetime: Bound<'py, PyModule> = py.import("datetime")?;
+    let arguments = (
+        value.year,
+        value.month,
+        value.day,
+        value.hour,
+        value.minute,
+        value.second,
+        value.microsecond,
+        datetime.getattr("UTC")?,
+    );
+    datetime.getattr("datetime")?.call1(arguments)
+}
+
+fn relation_payload(relation: &Bound<'_, PyAny>) -> PyResult<RelationPayload> {
+    Ok(RelationPayload {
+        database: field(relation, "database")?,
+        name: field(relation, "name")?,
+        kind: stored_enum(&relation.getattr("kind")?)?,
+        exists: field(relation, "exists")?,
+        total_bytes: field(relation, "total_bytes")?,
+        active_parts: field(relation, "active_parts")?,
+        catalog_fingerprint: field(relation, "catalog_fingerprint")?,
+        logical_names: field(relation, "logical_names")?,
+        pipeline_names: field(relation, "pipeline_names")?,
+        ownership: items(relation, "ownership")?
+            .iter()
+            .map(stored_enum)
+            .collect::<PyResult<_>>()?,
+        dependency_relation_names: field(relation, "dependency_relation_names")?,
+    })
+}
+
+/// The plan as the strict, versioned JSON envelope the plan store persists.
+#[pyfunction]
+fn serialize_destruction_plan(plan: &Bound<'_, PyAny>) -> PyResult<String> {
+    Ok(serialize_plan(&PlanPayload {
+        plan_id: field(plan, "plan_id")?,
+        operation: stored_enum(&plan.getattr("operation")?)?,
+        target: field(plan, "target")?,
+        database: field(plan, "database")?,
+        metadata_database: field(plan, "metadata_database")?,
+        requested_pipeline_names: field(plan, "requested_pipeline_names")?,
+        included_dependent_pipeline_names: field(plan, "included_dependent_pipeline_names")?,
+        affected_pipeline_names: field(plan, "affected_pipeline_names")?,
+        affected_model_names: field(plan, "affected_model_names")?,
+        affected_source_names: field(plan, "affected_source_names")?,
+        relations: items(plan, "relations")?
+            .iter()
+            .map(relation_payload)
+            .collect::<PyResult<_>>()?,
+        challenges: field(plan, "challenges")?,
+        preserves_sources: field(plan, "preserves_sources")?,
+        preserves_replay_data: field(plan, "preserves_replay_data")?,
+        manifest_fingerprint: field(plan, "manifest_fingerprint")?,
+        plan_fingerprint: field(plan, "plan_fingerprint")?,
+        created_at: timestamp(plan, "created_at")?,
+        expires_at: timestamp(plan, "expires_at")?,
+        relation_drop_size_limit: field(plan, "relation_drop_size_limit")?,
+        relation_drop_size_server_limit: field(plan, "relation_drop_size_server_limit")?,
+        relation_drop_size_override: field(plan, "relation_drop_size_override")?,
+        relation_drop_size_policy_observed: field(plan, "relation_drop_size_policy_observed")?,
+        include_orphans: field(plan, "include_orphans")?,
+    }))
+}
+
+/// The `DestructionPlan` in a stored envelope, raising `DestructionPlanCorruptError` for any
+/// other version, unknown or mistyped field, naive timestamp, or expiry not after creation.
+#[pyfunction]
+fn deserialize_destruction_plan<'py>(
+    py: Python<'py>,
+    payload_json: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let plan: PlanPayload = deserialize_plan(payload_json).map_err(|error| {
+        let message: String = match error {
+            PayloadError::Incompatible(reason) => {
+                format!("Stored destruction plan payload is incompatible or corrupt: {reason}")
+            }
+            PayloadError::Corrupt(reason) => reason,
+        };
+        match py
+            .import(DESTRUCTION_EXCEPTIONS)
+            .and_then(|module| module.getattr("DestructionPlanCorruptError"))
+            .and_then(|class| class.call1((message,)))
+        {
+            Ok(exception) => PyErr::from_value(exception),
+            Err(error) => error,
+        }
+    })?;
+    let models: Bound<'py, PyModule> = py.import(DESTRUCTION_MODELS)?;
+    let types: Bound<'py, PyModule> = py.import(DESTRUCTION_TYPES)?;
+    let evidence_class: Bound<'py, PyAny> = models.getattr("DestructionRelationEvidence")?;
+    let relations: Vec<Bound<'py, PyAny>> = plan
+        .relations
+        .iter()
+        .map(|relation| {
+            let ownership: Vec<Bound<'py, PyAny>> = relation
+                .ownership
+                .iter()
+                .map(|item| python_enum(&types, "DestructionOwnership", item))
+                .collect::<PyResult<_>>()?;
+            let arguments: Bound<'py, PyDict> = PyDict::new(py);
+            arguments.set_item("database", &relation.database)?;
+            arguments.set_item("name", &relation.name)?;
+            arguments.set_item(
+                "kind",
+                python_enum(&types, "DestructionRelationKind", &relation.kind)?,
+            )?;
+            arguments.set_item("exists", relation.exists)?;
+            arguments.set_item("total_bytes", relation.total_bytes)?;
+            arguments.set_item("active_parts", relation.active_parts)?;
+            arguments.set_item("catalog_fingerprint", &relation.catalog_fingerprint)?;
+            arguments.set_item("logical_names", PyTuple::new(py, &relation.logical_names)?)?;
+            arguments.set_item(
+                "pipeline_names",
+                PyTuple::new(py, &relation.pipeline_names)?,
+            )?;
+            arguments.set_item("ownership", PyTuple::new(py, ownership)?)?;
+            arguments.set_item(
+                "dependency_relation_names",
+                PyTuple::new(py, &relation.dependency_relation_names)?,
+            )?;
+            evidence_class.call((), Some(&arguments))
+        })
+        .collect::<PyResult<_>>()?;
+    let arguments: Bound<'py, PyDict> = PyDict::new(py);
+    arguments.set_item("plan_id", &plan.plan_id)?;
+    arguments.set_item(
+        "operation",
+        python_enum(&types, "DestructionOperation", &plan.operation)?,
+    )?;
+    arguments.set_item("target", &plan.target)?;
+    arguments.set_item("database", &plan.database)?;
+    arguments.set_item("metadata_database", &plan.metadata_database)?;
+    for (name, names) in [
+        ("requested_pipeline_names", &plan.requested_pipeline_names),
+        (
+            "included_dependent_pipeline_names",
+            &plan.included_dependent_pipeline_names,
+        ),
+        ("affected_pipeline_names", &plan.affected_pipeline_names),
+        ("affected_model_names", &plan.affected_model_names),
+        ("affected_source_names", &plan.affected_source_names),
+        ("challenges", &plan.challenges),
+    ] {
+        arguments.set_item(name, PyTuple::new(py, names)?)?;
+    }
+    arguments.set_item("relations", PyTuple::new(py, relations)?)?;
+    arguments.set_item("preserves_sources", plan.preserves_sources)?;
+    arguments.set_item("preserves_replay_data", plan.preserves_replay_data)?;
+    arguments.set_item("manifest_fingerprint", &plan.manifest_fingerprint)?;
+    arguments.set_item("plan_fingerprint", &plan.plan_fingerprint)?;
+    arguments.set_item("created_at", utc_datetime(py, plan.created_at)?)?;
+    arguments.set_item("expires_at", utc_datetime(py, plan.expires_at)?)?;
+    arguments.set_item("relation_drop_size_limit", plan.relation_drop_size_limit)?;
+    arguments.set_item(
+        "relation_drop_size_server_limit",
+        plan.relation_drop_size_server_limit,
+    )?;
+    arguments.set_item(
+        "relation_drop_size_override",
+        plan.relation_drop_size_override,
+    )?;
+    arguments.set_item(
+        "relation_drop_size_policy_observed",
+        plan.relation_drop_size_policy_observed,
+    )?;
+    arguments.set_item("include_orphans", plan.include_orphans)?;
+    models
+        .getattr("DestructionPlan")?
+        .call((), Some(&arguments))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(serialize_destruction_plan, module)?)?;
+    module.add_function(wrap_pyfunction!(deserialize_destruction_plan, module)?)?;
     module.add_function(wrap_pyfunction!(destruction_drop_statements, module)?)?;
     module.add_function(wrap_pyfunction!(destruction_available_pipelines, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_destruction_selection, module)?)?;

@@ -204,6 +204,14 @@ class LegacyDestructionPlanTestCase:
 
 
 @dataclass(frozen=True)
+class CorruptTimestampTestCase:
+    description: str
+    created_at: str
+    expires_at: str
+    expected_message: str
+
+
+@dataclass(frozen=True)
 class DestructionWorkflowTestCase:
     description: str
     expected_first_sql: str

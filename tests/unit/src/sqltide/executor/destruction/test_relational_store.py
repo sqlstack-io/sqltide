@@ -8,10 +8,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.executor.destruction._helpers.plan_serialization import (
-    deserialize_destruction_plan,
-    serialize_destruction_plan,
-)
+from sqltide._native import deserialize_destruction_plan, serialize_destruction_plan
 from sqltide.executor.destruction.classes.relational_destruction_plan_store import (
     RelationalDestructionPlanStore,
 )
@@ -26,6 +23,7 @@ from sqltide.executor.destruction.types import (
     DestructionRelationKind,
 )
 from tests.unit.src.sqltide.executor.destruction._test_types import (
+    CorruptTimestampTestCase,
     DurableStoreTestCase,
     LegacyDestructionPlanTestCase,
 )
@@ -116,6 +114,45 @@ def test_given_legacy_payload_when_deserializing_then_drop_policy_is_not_reporte
     assert legacy.relation_drop_size_policy_observed is test_case.expected_policy_observed
     assert legacy.relation_drop_size_limit == test_case.expected_limit
     assert legacy.include_orphans is False
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        CorruptTimestampTestCase(
+            description="expiry past year 9999 in UTC",
+            created_at="9999-12-31T22:00:00Z",
+            expires_at="9999-12-31T23:30:00-01:00",
+            expected_message="expires_at is out of range in UTC",
+        ),
+        CorruptTimestampTestCase(
+            description="creation before year 1 in UTC",
+            created_at="0001-01-01T00:30:00+01:00",
+            expires_at="0001-01-02T00:00:00Z",
+            expected_message="created_at is out of range in UTC",
+        ),
+        CorruptTimestampTestCase(
+            description="naive creation time",
+            created_at="2026-08-24T12:00:00",
+            expires_at="2026-08-25T12:00:00Z",
+            expected_message="created_at must include a timezone",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_unusable_timestamp_when_deserializing_then_plan_is_corrupt(
+    test_case: CorruptTimestampTestCase,
+) -> None:
+    now: datetime = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    payload: dict[str, object] = json.loads(
+        serialize_destruction_plan(build_complete_stored_destruction_plan(now=now))
+    )
+    plan_payload: dict[str, object] = cast(dict[str, object], payload["plan"])
+    plan_payload["created_at"] = test_case.created_at
+    plan_payload["expires_at"] = test_case.expires_at
+
+    with pytest.raises(DestructionPlanCorruptError, match=test_case.expected_message):
+        deserialize_destruction_plan(json.dumps(payload))
 
 
 @pytest.mark.parametrize(

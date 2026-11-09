@@ -28,6 +28,7 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
 from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
+from sqltide.executor.destruction.models import DestructionPlan
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -314,6 +315,8 @@ def destruction_plan_fingerprint(
     relation_drop_size_policy_observed: bool,
     include_orphans: bool,
 ) -> str: ...
+def serialize_destruction_plan(plan: DestructionPlan) -> str: ...
+def deserialize_destruction_plan(payload_json: str) -> DestructionPlan: ...
 def list_destruction_inactive_pipelines(
     current: list[str], snapshot_object: AdapterManifestSnapshot
 ) -> list[tuple[str, int, int, str]]: ...
