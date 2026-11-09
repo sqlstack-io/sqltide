@@ -35,7 +35,6 @@ from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.constants import (
-    DESIRED_OBJECT_TYPE_KAFKA_TABLE,
     DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
     DESIRED_OBJECT_TYPE_TABLE,
     REPLAY_CURSOR_COLUMN_NAME,
@@ -101,7 +100,6 @@ from sqltide.compiler.planner.models import (
     ActualKafkaTable,
     ActualMaterializedView,
     ActualState,
-    ActualStateInspection,
     ActualTable,
     DeploymentRecord,
     DeploymentWatermarkRecord,
@@ -110,9 +108,9 @@ from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
     ObjectStateRecord,
     PlannedObjectChange,
+    PlanningWarehouseSnapshot,
     PreparedObjectMapping,
     PublishEventRecord,
-    RootDeploymentInspection,
 )
 from sqltide.compiler.planner.types import ActualObject, DesiredObject, DirectSelectionMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
@@ -962,64 +960,7 @@ def build_actual_state_matching_desired(desired_state: DesiredState) -> ActualSt
     return ActualState(objects=actual_objects)
 
 
-def build_actual_objects() -> tuple[ActualKafkaTable | ActualTable | ActualMaterializedView, ...]:
-    kafka_spec: KafkaTableSpec = KafkaTableSpec(
-        columns=(Column(name="message", type="String"),),
-        kafka=CompiledKafkaSettings(
-            broker_list="kafka:9092",
-            topic="source.orders.created",
-            consumer_group="sqltide_orders_orders",
-            format="JSONAsString",
-            settings={"kafka_num_consumers": "4"},
-        ),
-    )
-    table_spec: TableSpec = TableSpec(
-        columns=(
-            Column(name="order_id", type="String"),
-            Column(name="updated_at", type="DateTime64(3)"),
-        ),
-        storage=TableStorage(
-            engine="ReplacingMergeTree(updated_at)",
-            order_by=("order_id", "updated_at"),
-            partition_by="toYYYYMM(updated_at)",
-            ttl="toDateTime(updated_at) + INTERVAL 30 DAY",
-            settings={"index_granularity": "8192"},
-        ),
-    )
-    materialized_view_spec: MaterializedViewSpec = MaterializedViewSpec(
-        source_table_name="raw__orders",
-        target_table_name="tbl__orders_enriched",
-        query="SELECT * FROM raw__orders",
-    )
-    return (
-        ActualTable(
-            key=ObjectKey(
-                database=None,
-                object_type=DESIRED_OBJECT_TYPE_TABLE,
-                name="tbl__orders_enriched",
-            ),
-            spec=table_spec,
-        ),
-        ActualMaterializedView(
-            key=ObjectKey(
-                database=None,
-                object_type=DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
-                name="mv__orders_enriched",
-            ),
-            spec=materialized_view_spec,
-        ),
-        ActualKafkaTable(
-            key=ObjectKey(
-                database=None,
-                object_type=DESIRED_OBJECT_TYPE_KAFKA_TABLE,
-                name="kafka__orders",
-            ),
-            spec=kafka_spec,
-        ),
-    )
-
-
-def build_projection_characterization_inputs() -> tuple[DesiredState, ActualStateInspection]:
+def build_projection_characterization_inputs() -> tuple[DesiredState, PlanningWarehouseSnapshot]:
     kafka_key: ObjectKey = ObjectKey(database=None, object_type="kafka_table", name="kafka__orders")
     raw_key: ObjectKey = ObjectKey(database=None, object_type="table", name="raw__orders")
     landing_mv_key: ObjectKey = ObjectKey(
@@ -1082,31 +1023,42 @@ def build_projection_characterization_inputs() -> tuple[DesiredState, ActualStat
         replay_anchor_keys=frozenset({raw_key}),
         mutable_ref_warning_keys=frozenset(),
     )
-    inspection: ActualStateInspection = ActualStateInspection(
-        existing_names=frozenset({kafka_key.name, raw_key.name, landing_mv_key.name}),
-        active_deployment_by_root={
-            transform_key: RootDeploymentInspection(
-                root_key=transform_key,
-                state_kind="active_view_present",
-                active_deployment_id="dep_a",
-            )
-        },
-        object_state_by_deployment_and_key={},
-        latest_object_state_by_key={},
-        active_physical_names_by_logical_name={transform_key.name: "tbl__orders_enriched__dep_a"},
-        active_table_specs_by_name={
-            "tbl__orders_enriched__dep_a": TableSpec(
-                columns=(Column(name="order_id", type="String"),),
-                storage=TableStorage(
-                    engine="MergeTree()",
-                    order_by=("order_id",),
-                    ttl=None,
-                    settings=None,
+    physical_name: str = "tbl__orders_enriched__20260131T120000Z_ab12"
+    snapshot: PlanningWarehouseSnapshot = PlanningWarehouseSnapshot(
+        catalog=CatalogSnapshot(
+            identity=CatalogIdentity(
+                adapter=AdapterIdentity(name="clickhouse"), database="analytics"
+            ),
+            warehouse_timezone="UTC",
+            relations=(
+                CatalogRelation(name=kafka_key.name, engine="Kafka", columns=()),
+                CatalogRelation(name=raw_key.name, engine="MergeTree", columns=()),
+                CatalogRelation(
+                    name=landing_mv_key.name,
+                    engine="MaterializedView",
+                    columns=(),
+                    query_sql="SELECT 1",
                 ),
-            )
-        },
+                CatalogRelation(
+                    name=transform_key.name,
+                    engine="View",
+                    columns=(),
+                    query_sql=f"SELECT * FROM {physical_name}",
+                    stable_binding_name=physical_name,
+                ),
+                CatalogRelation(
+                    name=physical_name,
+                    engine="MergeTree",
+                    columns=(CatalogColumn(name="order_id", type="String"),),
+                    order_by=("order_id",),
+                    ttl="created_at + INTERVAL 30 DAY",
+                    settings=(("index_granularity", "8192"),),
+                ),
+            ),
+        ),
+        object_state_records=(),
     )
-    return desired_state, inspection
+    return desired_state, snapshot
 
 
 KeyParts: type = tuple[str | None, str, str]

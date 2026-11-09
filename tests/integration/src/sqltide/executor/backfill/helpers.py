@@ -10,6 +10,7 @@ from typing import cast
 
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterConnectionConfig,
@@ -56,9 +57,6 @@ from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.pipeline.types import AdapterResource
 from sqltide.compiler.planner.constants import REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED
-from sqltide.compiler.planner.main.load_actual_state_from_snapshot import (
-    load_actual_state_from_snapshot,
-)
 from sqltide.compiler.planner.main.load_planning_warehouse_snapshot import (
     load_planning_warehouse_snapshot,
 )
@@ -201,7 +199,7 @@ def _prepare_backfill_request(
         client=client,
         database=request.default_database,
     )
-    actual_state: ActualState = load_actual_state_from_snapshot(
+    actual_state: ActualState = _native.load_actual_state_from_snapshot(
         snapshot=snapshot,
         desired_state=request.desired_state,
         database=request.default_database,
