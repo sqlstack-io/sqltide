@@ -46,7 +46,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'healthy', notBuilt: 0, behind: 0, lagUnavailable: 0 }
 		},
@@ -58,7 +59,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'healthy', notBuilt: 1, behind: 0, lagUnavailable: 0 }
 		},
@@ -70,7 +72,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'partial', notBuilt: 1, behind: 0, lagUnavailable: 1 }
 		},
@@ -82,7 +85,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'healthy', notBuilt: 1, behind: 0, lagUnavailable: 0 }
 		},
@@ -94,7 +98,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 1,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'error', notBuilt: 0, behind: 0, lagUnavailable: 0 }
 		},
@@ -106,7 +111,23 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 1,
 				materializedTableNames: ['kafka__source_0'],
 				pollingTables: 1,
-				exceptionTables: 1
+				exceptionTables: 1,
+				stuckConsumers: []
+			},
+			expected: { state: 'error', notBuilt: 0, behind: 0, lagUnavailable: 0 }
+		},
+		{
+			description: 'consumer stuck without a current exception',
+			lags: [0, 0],
+			consumers: {
+				configuredTables: 2,
+				materializedTables: 2,
+				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
+				pollingTables: 2,
+				exceptionTables: 0,
+				stuckConsumers: [
+					{ table: 'kafka__source_0', stuckSeconds: 7200, recentErrors: 10, latestError: 'cast failed' }
+				]
 			},
 			expected: { state: 'error', notBuilt: 0, behind: 0, lagUnavailable: 0 }
 		},
@@ -118,7 +139,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'behind', notBuilt: 0, behind: 1, lagUnavailable: 0 }
 		},
@@ -130,7 +152,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 2,
 				materializedTableNames: ['kafka__source_0', 'kafka__source_1'],
 				pollingTables: 2,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'partial', notBuilt: 0, behind: 0, lagUnavailable: 1 }
 		},
@@ -142,7 +165,8 @@ describe('projectHealthSummary ingest', () => {
 				materializedTables: 0,
 				materializedTableNames: [],
 				pollingTables: 0,
-				exceptionTables: 0
+				exceptionTables: 0,
+				stuckConsumers: []
 			},
 			expected: { state: 'no_kafka', notBuilt: 0, behind: 0, lagUnavailable: 0 }
 		}

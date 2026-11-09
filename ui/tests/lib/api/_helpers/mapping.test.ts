@@ -185,7 +185,10 @@ describe('project mapping', () => {
 						materializedTables: 2,
 						materializedTableNames: ['kafka__orders', 'kafka__payments'],
 						pollingTables: 2,
-						exceptionTables: 0
+						exceptionTables: 0,
+						stuckConsumers: [
+							{ table: 'kafka__orders', stuckSeconds: 60, recentErrors: 3, latestError: 'cast failed' }
+						]
 					},
 					tables: []
 				}
@@ -202,7 +205,10 @@ describe('project mapping', () => {
 			materializedTables: 2,
 			materializedTableNames: ['kafka__orders', 'kafka__payments'],
 			pollingTables: 2,
-			exceptionTables: 0
+			exceptionTables: 0,
+			stuckConsumers: [
+				{ table: 'kafka__orders', stuckSeconds: 60, recentErrors: 3, latestError: 'cast failed' }
+			]
 		});
 	});
 

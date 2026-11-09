@@ -837,6 +837,7 @@ function ingestHealthSummary(project: Project) {
 			materialized: 0,
 			polling: 0,
 			exceptions: 0,
+			stuckConsumers: [],
 			notBuilt: 0,
 			behind: 0,
 			lagUnavailable: 0
@@ -852,6 +853,7 @@ function ingestHealthSummary(project: Project) {
 			materialized: null,
 			polling: null,
 			exceptions: null,
+			stuckConsumers: [],
 			notBuilt: null,
 			behind,
 			lagUnavailable: null
@@ -874,7 +876,9 @@ function ingestHealthSummary(project: Project) {
 		(source) => source.live.kafkaLagMessages === null
 	).length;
 	const state: IngestHealthState =
-		consumers.exceptionTables > 0 || consumers.pollingTables < consumers.materializedTables
+		consumers.exceptionTables > 0 ||
+		consumers.stuckConsumers.length > 0 ||
+		consumers.pollingTables < consumers.materializedTables
 			? ('error' as const)
 			: lagUnavailable > 0
 				? ('partial' as const)
@@ -887,6 +891,7 @@ function ingestHealthSummary(project: Project) {
 		materialized: consumers.materializedTables,
 		polling: consumers.pollingTables,
 		exceptions: consumers.exceptionTables,
+		stuckConsumers: consumers.stuckConsumers,
 		notBuilt,
 		behind,
 		lagUnavailable

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from time import perf_counter
+from typing import cast
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
@@ -13,6 +14,7 @@ from sqltide.adapter.models import (
     AdapterWarehouseHealth,
     AdapterWarehouseKafkaConsumers,
     AdapterWarehouseMemory,
+    AdapterWarehouseStuckKafkaConsumer,
     AdapterWarehouseTable,
 )
 from sqltide.adapter.types import AdapterWarehouseHealthStatus
@@ -20,6 +22,9 @@ from sqltide.adapters.clickhouse._helpers.inspection import quote_clickhouse_sql
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_CAPACITY_CRITICAL_AVAILABLE_FRACTION,
     CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,
+    CLICKHOUSE_STUCK_CONSUMER_ERROR_CHARS,
+    CLICKHOUSE_STUCK_CONSUMER_MIN_ERRORS,
+    CLICKHOUSE_STUCK_CONSUMER_WINDOW_SECONDS,
     CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
 )
 
@@ -140,6 +145,7 @@ def _load_clickhouse_warehouse_health(
                     ),
                     polling_tables=int(str(consumer_row["polling_tables"])),
                     exception_tables=int(str(consumer_row["exception_tables"])),
+                    stuck_consumers=_stuck_consumers(consumer_row["stuck_consumers"]),
                 )
             else:
                 warnings.append("Managed Kafka consumer health is unavailable.")
@@ -268,9 +274,45 @@ def _kafka_consumers_query(*, database: str, managed_source_names: tuple[str, ..
         "AND engine = 'Kafka') AS materialized_table_names, "
         "countDistinct(table) AS polling_tables, "
         "countDistinctIf(table, notEmpty(exceptions.time) AND "
-        "arrayMax(exceptions.time) >= last_poll_time) AS exception_tables "
+        "arrayMax(exceptions.time) >= last_poll_time) AS exception_tables, "
+        f"({_stuck_consumers_query(quoted_database=quoted_database, quoted_tables=quoted_tables)}) "
+        "AS stuck_consumers "
         "FROM system.kafka_consumers "
         f"WHERE database = {quoted_database} AND table IN ({quoted_tables})"
+    )
+
+
+def _stuck_consumers_query(*, quoted_database: str, quoted_tables: str) -> str:
+    window: str = f"now() - INTERVAL {CLICKHOUSE_STUCK_CONSUMER_WINDOW_SECONDS} SECOND"
+    recent_errors: str = f"arrayCount(t -> t > last_commit_time AND t >= {window}, exceptions.time)"
+    latest_error: str = "exceptions.text[indexOf(exceptions.time, arrayMax(exceptions.time))]"
+    return (
+        "SELECT groupArray((table, stuck_seconds, recent_errors, latest_error)) FROM ("
+        "SELECT table, "
+        "if(min(last_commit_time) = toDateTime(0), NULL, "
+        "dateDiff('second', min(last_commit_time), now())) AS stuck_seconds, "
+        f"toUInt64(sum({recent_errors})) AS recent_errors, "
+        f"substring(argMax({latest_error}, last_poll_time), 1, "
+        f"{CLICKHOUSE_STUCK_CONSUMER_ERROR_CHARS}) AS latest_error "
+        "FROM system.kafka_consumers "
+        f"WHERE database = {quoted_database} AND table IN ({quoted_tables}) "
+        f"AND last_commit_time < {window} "
+        f"AND {recent_errors} >= {CLICKHOUSE_STUCK_CONSUMER_MIN_ERRORS} "
+        "GROUP BY table ORDER BY table)"
+    )
+
+
+def _stuck_consumers(value: object) -> tuple[AdapterWarehouseStuckKafkaConsumer, ...]:
+    return tuple(
+        AdapterWarehouseStuckKafkaConsumer(
+            table=str(table),
+            stuck_seconds=None if stuck_seconds is None else int(str(stuck_seconds)),
+            recent_errors=int(str(recent_errors)),
+            latest_error=str(latest_error),
+        )
+        for table, stuck_seconds, recent_errors, latest_error in cast(
+            Sequence[tuple[object, object, object, object]], value
+        )
     )
 
 

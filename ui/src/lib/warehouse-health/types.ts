@@ -51,6 +51,12 @@ export type WarehouseHealth = {
 		materializedTableNames: string[];
 		pollingTables: number;
 		exceptionTables: number;
+		stuckConsumers: {
+			table: string;
+			stuckSeconds: number | null;
+			recentErrors: number;
+			latestError: string;
+		}[];
 	} | null;
 	tables: {
 		name: string;
