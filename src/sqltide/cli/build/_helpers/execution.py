@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build._helpers.confirmation import confirm_build
 from sqltide.cli.build._helpers.execution_artifacts import render_direct_execution_json
 from sqltide.cli.build.models import BuildCommandOptions, DirectWorkflowPreparation
@@ -35,6 +36,9 @@ from sqltide.executor.direct.models import (
 )
 from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
     reset_fresh_landing_offsets,
+)
+from sqltide.executor.population.main.row_error_policy_failure_message import (
+    row_error_policy_failure_message,
 )
 from sqltide.executor.workflow.main.target_mutation_lock import target_mutation_lock
 from sqltide.executor.workflow.models import BuildWorkflow, WorkflowExecutionResult
@@ -102,6 +106,13 @@ def execute_confirmed_direct_build(
                 applied_model_names=applied_model_names,
             )
             _print_optional_warning(fingerprint_warning)
+            policy_failure: str | None = row_error_policy_failure_message(
+                changes=preparation.request.row_error_policy_changes,
+                failed_step_id=error.failed_step_id,
+                cause=error.cause,
+            )
+            if policy_failure is not None and isinstance(error.cause, AdapterError):
+                raise AdapterError(policy_failure) from error.cause
             raise error.cause from error
         result: DirectBuildExecutionResult = build_direct_execution_result(
             request=preparation.request,

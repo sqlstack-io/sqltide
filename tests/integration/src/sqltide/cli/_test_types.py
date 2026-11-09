@@ -573,3 +573,35 @@ class VirtualPolicyRepairIntegrationTestCase:
     live_model: str
     dropped_view_template: str
     expected_dead_letter_view_count: int
+
+
+@dataclass(frozen=True)
+class PolicySwitchFailureIntegrationTestCase:
+    description: str
+    live_header: str
+    desired_header: str
+    broken_view: str
+    expected_live_quarantined_after_failure: bool
+    expected_live_quarantined_after_rerun: bool
+
+
+@dataclass(frozen=True)
+class MissingLandingRepairIntegrationTestCase:
+    description: str
+    model_header: str
+    expected_landing_view_count: int
+
+
+@dataclass(frozen=True)
+class VirtualSelectedPolicyIntegrationTestCase:
+    description: str
+    selectors: tuple[str, ...]
+    expected_selected_quarantined: bool
+    expected_unselected_quarantined: bool
+
+
+@dataclass(frozen=True)
+class InPlaceDeadLetterCleanupIntegrationTestCase:
+    description: str
+    expected_retired_view_count: int
+    expected_active_view_count: int

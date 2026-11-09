@@ -412,6 +412,7 @@ class AdapterReplayCoverageRequest:
 
     replay: AdapterReplayRequest
     boundary_column_type: str | None
+    count_anchor_rows: bool = False
 
 
 @dataclass(frozen=True)

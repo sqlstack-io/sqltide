@@ -173,6 +173,7 @@ def build_virtual_build_preview(
         row_error_policy_changes=plan_virtual_row_error_policy_changes(
             analysis=analysis,
             planned_model_names=planned_model_names,
+            selected_model_keys=selection.selected_logical_model_keys,
             relations=snapshot.catalog.relations,
         ),
     )

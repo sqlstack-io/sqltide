@@ -7,6 +7,7 @@ from textwrap import dedent
 from typing import cast
 
 import clickhouse_connect
+import pytest
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
@@ -67,6 +68,7 @@ from sqltide.compiler.discovery.main.load_project_input_for_path import (
 )
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
+from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
 from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
     assemble_virtual_build_workflow,
 )
@@ -88,6 +90,9 @@ from sqltide.executor.direct.models import (
     DirectBuildResult,
     DirectBuildWorkflow,
     DirectRuntimeExecution,
+)
+from sqltide.executor.population.main._row_error_policy_view_steps import (
+    row_error_policy_view_steps,
 )
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -1908,6 +1913,7 @@ def run_virtual_environment_build(
     database: str,
     connection: AdapterConnection,
     deployment_id: str | None = None,
+    selectors: tuple[str, ...] = (),
 ) -> int:
     """Run `sqt build` in virtual mode against a live warehouse connection."""
 
@@ -1916,7 +1922,7 @@ def run_virtual_environment_build(
             pipelines_root=project_root / "pipelines",
             database=database,
             metadata_database=database,
-            selectors=(),
+            selectors=selectors,
             deployment_id=deployment_id,
             full_refresh=False,
             start_time=None,
@@ -2243,3 +2249,35 @@ def real_cast_row_count(*, client: Client, table: str, target_type: str) -> int:
         return len(client.query(f"SELECT CAST(x AS {target_type}) AS v FROM {table}").result_rows)
     except DatabaseError:
         return 0
+
+
+def break_row_error_policy_view(
+    *, monkeypatch: pytest.MonkeyPatch, module_path: str, broken_view: str
+) -> None:
+    """Make one logical policy view render SQL that ClickHouse really rejects."""
+
+    def failing_steps(
+        *,
+        changes: tuple[DirectRowErrorPolicyChange, ...],
+        database: str,
+        render_view: Callable[[str], str | None],
+    ) -> tuple[list[tuple[str, bool]], list[tuple[str, str]]]:
+        return row_error_policy_view_steps(
+            changes=changes,
+            database=database,
+            render_view=lambda name: {broken_view: "SELECT throwIf(1)"}.get(
+                name, render_view(name)
+            ),
+        )
+
+    monkeypatch.setattr(f"{module_path}.row_error_policy_view_steps", failing_steps)
+
+
+def view_is_quarantined(*, client: Client, database: str, view_name: str) -> bool:
+    """Return whether a live materialized view has the generated quarantine shape."""
+
+    query: str = (
+        f"SELECT as_select FROM system.tables WHERE database = '{database}' "
+        f"AND name = '{view_name}'"
+    )
+    return "__sqt_value_0" in str(client.query(query).result_rows[0][0])

@@ -12,6 +12,9 @@ from sqltide.compiler.planner.main.build_shadow_adapter_resource import (
 )
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
+from sqltide.executor.population.main._row_error_policy_restore_statements import (
+    row_error_policy_restore_statements,
+)
 from sqltide.executor.population.main._row_error_policy_view_steps import (
     row_error_policy_view_steps,
 )
@@ -28,8 +31,8 @@ def virtual_row_error_policy_statements(
     request: BackfillBootstrapRequest,
     client: AdapterConnection,
     target_catalog: CatalogSnapshot,
-) -> list[NativeStatement]:
-    """Return pause, view swap and resume statements for the request's policy changes."""
+) -> tuple[list[NativeStatement], list[NativeStatement]]:
+    """Return pause, view swap and resume statements for policy changes, and their recovery."""
 
     changes: tuple[DirectRowErrorPolicyChange, ...] = request.row_error_policy_changes
     views: dict[str, DesiredMaterializedView] = {
@@ -87,7 +90,7 @@ def virtual_row_error_policy_statements(
             client.render_migrate_metadata_state(request.metadata_database), start=1
         )
     ]
-    statements, _recovery = _native.direct_workflow_statements(
+    statements, recovery = _native.direct_workflow_statements(
         (
             request.default_database,
             client.render_ensure_database(request.default_database),
@@ -106,7 +109,10 @@ def virtual_row_error_policy_statements(
             _AUDIT_SAMPLE_LIMIT,
         ),
     )
-    return statements
+    restores: list[NativeStatement] = row_error_policy_restore_statements(
+        changes=changes, render_restore=client.render_restore_materialized_view
+    )
+    return statements, [*restores, *recovery]
 
 
 def _active_physical_tables(

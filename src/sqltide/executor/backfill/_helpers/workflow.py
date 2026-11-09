@@ -121,9 +121,15 @@ def assemble_virtual_build_workflow(
         population_plan=population_plan,
         replay_templates=replay_templates,
     )
+    recovery_statements: tuple[WarehouseStatement, ...] = ()
     if request.row_error_policy_changes:
-        policy_statements: list[NativeStatement] = virtual_row_error_policy_statements(
+        policy_statements: list[NativeStatement]
+        policy_recovery: list[NativeStatement]
+        policy_statements, policy_recovery = virtual_row_error_policy_statements(
             request=request, client=client, target_catalog=target_catalog
+        )
+        recovery_statements = _warehouse_statements(
+            native_statements=policy_recovery, start=1, existing=()
         )
         statements = _warehouse_statements(
             native_statements=policy_statements,
@@ -134,6 +140,7 @@ def assemble_virtual_build_workflow(
         mode=WorkflowMode.VIRTUAL_ENVIRONMENT,
         plan_json=plan_json,
         statements=statements,
+        recovery_statements=recovery_statements,
     )
 
 

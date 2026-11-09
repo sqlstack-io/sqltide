@@ -522,6 +522,7 @@ class DirectRowErrorPolicyChange:
     landing_view_names: tuple[str, ...]
     logical_view_name: str = ""
     logical_dead_letter_view_name: str = ""
+    previous_view_definition: str | None = None
 
 
 @dataclass(frozen=True)

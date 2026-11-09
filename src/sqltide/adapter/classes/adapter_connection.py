@@ -362,6 +362,14 @@ class AdapterConnection(ABC):
     def render_replay_coverage_query(self, request: AdapterReplayCoverageRequest) -> str:
         """Render one query returning typed replay-window coverage rows."""
 
+    def render_restore_materialized_view(self, definition_sql: str) -> str:
+        """Render a statement recreating one captured materialized view when it is missing."""
+
+        del definition_sql
+        raise AdapterCapabilityError(
+            f"Adapter '{self.adapter_identity.name}' cannot restore materialized views"
+        )
+
     def render_replay_from_capture(self, request: AdapterCapturedReplayRequest) -> str:
         """Render one replay from boundaries owned by the current process."""
 

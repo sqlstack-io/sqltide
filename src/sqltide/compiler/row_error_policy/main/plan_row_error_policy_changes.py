@@ -47,6 +47,7 @@ def plan_row_error_policy_changes(
             if view is None:
                 continue
             logical_dead_letters: str = f"{view.name}{DIRECT_DEAD_LETTERS_VIEW_SUFFIX}"
+            landing_views: tuple[str, ...] = landing_view_names(view=view, views=views)
             if not change_pending(
                 target_name=view.target_table_name,
                 view_name=view.name,
@@ -54,6 +55,7 @@ def plan_row_error_policy_changes(
                 relation_by_name=relation_by_name,
                 dead_letter_name_owned_by_model=logical_dead_letters in model_view_names,
                 quarantines=model.on_row_error is RowErrorPolicy.QUARANTINE,
+                landing_view_names=landing_views,
             ):
                 continue
             changes.append(
@@ -62,9 +64,14 @@ def plan_row_error_policy_changes(
                     view_name=view.name,
                     dead_letter_view_name=logical_dead_letters,
                     desired_policy=model.on_row_error,
-                    landing_view_names=landing_view_names(view=view, views=views),
+                    landing_view_names=landing_views,
                     logical_view_name=view.name,
                     logical_dead_letter_view_name=logical_dead_letters,
+                    previous_view_definition=(
+                        None
+                        if (live_view := relation_by_name.get(view.name)) is None
+                        else live_view.definition_sql
+                    ),
                 )
             )
     return tuple(changes)

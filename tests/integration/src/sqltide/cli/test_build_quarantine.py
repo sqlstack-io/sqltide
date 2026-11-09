@@ -13,6 +13,8 @@ from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
 )
 from tests.integration.src.sqltide.cli._test_types import (
     FanOutDedupeIntegrationTestCase,
+    MissingLandingRepairIntegrationTestCase,
+    PolicySwitchFailureIntegrationTestCase,
     QuarantineFailModeIntegrationTestCase,
     QuarantineInPlaceIntegrationTestCase,
     QuarantineLiveConsumerIntegrationTestCase,
@@ -22,11 +24,14 @@ from tests.integration.src.sqltide.cli._test_types import (
     QuarantineReplayIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
+    break_row_error_policy_view,
     build_managed_clickhouse_client,
     direct_build_order_ids,
     insert_landing_rows,
+    relation_names_like,
     run_direct_build,
     run_direct_plan,
+    view_is_quarantined,
     write_direct_adopted_source_project,
     write_direct_build_project,
 )
@@ -57,6 +62,8 @@ _QUARANTINE_MODEL: str = f'MODEL (on_row_error quarantine, order_by ["order_id"]
 _FAIL_MODEL: str = f'MODEL (order_by ["order_id"]);\n{_MODEL_BODY}'
 _TS: str = "'2026-07-28 00:00:01.000'"
 _DEDUPE_FRAGMENT: str = "LIMIT 1 BY"
+_MODEL_VIEW: str = "mv__orders_enriched"
+_LANDING_VIEW_PATTERN: str = "mv\\_\\_orders"
 _DROP_MODEL_VIEW: str = "DROP TABLE {database}.mv__orders_enriched SYNC"
 _DROP_DEAD_LETTER_VIEW: str = "DROP TABLE {database}.mv__orders_enriched__dead_letters SYNC"
 _RECREATE_FAIL_VIEW: str = "DROP TABLE {database}.mv__orders_enriched SYNC"
@@ -669,6 +676,7 @@ def test_given_fan_out_model_on_raw_anchor_when_replaying_repeats_then_no_rows_a
     assert (first_exit, second_exit) == (0, 0)
     assert row_count == test_case.expected_row_count
     assert ("LIMIT 1 BY" in statements) is test_case.expected_dedupe
+    assert ("anchor_row_count" in statements) is test_case.expected_dedupe
 
 
 @pytest.mark.integration
@@ -744,6 +752,161 @@ def test_given_upstream_model_anchor_when_replaying_then_fan_out_rows_are_kept(
     assert (first_exit, second_exit) == (0, 0)
     assert row_count == test_case.expected_row_count
     assert ("LIMIT 1 BY" in statements) is test_case.expected_dedupe
+    assert ("anchor_row_count" in statements) is test_case.expected_dedupe
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PolicySwitchFailureIntegrationTestCase(
+            description="enable fails creating the dead-letter view after the pause",
+            live_header="MODEL (",
+            desired_header="MODEL (on_row_error quarantine, ",
+            broken_view="mv__orders_enriched__dead_letters",
+            expected_live_quarantined_after_failure=False,
+            expected_live_quarantined_after_rerun=True,
+        ),
+        PolicySwitchFailureIntegrationTestCase(
+            description="enable fails between the drop and the recreate",
+            live_header="MODEL (",
+            desired_header="MODEL (on_row_error quarantine, ",
+            broken_view="mv__orders_enriched",
+            expected_live_quarantined_after_failure=False,
+            expected_live_quarantined_after_rerun=True,
+        ),
+        PolicySwitchFailureIntegrationTestCase(
+            description="disable fails between the drop and the recreate",
+            live_header="MODEL (on_row_error quarantine, ",
+            desired_header="MODEL (",
+            broken_view="mv__orders_enriched",
+            expected_live_quarantined_after_failure=True,
+            expected_live_quarantined_after_rerun=False,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_direct_switch_fails_when_building_then_old_view_keeps_consuming(
+    test_case: PolicySwitchFailureIntegrationTestCase,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_build_project(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    authored: str = model_path.read_text(encoding="utf-8")
+    model_path.write_text(authored.replace("MODEL (", test_case.live_header, 1), encoding="utf-8")
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        model_path.write_text(
+            authored.replace("MODEL (", test_case.desired_header, 1), encoding="utf-8"
+        )
+        break_row_error_policy_view(
+            monkeypatch=monkeypatch,
+            module_path="sqltide.executor.direct._helpers.workflow",
+            broken_view=test_case.broken_view,
+        )
+        capsys.readouterr()
+        failed_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        failure_output: str = capsys.readouterr().err
+        monkeypatch.undo()
+        quarantined_after_failure: bool = view_is_quarantined(
+            client=clickhouse_client, database=clickhouse_database, view_name=_MODEL_VIEW
+        )
+        landing_views: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client, database=clickhouse_database, pattern=_LANDING_VIEW_PATTERN
+        )
+        insert_landing_rows(
+            clickhouse_client=clickhouse_client,
+            database=clickhouse_database,
+            rows=(("order-late", 0, 9),),
+        )
+        order_ids: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+        rerun_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        quarantined_after_rerun: bool = view_is_quarantined(
+            client=clickhouse_client, database=clickhouse_database, view_name=_MODEL_VIEW
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, failed_exit, rerun_exit) == (0, 1, 0)
+    assert "orders_enriched" in failure_output
+    assert quarantined_after_failure is test_case.expected_live_quarantined_after_failure
+    assert len(landing_views) == 1
+    assert "order-late" in order_ids
+    assert quarantined_after_rerun is test_case.expected_live_quarantined_after_rerun
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        MissingLandingRepairIntegrationTestCase(
+            description="a paused consumer on a quarantine model is resumed",
+            model_header="MODEL (on_row_error quarantine, ",
+            expected_landing_view_count=1,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_missing_landing_view_when_building_changed_then_it_is_repaired(
+    test_case: MissingLandingRepairIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_build_project(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    model_path.write_text(
+        model_path.read_text(encoding="utf-8").replace("MODEL (", test_case.model_header, 1),
+        encoding="utf-8",
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        landing_view: str = relation_names_like(
+            client=clickhouse_client, database=clickhouse_database, pattern=_LANDING_VIEW_PATTERN
+        )[0]
+        clickhouse_client.command(f"DROP TABLE {clickhouse_database}.{landing_view} SYNC")
+        repair_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        landing_views: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client, database=clickhouse_database, pattern=_LANDING_VIEW_PATTERN
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, repair_exit) == (0, 0)
+    assert len(landing_views) == test_case.expected_landing_view_count
 
 
 if __name__ == "__main__":

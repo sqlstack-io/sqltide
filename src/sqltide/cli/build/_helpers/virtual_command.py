@@ -35,8 +35,14 @@ from sqltide.executor.observability.models import RunStartupTimings, TerminalInv
 from sqltide.executor.population.main.plan_population_sources import (
     plan_population_sources,
 )
+from sqltide.executor.population.main.row_error_policy_failure_message import (
+    row_error_policy_failure_message,
+)
 from sqltide.executor.workflow.exceptions import WorkflowExecutionError
 from sqltide.executor.workflow.main.execute_build_workflow import execute_build_workflow
+from sqltide.executor.workflow.main.execute_recovery_statements import (
+    execute_recovery_statements,
+)
 from sqltide.executor.workflow.main.target_mutation_lock import target_mutation_lock
 from sqltide.executor.workflow.models import PublishedBuildWorkflow, WorkflowExecutionResult
 
@@ -154,13 +160,32 @@ def execute_virtual_build_command(
         )
         with lock_context:
             _reset_fresh_landing_offsets_for_virtual_build(preparation=preparation)
-            execution: WorkflowExecutionResult = execute_build_workflow(
-                published_workflow=published_workflow,
-                connection=client,
-                emitter=sink,
-            )
+            try:
+                execution: WorkflowExecutionResult = execute_build_workflow(
+                    published_workflow=published_workflow,
+                    connection=client,
+                    emitter=sink,
+                )
+            except (WorkflowExecutionError, AdapterError, KeyboardInterrupt) as error:
+                _ = execute_recovery_statements(
+                    statements=preparation.workflow.recovery_statements,
+                    connection=client,
+                    emitter=sink,
+                    cause=error.cause if isinstance(error, WorkflowExecutionError) else error,
+                    start_sequence=len(preparation.workflow.statements) + 1,
+                )
+                raise
     except (WorkflowExecutionError, AdapterError) as error:
         cause: BaseException = error.cause if isinstance(error, WorkflowExecutionError) else error
+        failure_text: str = (
+            row_error_policy_failure_message(
+                changes=preparation.preview.row_error_policy_changes,
+                failed_step_id=error.failed_step_id,
+                cause=cause,
+            )
+            if isinstance(error, WorkflowExecutionError)
+            else None
+        ) or str(cause)
         _persist_virtual_invocation(
             started=started,
             preparation=preparation,
@@ -169,11 +194,11 @@ def execute_virtual_build_command(
             outcome="failed",
             exit_code=1,
             materialized_outcome=None,
-            error_message=str(cause),
+            error_message=failure_text,
         )
         if sink is not None:
-            sink.run_completed(outcome="failed", exit_code=1, error_message=str(cause))
-        print(str(cause), file=sys.stderr)
+            sink.run_completed(outcome="failed", exit_code=1, error_message=failure_text)
+        print(failure_text, file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         return _cancel_virtual_build(

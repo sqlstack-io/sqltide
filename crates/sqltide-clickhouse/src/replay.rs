@@ -161,9 +161,13 @@ pub struct DeploymentReplay {
 /// # Errors
 ///
 /// Returns a replay error when a scalar window lacks its boundary type or lower edge.
-pub fn coverage_query(replay: &Replay, boundary_column_type: Option<&str>) -> ReplayResult<String> {
+pub fn coverage_query(
+    replay: &Replay,
+    boundary_column_type: Option<&str>,
+    count_anchor_rows: bool,
+) -> ReplayResult<String> {
     if replay.mode == BoundaryMode::Offsets {
-        return offset_coverage_query(replay);
+        return offset_coverage_query(replay, count_anchor_rows);
     }
     scalar_coverage_query(replay, boundary_column_type)
 }
@@ -598,7 +602,14 @@ fn required_deployment_boundary_type(request: &DeploymentReplay) -> ReplayResult
     }
 }
 
-fn coverage_columns(replay: &Replay, timestamp_column: &str, anchor_row_count: &str) -> String {
+fn coverage_columns(
+    replay: &Replay,
+    timestamp_column: &str,
+    anchor_row_count: Option<&str>,
+) -> String {
+    let anchor_row_count: String = anchor_row_count
+        .map(|query| format!(", ({query}) AS anchor_row_count"))
+        .unwrap_or_default();
     format!(
         "SELECT '{}' AS driving_input_relation_name, 'offsets' AS replay_boundary_mode, \
          concat('_replay_partition=', toString(partition_value)) AS boundary_key, \
@@ -606,7 +617,7 @@ fn coverage_columns(replay: &Replay, timestamp_column: &str, anchor_row_count: &
          AS source_position_column_name, '{}' AS source_timestamp_column_name, \
          toString(lower_value) AS lower_value, toString(upper_value) AS upper_value, \
          toString(upper_value) AS replay_cutoff_value, true AS cutoff_inclusive, now64(9, 'UTC') \
-         AS captured_at, ({anchor_row_count}) AS anchor_row_count\nFROM (\nSELECT \
+         AS captured_at{anchor_row_count}\nFROM (\nSELECT \
          partition_value, min(offset_value) AS lower_value, max(offset_value) AS upper_value\nFROM (\nSELECT {partition} AS partition_value, {offset} \
          AS offset_value, {offset} - toInt64(row_number() OVER (PARTITION BY {partition} ORDER BY \
          {offset})) AS sequence_group\n",
@@ -622,7 +633,7 @@ fn coverage_columns(replay: &Replay, timestamp_column: &str, anchor_row_count: &
 const COVERAGE_TAIL: &str =
     "GROUP BY partition_value, sequence_group\nORDER BY partition_value, lower_value\n)";
 
-fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
+fn offset_coverage_query(replay: &Replay, count_anchor_rows: bool) -> ReplayResult<String> {
     let timestamp_column = replay.columns.timestamp.as_str();
     let partition = &replay.columns.partition;
     let offset = &replay.columns.offset;
@@ -633,7 +644,9 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
             coverage_columns(
                 replay,
                 timestamp_column,
-                &format!("SELECT count() FROM {anchor}")
+                count_anchor_rows
+                    .then(|| format!("SELECT count() FROM {anchor}"))
+                    .as_deref()
             )
         ));
     };
@@ -653,9 +666,11 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
         coverage_columns(
             replay,
             timestamp_column,
-            &format!(
-                "SELECT count() FROM {anchor} AS anchor\n{lower_join}WHERE true\n{lower_clause}"
-            )
+            count_anchor_rows
+                .then(|| format!(
+                    "SELECT count() FROM {anchor} AS anchor\n{lower_join}WHERE true\n{lower_clause}"
+                ))
+                .as_deref()
         )
     ))
 }

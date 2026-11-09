@@ -49,6 +49,9 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._row_error_policy_restore_statements import (
+    row_error_policy_restore_statements,
+)
 from sqltide.executor.population.main._row_error_policy_view_steps import (
     row_error_policy_view_steps,
 )
@@ -219,6 +222,7 @@ def _assemble_statements(
                 AdapterReplayCoverageRequest(
                     replay=runtime_replay.replay,
                     boundary_column_type=runtime_replay.boundary_column_type,
+                    count_anchor_rows=runtime_replay.managed_landing_anchor,
                 )
             ),
         )
@@ -254,7 +258,11 @@ def _assemble_statements(
             AUDIT_SAMPLE_LIMIT,
         ),
     )
-    return _warehouse_statements(statements), _warehouse_statements(recovery)
+    restores: list[NativeStatement] = row_error_policy_restore_statements(
+        changes=request.row_error_policy_changes,
+        render_restore=client.render_restore_materialized_view,
+    )
+    return _warehouse_statements(statements), _warehouse_statements([*restores, *recovery])
 
 
 def _render_view(

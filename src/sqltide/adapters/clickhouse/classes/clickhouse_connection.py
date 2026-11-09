@@ -901,6 +901,13 @@ class ClickHouseConnection(AdapterConnection):
 
         return render_clickhouse_stable_binding_replacement(connection=self, request=request)
 
+    def render_restore_materialized_view(self, definition_sql: str) -> str:
+        """Render the captured view definition so an existing view is left in place."""
+
+        return definition_sql.replace(
+            "CREATE MATERIALIZED VIEW ", "CREATE MATERIALIZED VIEW IF NOT EXISTS ", 1
+        )
+
     def render_cleanup_relations(self, request: AdapterRelationCleanupRequest) -> tuple[str, ...]:
         """Render guarded exact ClickHouse relation cleanup SQL."""
 

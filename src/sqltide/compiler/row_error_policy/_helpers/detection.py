@@ -15,11 +15,14 @@ def change_pending(
     relation_by_name: dict[str, CatalogRelation],
     dead_letter_name_owned_by_model: bool,
     quarantines: bool,
+    landing_view_names: tuple[str, ...],
 ) -> bool:
     """Return whether the live views differ from the policy, repairing a half-applied switch."""
 
     if target_name not in relation_by_name:
         return False
+    if any(name not in relation_by_name for name in landing_view_names):
+        return True
     live_view: CatalogRelation | None = relation_by_name.get(view_name)
     has_dead_letter_view: bool = (
         dead_letter_view_name in relation_by_name and not dead_letter_name_owned_by_model

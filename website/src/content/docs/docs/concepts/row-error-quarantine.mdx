@@ -56,6 +56,12 @@ Some columns are not checked, so **a failure in one of them still raises exactly
 - `Enum`, `JSON`, `Variant`, and any other type a check cannot evaluate without raising
 - `Nullable(T)`: no check is added, so a Nullable `Enum`, `FixedString` or `Decimal` can still raise
 
+In a few rare, value-dependent cases the check itself raises, so the insert fails as it would under
+`fail` and the row is not diverted:
+
+- a `Float` `NaN` or infinity cast to `DateTime64`
+- a `Decimal128` or `Decimal256` value too large for the target integer type
+
 ## Eligibility
 
 Direct and virtual models follow the same rules. Only non-aggregating models can quarantine. A model
