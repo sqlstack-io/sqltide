@@ -1,7 +1,7 @@
 """Public logical-project realization entry point."""
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import CompiledProject, CompilerAdapterProfile
-from sqltide.compiler.pipeline._helpers.realization import build_realized_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 
@@ -14,7 +14,7 @@ def realize_project(
 ) -> RealizedProject:
     """Realize a complete logical project through connection-free adapter callbacks."""
 
-    return build_realized_project(
+    return _native.realize_project(
         project=project,
         adapter_profile=adapter_profile,
         sql_analyzer=sql_analyzer,
