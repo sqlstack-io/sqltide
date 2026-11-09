@@ -1,5 +1,10 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/sqlstack-io/sqltide/main/.github/sqltide-logo-dark.png" alt="SQLTide" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/sqlstack-io/sqltide/main/website/public/assets/logo-dark.png">
+    <img src="https://raw.githubusercontent.com/sqlstack-io/sqltide/main/website/public/assets/logo-light.png" alt="SQLTide" width="420">
+  </picture>
+  <br>
+  <sub>by <a href="https://sqlstack.io">SQLStack</a></sub>
 </p>
 
 <h2 align="center">Streaming pipelines for ClickHouse, in typed SQL.</h2>
