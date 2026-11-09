@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import tomllib
 from pathlib import Path
-from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import sqltide._native as _native
@@ -113,12 +111,9 @@ def _read_config_source(*, file_path: Path, project_dir: Path) -> DiscoveredProj
 
 def _parse_toml_source(source: DiscoveredProjectFile) -> dict[str, object]:
     try:
-        payload: object = tomllib.loads(source.contents)
-    except tomllib.TOMLDecodeError as error:
+        return _native.load_toml(source.contents)
+    except ValueError as error:
         raise ProjectConfigError(f"{source.file_path} contains invalid TOML: {error}") from error
-    if not isinstance(payload, dict):
-        raise ProjectConfigError(f"{source.file_path} must contain a top-level mapping")
-    return cast(dict[str, object], payload)
 
 
 def timezone_exists(name: str) -> bool:
