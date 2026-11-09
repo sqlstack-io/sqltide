@@ -126,34 +126,6 @@ fn classification_result(classification: Classification) -> ClassificationResult
     )
 }
 
-/// Classify `(desired spec, actual spec | None, forced)` comparisons as
-/// `(change type, schema change kind, seed compatibility)`. A type that cannot be normalized
-/// raises `ValueError`.
-#[pyfunction]
-fn classify_object_changes(
-    py: Python<'_>,
-    comparisons: Vec<(SpecArgument, Option<SpecArgument>, bool)>,
-) -> PyResult<Vec<ClassificationResult>> {
-    let comparisons: Vec<Comparison> = comparisons
-        .into_iter()
-        .map(|(desired, actual, forced)| {
-            Ok(Comparison {
-                desired: spec(desired)?,
-                actual: actual.map(spec).transpose()?,
-                forced,
-            })
-        })
-        .collect::<PyResult<_>>()?;
-    py.detach(|| Differ::new().classify_all(&comparisons))
-        .map(|classifications| {
-            classifications
-                .into_iter()
-                .map(classification_result)
-                .collect()
-        })
-        .map_err(|error| PyValueError::new_err(error.message))
-}
-
 fn replay_mode(text: &str) -> PyResult<ReplayMode> {
     match text {
         "full" => Ok(ReplayMode::Full),
@@ -537,6 +509,17 @@ impl PyDesiredGraph {
         let subtrees: Vec<RebuildSubtree> = py
             .detach(|| rebuild_subtrees(&self.graph, &changes))
             .map_err(|error| graph_input_error(py, error))?;
+        self.subtree_objects(py, &subtrees)
+    }
+}
+
+impl PyDesiredGraph {
+    /// The `RebuildSubtree` dataclasses for `subtrees`, in their order.
+    fn subtree_objects<'py>(
+        &self,
+        py: Python<'py>,
+        subtrees: &[RebuildSubtree],
+    ) -> PyResult<Bound<'py, PyTuple>> {
         let subtree_class = py.import(PLANNER_MODELS)?.getattr("RebuildSubtree")?;
         let strategy = py
             .import(PLANNER_CONSTANTS)?
@@ -544,9 +527,9 @@ impl PyDesiredGraph {
         let execution_mode = py.import(PLANNER_TYPES)?.getattr("RebuildExecutionMode")?;
         let replay_mode = py.import(DISCOVERY_TYPES)?.getattr("ReplayOnChangeMode")?;
         let built: Vec<Bound<'py, PyAny>> = subtrees
-            .into_iter()
+            .iter()
             .map(|subtree| {
-                let backfill_mode: Bound<'py, PyAny> = match subtree.configured_backfill_mode {
+                let backfill_mode: Bound<'py, PyAny> = match &subtree.configured_backfill_mode {
                     None => py.None().into_bound(py),
                     Some(mode) => replay_mode.call1((mode.as_str(),))?,
                 };
@@ -578,7 +561,7 @@ impl PyDesiredGraph {
                             ),
                             (
                                 "forced_start_time",
-                                subtree.forced_start_time.into_bound_py_any(py)?,
+                                subtree.forced_start_time.as_deref().into_bound_py_any(py)?,
                             ),
                             ("configured_backfill_mode", backfill_mode),
                             (
@@ -595,46 +578,376 @@ impl PyDesiredGraph {
     }
 }
 
-/// `difflib.unified_diff` over `str.splitlines(keep_ends)` of both texts, with `"\n"` line
-/// terminators when the lines keep their ends and none otherwise.
-#[pyfunction]
-fn unified_diff(a: &str, b: &str, from_file: &str, to_file: &str, keep_ends: bool) -> Vec<String> {
-    sqltide_planner::unified_diff::unified_diff(
-        &split_lines(a, keep_ends),
-        &split_lines(b, keep_ends),
-        from_file,
-        to_file,
-        if keep_ends { "\n" } else { "" },
+const PLANNER_EXCEPTIONS: &str = "sqltide.compiler.planner.exceptions";
+const BUILD_ADAPTER_RESOURCE: &str = "sqltide.compiler.planner.main.build_adapter_resource";
+
+/// `class(message)` from `module`, raised `from None`.
+fn raised_from_none(py: Python<'_>, module: &str, class: &str, message: String) -> PyErr {
+    match py
+        .import(module)
+        .and_then(|module| module.getattr(class))
+        .and_then(|class| class.call1((message,)))
+    {
+        Ok(exception) => {
+            let failure: PyErr = PyErr::from_value(exception);
+            failure.set_cause(py, None);
+            failure
+        }
+        Err(failure) => failure,
+    }
+}
+
+/// A `ValueError` from spec conversion or classification as `DeploymentPlanError`.
+fn deployment_plan_error(py: Python<'_>, error: PyErr) -> PyErr {
+    if !error.is_instance_of::<PyValueError>(py) {
+        return error;
+    }
+    match error.value(py).str() {
+        Ok(message) => raised_from_none(
+            py,
+            PLANNER_EXCEPTIONS,
+            "DeploymentPlanError",
+            message.to_string(),
+        ),
+        Err(failure) => failure,
+    }
+}
+
+fn columns_argument(columns: &Bound<'_, PyAny>) -> PyResult<Vec<(String, String, Option<String>)>> {
+    columns
+        .try_iter()?
+        .map(|column| {
+            let column: Bound<'_, PyAny> = column?;
+            Ok((
+                column.getattr("name")?.extract()?,
+                column.getattr("type")?.extract()?,
+                column.getattr("default")?.extract()?,
+            ))
+        })
+        .collect()
+}
+
+fn settings_argument(settings: &Bound<'_, PyAny>) -> PyResult<Option<Vec<(String, String)>>> {
+    if settings.is_none() {
+        return Ok(None);
+    }
+    settings
+        .call_method0("items")?
+        .try_iter()?
+        .map(|item| item?.extract())
+        .collect::<PyResult<_>>()
+        .map(Some)
+}
+
+/// The comparison spec of a desired or actual object: a desired materialized view compares by
+/// its `comparison_spec`, everything else by its `spec`.
+fn comparison_spec_argument(
+    models: &Bound<'_, PyModule>,
+    object: &Bound<'_, PyAny>,
+) -> PyResult<SpecArgument> {
+    let spec: Bound<'_, PyAny> =
+        if object.is_instance(&models.getattr("DesiredMaterializedView")?)? {
+            object.getattr("comparison_spec")?
+        } else {
+            object.getattr("spec")?
+        };
+    if spec.is_instance(&models.getattr("TableSpec")?)? {
+        let storage: Bound<'_, PyAny> = spec.getattr("storage")?;
+        return Ok((
+            "table".to_owned(),
+            columns_argument(&spec.getattr("columns")?)?,
+            vec![
+                storage.getattr("engine")?.extract()?,
+                storage.getattr("partition_by")?.extract()?,
+                storage.getattr("ttl")?.extract()?,
+            ],
+            storage.getattr("order_by")?.extract()?,
+            settings_argument(&storage.getattr("settings")?)?,
+        ));
+    }
+    if spec.is_instance(&models.getattr("KafkaTableSpec")?)? {
+        let kafka: Bound<'_, PyAny> = spec.getattr("kafka")?;
+        return Ok((
+            "kafka_table".to_owned(),
+            columns_argument(&spec.getattr("columns")?)?,
+            vec![
+                kafka.getattr("broker_list")?.extract()?,
+                kafka.getattr("topic")?.extract()?,
+                kafka.getattr("consumer_group")?.extract()?,
+                kafka.getattr("format")?.extract()?,
+            ],
+            Vec::new(),
+            settings_argument(&kafka.getattr("settings")?)?,
+        ));
+    }
+    if spec.is_instance(&models.getattr("MaterializedViewSpec")?)? {
+        return Ok((
+            "materialized_view".to_owned(),
+            Vec::new(),
+            vec![
+                spec.getattr("source_table_name")?.extract()?,
+                spec.getattr("target_table_name")?.extract()?,
+                spec.getattr("query")?.extract()?,
+            ],
+            Vec::new(),
+            None,
+        ));
+    }
+    Ok((
+        "view".to_owned(),
+        Vec::new(),
+        vec![spec.getattr("query")?.extract()?],
+        Vec::new(),
+        None,
+    ))
+}
+
+fn keyword_call<'py>(
+    callable: &Bound<'py, PyAny>,
+    arguments: &[(&str, Bound<'py, PyAny>)],
+) -> PyResult<Bound<'py, PyAny>> {
+    let py: Python<'py> = callable.py();
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    for (name, value) in arguments {
+        keywords.set_item(name, value)?;
+    }
+    callable.call((), Some(&keywords))
+}
+
+/// `render_resource` over the adapter resource of `object`, in its key's database or
+/// `default_database`.
+fn rendered_sql(
+    render_resource: &Bound<'_, PyAny>,
+    build_resource: &Bound<'_, PyAny>,
+    object: &Bound<'_, PyAny>,
+    default_database: &Bound<'_, PyAny>,
+) -> PyResult<String> {
+    let database: Bound<'_, PyAny> = object.getattr("key")?.getattr("database")?;
+    let database: Bound<'_, PyAny> = if database.is_truthy()? {
+        database
+    } else {
+        default_database.clone()
+    };
+    keyword_call(
+        render_resource,
+        &[
+            ("resource", build_resource.call1((object,))?),
+            ("database", database),
+        ],
+    )?
+    .extract()
+}
+
+/// The desired object an actual object renders as.
+fn actual_as_desired<'py>(
+    compile_models: &Bound<'py, PyModule>,
+    planner_models: &Bound<'py, PyModule>,
+    actual: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let class: &str = if actual.is_instance(&planner_models.getattr("ActualKafkaTable")?)? {
+        "DesiredKafkaTable"
+    } else if actual.is_instance(&planner_models.getattr("ActualTable")?)? {
+        "DesiredTable"
+    } else if actual.is_instance(&planner_models.getattr("ActualMaterializedView")?)? {
+        "DesiredMaterializedView"
+    } else {
+        "DesiredView"
+    };
+    keyword_call(
+        &compile_models.getattr(class)?,
+        &[
+            ("key", actual.getattr("key")?),
+            ("deps", PyTuple::empty(actual.py()).into_any()),
+            ("spec", actual.getattr("spec")?),
+        ],
     )
 }
 
-/// `(step ID, phase, action, root, target, physical name)`.
-type StepResult = (
-    String,
-    &'static str,
-    &'static str,
-    usize,
-    Option<usize>,
-    Option<String>,
-);
-
-/// Stage `(root, affected)` subtrees over `(object type, name, uses mutable refs)` keys into
-/// `(steps, [(key, shadow physical name)], [(root, target)] mutable-ref warnings)`.
-#[pyfunction]
-#[allow(clippy::type_complexity)]
-fn stage_deployment(
-    keys: Vec<(String, String, bool)>,
-    subtrees: Vec<(usize, Vec<usize>)>,
-    deployment_id: Option<&str>,
-) -> PyResult<(Vec<StepResult>, Vec<(usize, String)>, Vec<(usize, usize)>)> {
-    let count = keys.len();
-    if subtrees
-        .iter()
-        .any(|(root, affected)| *root >= count || affected.iter().any(|key| *key >= count))
-    {
-        return Err(PyValueError::new_err("Deployment key index out of range"));
+/// How a SQL diff names the kind of a desired object.
+fn display_object_type(
+    compile_models: &Bound<'_, PyModule>,
+    object: &Bound<'_, PyAny>,
+) -> PyResult<&'static str> {
+    let materialized_view: bool =
+        object.is_instance(&compile_models.getattr("DesiredMaterializedView")?)?;
+    if materialized_view {
+        let target: String = object.getattr("target_table_name")?.extract()?;
+        if !target.starts_with(sqltide_compile::relations::RAW_TABLE_NAME_PREFIX) {
+            return Ok("transform");
+        }
     }
-    let keys: Vec<PlanKey<'_>> = keys
+    Ok(
+        if object.is_instance(&compile_models.getattr("DesiredKafkaTable")?)? {
+            "kafka table"
+        } else if object.is_instance(&compile_models.getattr("DesiredTable")?)? {
+            "table"
+        } else if materialized_view {
+            "materialized view"
+        } else {
+            "view"
+        },
+    )
+}
+
+/// A conservative staged `DeploymentPlan` from desired and actual state: classify every
+/// desired object against its actual object, collapse the changes into rebuild subtrees, stage
+/// them, and diff the rendered SQL of every changed object. A spec that cannot be compared
+/// raises `DeploymentPlanError`; a dependency cycle raises `GraphInputError`.
+#[pyfunction]
+#[pyo3(signature = (
+    *,
+    desired_state,
+    actual_state,
+    default_database,
+    render_resource,
+    deployment_id,
+    full_refresh_keys,
+    start_time_keys,
+    start_time,
+))]
+#[allow(clippy::too_many_arguments)]
+fn plan_deployment<'py>(
+    py: Python<'py>,
+    desired_state: &Bound<'py, PyAny>,
+    actual_state: &Bound<'py, PyAny>,
+    default_database: &Bound<'py, PyAny>,
+    render_resource: &Bound<'py, PyAny>,
+    deployment_id: Option<String>,
+    full_refresh_keys: &Bound<'py, PyAny>,
+    start_time_keys: &Bound<'py, PyAny>,
+    start_time: Option<String>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let compile_models: Bound<'py, PyModule> = py.import(COMPILE_MODELS)?;
+    let planner_models: Bound<'py, PyModule> = py.import(PLANNER_MODELS)?;
+    let materialized_view_class = compile_models.getattr("DesiredMaterializedView")?;
+    let desired_objects: Vec<Bound<'py, PyAny>> = desired_state
+        .getattr("objects")?
+        .try_iter()?
+        .collect::<PyResult<_>>()?;
+    let actual_by_key: Bound<'py, PyDict> = PyDict::new(py);
+    for object in actual_state.getattr("objects")?.try_iter()? {
+        let object: Bound<'py, PyAny> = object?;
+        actual_by_key.set_item(object.getattr("key")?, object)?;
+    }
+
+    // `(key, force full refresh, forced start time)` per desired object.
+    let mut forcing: Vec<(Bound<'py, PyAny>, bool, Option<String>)> = Vec::new();
+    let mut comparisons: Vec<(SpecArgument, Option<SpecArgument>, bool)> = Vec::new();
+    for object in &desired_objects {
+        let key: Bound<'py, PyAny> = object.getattr("key")?;
+        let forced_start_time: Option<String> = if start_time_keys.contains(&key)? {
+            start_time.clone()
+        } else {
+            None
+        };
+        let force_full_refresh: bool = full_refresh_keys.contains(&key)?;
+        // A dead-letter view compares as unchanged: only its model's rebuild moves it.
+        let actual: Option<Bound<'py, PyAny>> = if object.is_instance(&materialized_view_class)?
+            && object.getattr("dead_letters")?.is_truthy()?
+        {
+            Some(object.clone())
+        } else {
+            actual_by_key.get_item(&key)?
+        };
+        comparisons.push((
+            comparison_spec_argument(&compile_models, object)?,
+            actual
+                .map(|actual| comparison_spec_argument(&compile_models, &actual))
+                .transpose()?,
+            force_full_refresh || forced_start_time.is_some(),
+        ));
+        forcing.push((key, force_full_refresh, forced_start_time));
+    }
+    let comparisons: Vec<Comparison> = comparisons
+        .into_iter()
+        .map(|(desired, actual, forced)| {
+            Ok(Comparison {
+                desired: spec(desired)?,
+                actual: actual.map(spec).transpose()?,
+                forced,
+            })
+        })
+        .collect::<PyResult<_>>()
+        .map_err(|error| deployment_plan_error(py, error))?;
+    let classifications: Vec<Classification> = py
+        .detach(|| Differ::new().classify_all(&comparisons))
+        .map_err(|error| {
+            raised_from_none(py, PLANNER_EXCEPTIONS, "DeploymentPlanError", error.message)
+        })?;
+
+    let change_class = planner_models.getattr("PlannedObjectChange")?;
+    let mut object_changes: Vec<Bound<'py, PyAny>> = Vec::new();
+    for ((key, force_full_refresh, forced_start_time), classification) in
+        forcing.iter().zip(&classifications)
+    {
+        let (change_type, schema_change_kind, seed_compatibility) =
+            classification_result(*classification);
+        object_changes.push(keyword_call(
+            &change_class,
+            &[
+                ("key", key.clone()),
+                ("change_type", change_type.into_bound_py_any(py)?),
+                (
+                    "force_full_refresh",
+                    force_full_refresh.into_bound_py_any(py)?,
+                ),
+                (
+                    "forced_start_time",
+                    forced_start_time.as_deref().into_bound_py_any(py)?,
+                ),
+                (
+                    "schema_change_kind",
+                    schema_change_kind.into_bound_py_any(py)?,
+                ),
+                (
+                    "seed_compatibility",
+                    seed_compatibility.into_bound_py_any(py)?,
+                ),
+            ],
+        )?);
+    }
+
+    let graph: PyDesiredGraph = PyDesiredGraph::new(py, desired_state)?;
+    let changes: Vec<ObjectChange> = forcing
+        .iter()
+        .zip(&classifications)
+        .map(
+            |((key, force_full_refresh, forced_start_time), classification)| {
+                let (change_type, schema_change_kind, seed_compatibility) =
+                    classification_result(*classification);
+                let position: usize = graph
+                    .position(py, key)?
+                    .ok_or_else(|| PyKeyError::new_err(key.clone().unbind()))?;
+                object_change((
+                    position,
+                    change_type.to_owned(),
+                    *force_full_refresh,
+                    forced_start_time.clone(),
+                    schema_change_kind.map(str::to_owned),
+                    seed_compatibility.map(str::to_owned),
+                ))
+            },
+        )
+        .collect::<PyResult<_>>()?;
+    let subtrees: Vec<RebuildSubtree> = py
+        .detach(|| rebuild_subtrees(&graph.graph, &changes))
+        .map_err(|error| graph_input_error(py, error))?;
+    let rebuild_subtree_objects: Bound<'py, PyTuple> = graph.subtree_objects(py, &subtrees)?;
+
+    let mutable_ref_keys: Bound<'py, PyAny> = desired_state.getattr("mutable_ref_warning_keys")?;
+    let key_facts: Vec<(String, String, bool)> = graph
+        .keys
+        .iter()
+        .map(|key| {
+            let key: &Bound<'py, PyAny> = key.bind(py);
+            Ok((
+                text(&key.getattr("object_type")?)?,
+                key.getattr("name")?.extract()?,
+                mutable_ref_keys.contains(key)?,
+            ))
+        })
+        .collect::<PyResult<_>>()?;
+    let plan_keys: Vec<PlanKey<'_>> = key_facts
         .iter()
         .map(|(object_type, name, uses_mutable_refs)| PlanKey {
             object_type,
@@ -642,29 +955,164 @@ fn stage_deployment(
             uses_mutable_refs: *uses_mutable_refs,
         })
         .collect();
-    let subtrees: Vec<PlanSubtree> = subtrees
-        .into_iter()
-        .map(|(root, affected)| PlanSubtree { root, affected })
+    let plan_subtrees: Vec<PlanSubtree> = subtrees
+        .iter()
+        .map(|subtree| PlanSubtree {
+            root: subtree.root,
+            affected: subtree.affected.clone(),
+        })
         .collect();
-    let staged = stage(&keys, &subtrees, deployment_id);
-    Ok((
-        staged
-            .steps
-            .into_iter()
-            .map(|step| {
+    let staged = stage(&plan_keys, &plan_subtrees, deployment_id.as_deref());
+
+    let step_class = planner_models.getattr("DeploymentStep")?;
+    let steps: Vec<Bound<'py, PyAny>> = staged
+        .steps
+        .into_iter()
+        .map(|step| {
+            keyword_call(
+                &step_class,
+                &[
+                    ("step_id", step.step_id.into_bound_py_any(py)?),
+                    ("phase", step.phase.into_bound_py_any(py)?),
+                    ("action", step.action.into_bound_py_any(py)?),
+                    ("root_key", graph.key(py, step.root)),
+                    (
+                        "target_key",
+                        match step.target {
+                            None => py.None().into_bound(py),
+                            Some(target) => graph.key(py, target),
+                        },
+                    ),
+                    ("physical_name", step.physical_name.into_bound_py_any(py)?),
+                ],
+            )
+        })
+        .collect::<PyResult<_>>()?;
+
+    let model_kinds = (
+        compile_models.getattr("DesiredTable")?,
+        materialized_view_class.clone(),
+        compile_models.getattr("DesiredView")?,
+    );
+    let logical_model_name_by_key: Bound<'py, PyDict> = PyDict::new(py);
+    for object in &desired_objects {
+        if object.is_instance(&model_kinds.0)?
+            || object.is_instance(&model_kinds.1)?
+            || object.is_instance(&model_kinds.2)?
+        {
+            let name: Bound<'py, PyAny> = object.getattr("logical_model_name")?;
+            if !name.is_none() {
+                logical_model_name_by_key.set_item(object.getattr("key")?, name)?;
+            }
+        }
+    }
+    let shadow_class = planner_models.getattr("PreparedShadowObject")?;
+    let prepared_shadow_objects: Vec<Bound<'py, PyAny>> = staged
+        .shadow_objects
+        .into_iter()
+        .map(|(position, physical_name)| {
+            let key: Bound<'py, PyAny> = graph.key(py, position);
+            let logical_model_name: Bound<'py, PyAny> =
+                logical_model_name_by_key
+                    .get_item(&key)?
+                    .ok_or_else(|| PyKeyError::new_err(key.clone().unbind()))?;
+            keyword_call(
+                &shadow_class,
+                &[
+                    ("logical_key", key),
+                    ("physical_name", physical_name.into_bound_py_any(py)?),
+                    ("logical_model_name", logical_model_name),
+                ],
+            )
+        })
+        .collect::<PyResult<_>>()?;
+
+    let planner_constants: Bound<'py, PyModule> = py.import(PLANNER_CONSTANTS)?;
+    let warning_code = planner_constants.getattr("MUTABLE_REF_WARNING_CODE")?;
+    let warning_message = planner_constants.getattr("MUTABLE_REF_WARNING_MESSAGE")?;
+    let warning_class = planner_models.getattr("PlannerWarning")?;
+    let warnings: Vec<Bound<'py, PyAny>> = staged
+        .mutable_ref_warnings
+        .into_iter()
+        .map(|(root, target)| {
+            keyword_call(
+                &warning_class,
+                &[
+                    ("warning_code", warning_code.clone()),
+                    ("message", warning_message.clone()),
+                    ("root_key", graph.key(py, root)),
+                    ("target_key", graph.key(py, target)),
+                ],
+            )
+        })
+        .collect::<PyResult<_>>()?;
+
+    let desired_by_key: Bound<'py, PyDict> = PyDict::new(py);
+    for object in &desired_objects {
+        desired_by_key.set_item(object.getattr("key")?, object)?;
+    }
+    let build_resource = py
+        .import(BUILD_ADAPTER_RESOURCE)?
+        .getattr("build_adapter_resource")?;
+    let diff_class = planner_models.getattr("PlannedSqlDiff")?;
+    let mut sql_diffs: Vec<Bound<'py, PyAny>> = Vec::new();
+    for ((key, _, _), classification) in forcing.iter().zip(&classifications) {
+        if classification.change_type == ChangeType::NoOp {
+            continue;
+        }
+        let Some(desired) = desired_by_key.get_item(key)? else {
+            continue;
+        };
+        let desired_sql: String =
+            rendered_sql(render_resource, &build_resource, &desired, default_database)?;
+        let current_sql: String = match actual_by_key.get_item(key)? {
+            Some(actual) if classification.change_type != ChangeType::Create => rendered_sql(
+                render_resource,
+                &build_resource,
+                &actual_as_desired(&compile_models, &planner_models, &actual)?,
+                default_database,
+            )?,
+            _ => String::new(),
+        };
+        let diff_lines: Vec<String> = sqltide_planner::unified_diff::unified_diff(
+            &split_lines(&current_sql, false),
+            &split_lines(&desired_sql, false),
+            "current",
+            "desired",
+            "",
+        );
+        sql_diffs.push(keyword_call(
+            &diff_class,
+            &[
+                ("key", key.clone()),
                 (
-                    step.step_id,
-                    step.phase,
-                    step.action,
-                    step.root,
-                    step.target,
-                    step.physical_name,
-                )
-            })
-            .collect(),
-        staged.shadow_objects,
-        staged.mutable_ref_warnings,
-    ))
+                    "object_type",
+                    display_object_type(&compile_models, &desired)?.into_bound_py_any(py)?,
+                ),
+                ("name", desired.getattr("name")?),
+                ("diff_lines", PyTuple::new(py, diff_lines)?.into_any()),
+            ],
+        )?);
+    }
+
+    keyword_call(
+        &planner_models.getattr("DeploymentPlan")?,
+        &[
+            ("deployment_id", deployment_id.into_bound_py_any(py)?),
+            (
+                "object_changes",
+                PyTuple::new(py, object_changes)?.into_any(),
+            ),
+            ("rebuild_subtrees", rebuild_subtree_objects.into_any()),
+            ("steps", PyTuple::new(py, steps)?.into_any()),
+            (
+                "prepared_shadow_objects",
+                PyTuple::new(py, prepared_shadow_objects)?.into_any(),
+            ),
+            ("warnings", PyTuple::new(py, warnings)?.into_any()),
+            ("sql_diffs", PyTuple::new(py, sql_diffs)?.into_any()),
+        ],
+    )
 }
 
 /// `(table, aggregate, query, replay settings)` for a model.
@@ -1263,9 +1711,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(direct_fingerprint_record, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_drift_reasons, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_identity_metadata, module)?)?;
-    module.add_function(wrap_pyfunction!(classify_object_changes, module)?)?;
-    module.add_function(wrap_pyfunction!(unified_diff, module)?)?;
-    module.add_function(wrap_pyfunction!(stage_deployment, module)?)?;
     module.add_function(wrap_pyfunction!(plan_direct_build, module)?)?;
+    module.add_function(wrap_pyfunction!(plan_deployment, module)?)?;
     module.add_class::<PyDesiredGraph>()
 }

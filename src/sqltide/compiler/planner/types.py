@@ -116,14 +116,3 @@ class DirectResourceKind(StrEnum):
     TABLE = "table"
     MATERIALIZED_VIEW = "materialized_view"
     VIEW = "view"
-
-
-type NativeSpec = tuple[
-    str,
-    list[tuple[str, str, str | None]],
-    list[str | None],
-    list[str],
-    list[tuple[str, str]] | None,
-]
-type NativeComparison = tuple[NativeSpec, NativeSpec | None, bool]
-type NativeClassification = tuple[str, str | None, str | None]

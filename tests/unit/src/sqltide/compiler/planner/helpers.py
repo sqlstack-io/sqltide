@@ -95,6 +95,7 @@ from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
+from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
 from sqltide.compiler.planner.models import (
     ActualKafkaTable,
@@ -108,11 +109,12 @@ from sqltide.compiler.planner.models import (
     DirectRelationOperation,
     DirectWarehouseSnapshot,
     ObjectStateRecord,
+    PlannedObjectChange,
     PreparedObjectMapping,
     PublishEventRecord,
     RootDeploymentInspection,
 )
-from sqltide.compiler.planner.types import DirectSelectionMode
+from sqltide.compiler.planner.types import ActualObject, DesiredObject, DirectSelectionMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer
 
@@ -1124,3 +1126,20 @@ def optional_key_parts(key: ObjectKey | None) -> KeyParts | None:
         ObjectKey: lambda: key_parts(cast(ObjectKey, key)),
     }
     return resolvers[type(key)]()
+
+
+def planned_change(
+    *, desired_object: DesiredObject, actual_object: ActualObject
+) -> PlannedObjectChange:
+    """Plan one desired object against one actual object and return its classification."""
+
+    return plan_deployment(
+        desired_state=DesiredState(
+            objects=(desired_object,),
+            replay_anchor_keys=frozenset(),
+            mutable_ref_warning_keys=frozenset(),
+        ),
+        actual_state=ActualState(objects=(actual_object,)),
+        default_database="analytics",
+        render_resource=ClickHouseAdapter().render_resource,
+    ).object_changes[0]
