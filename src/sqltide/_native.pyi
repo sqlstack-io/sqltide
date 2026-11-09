@@ -9,6 +9,7 @@ from sqltide.adapter.models import (
     AdapterReplayRequest,
     CatalogSnapshot,
 )
+from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import (
@@ -35,7 +36,12 @@ from sqltide.compiler.discovery.models import (
     SourceFreshnessPolicy,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
-from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
+from sqltide.compiler.planner.models import (
+    ActualState,
+    DeploymentPlan,
+    PlannedObjectChange,
+    RebuildSubtree,
+)
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -254,18 +260,6 @@ def build_project_graph(
     pipeline_reference_scope: bool,
     allowed_cross_pipeline_references: list[tuple[str, str]],
 ) -> tuple[list[int], list[list[tuple[int, str]]], list[list[tuple[int, int]]], list[int]]: ...
-
-type _NativeSpec = tuple[
-    str,
-    list[tuple[str, str, str | None]],
-    list[str | None],
-    list[str],
-    list[tuple[str, str]] | None,
-]
-
-def classify_object_changes(
-    comparisons: list[tuple[_NativeSpec, _NativeSpec | None, bool]],
-) -> list[tuple[str, str | None, str | None]]: ...
 def destruction_available_pipelines(
     current: list[str], snapshot: AdapterManifestSnapshot | None
 ) -> list[str]: ...
@@ -421,16 +415,17 @@ def bounded_replay_outcome(
     live_columns: set[str] | None,
     fallback_without_history: bool,
 ) -> str: ...
-def unified_diff(a: str, b: str, from_file: str, to_file: str, keep_ends: bool) -> list[str]: ...
-def stage_deployment(
-    keys: list[tuple[str, str, bool]],
-    subtrees: list[tuple[int, list[int]]],
+def plan_deployment(
+    *,
+    desired_state: DesiredState,
+    actual_state: ActualState,
+    default_database: str,
+    render_resource: AdapterResourceRenderer,
     deployment_id: str | None,
-) -> tuple[
-    list[tuple[str, str, str, int, int | None, str | None]],
-    list[tuple[int, str]],
-    list[tuple[int, int]],
-]: ...
+    full_refresh_keys: frozenset[ObjectKey],
+    start_time_keys: frozenset[ObjectKey],
+    start_time: str | None,
+) -> DeploymentPlan: ...
 def plan_direct_build(
     *,
     nodes: list[
