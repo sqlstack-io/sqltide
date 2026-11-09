@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.2](https://github.com/sqlstack-io/sqltide/compare/v0.65.1...v0.65.2) (2026-11-09)
+
+
+### Refactoring
+
+* evaluate and format SQL Rules natively ([#338](https://github.com/sqlstack-io/sqltide/issues/338)) ([acba056](https://github.com/sqlstack-io/sqltide/commit/acba056cfcbe509992a756cb3b63a5621fb83985))
+* validate adopted source tables natively ([#336](https://github.com/sqlstack-io/sqltide/issues/336)) ([e3e6225](https://github.com/sqlstack-io/sqltide/commit/e3e6225c88db2c190f28194a7cf5d80756384d97))
+
 ## [0.65.1](https://github.com/sqlstack-io/sqltide/compare/v0.65.0...v0.65.1) (2026-11-09)
 
 
