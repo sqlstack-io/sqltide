@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.64.0](https://github.com/sqlstack-io/sqltide/compare/v0.63.0...v0.64.0) (2026-11-09)
+
+
+### Features
+
+* quarantine rows that fail casting instead of stalling the pipeline ([#324](https://github.com/sqlstack-io/sqltide/issues/324)) ([5f57073](https://github.com/sqlstack-io/sqltide/commit/5f570735c1e01ef05daf54a501fd80ef661c0056))
+
 ## [0.63.0](https://github.com/sqlstack-io/sqltide/compare/v0.62.0...v0.63.0) (2026-11-09)
 
 
