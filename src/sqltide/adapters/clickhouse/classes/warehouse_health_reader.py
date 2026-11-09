@@ -24,6 +24,7 @@ from sqltide.adapters.clickhouse._helpers.inspection import quote_clickhouse_sql
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_CAPACITY_CRITICAL_AVAILABLE_FRACTION,
     CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,
+    CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX,
     CLICKHOUSE_STUCK_CONSUMER_ERROR_CHARS,
     CLICKHOUSE_STUCK_CONSUMER_MIN_ERRORS,
     CLICKHOUSE_STUCK_CONSUMER_WINDOW_SECONDS,
@@ -31,6 +32,7 @@ from sqltide.adapters.clickhouse.constants import (
 )
 
 _DEAD_LETTER_PAYLOAD_CHARACTERS: int = 500
+_DEAD_LETTERS_TARGET_PATTERN: str = f"TO `?([^.` ]+)`?\\\\.`?{METADATA_DEAD_LETTERS_TABLE_NAME}"
 
 
 class ClickHouseWarehouseHealthReader:
@@ -174,11 +176,16 @@ def _load_clickhouse_warehouse_health(
         )
 
     try:
+        dead_letters_database: str = (
+            _dead_letters_database(connection=connection, database=database)
+            if include_dead_letters
+            else database
+        )
         if include_dead_letters and _dead_letters_table_exists(
-            connection=connection, database=database
+            connection=connection, database=dead_letters_database
         ):
             dead_letters = connection.query_many(
-                statement=_dead_letters_query(database),
+                statement=_dead_letters_query(dead_letters_database),
                 decode=lambda row: AdapterWarehouseDeadLetterModel(
                     model_name=str(row["model_name"]),
                     row_count=int(str(row["row_count"])),
@@ -288,6 +295,23 @@ def _tables_query(database: str) -> str:
         f"WHERE active AND database = {quoted_database} GROUP BY table "
         "ORDER BY bytes_on_disk DESC, table LIMIT 10"
     )
+
+
+def _dead_letters_database(*, connection: AdapterConnection, database: str) -> str:
+    """Return the database the live dead-letter views write to, else the target database."""
+
+    row: Mapping[str, object] | None = connection.query_one(
+        statement=(
+            "SELECT extract(create_table_query, "
+            f"'{_DEAD_LETTERS_TARGET_PATTERN}') AS target_database FROM system.tables "
+            f"WHERE database = {quote_clickhouse_sql_string(database)} "
+            "AND engine = 'MaterializedView' AND endsWith(name, "
+            f"{quote_clickhouse_sql_string(CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX)}) LIMIT 1"
+        ),
+        decode=lambda row: row,
+    )
+    target_database: str = "" if row is None else str(row["target_database"])
+    return target_database or database
 
 
 def _dead_letters_table_exists(*, connection: AdapterConnection, database: str) -> bool:

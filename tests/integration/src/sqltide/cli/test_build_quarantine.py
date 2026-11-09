@@ -7,11 +7,16 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.models import AdapterWarehouseHealth
+from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
+    ClickHouseWarehouseHealthReader,
+)
 from tests.integration.src.sqltide.cli._test_types import (
     QuarantineFailModeIntegrationTestCase,
     QuarantineInPlaceIntegrationTestCase,
     QuarantineLiveConsumerIntegrationTestCase,
     QuarantineLiveIntegrationTestCase,
+    QuarantineMetadataDatabaseIntegrationTestCase,
     QuarantineReplayIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
@@ -453,6 +458,68 @@ def test_given_managed_source_when_policy_changes_then_consumer_is_paused_and_re
     assert any(step_id.startswith("activate_source_") for step_id in step_ids)
     assert not any(step_id.startswith("capture_replay") for step_id in step_ids)
     assert order_ids == test_case.expected_order_ids
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineMetadataDatabaseIntegrationTestCase(
+            description="dead letters land in and are read from a separate metadata database",
+            metadata_database_suffix="_metadata",
+            values_sql=f"('order-1', '1', 0, 1, {_TS}), (NULL, '2', 0, 2, {_TS})",
+            expected_failed_columns=(("order_id",),),
+            expected_health_row_count=1,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_separate_metadata_database_when_rows_fail_then_dead_letters_live_there(
+    test_case: QuarantineMetadataDatabaseIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    metadata_database: str = f"{clickhouse_database}{test_case.metadata_database_suffix}"
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_QUARANTINE_MODEL
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    clickhouse_client.command(f"CREATE DATABASE {metadata_database}")
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        exit_code: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            metadata_database=metadata_database,
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing VALUES {test_case.values_sql}"
+        )
+        failed: tuple[tuple[str, ...], ...] = tuple(
+            tuple(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT failed_columns FROM {metadata_database}._sqltide_dead_letters"
+            ).result_rows
+        )
+        health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
+            connection=connection
+        ).read(database=clickhouse_database, include_dead_letters=True)
+    finally:
+        connection.close()
+        clickhouse_client.command(f"DROP DATABASE IF EXISTS {metadata_database} SYNC")
+
+    assert exit_code == 0
+    assert failed == test_case.expected_failed_columns
+    assert health.dead_letters is not None
+    assert health.dead_letters[0].row_count == test_case.expected_health_row_count
 
 
 if __name__ == "__main__":

@@ -504,3 +504,12 @@ class QuarantineLiveConsumerIntegrationTestCase:
     history_rows: tuple[tuple[str, int, int], ...]
     late_rows: tuple[tuple[str, int, int], ...]
     expected_order_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineMetadataDatabaseIntegrationTestCase:
+    description: str
+    metadata_database_suffix: str
+    values_sql: str
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_health_row_count: int

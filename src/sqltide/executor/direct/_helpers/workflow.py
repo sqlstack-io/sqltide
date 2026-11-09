@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.constants import METADATA_DEAD_LETTERS_TABLE_NAME
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
     AdapterMaterializedView,
@@ -172,7 +173,12 @@ def _assemble_statements(
     rendered_realizations: list[tuple[str, str]] = [
         (
             realization.resource.name,
-            client.render_resource(resource=realization.resource, database=realization.database),
+            client.render_resource(
+                resource=_dead_letters_in_metadata_database(
+                    resource=realization.resource, request=request
+                ),
+                database=realization.database,
+            ),
         )
         for realization in realizations
     ]
@@ -244,6 +250,23 @@ def _assemble_statements(
     return _warehouse_statements(statements), _warehouse_statements(recovery)
 
 
+def _dead_letters_in_metadata_database[ResourceT](
+    *, resource: ResourceT, request: DirectBuildRequest
+) -> ResourceT:
+    """Point a dead-letter view at the metadata database when it differs from the target."""
+
+    if (
+        not isinstance(resource, AdapterMaterializedView)
+        or resource.target_relation_name != METADATA_DEAD_LETTERS_TABLE_NAME
+        or request.metadata_database == request.database
+    ):
+        return resource
+    return replace(
+        resource,
+        target_relation_name=f"{request.metadata_database}.{METADATA_DEAD_LETTERS_TABLE_NAME}",
+    )
+
+
 def _policy_landing_view_names(*, request: DirectBuildRequest) -> frozenset[str]:
     names: set[str] = set()
     for change in request.row_error_policy_changes:
@@ -272,7 +295,9 @@ def _policy_change_views(
                     (
                         view_name,
                         client.render_resource(
-                            resource=build_adapter_resource(view),
+                            resource=_dead_letters_in_metadata_database(
+                                resource=build_adapter_resource(view), request=request
+                            ),
                             database=view.key.database or request.database,
                         ),
                     )
