@@ -1,7 +1,6 @@
 """Rewrite one SELECT through the mandatory SQL-analysis boundary."""
 
 import sqltide._native as _native
-from sqltide.compiler.sql_analysis._helpers.aggregates import build_aggregate_facts
 from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 from sqltide.compiler.sql_analysis.models import (
     SqlAggregateFacts,
@@ -38,7 +37,7 @@ def rewrite_query(
             [(named_query.name, named_query.query) for named_query in prepend_ctes],
         )
     )
-    facts: SqlAggregateFacts = build_aggregate_facts(
+    facts: SqlAggregateFacts = _native.build_aggregate_facts(
         function_names=function_names, has_group_by=has_group_by, engine=""
     )
     return SqlQueryRewriteResult(query=query, has_aggregate_semantics=facts.has_semantics)

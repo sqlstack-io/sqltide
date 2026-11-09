@@ -1,7 +1,6 @@
 """Rewrite one placeholder-qualified template while preserving author bytes."""
 
 import sqltide._native as _native
-from sqltide.compiler.sql_analysis._helpers.aggregates import build_aggregate_facts
 from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 from sqltide.compiler.sql_analysis._helpers.scanning import (
     append_template_predicate_impl,
@@ -38,7 +37,7 @@ def rewrite_template_query(
     function_names, has_group_by = native_sql(
         lambda: _native.sql_select_aggregate_facts(rewritten, dialect)
     )
-    facts: SqlAggregateFacts = build_aggregate_facts(
+    facts: SqlAggregateFacts = _native.build_aggregate_facts(
         function_names=function_names, has_group_by=has_group_by, engine=""
     )
     return SqlQueryRewriteResult(

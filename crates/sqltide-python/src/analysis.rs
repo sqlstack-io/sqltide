@@ -93,18 +93,18 @@ pub(crate) struct SqlModelTree {
 #[pymethods]
 impl SqlModelTree {
     #[getter]
-    fn function_names(&self) -> Vec<String> {
+    pub(crate) fn function_names(&self) -> Vec<String> {
         self.model.function_names.clone()
     }
 
     #[getter]
-    fn has_group_by(&self) -> bool {
+    pub(crate) fn has_group_by(&self) -> bool {
         self.model.has_group_by
     }
 
     /// `(index, name, type, span)` for each typed outer projection.
     #[getter]
-    fn projections(&self) -> Vec<NativeProjection> {
+    pub(crate) fn projections(&self) -> Vec<NativeProjection> {
         self.model
             .projections
             .iter()

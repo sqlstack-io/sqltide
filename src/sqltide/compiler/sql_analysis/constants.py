@@ -35,7 +35,3 @@ POLYGLOT_COMPACT_SOURCE_NAME_KEY: str = "sourceName"
 POLYGLOT_COMPACT_CONFIDENCE_KEY: str = "confidence"
 POLYGLOT_COMPACT_COLUMN_KEY: str = "column"
 POLYGLOT_COMPACT_INDEX_KEY: str = "index"
-
-CLICKHOUSE_AGGREGATING_ENGINE_NAMES: frozenset[str] = frozenset(
-    {"aggregatingmergetree", "summingmergetree"}
-)

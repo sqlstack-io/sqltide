@@ -11,7 +11,7 @@ use sqltide_sqltext::sql_scan::{
 create_exception!(_native, SqlScanError, PyValueError);
 
 pub(crate) type Span = (usize, usize, usize, usize, usize, usize);
-type Reference = (String, &'static str, Option<&'static str>, Span);
+pub(crate) type Reference = (String, &'static str, Option<&'static str>, Span);
 type Cte = (String, String, Span);
 
 pub(crate) fn span(span: SourceSpan) -> Span {
@@ -67,7 +67,7 @@ fn normalized_statement_sql(sql: &str) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn extract_references(sql: &str) -> PyResult<Vec<Reference>> {
+pub(crate) fn extract_references(sql: &str) -> PyResult<Vec<Reference>> {
     let references: Vec<SqlReference> = sql_scan::extract_references(&chars(sql)).map_err(raise)?;
     Ok(references
         .into_iter()
