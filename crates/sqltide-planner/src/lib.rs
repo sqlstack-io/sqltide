@@ -7,6 +7,7 @@ pub mod desired;
 pub mod diff;
 pub mod direct;
 pub mod direct_fingerprint;
+pub mod direct_render;
 pub mod inspection;
 pub mod naming;
 pub mod plan_render;

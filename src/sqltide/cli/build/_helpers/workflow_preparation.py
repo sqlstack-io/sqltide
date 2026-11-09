@@ -3,6 +3,7 @@
 import json
 from dataclasses import replace
 
+import sqltide._native as _native
 from sqltide._native import normalize_cli_start_time
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build._helpers.audits import prepare_direct_build_audits
@@ -19,10 +20,8 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
-from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
 from sqltide.cli.selection.main._selection import resolve_selected_logical_model_keys
 from sqltide.compiler.compile.models import (
     CompiledTableModel,
@@ -230,7 +229,7 @@ def prepare_direct_build_workflow(
         request=request,
         client=client,
         snapshot=preview.warehouse_snapshot,
-        plan_json=render_direct_plan_json(
+        plan_json=_native.render_direct_plan_json(
             plan=preview.plan,
             adapter_name=preview.adapter_name,
             row_error_policy_changes=preview.row_error_policy_changes,
@@ -241,7 +240,7 @@ def prepare_direct_build_workflow(
             workflow,
             template=replace(
                 workflow.template,
-                plan_json=render_direct_plan_json(
+                plan_json=_native.render_direct_plan_json(
                     plan=preview.plan,
                     adapter_name=preview.adapter_name,
                     source_recreations=workflow.recreated_sources,
@@ -316,7 +315,7 @@ def prepare_virtual_build_workflow(
         plan_text = "\n".join(
             [
                 plan_text,
-                *map(render_row_error_policy_line, preview.row_error_policy_changes),
+                *map(_native.render_row_error_policy_line, preview.row_error_policy_changes),
             ]
         )
     request: BackfillBootstrapRequest = BackfillBootstrapRequest(

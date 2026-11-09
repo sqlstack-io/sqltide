@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqltide._native import render_source_recreation_notice
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterReplayColumns
@@ -10,9 +11,6 @@ from sqltide.cli.build.models import (
     DirectWorkflowPreparation,
     MixedWorkflowPreparation,
     VirtualWorkflowPreparation,
-)
-from sqltide.cli.plan.main.render_source_recreation_notice import (
-    render_source_recreation_notice,
 )
 from sqltide.compiler.compile.models import CompiledPipeline, LogicalResourceKey, ObjectKey
 from sqltide.compiler.discovery.models import PipelineProtection

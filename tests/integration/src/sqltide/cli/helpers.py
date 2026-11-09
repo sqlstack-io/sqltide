@@ -11,6 +11,7 @@ import pytest
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
+from sqltide._native import render_direct_plan_json
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterWarehouseError
@@ -58,7 +59,6 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.plan.models import PlanCommandOptions

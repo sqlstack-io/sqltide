@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
-from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
+from sqltide._native import render_direct_plan_json, render_direct_plan_text
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
 from sqltide.executor.direct.main.assemble_direct_build_workflow import (
@@ -149,6 +148,7 @@ def test_given_settings_only_source_drift_when_planning_then_source_is_recreated
     plan_text: str = render_direct_plan_text(
         plan=request.plan,
         adapter_name="clickhouse",
+        use_color=False,
         source_recreations=workflow.recreated_sources,
     )
     plan_payload: dict = json.loads(
