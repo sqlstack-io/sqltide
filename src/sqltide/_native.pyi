@@ -11,7 +11,7 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile.models import DesiredState, ObjectKey
+from sqltide.compiler.compile.models import DesiredState, ExternalSourceReplayConfig, ObjectKey
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
     EffectiveProjectConfiguration,
@@ -318,6 +318,12 @@ def destruction_plan_fingerprint(
     include_orphans: bool,
 ) -> str: ...
 def normalize_cli_start_time(raw_value: str) -> str: ...
+def validate_declared_external_sources(
+    *,
+    catalog: CatalogSnapshot,
+    external_source_replay_configs: tuple[ExternalSourceReplayConfig, ...],
+    database: str,
+) -> None: ...
 def resolve_audit_warmup_states(
     *,
     audits: tuple[LoadedSqlAudit, ...],
