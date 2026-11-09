@@ -1,7 +1,7 @@
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import DesiredState
-from sqltide.compiler.planner._helpers.rebuild import emit_rebuild_subtrees_from_changes
 from sqltide.compiler.planner.constants import (
     PLANNED_CHANGE_TYPE_CREATE,
     PLANNED_CHANGE_TYPE_REBUILD,
@@ -57,10 +57,9 @@ def test_given_overlapping_changed_keys_when_building_subtrees_then_it_collapses
         )
     )
 
-    rebuild_subtrees: tuple[RebuildSubtree, ...] = emit_rebuild_subtrees_from_changes(
-        desired_state=desired_state,
-        object_changes=object_changes,
-    )
+    rebuild_subtrees: tuple[RebuildSubtree, ...] = _native.DesiredGraph(
+        desired_state
+    ).rebuild_subtrees(object_changes)
 
     assert (
         tuple(key_parts(subtree.root_key) for subtree in rebuild_subtrees)

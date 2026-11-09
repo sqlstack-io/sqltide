@@ -2,8 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pyo3::exceptions::PyValueError;
+use pyo3::IntoPyObjectExt;
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::{IntoPyDict, PyDict, PyTuple};
 use sqltide_planner::actual::{
     ActualSource, ActualStateLookup, DesiredFacts, DesiredObjectFacts, InspectionFacts,
     RecordFacts, RootFacts, actual_sources,
@@ -31,16 +33,6 @@ use sqltide_planner::rebuild::{
 
 /// `(mode, lookback seconds)`.
 type RuleArgument = (String, Option<i64>);
-/// `(key, deps, kind, materialized view source key, materialized view target,
-/// (breaking rule, non-breaking rule) for a table with an authored policy)`.
-type ObjectArgument = (
-    usize,
-    Vec<usize>,
-    String,
-    Option<usize>,
-    Option<String>,
-    Option<(Option<RuleArgument>, Option<RuleArgument>)>,
-);
 /// `(key, change type, force full refresh, forced start time, schema change kind, seed
 /// compatibility)`.
 type ChangeArgument = (
@@ -50,19 +42,6 @@ type ChangeArgument = (
     Option<String>,
     Option<String>,
     Option<String>,
-);
-/// `(root, affected, upstream boundary, replay required, execution mode, forced full refresh,
-/// forced start time, configured backfill mode, execution lookback seconds)`.
-type SubtreeResult = (
-    usize,
-    Vec<usize>,
-    usize,
-    bool,
-    &'static str,
-    bool,
-    Option<String>,
-    Option<&'static str>,
-    Option<i64>,
 );
 
 /// `(kind, [(name, type, default)], texts, order by, settings)`, where the texts are the
@@ -263,20 +242,6 @@ fn object_change(change: ChangeArgument) -> PyResult<ObjectChange> {
     })
 }
 
-fn subtree_result(subtree: RebuildSubtree) -> SubtreeResult {
-    (
-        subtree.root,
-        subtree.affected,
-        subtree.upstream_boundary,
-        subtree.replay_required,
-        subtree.execution_mode.as_str(),
-        subtree.forced_full_refresh,
-        subtree.forced_start_time,
-        subtree.configured_backfill_mode.map(ReplayMode::as_str),
-        subtree.execution_lookback_seconds,
-    )
-}
-
 fn object_type(text: &str) -> PyResult<ObjectType> {
     match text {
         "kafka_table" => Ok(ObjectType::KafkaTable),
@@ -289,111 +254,344 @@ fn object_type(text: &str) -> PyResult<ObjectType> {
     }
 }
 
-fn cycle(error: CycleError) -> PyErr {
-    PyValueError::new_err(error.message)
+const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
+const COMPILE_CONSTANTS: &str = "sqltide.compiler.compile.constants";
+const GRAPH_EXCEPTIONS: &str = "sqltide.compiler.graph.exceptions";
+const PLANNER_MODELS: &str = "sqltide.compiler.planner.models";
+const PLANNER_CONSTANTS: &str = "sqltide.compiler.planner.constants";
+const PLANNER_TYPES: &str = "sqltide.compiler.planner.types";
+const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
+
+/// `GraphInputError` for a dependency cycle, raised `from None` as Python raised it.
+fn graph_input_error(py: Python<'_>, error: CycleError) -> PyErr {
+    match py
+        .import(GRAPH_EXCEPTIONS)
+        .and_then(|module| module.getattr("GraphInputError"))
+        .and_then(|class| class.call1((error.message,)))
+    {
+        Ok(exception) => {
+            let failure: PyErr = PyErr::from_value(exception);
+            failure.set_cause(py, None);
+            failure
+        }
+        Err(failure) => failure,
+    }
 }
 
-/// The desired-state graph over caller-interned key indices.
+fn text(object: &Bound<'_, PyAny>) -> PyResult<String> {
+    Ok(object.str()?.to_string())
+}
+
+/// `str(value)`, or `None` when `value` is `None`.
+fn optional_text(object: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    if object.is_none() {
+        Ok(None)
+    } else {
+        text(object).map(Some)
+    }
+}
+
+/// Desired-state keys numbered in the order the state first names them, with Python key
+/// equality.
+struct Interner<'py> {
+    keys: Vec<Bound<'py, PyAny>>,
+    index: Bound<'py, PyDict>,
+    infos: Vec<KeyInfo>,
+}
+
+impl<'py> Interner<'py> {
+    fn intern(&mut self, key: &Bound<'py, PyAny>) -> PyResult<usize> {
+        if let Some(found) = self.index.get_item(key)? {
+            return found.extract();
+        }
+        let position: usize = self.keys.len();
+        self.index.set_item(key, position)?;
+        self.infos.push(KeyInfo {
+            object_type: object_type(&text(&key.getattr("object_type")?)?)?,
+            name: key.getattr("name")?.extract()?,
+        });
+        self.keys.push(key.clone());
+        Ok(position)
+    }
+}
+
+/// `(mode, lookback seconds)` of one replay-on-change rule.
+fn rule_argument(rule: &Bound<'_, PyAny>) -> PyResult<Option<RuleArgument>> {
+    if rule.is_none() {
+        return Ok(None);
+    }
+    Ok(Some((
+        text(&rule.getattr("mode")?)?,
+        rule.getattr("lookback_seconds")?.extract()?,
+    )))
+}
+
+/// One desired object's kind; a materialized view names its source table by key.
+fn desired_kind<'py>(
+    py: Python<'py>,
+    interner: &mut Interner<'py>,
+    object: &Bound<'py, PyAny>,
+) -> PyResult<ObjectKind> {
+    let models: Bound<'py, PyModule> = py.import(COMPILE_MODELS)?;
+    if object.is_instance(&models.getattr("DesiredMaterializedView")?)? {
+        let source_key: Bound<'py, PyAny> = models.getattr("ObjectKey")?.call(
+            (),
+            Some(
+                &[
+                    ("database", py.None().into_bound(py)),
+                    (
+                        "object_type",
+                        py.import(COMPILE_CONSTANTS)?
+                            .getattr("DESIRED_OBJECT_TYPE_TABLE")?,
+                    ),
+                    ("name", object.getattr("source_table_name")?),
+                ]
+                .into_py_dict(py)?,
+            ),
+        )?;
+        let source: usize = interner.intern(&source_key)?;
+        return object_kind(
+            "materialized_view",
+            Some(source),
+            Some(object.getattr("target_table_name")?.extract()?),
+            None,
+        );
+    }
+    if object.is_instance(&models.getattr("DesiredTable")?)? {
+        let policy: Bound<'py, PyAny> = object.getattr("replay_on_change")?;
+        let policy = if policy.is_none() {
+            None
+        } else {
+            Some((
+                rule_argument(&policy.getattr("breaking")?)?,
+                rule_argument(&policy.getattr("non_breaking")?)?,
+            ))
+        };
+        return object_kind("table", None, None, policy);
+    }
+    if object.is_instance(&models.getattr("DesiredKafkaTable")?)? {
+        return object_kind("kafka_table", None, None, None);
+    }
+    object_kind("view", None, None, None)
+}
+
+fn planned_change(index: &Bound<'_, PyDict>, change: &Bound<'_, PyAny>) -> PyResult<ObjectChange> {
+    let key: Bound<'_, PyAny> = change.getattr("key")?;
+    let position: usize = index
+        .get_item(&key)?
+        .ok_or_else(|| PyKeyError::new_err(key.clone().unbind()))?
+        .extract()?;
+    object_change((
+        position,
+        text(&change.getattr("change_type")?)?,
+        change.getattr("force_full_refresh")?.extract()?,
+        change.getattr("forced_start_time")?.extract()?,
+        optional_text(&change.getattr("schema_change_kind")?)?,
+        optional_text(&change.getattr("seed_compatibility")?)?,
+    ))
+}
+
+/// The dependency graph of one realized desired state, answering in its `ObjectKey`s.
 #[pyclass(name = "DesiredGraph", module = "sqltide._native", frozen)]
 struct PyDesiredGraph {
     graph: DesiredGraph,
+    keys: Vec<Py<PyAny>>,
+    index: Py<PyDict>,
+}
+
+impl PyDesiredGraph {
+    fn key<'py>(&self, py: Python<'py>, position: usize) -> Bound<'py, PyAny> {
+        self.keys[position].bind(py).clone()
+    }
+
+    fn key_tuple<'py>(
+        &self,
+        py: Python<'py>,
+        positions: &[usize],
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(py, positions.iter().map(|position| self.key(py, *position)))
+    }
+
+    fn position(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Option<usize>> {
+        self.index
+            .bind(py)
+            .get_item(key)?
+            .map(|found| found.extract())
+            .transpose()
+    }
 }
 
 #[pymethods]
 impl PyDesiredGraph {
-    /// `keys` holds `(object type, name)` per index; see [`ObjectArgument`] for `objects`.
+    /// The graph over `desired_state`'s objects, their dependencies, materialized-view source
+    /// tables and replay anchors.
     #[new]
-    fn new(
-        keys: Vec<(String, String)>,
-        objects: Vec<ObjectArgument>,
-        replay_anchors: Vec<usize>,
-    ) -> PyResult<Self> {
-        let keys: Vec<KeyInfo> = keys
-            .into_iter()
-            .map(|(kind, name)| {
-                Ok(KeyInfo {
-                    object_type: object_type(&kind)?,
-                    name,
-                })
-            })
-            .collect::<PyResult<_>>()?;
-        let count: usize = keys.len();
-        let in_range = |index: &usize| *index < count;
-        if !objects.iter().all(|(key, deps, _, source, _, _)| {
-            in_range(key) && deps.iter().all(in_range) && source.as_ref().is_none_or(in_range)
-        }) || !replay_anchors.iter().all(in_range)
-        {
-            return Err(PyValueError::new_err(
-                "Desired graph key index out of range",
-            ));
+    fn new(py: Python<'_>, desired_state: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let mut interner = Interner {
+            keys: Vec::new(),
+            index: PyDict::new(py),
+            infos: Vec::new(),
+        };
+        let mut objects: Vec<DesiredObject> = Vec::new();
+        for object in desired_state.getattr("objects")?.try_iter()? {
+            let object: Bound<'_, PyAny> = object?;
+            let key: usize = interner.intern(&object.getattr("key")?)?;
+            let deps: Vec<usize> = object
+                .getattr("deps")?
+                .try_iter()?
+                .map(|dep| interner.intern(&dep?))
+                .collect::<PyResult<_>>()?;
+            let kind: ObjectKind = desired_kind(py, &mut interner, &object)?;
+            objects.push(DesiredObject { key, deps, kind });
         }
-        let objects: Vec<DesiredObject> = objects
-            .into_iter()
-            .map(|(key, deps, kind, source, target, policy)| {
-                Ok(DesiredObject {
-                    key,
-                    deps,
-                    kind: object_kind(&kind, source, target, policy)?,
-                })
-            })
+        let anchors: Vec<usize> = desired_state
+            .getattr("replay_anchor_keys")?
+            .try_iter()?
+            .map(|key| interner.intern(&key?))
             .collect::<PyResult<_>>()?;
         Ok(Self {
-            graph: DesiredGraph::new(keys, objects, &replay_anchors),
+            graph: DesiredGraph::new(interner.infos, objects, &anchors),
+            keys: interner.keys.into_iter().map(Bound::unbind).collect(),
+            index: interner.index.unbind(),
         })
     }
 
-    /// `(upstream key, downstream keys)` for every key with a downstream object.
-    fn reverse_deps(&self) -> Vec<(usize, Vec<usize>)> {
-        self.graph
-            .reverse_dep_keys()
-            .into_iter()
-            .map(|key| (key, self.graph.reverse_deps(key).to_vec()))
-            .collect()
-    }
-
-    /// Included keys in dependency order. A cycle raises `ValueError`.
-    fn order(&self, py: Python<'_>, included: HashSet<usize>) -> PyResult<Vec<usize>> {
-        py.detach(|| self.graph.order(&included)).map_err(cycle)
-    }
-
-    /// `root` and its downstream objects in dependency order. A cycle raises `ValueError`.
-    fn descendants(&self, py: Python<'_>, root: usize) -> PyResult<Vec<usize>> {
-        py.detach(|| self.graph.descendants(root)).map_err(cycle)
-    }
-
-    /// The rebuild subtrees `changes` require. A cycle raises `ValueError`.
-    fn rebuild_subtrees(
-        &self,
-        py: Python<'_>,
-        changes: Vec<ChangeArgument>,
-    ) -> PyResult<Vec<SubtreeResult>> {
-        let changes: Vec<ObjectChange> = changes
-            .into_iter()
-            .map(object_change)
-            .collect::<PyResult<_>>()?;
-        if changes
-            .iter()
-            .any(|change| change.key >= self.graph.key_count())
-        {
-            return Err(PyValueError::new_err(
-                "Desired graph key index out of range",
-            ));
+    /// Downstream object keys by upstream key, for every key with a downstream object.
+    fn reverse_deps<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let reverse: Bound<'py, PyDict> = PyDict::new(py);
+        for upstream in self.graph.reverse_dep_keys() {
+            reverse.set_item(
+                self.key(py, upstream),
+                self.key_tuple(py, self.graph.reverse_deps(upstream))?,
+            )?;
         }
-        py.detach(|| rebuild_subtrees(&self.graph, &changes))
-            .map(|subtrees| subtrees.into_iter().map(subtree_result).collect())
-            .map_err(cycle)
+        Ok(reverse)
     }
 
-    /// The nearest upstream replay anchor for `root`. A cycle raises `ValueError`.
-    fn nearest_replay_anchor(
+    /// The included keys this graph knows, in stable dependency order. A cycle raises
+    /// `GraphInputError`.
+    fn order<'py>(
         &self,
-        root: usize,
-        allow_root: bool,
-        root_name: &str,
-    ) -> PyResult<usize> {
-        self.graph
-            .nearest_replay_anchor(root, allow_root, root_name)
-            .map_err(cycle)
+        py: Python<'py>,
+        included_keys: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let mut included: HashSet<usize> = HashSet::new();
+        for key in included_keys.try_iter()? {
+            if let Some(position) = self.position(py, &key?)? {
+                included.insert(position);
+            }
+        }
+        let ordered: Vec<usize> = py
+            .detach(|| self.graph.order(&included))
+            .map_err(|error| graph_input_error(py, error))?;
+        self.key_tuple(py, &ordered)
+    }
+
+    /// `root_key` and its downstream object keys in dependency order; empty for an unknown key.
+    /// A cycle raises `GraphInputError`.
+    fn descendants<'py>(
+        &self,
+        py: Python<'py>,
+        root_key: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let Some(root) = self.position(py, root_key)? else {
+            return Ok(PyTuple::empty(py));
+        };
+        let descendants: Vec<usize> = py
+            .detach(|| self.graph.descendants(root))
+            .map_err(|error| graph_input_error(py, error))?;
+        self.key_tuple(py, &descendants)
+    }
+
+    /// The nearest eligible table through realized driving dependencies; an unknown key is its
+    /// own anchor. A cycle raises `GraphInputError`.
+    fn nearest_replay_anchor<'py>(
+        &self,
+        py: Python<'py>,
+        root_key: &Bound<'py, PyAny>,
+        allow_root_key: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let Some(root) = self.position(py, root_key)? else {
+            return Ok(root_key.clone());
+        };
+        let name: String = root_key.getattr("name")?.extract()?;
+        let anchor: usize = self
+            .graph
+            .nearest_replay_anchor(root, allow_root_key, &name)
+            .map_err(|error| graph_input_error(py, error))?;
+        Ok(self.key(py, anchor))
+    }
+
+    /// The `RebuildSubtree`s that `object_changes` require, collapsing descendant roots. A
+    /// cycle raises `GraphInputError`.
+    fn rebuild_subtrees<'py>(
+        &self,
+        py: Python<'py>,
+        object_changes: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let index: &Bound<'py, PyDict> = self.index.bind(py);
+        let changes: Vec<ObjectChange> = object_changes
+            .try_iter()?
+            .map(|change| planned_change(index, &change?))
+            .collect::<PyResult<_>>()?;
+        let subtrees: Vec<RebuildSubtree> = py
+            .detach(|| rebuild_subtrees(&self.graph, &changes))
+            .map_err(|error| graph_input_error(py, error))?;
+        let subtree_class = py.import(PLANNER_MODELS)?.getattr("RebuildSubtree")?;
+        let strategy = py
+            .import(PLANNER_CONSTANTS)?
+            .getattr("REBUILD_STRATEGY_SHADOW")?;
+        let execution_mode = py.import(PLANNER_TYPES)?.getattr("RebuildExecutionMode")?;
+        let replay_mode = py.import(DISCOVERY_TYPES)?.getattr("ReplayOnChangeMode")?;
+        let built: Vec<Bound<'py, PyAny>> = subtrees
+            .into_iter()
+            .map(|subtree| {
+                let backfill_mode: Bound<'py, PyAny> = match subtree.configured_backfill_mode {
+                    None => py.None().into_bound(py),
+                    Some(mode) => replay_mode.call1((mode.as_str(),))?,
+                };
+                subtree_class.call(
+                    (),
+                    Some(
+                        &[
+                            ("root_key", self.key(py, subtree.root)),
+                            (
+                                "affected_keys",
+                                self.key_tuple(py, &subtree.affected)?.into_any(),
+                            ),
+                            (
+                                "upstream_boundary_key",
+                                self.key(py, subtree.upstream_boundary),
+                            ),
+                            ("strategy", strategy.clone()),
+                            (
+                                "replay_required",
+                                subtree.replay_required.into_bound_py_any(py)?,
+                            ),
+                            (
+                                "execution_mode",
+                                execution_mode.call1((subtree.execution_mode.as_str(),))?,
+                            ),
+                            (
+                                "forced_full_refresh",
+                                subtree.forced_full_refresh.into_bound_py_any(py)?,
+                            ),
+                            (
+                                "forced_start_time",
+                                subtree.forced_start_time.into_bound_py_any(py)?,
+                            ),
+                            ("configured_backfill_mode", backfill_mode),
+                            (
+                                "execution_lookback_seconds",
+                                subtree.execution_lookback_seconds.into_bound_py_any(py)?,
+                            ),
+                        ]
+                        .into_py_dict(py)?,
+                    ),
+                )
+            })
+            .collect::<PyResult<_>>()?;
+        PyTuple::new(py, built)
     }
 }
 

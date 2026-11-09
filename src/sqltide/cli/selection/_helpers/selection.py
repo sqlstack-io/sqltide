@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -22,9 +23,7 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.graph.exceptions import GraphInputError
-from sqltide.compiler.graph.main.build_reverse_deps import build_reverse_deps
 from sqltide.compiler.graph.main.resolve_named_model_keys import resolve_named_model_keys
-from sqltide.compiler.graph.main.topologically_order_keys import topologically_order_keys
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.pipeline.types import AdapterResource
 
@@ -47,7 +46,9 @@ def expand_included_keys(
     desired_state: DesiredState,
     selected_model_keys: frozenset[ObjectKey],
 ) -> frozenset[ObjectKey]:
-    reverse_deps: dict[ObjectKey, tuple[ObjectKey, ...]] = build_reverse_deps(desired_state)
+    reverse_deps: dict[ObjectKey, tuple[ObjectKey, ...]] = _native.DesiredGraph(
+        desired_state
+    ).reverse_deps()
     object_by_key: dict[ObjectKey, DesiredTable | DesiredMaterializedView | DesiredView] = {
         object_.key: object_
         for object_ in desired_state.objects
@@ -104,9 +105,7 @@ def filter_desired_state(
     desired_state: DesiredState,
     included_keys: frozenset[ObjectKey],
 ) -> DesiredState:
-    ordered_keys: tuple[ObjectKey, ...] = topologically_order_keys(
-        desired_state=desired_state, included_keys=set(included_keys)
-    )
+    ordered_keys: tuple[ObjectKey, ...] = _native.DesiredGraph(desired_state).order(included_keys)
     object_by_key: dict[
         ObjectKey, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
     ] = {object_.key: object_ for object_ in desired_state.objects if object_.key in included_keys}
