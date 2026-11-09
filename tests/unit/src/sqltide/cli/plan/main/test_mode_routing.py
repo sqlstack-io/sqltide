@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from sqltide.adapter.models import AdapterDirectFingerprintSnapshot
-from sqltide.cli.plan.constants import DIRECT_MODE_LABEL, VIRTUAL_ENVIRONMENTS_MODE_LABEL
+from sqltide.cli.plan.constants import DIRECT_MODE_LABEL
 from sqltide.cli.workflow_artifacts.main._publish_plan_workflow import publish_plan_workflow
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.workflow.models import BuildWorkflow
@@ -49,7 +49,7 @@ _TOPIC_DRIFT: tuple[tuple[str, str], ...] = (("kafka_topic_list", "source.orders
         CliPlanModeRoutingTestCase(
             description="an enabled virtual_environments setting preserves deployment planning",
             virtual_environments=True,
-            expected_mode=VIRTUAL_ENVIRONMENTS_MODE_LABEL,
+            expected_mode="virtual environments",
             expected_title="Plan Ready",
         ),
     ],

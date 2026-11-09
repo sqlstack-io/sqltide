@@ -14,6 +14,7 @@ mod discovery;
 mod executor;
 mod graph;
 mod macros;
+mod plan_render;
 mod planner;
 mod polyglot;
 mod population;
@@ -83,6 +84,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     config::register(module)?;
     destruction::register(module)?;
     executor::register(module)?;
+    plan_render::register(module)?;
     planner::register(module)?;
     polyglot::register(module)?;
     population::register(module)?;
