@@ -71,6 +71,7 @@ from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
                     AND anchor._replay_offset <= 9709
                     AND anchor._replay_offset >= 9000
                   )
+                LIMIT 1 BY anchor._replay_partition, anchor._replay_offset
             ) AS item_rows
             WHERE status = 'created'
             GROUP BY event_hour, category
@@ -112,6 +113,7 @@ from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
                     AND anchor._replay_offset <= 9709
                     AND anchor._replay_offset >= 9000
                   )
+                LIMIT 1 BY anchor._replay_partition, anchor._replay_offset
             ) AS o
             LEFT JOIN orders_demo.tbl__region_lookup__dep AS r
                 ON o.order_id = r.region
@@ -154,6 +156,7 @@ from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
                     AND anchor._replay_offset <= 9709
                     AND anchor._replay_offset >= 9000
                   )
+                LIMIT 1 BY anchor._replay_partition, anchor._replay_offset
             ) AS o
             LEFT JOIN orders_demo.tbl__region_lookup AS r
                 ON o.order_id = r.region
@@ -197,6 +200,7 @@ from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
                     AND anchor._replay_offset <= 9709
                     AND anchor._replay_offset >= 9000
                   )
+                LIMIT 1 BY anchor._replay_partition, anchor._replay_offset
             ) AS o
             LEFT JOIN orders_demo.tbl__region_lookup__dep AS r
                 ON o.order_id = r.region
@@ -734,6 +738,7 @@ def test_given_deployment_lookback_when_rendering_then_boundary_time_is_deployme
                 "INSERT INTO orders_demo.tbl__orders_enriched__dep",
                 "WITH cutoff_offsets AS (",
                 "filtered_replay_source AS (",
+                "LIMIT 1 BY anchor._replay_partition, anchor._replay_offset",
                 "FROM filtered_replay_source ",
                 "startsWith(topic, 'races') AS is_race",
                 "WHERE status = 'open' OR status = 'held'",

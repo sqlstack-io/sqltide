@@ -389,13 +389,21 @@ fn deployment_offset_source_sql(request: &DeploymentReplay, has_lower_bound: boo
             .map(|name| format!("anchor.{name} AS {name}")),
         ", ",
     );
-    format!(
+    let source = format!(
         "SELECT {selected}\nFROM {}.{} AS anchor\nINNER JOIN cutoff_offsets\nON anchor.{} = \
          cutoff_offsets.{REPLAY_PARTITION}\n{lower_join}WHERE {upper_clause}\n{lower_clause}",
         replay.database, replay.relations.anchor, replay.columns.partition
+    );
+    format!("{}\n{}", source.trim_end(), offset_dedupe_clause(replay))
+}
+
+/// Keep one row per source offset, so an anchor holding repeated copies of an offset replays it
+/// once.
+fn offset_dedupe_clause(replay: &Replay) -> String {
+    format!(
+        "LIMIT 1 BY anchor.{}, anchor.{}",
+        replay.columns.partition, replay.columns.offset
     )
-    .trim_end()
-    .to_owned()
 }
 
 fn deployment_offset_cutoff_cte(request: &DeploymentReplay) -> String {
@@ -797,8 +805,10 @@ fn offset_replay(
 ) -> ReplayResult<String> {
     let predicate = offset_literal_predicate(replay, lower_by_partition)?;
     let filtered_source = format!(
-        "SELECT anchor.*\nFROM {}.{} AS anchor\nWHERE {predicate}",
-        replay.database, replay.relations.anchor
+        "SELECT anchor.*\nFROM {}.{} AS anchor\nWHERE {predicate}\n{}",
+        replay.database,
+        replay.relations.anchor,
+        offset_dedupe_clause(replay)
     );
     let query = rewrite_replay_query(
         &replay.query,
