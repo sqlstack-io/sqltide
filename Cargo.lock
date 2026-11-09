@@ -573,6 +573,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqltide-config"
+version = "0.63.0"
+dependencies = [
+ "regex",
+ "serde_json",
+ "sha2",
+ "sqltide-json",
+ "sqltide-sqltext",
+]
+
+[[package]]
 name = "sqltide-discovery"
 version = "0.63.0"
 dependencies = [
@@ -620,6 +631,7 @@ dependencies = [
  "sqlclean",
  "sqltide-clickhouse",
  "sqltide-compile",
+ "sqltide-config",
  "sqltide-discovery",
  "sqltide-executor",
  "sqltide-json",

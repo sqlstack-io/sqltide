@@ -1,5 +1,6 @@
 import os
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any, Literal
 
 from sqltide.adapter.models import (
@@ -8,6 +9,7 @@ from sqltide.adapter.models import (
     AdapterReplayRequest,
     CatalogSnapshot,
 )
+from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
     AuthoredProjectConfig,
@@ -32,6 +34,14 @@ class SqlScanError(ValueError):
     args: tuple[str, str, _Span | None]
 
 def parse_model_header(header: str) -> dict[str, object]: ...
+def compile_access_policy(
+    contents: str, source_path: Path, pipeline_names: frozenset[str]
+) -> CompiledAccessPolicy: ...
+
+ACCESS_PIPELINE_PERMISSIONS: list[str]
+ACCESS_PROJECT_PERMISSIONS: list[str]
+ACCESS_TARGET_PERMISSIONS: list[str]
+
 def render_clickhouse_resource(resource: object, database: str, if_not_exists: bool) -> str: ...
 def render_clickhouse_set_difference_comparison(targets: tuple[object, ...]) -> str: ...
 def render_clickhouse_ensure_database(database: str) -> str: ...

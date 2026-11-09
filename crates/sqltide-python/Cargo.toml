@@ -25,6 +25,7 @@ serde_json.workspace = true
 sqlclean.workspace = true
 sqltide-clickhouse.workspace = true
 sqltide-compile.workspace = true
+sqltide-config.workspace = true
 sqltide-discovery.workspace = true
 sqltide-executor.workspace = true
 sqltide-json.workspace = true
