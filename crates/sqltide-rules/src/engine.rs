@@ -6,57 +6,29 @@ use fensu_policy::lifecycle::models::{
     ApplySuppressionsRequest, ExactSuppression, Finding, ScopedIgnore,
 };
 use fensu_policy::policy::types::RuleCodeGrammar;
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use serde::Deserialize;
-use sqlclean::sql_lint::main::{batch_engine, catalogue, default_rules, formatter};
+use sqlclean::sql_lint::main::{catalogue, cross_join_subject, default_rules};
 use sqltide_sqltext::sql_scan::{
-    extract_references, find_matching_parenthesis, find_next_unquoted_character,
+    ScanResult, extract_references, find_matching_parenthesis, find_next_unquoted_character,
     skip_block_comment, skip_line_comment, skip_quoted_text,
 };
 
-use crate::sql_scan::raise;
+/// The family selector that selects every SQLClean Rule.
+pub const SQLCLEAN_FAMILY: &str = "SQLCLEAN";
 
-#[pyfunction]
-fn sqlclean_lint_batch(py: Python<'_>, request: String) -> PyResult<String> {
-    py.detach(|| batch_engine::lint_batch_json(&request))
-        .map_err(PyValueError::new_err)
-}
-
-#[pyfunction]
-fn sqlclean_format(py: Python<'_>, request: String) -> PyResult<String> {
-    py.detach(|| formatter::format_json(&request))
-        .map_err(PyValueError::new_err)
-}
-
-#[pyfunction]
-fn sqlclean_rules() -> Vec<(&'static str, &'static str, &'static str, bool)> {
+/// Every published Rule code in catalogue order, with whether SQLClean enables it by default.
+#[must_use]
+pub fn rule_codes() -> Vec<(&'static str, bool)> {
     let defaults = default_rules::default_rules();
     catalogue::catalogue()
         .into_iter()
-        .map(|rule| {
-            (
-                rule.code,
-                rule.message,
-                rule.remediation,
-                defaults.contains(&rule.code),
-            )
-        })
+        .map(|rule| (rule.code, defaults.contains(&rule.code)))
         .collect()
 }
 
-#[pyfunction]
-fn sqlclean_cross_join_subject(message: &str) -> Option<(String, Option<String>)> {
-    sqlclean::sql_lint::main::cross_join_subject::cross_join_subject(message)
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PolicyRequest {
-    findings: Vec<Finding>,
-    evaluated_codes: Vec<String>,
-    suppressions: Vec<ExactSuppression>,
-    scoped_ignores: Vec<ScopedIgnore>,
+/// The relation and optional CTE a cross-join finding's message names.
+#[must_use]
+pub fn cross_join_subject(message: &str) -> Option<(String, Option<String>)> {
+    cross_join_subject::cross_join_subject(message)
 }
 
 struct SqlCleanGrammar;
@@ -67,24 +39,30 @@ impl RuleCodeGrammar for SqlCleanGrammar {
     }
 
     fn rule_selector_is_valid(&self, value: &str) -> bool {
-        value == "SQLCLEAN" || self.rule_code_is_exact(value)
+        value == SQLCLEAN_FAMILY || self.rule_code_is_exact(value)
     }
 }
 
-/// Return original finding indices after SQLBuild's published exact/scoped policy lifecycle.
-#[pyfunction]
-fn sqlclean_apply_policy(request: &str) -> PyResult<Vec<usize>> {
-    let request: PolicyRequest =
-        serde_json::from_str(request).map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let originals = request.findings.clone();
+/// The indices of `findings` SQLBuild's published exact and scoped policy lifecycle keeps.
+///
+/// # Errors
+///
+/// Returns the lifecycle's refusal, such as a stale or malformed exception.
+pub fn apply_policy(
+    findings: Vec<Finding>,
+    evaluated_codes: &[String],
+    suppressions: &[ExactSuppression],
+    scoped_ignores: &[ScopedIgnore],
+) -> Result<Vec<usize>, String> {
+    let originals = findings.clone();
     let result = fensu_policy::apply_suppressions(ApplySuppressionsRequest {
-        findings: request.findings,
-        evaluated_codes: &request.evaluated_codes,
-        suppressions: &request.suppressions,
-        scoped_ignores: &request.scoped_ignores,
+        findings,
+        evaluated_codes,
+        suppressions,
+        scoped_ignores,
         grammar: &SqlCleanGrammar,
     })
-    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    .map_err(|error| error.to_string())?;
     let kept: BTreeSet<_> = result
         .findings
         .iter()
@@ -100,20 +78,22 @@ fn sqlclean_apply_policy(request: &str) -> PyResult<Vec<usize>> {
         .collect())
 }
 
-/// Template ranges for layout protection, using the compiler's lexical rules.
-#[pyfunction]
-fn sqlclean_template_sites(sql: &str) -> PyResult<Vec<(usize, usize)>> {
-    let chars: Vec<char> = sql.chars().collect();
-    let mut sites: Vec<(usize, usize)> = extract_references(&chars)
-        .map_err(raise)?
+/// Template ranges for layout protection, using the compiler's lexical rules. A macro inside a
+/// relation call's arguments is covered by the outer site.
+///
+/// # Errors
+///
+/// Returns the scan failure for unclosed syntax.
+pub fn template_sites(chars: &[char]) -> ScanResult<Vec<(usize, usize)>> {
+    let mut sites: Vec<(usize, usize)> = extract_references(chars)?
         .into_iter()
         .map(|reference| (reference.span.start, reference.span.end))
         .collect();
     let mut cursor = 0;
-    while let Some(start) = find_next_unquoted_character(&chars, '@', cursor).map_err(raise)? {
+    while let Some(start) = find_next_unquoted_character(chars, '@', cursor)? {
         let mut end = start + 1;
         if chars.get(end) == Some(&'\'') {
-            end = skip_quoted_text(&chars, end).map_err(raise)?;
+            end = skip_quoted_text(chars, end)?;
         } else {
             while chars
                 .get(end)
@@ -126,9 +106,7 @@ fn sqlclean_template_sites(sql: &str) -> PyResult<Vec<(usize, usize)>> {
                 open += 1;
             }
             if chars.get(open) == Some(&'(') {
-                end = find_matching_parenthesis(&chars, open, "SQL template call")
-                    .map_err(raise)?
-                    + 1;
+                end = find_matching_parenthesis(chars, open, "SQL template call")? + 1;
                 if chars.get(end) == Some(&'.') {
                     end += 1;
                     while chars
@@ -146,7 +124,6 @@ fn sqlclean_template_sites(sql: &str) -> PyResult<Vec<(usize, usize)>> {
         cursor = end;
     }
     sites.sort_unstable();
-    // A macro may occur inside a relation call's arguments. Protect only the outer site.
     let mut outer: Vec<(usize, usize)> = Vec::new();
     for site in sites {
         if outer.last().is_none_or(|previous| site.0 >= previous.1) {
@@ -157,21 +134,23 @@ fn sqlclean_template_sites(sql: &str) -> PyResult<Vec<(usize, usize)>> {
 }
 
 /// Comment-only inline suppression directives. Strings and quoted identifiers are not comments.
-#[pyfunction]
-fn sqlclean_suppressions(sql: &str) -> PyResult<Vec<(usize, usize)>> {
-    let chars: Vec<char> = sql.chars().collect();
+///
+/// # Errors
+///
+/// Returns the scan failure for unclosed syntax.
+pub fn suppressions(chars: &[char]) -> ScanResult<Vec<(usize, usize)>> {
     let mut sites = Vec::new();
     let mut cursor = 0;
     while cursor < chars.len() {
         if matches!(chars[cursor], '\'' | '"' | '`') {
-            cursor = skip_quoted_text(&chars, cursor).map_err(raise)?;
+            cursor = skip_quoted_text(chars, cursor)?;
             continue;
         }
         let rest = &chars[cursor..];
         let end = if rest.starts_with(&['/', '*']) {
-            Some(skip_block_comment(&chars, cursor).map_err(raise)?)
+            Some(skip_block_comment(chars, cursor)?)
         } else if rest.starts_with(&['-', '-']) || rest.starts_with(&['#']) {
-            Some(skip_line_comment(&chars, cursor))
+            Some(skip_line_comment(chars, cursor))
         } else {
             None
         };
@@ -196,14 +175,4 @@ fn sqlclean_suppressions(sql: &str) -> PyResult<Vec<(usize, usize)>> {
         }
     }
     Ok(sites)
-}
-
-pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(sqlclean_apply_policy, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_lint_batch, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_format, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_template_sites, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_suppressions, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_cross_join_subject, module)?)?;
-    module.add_function(wrap_pyfunction!(sqlclean_rules, module)?)
 }

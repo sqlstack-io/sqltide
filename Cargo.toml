@@ -9,6 +9,7 @@ members = [
     "crates/sqltide-clickhouse",
     "crates/sqltide-discovery",
     "crates/sqltide-config",
+    "crates/sqltide-rules",
     "crates/sqltide-python",
 ]
 resolver = "2"
@@ -48,6 +49,7 @@ sqltide-discovery = { path = "crates/sqltide-discovery" }
 sqltide-executor = { path = "crates/sqltide-executor" }
 sqltide-json = { path = "crates/sqltide-json" }
 sqltide-planner = { path = "crates/sqltide-planner" }
+sqltide-rules = { path = "crates/sqltide-rules" }
 sqltide-sqlanalysis = { path = "crates/sqltide-sqlanalysis" }
 sqltide-sqltext = { path = "crates/sqltide-sqltext" }
 toml_edit = { version = "0.25", default-features = false, features = ["parse"] }

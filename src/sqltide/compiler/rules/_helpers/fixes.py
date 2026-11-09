@@ -3,18 +3,14 @@
 from dataclasses import replace
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import DiscoveredProjectFile, LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.rules._helpers.bodies import lint_bodies
-from sqltide.compiler.rules._helpers.configuration import rules_config
-from sqltide.compiler.rules._helpers.evaluation import evaluate_rules
-from sqltide.compiler.rules._helpers.formatting import formatted_file
 from sqltide.compiler.rules._helpers.selection import resolve_rule_ignores
 from sqltide.compiler.rules._helpers.verification import verify_fix
 from sqltide.compiler.rules.exceptions import SqlRulesError
-from sqltide.compiler.rules.models import RuleFinding, RulesConfig
 from sqltide.diagnostics.models import CompilerDiagnostic
 
 
@@ -31,7 +27,9 @@ def fixed_file(
 
     path: Path = source.file_path
     candidate: str = source.contents
-    config: RulesConfig = rules_config(loaded_project=loaded_project, selection=selection)
+    config: _native.RulesConfig = _native.rules_config(
+        loaded_project=loaded_project, selection=selection
+    )
     baseline: CompileAnalysis = analyze_project(
         pipelines_root=root,
         loaded_project=loaded_project,
@@ -56,25 +54,24 @@ def fixed_file(
             rule_selection=selection,
         )
         verify_fix(before=baseline, after=current, edited=path)
-        findings: tuple[RuleFinding, ...] = (
-            evaluate_rules(
-                bodies=tuple(
-                    body for body in lint_bodies(inputs=current.compile_inputs) if body.path == path
-                ),
+        findings: tuple[_native.RuleFinding, ...] = (
+            _native.evaluate_rules(
+                inputs=current.compile_inputs,
                 config=config,
                 dialect=adapter_profile.sql_analysis_dialect,
                 project_dir=root.parent,
+                only_path=path,
                 check_stale=False,
             )
             if adapter_profile.run_sql_rules
             else ()
         )
-        edits: list[RuleFinding] = sorted(
+        edits: list[_native.RuleFinding] = sorted(
             (finding for finding in findings if finding.replacement is not None),
             key=lambda finding: finding.fix_start or 0,
         )
         if not edits:
-            formatted: str = formatted_file(
+            formatted: str = _native.formatted_file(
                 source=replace(source, contents=candidate),
                 keyword=keyword,
                 dialect=adapter_profile.sql_analysis_dialect,
@@ -93,7 +90,7 @@ def fixed_file(
                 for diagnostic in final.diagnostics
                 if diagnostic.location is not None and diagnostic.location.path == path
             )
-        edit: RuleFinding = edits[0]
+        edit: _native.RuleFinding = edits[0]
         if edit.fix_start is None or edit.fix_end is None or edit.replacement is None:
             raise SqlRulesError(f"{path}: Rule edit is incomplete; original source preserved")
         candidate = candidate[: edit.fix_start] + edit.replacement + candidate[edit.fix_end :]
