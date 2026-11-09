@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.63.0](https://github.com/sqlstack-io/sqltide/compare/v0.62.0...v0.63.0) (2026-11-09)
+
+
+### Features
+
+* **ui:** report Kafka consumers stuck without committing offsets ([#321](https://github.com/sqlstack-io/sqltide/issues/321)) ([c9dccb7](https://github.com/sqlstack-io/sqltide/commit/c9dccb7591fe63017b2e04aa72c60c51e18e8ce7))
+
+
+### Documentation
+
+* shorten the README ([#322](https://github.com/sqlstack-io/sqltide/issues/322)) ([0a24be6](https://github.com/sqlstack-io/sqltide/commit/0a24be6c5122d4fa0f248128e9968bc8727d22e1))
+
 ## [0.62.0](https://github.com/sqlstack-io/sqltide/compare/v0.61.0...v0.62.0) (2026-11-01)
 
 
