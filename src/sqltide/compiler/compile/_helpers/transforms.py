@@ -218,11 +218,11 @@ def _resolve_on_row_error(
     sql_analyzer: SqlModelAnalyzer,
     context: RowErrorContext,
 ) -> RowErrorPolicy:
-    """Resolve the model, then project, row-error mode, enforcing quarantine eligibility."""
+    """Resolve the model, pipeline, then project policy; only a model value may raise."""
 
     if transform.on_row_error is RowErrorPolicy.FAIL:
         return RowErrorPolicy.FAIL
-    if transform.on_row_error is None and context.project_policy is not RowErrorPolicy.QUARANTINE:
+    if transform.on_row_error is None and context.inherited_policy is not RowErrorPolicy.QUARANTINE:
         return RowErrorPolicy.FAIL
     ineligible_reason: str | None = None
     if context.pipeline_mode is not PipelineMode.DIRECT:
@@ -235,7 +235,12 @@ def _resolve_on_row_error(
             "its outer query uses GROUP BY, an aggregate-state engine, or a window function"
         )
     if ineligible_reason is None:
-        return RowErrorPolicy.QUARANTINE
+        blocked: tuple[str, str] | None = sql_analyzer.quarantine_ineligibility(
+            analysis=sql_analysis
+        )
+        if blocked is None:
+            return RowErrorPolicy.QUARANTINE
+        ineligible_reason = f"column '{blocked[0]}' is ineligible: {blocked[1]}"
     if transform.on_row_error is RowErrorPolicy.QUARANTINE:
         raise PipelineCompileError(
             f"Transform '{transform.name}' sets on_row_error = quarantine, but {ineligible_reason}"

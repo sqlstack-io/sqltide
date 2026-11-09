@@ -13,8 +13,9 @@ use sqltide_sqlanalysis::{
     Projection, ProjectionTypeCache, RelationCache, RelationIdentity, RelationRewrite,
     RewrittenQuery, SqlDialect, analyze_catalog, analyze_model,
     canonical_query_with_database_template, canonicalize_sql, expression_list,
-    render_string_literal, rewrite_query, select_aggregate_facts, select_row_level,
-    storage_column_names, validate_query, validated_relation_rewrite,
+    quarantine_ineligibility, quarantine_split, render_string_literal, rewrite_query,
+    select_aggregate_facts, select_row_level, storage_column_names, validate_query,
+    validated_relation_rewrite,
 };
 use sqltide_sqltext::sql_scan::SourceSpan;
 
@@ -296,6 +297,29 @@ fn sql_rewrite_query(
 }
 
 /// `(function_names, has_group_by)` of one SELECT.
+/// `(column, reason)` for the first column preventing a quarantine split, else `None`.
+#[pyfunction]
+fn sql_quarantine_ineligibility(
+    sql: &str,
+    dialect_name: &str,
+) -> PyResult<Option<(String, String)>> {
+    quarantine_ineligibility(sql, &SqlDialect::new(dialect_name))
+        .map(|blocked| blocked.map(|item| (item.column, item.reason)))
+        .map_err(analysis_error)
+}
+
+/// `(kept-rows query, dead-letter query)` for one quarantine model.
+#[pyfunction]
+fn sql_quarantine_split(
+    sql: &str,
+    model_name: &str,
+    dialect_name: &str,
+) -> PyResult<(String, String)> {
+    quarantine_split(sql, model_name, &SqlDialect::new(dialect_name))
+        .map(|split| (split.good_query, split.dead_letter_query))
+        .map_err(analysis_error)
+}
+
 #[pyfunction]
 fn sql_select_is_row_level(sql: &str, dialect_name: &str) -> PyResult<bool> {
     select_row_level(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
@@ -363,6 +387,8 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(sql_rewrite_query, module)?)?;
     module.add_function(wrap_pyfunction!(sql_select_aggregate_facts, module)?)?;
     module.add_function(wrap_pyfunction!(sql_select_is_row_level, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_quarantine_ineligibility, module)?)?;
+    module.add_function(wrap_pyfunction!(sql_quarantine_split, module)?)?;
     module.add_function(wrap_pyfunction!(sql_analyze_catalog, module)?)?;
     module.add_function(wrap_pyfunction!(sql_expression_list, module)?)?;
     module.add_function(wrap_pyfunction!(sql_validate_query, module)?)?;

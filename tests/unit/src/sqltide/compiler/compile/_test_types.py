@@ -256,6 +256,7 @@ class ResolveRowErrorPolicyTestCase:
     description: str
     model_contents: str
     project_policy: RowErrorPolicy | None
+    pipeline_policy: RowErrorPolicy | None
     pipeline_mode: PipelineMode
     expected_policy: RowErrorPolicy
 

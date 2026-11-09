@@ -99,6 +99,7 @@ fn replay(object: &Bound<'_, PyAny>) -> PyResult<Replay> {
         target_column_names: field(object, "target_column_names")?,
         settings: field(object, "settings")?,
         filter_boundaries_at_source: field(object, "filter_boundaries_at_source")?,
+        dedupe_offsets: field(object, "dedupe_offsets")?,
     })
 }
 

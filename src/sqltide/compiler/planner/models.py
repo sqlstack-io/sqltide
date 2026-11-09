@@ -24,6 +24,7 @@ from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ReplayLineageMode,
     ReplayOnChangeMode,
+    RowErrorPolicy,
 )
 from sqltide.compiler.planner.types import (
     DeploymentAction,
@@ -508,6 +509,17 @@ class DirectSourceDriftSelection:
     reader_pipeline_names: tuple[str, ...]
     drifted_setting_names: tuple[str, ...]
     model_keys: tuple[LogicalResourceKey, ...]
+
+
+@dataclass(frozen=True)
+class DirectRowErrorPolicyChange:
+    """A view-only switch of one live model's row-error policy, without replay."""
+
+    model_key: LogicalResourceKey
+    view_name: str
+    dead_letter_view_name: str
+    desired_policy: RowErrorPolicy
+    landing_view_names: tuple[str, ...]
 
 
 @dataclass(frozen=True)

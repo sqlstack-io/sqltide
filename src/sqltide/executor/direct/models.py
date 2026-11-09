@@ -9,7 +9,7 @@ from sqltide.adapter.models import AdapterReplayRequest
 from sqltide.compiler.compile.models import LogicalResourceKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.planner.models import DirectPlan
+from sqltide.compiler.planner.models import DirectPlan, DirectRowErrorPolicyChange
 from sqltide.executor.auditing.models import SqlAuditRunResult
 from sqltide.executor.population.models import PopulationSourceRecreation
 from sqltide.executor.workflow.models import (
@@ -33,6 +33,7 @@ class DirectBuildRequest:
     stabilization_seconds: float = 5.0
     boundary_time: str | None = None
     audits: tuple[DirectBuildAudit, ...] = ()
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
 
     @property
     def effective_start_time(self) -> str | None:
@@ -72,6 +73,7 @@ class DirectReplayRange:
     upper_value: str
     replay_cutoff_value: str
     cutoff_inclusive: bool
+    has_duplicate_offsets: bool = False
 
 
 @dataclass(frozen=True)

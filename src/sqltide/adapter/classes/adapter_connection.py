@@ -143,12 +143,17 @@ class AdapterConnection(ABC):
         """Capture the active warehouse server's UTC millisecond timestamp."""
 
     def load_warehouse_health(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Return optional adapter-neutral warehouse diagnostics."""
 
         del database
         del managed_source_names
+        del include_dead_letters
         return AdapterWarehouseHealth(
             availability="unavailable",
             status="unknown",

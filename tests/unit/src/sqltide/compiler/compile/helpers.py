@@ -314,6 +314,7 @@ def build_row_error_model(
     model_contents: str,
     project_policy: RowErrorPolicy | None,
     pipeline_mode: PipelineMode,
+    pipeline_policy: RowErrorPolicy | None = None,
 ) -> CompiledTableModel:
     pipeline_dir: Path = write_registry_pipeline_project(
         project_dir=tmp_path,
@@ -323,7 +324,9 @@ def build_row_error_model(
     loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
     assert loaded.project is not None
     project: Project = replace(loaded.project, model_on_row_error=project_policy)
-    pipeline: Pipeline = replace(loaded.pipeline, mode=pipeline_mode)
+    pipeline: Pipeline = replace(
+        loaded.pipeline, mode=pipeline_mode, model_on_row_error=pipeline_policy
+    )
     compiled: CompiledPipeline = compile_test_pipeline(
         replace(loaded, project=project, pipeline=pipeline)
     )

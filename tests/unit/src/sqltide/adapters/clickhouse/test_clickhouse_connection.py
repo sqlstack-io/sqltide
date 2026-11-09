@@ -188,7 +188,7 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_status="critical",
             expected_memory_basis="cgroup",
             expected_table_name="tbl__orders",
-            expected_query_count=7,
+            expected_query_count=6,
             managed_source_names=("kafka__orders", "kafka__payments"),
             consumer_row=(1, ["kafka__orders"], 1, 1, [("kafka__orders", 7200, 10, "cast failed")]),
             expected_configured_tables=2,
@@ -234,7 +234,7 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_status="unknown",
             expected_memory_basis="cgroup",
             expected_table_name="tbl__orders",
-            expected_query_count=7,
+            expected_query_count=6,
             managed_source_names=("kafka__orders",),
             consumer_row=(1, ["kafka__orders"], 1, 0, []),
             expected_configured_tables=1,
@@ -264,7 +264,7 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_status="critical",
             expected_memory_basis="cgroup",
             expected_table_name="tbl__orders",
-            expected_query_count=7,
+            expected_query_count=6,
             managed_source_names=("kafka__orders",),
             consumer_row=(1, ["kafka__orders"], 1, 0, []),
             expected_configured_tables=1,
@@ -316,7 +316,6 @@ def test_given_clickhouse_system_metrics_when_reading_health_then_snapshot_is_tr
             ],
             result_rows=[list(test_case.consumer_row)],
         ),
-        FakeRawClickHouseQueryResult(column_names=["present"], result_rows=[]),
     ]
     query_results.append(
         FakeRawClickHouseQueryResult(
@@ -360,8 +359,7 @@ def test_given_clickhouse_system_metrics_when_reading_health_then_snapshot_is_tr
     table_query_index: int = test_case.expected_query_count - 1
     assert "database = 'analytics\\\\o'''" in raw_client.statements[table_query_index]
     assert "LIMIT 10" in raw_client.statements[table_query_index]
-    assert "_sqltide_dead_letters" in raw_client.statements[table_query_index - 1]
-    consumer_query: str = raw_client.statements[table_query_index - 2]
+    consumer_query: str = raw_client.statements[table_query_index - 1]
     assert "system.kafka_consumers" in consumer_query
     assert "system.tables" in consumer_query
     assert "engine = 'Kafka'" in consumer_query
@@ -404,7 +402,6 @@ def test_given_project_footprint_failure_when_reading_health_then_table_evidence
     connection.query_one.side_effect = [
         {"version": "25.8.1.1", "uptime_seconds": 100},
         {"active_queries": 0, "active_merges": 0, "incomplete_mutations": 0},
-        None,
     ]
 
     health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(

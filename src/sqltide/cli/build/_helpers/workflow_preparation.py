@@ -223,12 +223,17 @@ def prepare_direct_build_workflow(
         metadata_database=preview.metadata_database,
         tool_version=SQLTIDE_TOOL_VERSION,
         audits=audits,
+        row_error_policy_changes=preview.row_error_policy_changes,
     )
     workflow: DirectBuildWorkflow = assemble_direct_build_workflow(
         request=request,
         client=client,
         snapshot=preview.warehouse_snapshot,
-        plan_json=render_direct_plan_json(plan=preview.plan, adapter_name=preview.adapter_name),
+        plan_json=render_direct_plan_json(
+            plan=preview.plan,
+            adapter_name=preview.adapter_name,
+            row_error_policy_changes=preview.row_error_policy_changes,
+        ),
     )
     if workflow.recreated_sources:
         workflow = replace(
@@ -239,6 +244,7 @@ def prepare_direct_build_workflow(
                     plan=preview.plan,
                     adapter_name=preview.adapter_name,
                     source_recreations=workflow.recreated_sources,
+                    row_error_policy_changes=preview.row_error_policy_changes,
                 ),
             ),
         )
@@ -251,6 +257,7 @@ def prepare_direct_build_workflow(
             adapter_name=preview.adapter_name,
             verbose=options.verbose,
             source_recreations=workflow.recreated_sources,
+            row_error_policy_changes=preview.row_error_policy_changes,
         ),
         protection_requirements=build_protection_requirements(
             compiled_project=analysis.compiled_project,

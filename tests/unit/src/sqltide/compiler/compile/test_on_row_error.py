@@ -57,6 +57,7 @@ _INNER_AGGREGATE_SELECT: str = (
             description="unset everywhere stays on fail",
             model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
             project_policy=None,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.FAIL,
         ),
@@ -64,6 +65,7 @@ _INNER_AGGREGATE_SELECT: str = (
             description="project default enables an eligible model",
             model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
             project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.QUARANTINE,
         ),
@@ -71,6 +73,7 @@ _INNER_AGGREGATE_SELECT: str = (
             description="model value wins over the project default",
             model_contents=f"MODEL (on_row_error fail); {_ROW_LEVEL_SELECT}",
             project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.FAIL,
         ),
@@ -78,6 +81,29 @@ _INNER_AGGREGATE_SELECT: str = (
             description="explicit quarantine applies without a project default",
             model_contents=f"MODEL (on_row_error quarantine); {_ROW_LEVEL_SELECT}",
             project_policy=None,
+            pipeline_policy=None,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.QUARANTINE,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="array column stays eligible and unchecked",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::Array(String) AS tags, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            project_policy=None,
+            pipeline_policy=None,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.QUARANTINE,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="self-shadowing column stays eligible",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::String AS kafka_key, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            project_policy=None,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.QUARANTINE,
         ),
@@ -85,6 +111,7 @@ _INNER_AGGREGATE_SELECT: str = (
             description="an aggregate only in a nested query stays eligible",
             model_contents=f"MODEL (on_row_error quarantine); {_INNER_AGGREGATE_SELECT}",
             project_policy=None,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.QUARANTINE,
         ),
@@ -92,6 +119,7 @@ _INNER_AGGREGATE_SELECT: str = (
             description="inherited quarantine leaves a grouped model on fail",
             model_contents=f"MODEL (); {_GROUPED_SELECT}",
             project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.FAIL,
         ),
@@ -99,7 +127,51 @@ _INNER_AGGREGATE_SELECT: str = (
             description="inherited quarantine leaves a virtual pipeline on fail",
             model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
             project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=None,
             pipeline_mode=PipelineMode.VIRTUAL,
+            expected_policy=RowErrorPolicy.FAIL,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="pipeline value wins over the project default",
+            model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
+            project_policy=RowErrorPolicy.FAIL,
+            pipeline_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.QUARANTINE,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="pipeline fail overrides a project quarantine",
+            model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
+            project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=RowErrorPolicy.FAIL,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.FAIL,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="model fail wins over a pipeline quarantine",
+            model_contents=f"MODEL (on_row_error fail); {_ROW_LEVEL_SELECT}",
+            project_policy=None,
+            pipeline_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.FAIL,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="pipeline quarantine leaves an ineligible model on fail silently",
+            model_contents=f"MODEL (); {_GROUPED_SELECT}",
+            project_policy=None,
+            pipeline_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_policy=RowErrorPolicy.FAIL,
+        ),
+        ResolveRowErrorPolicyTestCase(
+            description="project quarantine leaves a sibling-alias model on fail silently",
+            model_contents=(
+                "MODEL (); SELECT kafka_key::String AS a, (a || 'x')::String AS b, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            project_policy=RowErrorPolicy.QUARANTINE,
+            pipeline_policy=None,
+            pipeline_mode=PipelineMode.DIRECT,
             expected_policy=RowErrorPolicy.FAIL,
         ),
     ],
@@ -114,6 +186,7 @@ def test_given_row_error_settings_when_compiling_then_policy_resolves(
         source_contents=_SOURCE_CONTENTS,
         model_contents=test_case.model_contents,
         project_policy=test_case.project_policy,
+        pipeline_policy=test_case.pipeline_policy,
         pipeline_mode=test_case.pipeline_mode,
     )
 
@@ -134,6 +207,25 @@ def test_given_row_error_settings_when_compiling_then_policy_resolves(
             model_contents=f"MODEL (on_row_error quarantine); {_WINDOW_SELECT}",
             pipeline_mode=PipelineMode.DIRECT,
             expected_error_fragment="window function",
+        ),
+        RejectRowErrorPolicyTestCase(
+            description="sibling alias names the column and reason",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::String AS a, "
+                "(a || 'x')::String AS b, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_error_fragment="column 'b' is ineligible.*'a'",
+        ),
+        RejectRowErrorPolicyTestCase(
+            description="dynamic column names the column and reason",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::Dynamic AS a, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_error_fragment="column 'a' is ineligible.*Dynamic",
         ),
         RejectRowErrorPolicyTestCase(
             description="virtual pipeline",

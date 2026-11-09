@@ -9,7 +9,12 @@ from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.compile.models import DesiredState, LogicalResourceKey, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.models import DeploymentPlan, DirectPlan, DirectWarehouseSnapshot
+from sqltide.compiler.planner.models import (
+    DeploymentPlan,
+    DirectPlan,
+    DirectRowErrorPolicyChange,
+    DirectWarehouseSnapshot,
+)
 from sqltide.executor.backfill.models import BackfillBootstrapRequest, RootBackfillReport
 from sqltide.executor.direct.models import DirectBuildRequest, DirectBuildWorkflow
 from sqltide.executor.workflow.models import BuildWorkflow
@@ -70,6 +75,7 @@ class DirectBuildPreviewContext:
     metadata_database: str
     adapter_name: str
     effective_start_time: str | None = None
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
 
 
 @dataclass(frozen=True)

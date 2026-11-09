@@ -25,8 +25,12 @@ from sqltide.compiler.planner.main.load_direct_warehouse_snapshot import (
     load_direct_warehouse_snapshot,
 )
 from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
+from sqltide.compiler.planner.main.plan_row_error_policy_changes import (
+    plan_row_error_policy_changes,
+)
 from sqltide.compiler.planner.models import (
     DirectPlan,
+    DirectRowErrorPolicyChange,
     DirectSourceDriftSelection,
     DirectWarehouseSnapshot,
 )
@@ -114,7 +118,15 @@ def build_direct_build_preview(
         effective_start_time=start_time,
         source_drift_selections=source_drift_selections,
     )
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = (
+        plan_row_error_policy_changes(
+            analysis=analysis, plan=plan, relations=snapshot.catalog.relations
+        )
+        if options.changed
+        else ()
+    )
     return DirectBuildPreviewContext(
+        row_error_policy_changes=row_error_policy_changes,
         analysis=analysis,
         plan=plan,
         warehouse_snapshot=snapshot,

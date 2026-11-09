@@ -18,7 +18,9 @@ def expand_fan_in_roots(*, plan: PopulationPlan, desired_state: DesiredState) ->
     """Add direct catch-up roots for in-scope side-reference fan-in targets."""
 
     views: list[DesiredMaterializedView] = [
-        object_ for object_ in desired_state.objects if isinstance(object_, DesiredMaterializedView)
+        object_
+        for object_ in desired_state.objects
+        if isinstance(object_, DesiredMaterializedView) and not object_.dead_letters
     ]
     tables: list[DesiredTable] = [
         object_ for object_ in desired_state.objects if isinstance(object_, DesiredTable)

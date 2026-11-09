@@ -124,6 +124,7 @@ class AdapterMaterializedView:
     database_template: str
     refresh: str | None = None
     append: bool = True
+    dead_letters: bool = False
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,8 @@ class AdapterModelRealizationRequest:
     settings: tuple[tuple[str, str], ...] = ()
     refresh: str | None = None
     append: bool = True
+    dead_letter_query: str | None = None
+    dead_letter_database_template: str | None = None
 
 
 @dataclass(frozen=True)
@@ -400,6 +403,7 @@ class AdapterReplayRequest:
     target_column_names: tuple[str, ...]
     settings: tuple[tuple[str, str], ...] = ()
     filter_boundaries_at_source: bool = False
+    dedupe_offsets: bool = False
 
 
 @dataclass(frozen=True)

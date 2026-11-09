@@ -25,9 +25,6 @@
 	const freshness = $derived(healthSummary.freshness);
 	const ingest = $derived(healthSummary.ingest);
 	const deadLetters = $derived(healthSummary.deadLetters);
-	const deadLetterCount = $derived(
-		deadLetters === null ? null : deadLetters.reduce((total, model) => total + model.rowCount, 0)
-	);
 	const ingestLabel = $derived(
 		ingest.state === 'healthy'
 			? 'Healthy'
@@ -136,16 +133,16 @@
 					{#if ingest.stuckConsumers.length}<span style:color="var(--sb-error)">{ingest.stuckConsumers.length} stuck</span>{/if}
 					<span>{ingest.behind} behind</span>
 					{#if ingest.lagUnavailable}<span>{ingest.lagUnavailable} lag unavailable</span>{/if}
-					{#if deadLetterCount === null}
+					{#if deadLetters.state === 'unavailable'}
 						<span>dead letters unavailable</span>
-					{:else if deadLetterCount > 0}
-						<span>{deadLetterCount} dead letters 24h</span>
+					{:else if deadLetters.state === 'present'}
+						<span>{deadLetters.total} dead letters 24h</span>
 					{/if}
 				</span>
 			</div>
-			{#if deadLetters && deadLetters.length > 0}
+			{#if deadLetters.state === 'present'}
 				<ul class="mb-2 space-y-1 font-mono text-[10px]" data-testid="dead-letters">
-					{#each deadLetters as model (model.modelName)}
+					{#each deadLetters.models as model (model.modelName)}
 						<li class="flex flex-col gap-0.5">
 							<span>
 								{model.modelName}: {model.rowCount} in 24h, latest failed

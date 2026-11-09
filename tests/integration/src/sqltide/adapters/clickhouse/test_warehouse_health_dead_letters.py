@@ -30,7 +30,7 @@ def test_given_no_dead_letter_table_when_reading_then_dead_letters_are_unavailab
 ) -> None:
     health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
         connection=managed_clickhouse_client
-    ).read(database=clickhouse_database)
+    ).read(database=clickhouse_database, include_dead_letters=True)
 
     assert health.dead_letters is test_case.expected_dead_letters
 
@@ -74,7 +74,7 @@ def test_given_dead_letters_when_reading_then_recent_counts_and_latest_row_are_r
 
     health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
         connection=managed_clickhouse_client
-    ).read(database=clickhouse_database)
+    ).read(database=clickhouse_database, include_dead_letters=True)
 
     assert health.dead_letters is not None
     assert len(health.dead_letters) == 1

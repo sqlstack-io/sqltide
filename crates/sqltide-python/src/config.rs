@@ -643,7 +643,7 @@ fn parse_pipeline_mode(
 }
 
 /// `pipeline.toml`'s other settings: `(replay_on_change, bounded_replay_fallback, naming,
-/// protection, audit_defaults, execution_settings, model_retention)`.
+/// protection, audit_defaults, execution_settings, model_retention, model_on_row_error)`.
 #[pyfunction]
 fn parse_pipeline_settings<'py>(
     py: Python<'py>,
@@ -701,6 +701,7 @@ fn parse_pipeline_settings<'py>(
             retention_object(py, settings.model_retention, |policy| {
                 document.model_retention(policy)
             })?,
+            document.object(settings.model_on_row_error.as_deref())?,
         ],
     )
 }

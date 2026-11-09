@@ -220,6 +220,8 @@ class DesiredMaterializedView:
     logical_model_name: str | None = field(default=None, compare=False)
     refresh: str | None = field(default=None, compare=False)
     append: bool = field(default=True, compare=False)
+    filters_row_errors: bool = field(default=False, compare=False)
+    dead_letters: bool = field(default=False, compare=False)
 
     @property
     def name(self) -> str:
@@ -356,9 +358,9 @@ class CompiledModel:
 
 @dataclass(frozen=True)
 class RowErrorContext:
-    """The pipeline facts that decide a table model's row-error policy."""
+    """The inherited setting and pipeline mode deciding a table model's row-error policy."""
 
-    project_policy: RowErrorPolicy | None = None
+    inherited_policy: RowErrorPolicy | None = None
     pipeline_mode: PipelineMode = PipelineMode.DIRECT
 
 

@@ -82,11 +82,17 @@ def assemble_direct_build_workflow(
         catalog=snapshot.catalog,
         database=request.database,
     )
+    policy_landing_view_names: frozenset[str] = frozenset(
+        name for change in request.row_error_policy_changes for name in change.landing_view_names
+    )
     preserved_landing_views: tuple[DesiredMaterializedView, ...] = tuple(
         desired
         for desired in request.realized_project.desired_state.objects
         if isinstance(desired, DesiredMaterializedView)
-        and desired.name in source_preparation.preserved_relation_names
+        and (
+            desired.name in source_preparation.preserved_relation_names
+            or desired.name in policy_landing_view_names
+        )
     )
     population_plan: PopulationPlan = expand_population_plan(
         plan=build_direct_population_plan(
@@ -158,7 +164,11 @@ def _assemble_statements(
 ) -> tuple[tuple[WarehouseStatement, ...], tuple[WarehouseStatement, ...]]:
     """Return the workflow statements and the statements that recover paused sources."""
 
-    if not request.plan.execution_scope and not request.audits:
+    if (
+        not request.plan.execution_scope
+        and not request.audits
+        and not request.row_error_policy_changes
+    ):
         return (), ()
     rendered_realizations: list[tuple[str, str]] = [
         (
@@ -167,6 +177,8 @@ def _assemble_statements(
         )
         for realization in realizations
     ]
+    policy_teardown, policy_realizations = _policy_change_views(request=request, client=client)
+    rendered_realizations.extend(policy_realizations)
     ensure_database_sql: str = client.render_ensure_database(request.database)
     rendered_sources: list[tuple[str, str]] = [
         (
@@ -222,7 +234,8 @@ def _assemble_statements(
             [
                 (operation.relation_name, operation.resource_kind == DirectResourceKind.VIEW)
                 for operation in request.plan.teardown_operations
-            ],
+            ]
+            + policy_teardown,
             rendered_realizations,
             coverage,
             [(audit.name, audit.query) for audit in request.audits],
@@ -230,6 +243,35 @@ def _assemble_statements(
         ),
     )
     return _warehouse_statements(statements), _warehouse_statements(recovery)
+
+
+def _policy_change_views(
+    *, request: DirectBuildRequest, client: AdapterConnection
+) -> tuple[list[tuple[str, bool]], list[tuple[str, str]]]:
+    """Return the view drops and creations applying each in-place row-error policy change."""
+
+    desired_views: dict[str, DesiredMaterializedView] = {
+        desired.name: desired
+        for desired in request.realized_project.desired_state.objects
+        if isinstance(desired, DesiredMaterializedView)
+    }
+    teardown: list[tuple[str, bool]] = []
+    realizations: list[tuple[str, str]] = []
+    for change in request.row_error_policy_changes:
+        teardown.extend([(change.dead_letter_view_name, False), (change.view_name, False)])
+        for view_name in (change.view_name, change.dead_letter_view_name):
+            view: DesiredMaterializedView | None = desired_views.get(view_name)
+            if view is not None:
+                realizations.append(
+                    (
+                        view_name,
+                        client.render_resource(
+                            resource=build_adapter_resource(view),
+                            database=view.key.database or request.database,
+                        ),
+                    )
+                )
+    return teardown, realizations
 
 
 def _warehouse_statements(statements: list[NativeStatement]) -> tuple[WarehouseStatement, ...]:
@@ -339,6 +381,7 @@ def realize_direct_replay_statement(
             )
             for boundary_key, cutoff_value, cutoff_inclusive, partition_value in boundaries
         ),
+        dedupe_offsets=any(replay_range.has_duplicate_offsets for replay_range in capture.ranges),
     )
     rendered_sql: str = client.render_replay_from_capture(
         AdapterCapturedReplayRequest(

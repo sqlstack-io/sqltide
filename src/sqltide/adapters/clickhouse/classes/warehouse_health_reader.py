@@ -40,7 +40,11 @@ class ClickHouseWarehouseHealthReader:
         self._connection: AdapterConnection = connection
 
     def read(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Collect diagnostics without making optional failures authoritative."""
 
@@ -48,6 +52,7 @@ class ClickHouseWarehouseHealthReader:
             connection=self._connection,
             database=database,
             managed_source_names=managed_source_names,
+            include_dead_letters=include_dead_letters,
         )
 
 
@@ -56,6 +61,7 @@ def _load_clickhouse_warehouse_health(
     connection: AdapterConnection,
     database: str,
     managed_source_names: tuple[str, ...],
+    include_dead_letters: bool,
 ) -> AdapterWarehouseHealth:
     """Collect one bounded snapshot without making optional failures authoritative."""
 
@@ -81,7 +87,9 @@ def _load_clickhouse_warehouse_health(
     memory: AdapterWarehouseMemory | None = None
     activity: AdapterWarehouseActivity | None = None
     kafka_consumers: AdapterWarehouseKafkaConsumers | None = None
-    dead_letters: tuple[AdapterWarehouseDeadLetterModel, ...] | None = None
+    dead_letters: tuple[AdapterWarehouseDeadLetterModel, ...] | None = (
+        None if include_dead_letters else ()
+    )
     tables: tuple[AdapterWarehouseTable, ...] | None = None
 
     try:
@@ -166,7 +174,9 @@ def _load_clickhouse_warehouse_health(
         )
 
     try:
-        if _dead_letters_table_exists(connection=connection, database=database):
+        if include_dead_letters and _dead_letters_table_exists(
+            connection=connection, database=database
+        ):
             dead_letters = connection.query_many(
                 statement=_dead_letters_query(database),
                 decode=lambda row: AdapterWarehouseDeadLetterModel(

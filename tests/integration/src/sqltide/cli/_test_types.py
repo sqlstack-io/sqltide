@@ -460,3 +460,40 @@ class CliDirectPostgresRefreshIntegrationTestCase:
     description: str
     refresh: str
     expected_rows: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class QuarantineLiveIntegrationTestCase:
+    description: str
+    values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_offsets: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineFailModeIntegrationTestCase:
+    description: str
+    values_sql: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class QuarantineReplayIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_dead_letter_count: int
+    expected_sql_fragment: str | None
+    expected_absent_sql_fragment: str | None
+
+
+@dataclass(frozen=True)
+class QuarantineInPlaceIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    bad_row_values_sql: str
+    good_row_values_sql: str
+    expected_after_enable: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_after_disable: tuple[str, ...]

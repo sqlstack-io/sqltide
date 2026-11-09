@@ -259,13 +259,18 @@ class ClickHouseConnection(AdapterConnection):
         return load_clickhouse_refresh_states(connection=self, database=database)
 
     def load_warehouse_health(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Read bounded ClickHouse system-table diagnostics."""
 
         return ClickHouseWarehouseHealthReader(connection=self).read(
             database=database,
             managed_source_names=managed_source_names,
+            include_dead_letters=include_dead_letters,
         )
 
     def metadata_columns(self, *, database: str, table: str) -> frozenset[str]:

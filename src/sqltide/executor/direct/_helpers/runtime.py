@@ -222,6 +222,7 @@ def _decode_range(*, row: Mapping[str, object]) -> DirectReplayRange:
         upper_value=_required_text(row=row, column="upper_value"),
         replay_cutoff_value=_required_text(row=row, column="replay_cutoff_value"),
         cutoff_inclusive=bool(row.get("cutoff_inclusive", True)),
+        has_duplicate_offsets=bool(row.get("has_duplicate_offsets", False)),
     )
 
 

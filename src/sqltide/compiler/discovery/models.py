@@ -624,8 +624,11 @@ class Pipeline:
     audit_defaults: AuditDefaults = field(default_factory=AuditDefaults)
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
     model_retention: ModelRetentionPolicy | Literal[False] | None = None
+    model_on_row_error: RowErrorPolicy | str | None = None
 
     def __post_init__(self) -> None:
+        if self.model_on_row_error is not None:
+            object.__setattr__(self, "model_on_row_error", RowErrorPolicy(self.model_on_row_error))
         object.__setattr__(self, "transforms", tuple(self.transforms))
         object.__setattr__(self, "mode", PipelineMode(self.mode))
         if self.bounded_replay_fallback is not None:

@@ -1,0 +1,382 @@
+import json
+from pathlib import Path
+
+import pytest
+from clickhouse_connect.driver.client import Client
+from clickhouse_connect.driver.exceptions import DatabaseError
+
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from tests.integration.src.sqltide.cli._test_types import (
+    QuarantineFailModeIntegrationTestCase,
+    QuarantineInPlaceIntegrationTestCase,
+    QuarantineLiveIntegrationTestCase,
+    QuarantineReplayIntegrationTestCase,
+)
+from tests.integration.src.sqltide.cli.helpers import (
+    build_managed_clickhouse_client,
+    direct_build_order_ids,
+    run_direct_build,
+    run_direct_plan,
+    write_direct_adopted_source_project,
+)
+from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
+
+_SOURCE_YML: str = (
+    "sources:\n"
+    "  - kind: stream_table\n"
+    "    name: orders\n"
+    "    table_name: orders_existing\n"
+    "    replay_boundary:\n"
+    "      mode: offsets\n"
+    "      columns:\n"
+    "        _replay_partition: event_partition\n"
+    "        _replay_offset: event_offset\n"
+    "        _replay_timestamp: event_timestamp\n"
+)
+_SOURCE_COLUMNS: str = (
+    "order_id Nullable(String), amount String, event_partition Int32, event_offset Int64, "
+    "event_timestamp DateTime64(3)"
+)
+_MODEL_BODY: str = (
+    "SELECT order_id::String AS order_id, amount::Int32 AS amount, "
+    "_replay_partition::Int32 AS _replay_partition, _replay_offset::Int64 AS _replay_offset "
+    'FROM __ref("orders")\n'
+)
+_QUARANTINE_MODEL: str = f'MODEL (on_row_error quarantine, order_by ["order_id"]);\n{_MODEL_BODY}'
+_FAIL_MODEL: str = f'MODEL (order_by ["order_id"]);\n{_MODEL_BODY}'
+_TS: str = "'2026-07-28 00:00:01.000'"
+_DEDUPE_FRAGMENT: str = "LIMIT 1 BY"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineLiveIntegrationTestCase(
+            description="a NULL into a non-Nullable column lands the good rows",
+            values_sql=f"('order-1', '1', 0, 1, {_TS}), (NULL, '2', 0, 2, {_TS})",
+            expected_order_ids=("order-1",),
+            expected_failed_columns=(("order_id",),),
+            expected_offsets=(2,),
+        ),
+        QuarantineLiveIntegrationTestCase(
+            description="unconvertible and out-of-range values are recorded",
+            values_sql=(
+                f"('order-1', '1', 0, 1, {_TS}), ('order-2', 'not-a-number', 0, 2, {_TS}), "
+                f"('order-3', '99999999999', 0, 3, {_TS})"
+            ),
+            expected_order_ids=("order-1",),
+            expected_failed_columns=(("amount",), ("amount",)),
+            expected_offsets=(2, 3),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_quarantine_model_when_bad_rows_arrive_then_they_become_dead_letters(
+    test_case: QuarantineLiveIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_QUARANTINE_MODEL
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        first_exit_code: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing VALUES {test_case.values_sql}"
+        )
+        order_ids: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+        dead_letters = clickhouse_client.query(
+            "SELECT model_name, failed_columns, kafka_offset "
+            f"FROM {clickhouse_database}._sqltide_dead_letters ORDER BY kafka_offset"
+        ).result_rows
+    finally:
+        connection.close()
+
+    assert first_exit_code == 0
+    assert order_ids == test_case.expected_order_ids
+    assert {row[0] for row in dead_letters} == {"orders_enriched"}
+    assert tuple(tuple(row[1]) for row in dead_letters) == test_case.expected_failed_columns
+    assert tuple(row[2] for row in dead_letters) == test_case.expected_offsets
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineFailModeIntegrationTestCase(
+            description="the default still fails the insert",
+            values_sql=f"(NULL, '2', 0, 2, {_TS})",
+            expected_error_fragment="non-Nullable",
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_default_policy_when_a_bad_row_arrives_then_the_insert_errors(
+    test_case: QuarantineFailModeIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_FAIL_MODEL
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        exit_code: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        with pytest.raises(DatabaseError, match=test_case.expected_error_fragment):
+            clickhouse_client.command(
+                f"INSERT INTO {clickhouse_database}.orders_existing VALUES {test_case.values_sql}"
+            )
+    finally:
+        connection.close()
+
+    assert exit_code == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineReplayIntegrationTestCase(
+            description="replay deduplicates repeated offsets and skips bad rows silently",
+            history_values_sql=(
+                f"('order-1', '1', 0, 1, {_TS}), ('order-1', '1', 0, 1, {_TS}), "
+                f"(NULL, '2', 0, 2, {_TS}), ('order-3', '3', 0, 3, {_TS})"
+            ),
+            expected_order_ids=("order-1", "order-3"),
+            expected_dead_letter_count=0,
+            expected_sql_fragment=_DEDUPE_FRAGMENT,
+            expected_absent_sql_fragment=None,
+        ),
+        QuarantineReplayIntegrationTestCase(
+            description="replay without repeated offsets stays undeduplicated",
+            history_values_sql=(f"('order-1', '1', 0, 1, {_TS}), ('order-3', '3', 0, 2, {_TS})"),
+            expected_order_ids=("order-1", "order-3"),
+            expected_dead_letter_count=0,
+            expected_sql_fragment=None,
+            expected_absent_sql_fragment=_DEDUPE_FRAGMENT,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_retained_history_when_building_quarantine_model_then_replay_uses_kept_rows(
+    test_case: QuarantineReplayIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_QUARANTINE_MODEL
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing "
+            f"VALUES {test_case.history_values_sql}"
+        )
+        exit_code: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            selectors=("orders_enriched",),
+            start_time="2026-07-28T00:00:00Z",
+        )
+        order_ids: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+        dead_letter_count: int = int(
+            clickhouse_client.query(
+                f"SELECT count() FROM {clickhouse_database}._sqltide_dead_letters"
+            ).result_rows[0][0]
+        )
+        replay_statements: str = "\n".join(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT sql FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+        )
+        second_exit_code: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        order_ids_after_rerun: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+    finally:
+        connection.close()
+
+    assert (exit_code, second_exit_code) == (0, 0)
+    assert order_ids == test_case.expected_order_ids
+    assert order_ids_after_rerun == test_case.expected_order_ids
+    assert dead_letter_count == test_case.expected_dead_letter_count
+    if test_case.expected_sql_fragment is not None:
+        assert test_case.expected_sql_fragment in replay_statements
+    if test_case.expected_absent_sql_fragment is not None:
+        assert test_case.expected_absent_sql_fragment not in replay_statements
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineInPlaceIntegrationTestCase(
+            description="switching policy recreates views only and keeps target rows",
+            history_values_sql=f"('order-1', '1', 0, 1, {_TS}), ('order-2', '2', 0, 2, {_TS})",
+            bad_row_values_sql=f"(NULL, '3', 0, 3, {_TS})",
+            good_row_values_sql=f"('order-4', '4', 0, 4, {_TS})",
+            expected_after_enable=("order-1", "order-2", "order-4"),
+            expected_failed_columns=(("order_id",),),
+            expected_after_disable=("order-1", "order-2", "order-4"),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_built_model_when_policy_changes_then_only_its_views_are_recreated(
+    test_case: QuarantineInPlaceIntegrationTestCase,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=_FAIL_MODEL
+    )
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    uuid_query: str = (
+        f"SELECT uuid FROM system.tables WHERE database = '{clickhouse_database}' "
+        "AND name = 'tbl__orders_enriched'"
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing "
+            f"VALUES {test_case.history_values_sql}"
+        )
+        build_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            selectors=("orders_enriched",),
+            start_time="2026-07-28T00:00:00Z",
+        )
+        table_uuid: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+        invocations_before: frozenset[str] = frozenset(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT DISTINCT invocation_id FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+        )
+        capsys.readouterr()
+        model_path.write_text(_QUARANTINE_MODEL, encoding="utf-8")
+        plan_exit: int = run_direct_plan(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        enable_output: str = capsys.readouterr().out
+        enable_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        enable_statements: tuple[str, ...] = tuple(
+            str(row[1])
+            for row in clickhouse_client.query(
+                f"SELECT invocation_id, sql FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+            if str(row[0]) not in invocations_before
+        )
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_existing "
+            f"VALUES {test_case.bad_row_values_sql}, {test_case.good_row_values_sql}"
+        )
+        after_enable: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+        failed: tuple[tuple[str, ...], ...] = tuple(
+            tuple(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT failed_columns FROM {clickhouse_database}._sqltide_dead_letters"
+            ).result_rows
+        )
+        uuid_after_enable: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+        model_path.write_text(_FAIL_MODEL, encoding="utf-8")
+        disable_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        dead_letter_views: int = int(
+            clickhouse_client.query(
+                f"SELECT count() FROM system.tables WHERE database = '{clickhouse_database}' "
+                "AND name = 'mv__orders_enriched__dead_letters'"
+            ).result_rows[0][0]
+        )
+        after_disable: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+        uuid_after_disable: object = clickhouse_client.query(uuid_query).result_rows[0][0]
+    finally:
+        connection.close()
+
+    assert (build_exit, plan_exit, enable_exit, disable_exit) == (0, 0, 0, 0)
+    plan_payload: dict[str, object] = json.loads(enable_output)
+    assert plan_payload["replay_roots"] == []
+    assert "view_only" in enable_output
+    assert enable_statements
+    assert not any(
+        statement.lstrip().upper().startswith(("INSERT", "TRUNCATE"))
+        or f"DROP TABLE IF EXISTS {clickhouse_database}.tbl__orders_enriched" in statement
+        for statement in enable_statements
+    )
+    assert table_uuid == uuid_after_enable == uuid_after_disable
+    assert after_enable == test_case.expected_after_enable
+    assert failed == test_case.expected_failed_columns
+    assert after_disable == test_case.expected_after_disable
+    assert dead_letter_views == 0
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-vv"])

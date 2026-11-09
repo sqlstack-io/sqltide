@@ -107,6 +107,16 @@ class SqlModelAnalyzer:
 
         return _native.sql_select_is_row_level(analysis.authored_sql, self._dialect)
 
+    def quarantine_ineligibility(self, *, analysis: SqlModelAnalysis) -> tuple[str, str] | None:
+        """Return the first ``(column, reason)`` preventing a quarantine split."""
+
+        return _native.sql_quarantine_ineligibility(analysis.authored_sql, self._dialect)
+
+    def quarantine_split(self, *, sql: str, model_name: str) -> tuple[str, str]:
+        """Return the kept-rows and dead-letter queries generated from one resolved query."""
+
+        return _native.sql_quarantine_split(sql, model_name, self._dialect)
+
     def _tree(self, analysis: SqlModelAnalysis) -> _native.SqlModelTree:
         tree: _native.SqlModelTree | None = self._tree_by_analysis.get(analysis)
         if tree is None:
