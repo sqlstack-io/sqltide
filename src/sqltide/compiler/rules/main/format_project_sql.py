@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
 from sqltide.compiler.discovery.models import DiscoveredProjectInputs, LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
-from sqltide.compiler.rules._helpers.configuration import rules_config
 from sqltide.compiler.rules._helpers.fixes import fixed_file
-from sqltide.compiler.rules._helpers.formatting import formatted_file
-from sqltide.compiler.rules.models import FormattedSource, RulesConfig
+from sqltide.compiler.rules.models import FormattedSource
 
 
 def format_project_sql(
@@ -23,8 +22,10 @@ def format_project_sql(
 ) -> tuple[FormattedSource, ...]:
     """Keep file ownership and fix eligibility inside the compiler's SQL boundary."""
 
-    config: RulesConfig = rules_config(loaded_project=loaded_project, selection=selection)
-    if any(entry.selectors for entry in config.rule_ignores):
+    config: _native.RulesConfig = _native.rules_config(
+        loaded_project=loaded_project, selection=selection
+    )
+    if any(config.ignore_selectors()):
         _ = analyze_project(
             pipelines_root=root,
             loaded_project=loaded_project,
@@ -60,7 +61,7 @@ def format_project_sql(
                     )
                     if fix
                     else (
-                        formatted_file(
+                        _native.formatted_file(
                             source=source,
                             keyword=keyword,
                             dialect=adapter_profile.sql_analysis_dialect,

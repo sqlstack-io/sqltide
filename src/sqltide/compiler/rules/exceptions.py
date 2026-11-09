@@ -1,6 +1,6 @@
 """A configured Rule failure is a compile failure, not a source rewrite."""
 
-from sqltide.compiler.rules.models import RuleFinding
+import sqltide._native as _native
 from sqltide.diagnostics.main.render_diagnostic import render_diagnostic
 
 
@@ -11,7 +11,9 @@ class SqlRulesError(ValueError):
 class RulesError(ValueError):
     """All findings from one compile, with the default-selection migration notice."""
 
-    def __init__(self, *, findings: tuple[RuleFinding, ...], defaults: bool = False) -> None:
+    def __init__(
+        self, *, findings: tuple[_native.RuleFinding, ...], defaults: bool = False
+    ) -> None:
         self.findings = findings
         message: str = "\n\n".join(
             render_diagnostic(diagnostic=finding.diagnostic) for finding in findings

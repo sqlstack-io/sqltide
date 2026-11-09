@@ -11,14 +11,21 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile.models import DesiredState, ExternalSourceReplayConfig, ObjectKey
+from sqltide.compiler.compile.models import (
+    CompileProjectInputs,
+    DesiredState,
+    ExternalSourceReplayConfig,
+    ObjectKey,
+)
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
+    DiscoveredProjectFile,
     EffectiveProjectConfiguration,
     ExecutionSettings,
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
+    LoadedProject,
     LoadedProjectConfiguration,
     ModelRetentionPolicy,
     PipelineNaming,
@@ -29,6 +36,7 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
 from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
+from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
 
@@ -113,13 +121,43 @@ def expand_macro_calls(
     declarations: Declarations | None,
     capture: Callable[[tuple[str, list[tuple[int, int, int, int]]]], None] | None = None,
 ) -> str: ...
-def sqlclean_lint_batch(request: str) -> str: ...
-def sqlclean_apply_policy(request: str) -> list[int]: ...
-def sqlclean_format(request: str) -> str: ...
-def sqlclean_rules() -> list[tuple[str, str, str, bool]]: ...
-def sqlclean_template_sites(sql: str) -> list[tuple[int, int]]: ...
-def sqlclean_suppressions(sql: str) -> list[tuple[int, int]]: ...
-def sqlclean_cross_join_subject(message: str) -> tuple[str, str | None] | None: ...
+
+class RulesConfig:
+    @property
+    def select(self) -> list[str] | None: ...
+    def selected_rules(self) -> list[str]: ...
+    def ignore_selectors(self) -> list[list[str]]: ...
+    def with_selector_paths(self, resolved: list[list[str]]) -> RulesConfig: ...
+
+class RuleFinding:
+    @property
+    def diagnostic(self) -> CompilerDiagnostic: ...
+    @property
+    def path(self) -> Path: ...
+    @property
+    def start(self) -> int: ...
+    @property
+    def end(self) -> int: ...
+    @property
+    def replacement(self) -> str | None: ...
+    @property
+    def fix_start(self) -> int | None: ...
+    @property
+    def fix_end(self) -> int | None: ...
+
+def rules_config(
+    *, loaded_project: LoadedProject | None, selection: tuple[str, ...] | None = None
+) -> RulesConfig: ...
+def evaluate_rules(
+    *,
+    inputs: CompileProjectInputs,
+    config: RulesConfig,
+    dialect: str,
+    project_dir: Path,
+    only_path: Path | None = None,
+    check_stale: bool = True,
+) -> tuple[RuleFinding, ...]: ...
+def formatted_file(*, source: DiscoveredProjectFile, keyword: str, dialect: str) -> str: ...
 
 class Declarations:
     def render_constant(self, name: str, file_path: str) -> str: ...

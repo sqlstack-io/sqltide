@@ -1,8 +1,8 @@
 """Resolve ignore scopes from compiler-owned models, never execution closure."""
 
-from dataclasses import replace
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import (
     CompiledProject,
     CompiledTableModel,
@@ -11,15 +11,15 @@ from sqltide.compiler.compile.models import (
 )
 from sqltide.compiler.graph.main.resolve_named_model_keys import resolve_named_model_keys
 from sqltide.compiler.rules.exceptions import SqlRulesError
-from sqltide.compiler.rules.models import RuleIgnore, RulesConfig
 
 
 def resolve_rule_ignores(
-    *, config: RulesConfig, compiled_project: CompiledProject, project_dir: Path
-) -> RulesConfig:
+    *, config: _native.RulesConfig, compiled_project: CompiledProject, project_dir: Path
+) -> _native.RulesConfig:
     """Named pipelines own their models; downstream resources retain their checks."""
 
-    if not any(entry.selectors for entry in config.rule_ignores):
+    scopes: list[list[str]] = config.ignore_selectors()
+    if not any(scopes):
         return config
     paths_by_key: dict[LogicalResourceKey, str] = {}
     for model in compiled_project.models:
@@ -32,16 +32,16 @@ def resolve_rule_ignores(
         )
         if path is not None:
             paths_by_key[model.key] = path.relative_to(project_dir).as_posix()
-    resolved: list[RuleIgnore] = []
-    for entry in config.rule_ignores:
-        if not entry.selectors:
-            resolved.append(entry)
+    resolved: list[list[str]] = []
+    for selectors in scopes:
+        if not selectors:
+            resolved.append([])
             continue
         keys: frozenset[LogicalResourceKey] = resolve_named_model_keys(
-            compiled_pipelines=compiled_project.pipelines, selectors=entry.selectors
+            compiled_pipelines=compiled_project.pipelines, selectors=tuple(selectors)
         )
-        paths: set[str] = {paths_by_key[key] for key in keys if key in paths_by_key}
+        paths: list[str] = [paths_by_key[key] for key in keys if key in paths_by_key]
         if not paths:
             raise SqlRulesError("Rule ignore selectors must resolve to authored model files")
-        resolved.append(replace(entry, paths=tuple(sorted(paths | set(entry.paths))), selectors=()))
-    return replace(config, rule_ignores=tuple(resolved))
+        resolved.append(paths)
+    return config.with_selector_paths(resolved)
