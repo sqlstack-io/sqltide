@@ -513,3 +513,45 @@ class QuarantineMetadataDatabaseIntegrationTestCase:
     values_sql: str
     expected_failed_columns: tuple[tuple[str, ...], ...]
     expected_health_row_count: int
+
+
+@dataclass(frozen=True)
+class QuarantineCheckAgreementTestCase:
+    description: str
+    target_type: str
+    source_type: str
+    value_sql: str
+    expected_check_agrees_with_cast: bool
+
+
+@dataclass(frozen=True)
+class QuarantineRepairIntegrationTestCase:
+    description: str
+    desired_model: str
+    live_model: str
+    break_statements: tuple[str, ...]
+    expected_dead_letter_view_count: int
+
+
+@dataclass(frozen=True)
+class FanOutDedupeIntegrationTestCase:
+    description: str
+    expected_row_count: int
+    expected_dedupe: bool
+
+
+@dataclass(frozen=True)
+class VirtualQuarantineIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    live_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+
+
+@dataclass(frozen=True)
+class VirtualDedupeIntegrationTestCase:
+    description: str
+    history_rows: tuple[tuple[str, int, int], ...]
+    expected_order_ids: tuple[str, ...]
+    expected_dedupe: bool

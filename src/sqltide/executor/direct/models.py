@@ -102,6 +102,7 @@ class DirectRuntimeReplay:
     replay_step_id: str
     replay: AdapterReplayRequest
     boundary_column_type: str | None
+    managed_landing_anchor: bool = False
 
 
 @dataclass(frozen=True)

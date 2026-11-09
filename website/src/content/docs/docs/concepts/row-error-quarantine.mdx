@@ -31,8 +31,9 @@ FROM __ref("orders")
 ## What it generates
 
 SQLTide moves each authored expression into an inner query under a private name, then applies the
-authored casts outside it. For every column whose type is not `Nullable(...)`, a row is invalid
-when `accurateCastOrNull(value, 'T') IS NULL`.
+authored casts outside it. A check marks a row invalid only when the authored `CAST` would have
+raised on it, so enabling quarantine does not change which other rows reach the target or their
+values: a value that `CAST` truncates or wraps stays a good row.
 
 - `mv__<target>` writes rows with no invalid column to the target table.
 - `mv__<target>__dead_letters` writes rows with at least one invalid column to
@@ -41,20 +42,33 @@ when `accurateCastOrNull(value, 'T') IS NULL`.
 Both views come from one rewrite, so they cannot disagree about which rows are valid. Replays use
 the kept-rows query: they never fail on invalid rows and never write dead letters.
 
-`LowCardinality(T)` columns are checked against `T`. `Array(...)`, `Map(...)` and `Tuple(...)`
-columns are not checked, so **a failure in one of those columns still raises exactly as it does
-under `fail`**, while the model's other columns are still checked.
+In a virtual pipeline each deployment gets its own views with deployment-suffixed names. They record
+the model's logical name, so dead letters survive promotion and rollback, and cleaning up a
+deployment drops its dead-letter view with its other relations. While two deployments are both
+attached to a source, each writes its own dead letters for the same bad row.
+
+`LowCardinality(T)` columns are checked against `T`.
+
+Some columns are not checked, so **a failure in one of them still raises exactly as it does under
+`fail`**, while the model's other columns are checked:
+
+- `Array(...)`, `Map(...)` and `Tuple(...)`
+- `Bool`, `Enum`, `JSON`, `Variant`, and any other type a check cannot evaluate without raising
+- `Nullable(T)`: no check is added, so a Nullable `Enum`, `FixedString` or `Decimal` can still raise
 
 ## Eligibility
 
-Only direct-mode, non-aggregating models can quarantine. A model is ineligible when:
+Direct and virtual models follow the same rules. Only non-aggregating models can quarantine. A model
+is ineligible when:
 
 - its outer query uses `GROUP BY`, an aggregate-state engine, or a window function
 - a projection references another output column by its alias, unqualified, such as
   `CAST(a + 1 AS Int32) AS b`. Reference the source column or compute the value in a subquery.
-  A self-reference such as `CAST(v AS String) AS v` is allowed.
-- a clause outside the projection, such as `WHERE`, references an output alias that is not a
+  A self-reference inside the projection, such as `CAST(v AS String) AS v`, is allowed.
+- a clause outside the projection, such as `WHERE`, references an output alias, including a
   self-reference
+- its outer query uses `DISTINCT` or `LIMIT BY`
+- it reads a scheduled refresh source
 - a column type cannot be checked: `Nested`, `Dynamic`, `AggregateFunction`, and the geo types
 
 A value set in the model's own `MODEL (...)` header on an ineligible model is a compile error
@@ -70,7 +84,8 @@ Use the `OrNull` form so the failure reaches the check as a `NULL`.
 ## Changing the policy
 
 Switching a live model between `fail` and `quarantine` does not count as a model change: it does not
-drop the target table and does not replay. `sqt build --changed` applies it in place by pausing the
+drop the target table, create a deployment, or replay. A virtual deployment picks up the policy the
+next time its model is deployed. For a direct model, `sqt build --changed` applies it in place by pausing the
 source's consumer, recreating `mv__<target>`, creating or dropping `mv__<target>__dead_letters`, and
 resuming. `sqt plan --changed` shows it as a view-only change with no replay roots. A model that
 also has a real SQL change takes the normal rebuild, using the desired policy.
@@ -80,6 +95,8 @@ not processed by the model.
 
 Existing rows are not reprocessed by a policy change. To reprocess them, force a rebuild yourself:
 destroy and rebuild the model, or run a build with `--full-refresh`.
+
+`sqt test` runs the model's authored query, so it does not exercise the generated split.
 
 ## Reading dead letters
 

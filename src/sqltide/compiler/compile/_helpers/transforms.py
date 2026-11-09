@@ -23,6 +23,7 @@ from sqltide.compiler.discovery.constants import DEFAULT_SQL_MODEL_ENGINE
 from sqltide.compiler.discovery.models import (
     LoadedPipeline,
     ModelRetentionPolicy,
+    PostgresRefreshSourceStep,
     ReplayOnChangePolicy,
     TransformStep,
     ViewStep,
@@ -30,7 +31,6 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ModelKind,
-    PipelineMode,
     RefType,
     ReplayLineageMode,
     RowErrorPolicy,
@@ -226,8 +226,8 @@ def _resolve_on_row_error(
     if transform.on_row_error is None and context.inherited_policy is not RowErrorPolicy.QUARANTINE:
         return RowErrorPolicy.FAIL
     ineligible_reason: str | None = None
-    if context.pipeline_mode is not PipelineMode.DIRECT:
-        ineligible_reason = "it is not in a direct-mode pipeline"
+    if context.refresh_source:
+        ineligible_reason = "it reads a scheduled refresh source"
     elif (
         sql_analysis.aggregate_facts.engine_has_aggregate_semantics
         or not sql_analyzer.is_row_level(analysis=sql_analysis)
@@ -241,12 +241,23 @@ def _resolve_on_row_error(
         )
         if blocked is None:
             return RowErrorPolicy.QUARANTINE
-        ineligible_reason = f"column '{blocked[0]}' is ineligible: {blocked[1]}"
+        ineligible_reason = (
+            blocked[1] if not blocked[0] else f"column '{blocked[0]}' is ineligible: {blocked[1]}"
+        )
     if transform.on_row_error is RowErrorPolicy.QUARANTINE:
         raise PipelineCompileError(
             f"Transform '{transform.name}' sets on_row_error = quarantine, but {ineligible_reason}"
         )
     return RowErrorPolicy.FAIL
+
+
+def row_error_context(*, loaded_pipeline: LoadedPipeline) -> RowErrorContext:
+    """Return the facts deciding row-error policy for models in one pipeline."""
+
+    return RowErrorContext(
+        inherited_policy=inherited_row_error_policy(loaded_pipeline=loaded_pipeline),
+        refresh_source=isinstance(loaded_pipeline.pipeline.source, PostgresRefreshSourceStep),
+    )
 
 
 def inherited_row_error_policy(*, loaded_pipeline: LoadedPipeline) -> RowErrorPolicy | None:

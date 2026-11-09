@@ -14,8 +14,21 @@ const PARTITION_COLUMN: &str = "_replay_partition";
 const OFFSET_COLUMN: &str = "_replay_offset";
 const NULLABLE_WRAPPER: &str = "nullable(";
 const LOW_CARDINALITY_WRAPPER: &str = "lowcardinality(";
-/// Container types left unchecked: a failure in one still raises as it does under `fail`.
-const SKIPPED_TYPE_PREFIXES: [&str; 3] = ["array(", "map(", "tuple("];
+/// Types whose real `CAST` and `CAST(... AS Nullable(T))` agree on which rows raise.
+const NULLABLE_CAST_TYPE_PREFIXES: [&str; 10] = [
+    "float32",
+    "float64",
+    "date32",
+    "date",
+    "datetime64",
+    "datetime",
+    "string",
+    "uuid",
+    "ipv4",
+    "ipv6",
+];
+/// Types where a `Nullable` cast raises but `accurateCastOrNull` agrees with `CAST`.
+const ACCURATE_TYPE_PREFIXES: [&str; 2] = ["decimal", "fixedstring"];
 /// Type names `accurateCastOrNull` cannot return and a model cannot sensibly skip.
 const UNCHECKABLE_TYPE_PREFIXES: [&str; 8] = [
     "nested(",
@@ -47,8 +60,6 @@ pub struct QuarantineIneligibility {
 struct OuterColumn {
     name: String,
     type_sql: String,
-    /// The type to test convertibility against, or `None` for a column that is not checked.
-    check_type: Option<String>,
 }
 
 /// The first output column that prevents the split, in authored order.
@@ -83,16 +94,20 @@ pub fn quarantine_split(
             blocked.column, blocked.reason
         )));
     }
-    let columns: Vec<OuterColumn> = model.projections.iter().map(outer_column).collect();
+    let columns: Vec<OuterColumn> = model
+        .projections
+        .iter()
+        .map(|projection| OuterColumn {
+            name: projection.name.clone(),
+            type_sql: projection.type_sql.clone(),
+        })
+        .collect();
     let inner: String = inner_query(&model, dialect)?;
     let checks: Vec<(String, String)> = columns
         .iter()
         .enumerate()
         .filter_map(|(index, column)| {
-            column
-                .check_type
-                .as_deref()
-                .map(|check| (column.name.clone(), invalid_check(index, check)))
+            invalid_check(index, &column.type_sql).map(|check| (column.name.clone(), check))
         })
         .collect();
     let any_invalid: Option<String> = (!checks.is_empty()).then(|| {
@@ -162,7 +177,9 @@ fn ineligibility(
 ) -> AnalysisResult<Option<QuarantineIneligibility>> {
     let trees: &[Value] = expressions(select);
     let outputs: HashSet<&str> = projections.iter().map(|item| item.name.as_str()).collect();
-    let mut self_shadowing: HashSet<&str> = HashSet::new();
+    if let Some(blocked) = query_level_ineligibility(select) {
+        return Ok(Some(blocked));
+    }
     for (projection, tree) in projections.iter().zip(trees) {
         let expression: &Value = authored_expression(tree)
             .ok_or_else(|| AnalysisError::new("Quarantine expects CAST projections"))?;
@@ -179,9 +196,6 @@ fn ineligibility(
                      reference the source column or compute it in a subquery"
                 ),
             }));
-        }
-        if names.contains(&projection.name) {
-            self_shadowing.insert(projection.name.as_str());
         }
         if is_uncheckable(&projection.type_sql) {
             return Ok(Some(QuarantineIneligibility {
@@ -201,11 +215,29 @@ fn ineligibility(
     }
     Ok(clause_names
         .iter()
-        .find(|name| outputs.contains(name.as_str()) && !self_shadowing.contains(name.as_str()))
+        .find(|name| outputs.contains(name.as_str()))
         .map(|alias| QuarantineIneligibility {
             column: alias.clone(),
             reason: "a clause outside the projection references this output by alias".to_owned(),
         }))
+}
+
+fn query_level_ineligibility(select: &Object) -> Option<QuarantineIneligibility> {
+    let clause: &str = if select.get("distinct") == Some(&Value::Bool(true))
+        || select
+            .get("distinct_on")
+            .is_some_and(|value| !value.is_null())
+    {
+        "DISTINCT"
+    } else if select.get("limit_by").is_some_and(|value| !value.is_null()) {
+        "LIMIT BY"
+    } else {
+        return None;
+    };
+    Some(QuarantineIneligibility {
+        column: String::new(),
+        reason: format!("its outer query uses {clause}"),
+    })
 }
 
 /// Unqualified column names under `node`, not descending into nested queries.
@@ -243,35 +275,49 @@ fn is_uncheckable(type_sql: &str) -> bool {
         .any(|prefix| lowered.starts_with(prefix))
 }
 
-fn outer_column(projection: &Projection) -> OuterColumn {
-    OuterColumn {
-        name: projection.name.clone(),
-        type_sql: projection.type_sql.clone(),
-        check_type: check_type(&projection.type_sql),
-    }
-}
-
-fn check_type(type_sql: &str) -> Option<String> {
+/// The predicate marking row `index` invalid for `type_sql`, or `None` for an unchecked column.
+fn invalid_check(index: usize, type_sql: &str) -> Option<String> {
     let lowered: String = type_sql.to_lowercase();
-    if lowered.starts_with(NULLABLE_WRAPPER)
-        || SKIPPED_TYPE_PREFIXES
-            .iter()
-            .any(|prefix| lowered.starts_with(prefix))
-    {
+    if lowered.starts_with(NULLABLE_WRAPPER) {
         return None;
     }
-    if !lowered.starts_with(LOW_CARDINALITY_WRAPPER) {
-        return Some(type_sql.to_owned());
+    if lowered.starts_with(LOW_CARDINALITY_WRAPPER) {
+        let inner: &str = type_sql[LOW_CARDINALITY_WRAPPER.len()..].strip_suffix(')')?;
+        return invalid_check(index, inner);
     }
-    let inner: &str = type_sql[LOW_CARDINALITY_WRAPPER.len()..].strip_suffix(')')?;
-    check_type(inner)
+    let value: String = format!("{VALUE_PREFIX}{index}");
+    if ACCURATE_TYPE_PREFIXES
+        .iter()
+        .any(|prefix| lowered.starts_with(prefix))
+    {
+        return Some(format!(
+            "accurateCastOrNull({value}, {}) IS NULL",
+            literal(type_sql)
+        ));
+    }
+    if is_integer_type(&lowered) {
+        let widest: &str = if lowered.starts_with("uint") {
+            "UInt256"
+        } else {
+            "Int256"
+        };
+        return Some(format!(
+            "(CAST({value} AS Nullable({type_sql})) IS NULL AND CAST({value} AS \
+             Nullable({widest})) IS NULL)"
+        ));
+    }
+    NULLABLE_CAST_TYPE_PREFIXES
+        .iter()
+        .any(|prefix| lowered.starts_with(prefix))
+        .then(|| format!("CAST({value} AS Nullable({type_sql})) IS NULL"))
 }
 
-fn invalid_check(index: usize, check_type: &str) -> String {
-    format!(
-        "accurateCastOrNull({VALUE_PREFIX}{index}, {}) IS NULL",
-        literal(check_type)
-    )
+fn is_integer_type(lowered: &str) -> bool {
+    let digits: &str = lowered
+        .strip_prefix("uint")
+        .or_else(|| lowered.strip_prefix("int"))
+        .unwrap_or_default();
+    !digits.is_empty() && digits.chars().all(|character| character.is_ascii_digit())
 }
 
 fn literal(text: &str) -> String {
@@ -391,13 +437,14 @@ mod tests {
             "SELECT CAST(__sqt_value_0 AS String) AS v, CAST(__sqt_value_1 AS Nullable(Int32)) \
              AS n, CAST(__sqt_value_2 AS Int64) AS _replay_offset FROM (SELECT v AS __sqt_value_0, \
              n AS __sqt_value_1, _replay_offset AS __sqt_value_2 FROM raw__orders WHERE id > 0) \
-             WHERE NOT (accurateCastOrNull(__sqt_value_0, 'String') IS NULL OR \
-             accurateCastOrNull(__sqt_value_2, 'Int64') IS NULL)"
+             WHERE NOT (CAST(__sqt_value_0 AS Nullable(String)) IS NULL OR \
+             (CAST(__sqt_value_2 AS Nullable(Int64)) IS NULL AND CAST(__sqt_value_2 AS \
+             Nullable(Int256)) IS NULL))"
         );
         assert!(
             generated
                 .dead_letter_query
-                .contains("if(accurateCastOrNull(__sqt_value_0, 'String') IS NULL, 'v', '')")
+                .contains("if(CAST(__sqt_value_0 AS Nullable(String)) IS NULL, 'v', '')")
         );
         assert!(
             generated
@@ -420,9 +467,13 @@ mod tests {
         assert!(
             generated
                 .good_query
-                .contains("accurateCastOrNull(__sqt_value_0, 'String') IS NULL")
+                .contains("CAST(__sqt_value_0 AS Nullable(String)) IS NULL")
         );
-        assert!(!generated.good_query.contains("__sqt_value_1, 'String'"));
+        assert!(
+            !generated
+                .good_query
+                .contains("CAST(__sqt_value_1 AS Nullable(")
+        );
     }
 
     #[test]
@@ -435,6 +486,14 @@ mod tests {
         assert!(unsupported.reason.contains("Dynamic"));
         let clause = blocked("SELECT CAST(x AS Int32) AS a FROM t WHERE a > 1");
         assert_eq!(clause.column, "a");
+        let self_shadow = blocked("SELECT CAST(v AS String) AS v FROM t WHERE v != ''");
+        assert_eq!(self_shadow.column, "v");
+        for sql in [
+            "SELECT DISTINCT CAST(v AS String) AS v2 FROM t",
+            "SELECT CAST(v AS String) AS v2 FROM t LIMIT 1 BY v",
+        ] {
+            assert!(blocked(sql).column.is_empty());
+        }
     }
 
     #[test]
@@ -446,7 +505,7 @@ mod tests {
         assert!(
             generated
                 .good_query
-                .contains("WHERE NOT (accurateCastOrNull(__sqt_value_3")
+                .contains("WHERE NOT (CAST(__sqt_value_3 AS Nullable(")
         );
         assert!(
             !generated
@@ -461,10 +520,36 @@ mod tests {
     }
 
     #[test]
+    fn selects_the_check_by_type_family() {
+        let generated = split(
+            "SELECT CAST(a AS Decimal(10, 2)) AS a, CAST(b AS FixedString(2)) AS b, \
+             CAST(c AS Bool) AS c, CAST(d AS Enum8('x' = 1)) AS d, CAST(e AS Date) AS e FROM t",
+        );
+        assert!(
+            generated
+                .good_query
+                .contains("accurateCastOrNull(__sqt_value_0, 'Decimal(10, 2)')")
+        );
+        assert!(
+            generated
+                .good_query
+                .contains("accurateCastOrNull(__sqt_value_1, 'FixedString(2)')")
+        );
+        assert!(!generated.good_query.contains("__sqt_value_2 AS Nullable"));
+        assert!(!generated.good_query.contains("__sqt_value_3 AS Nullable"));
+        assert!(
+            generated
+                .good_query
+                .to_lowercase()
+                .contains("cast(__sqt_value_4 as nullable(date)) is null")
+        );
+    }
+
+    #[test]
     fn allows_self_references_and_qualified_names() {
         let dialect = SqlDialect::new("clickhouse");
         for sql in [
-            "SELECT CAST(v AS String) AS v FROM t WHERE v != ''",
+            "SELECT CAST(v AS String) AS v FROM t",
             "SELECT CAST(t.a AS Int32) AS a, CAST(t.a + 1 AS Int32) AS b FROM t",
         ] {
             assert_eq!(quarantine_ineligibility(sql, &dialect).unwrap(), None);

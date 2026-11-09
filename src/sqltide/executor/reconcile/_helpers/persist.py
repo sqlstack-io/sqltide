@@ -38,15 +38,19 @@ def build_object_state_record(
     reconcile_id: str,
     recorded_at: str,
 ) -> ObjectStateRecord:
-    normalized_query: str | None = (
-        desired_object.query
-        if isinstance(desired_object, (DesiredMaterializedView, DesiredView))
-        else None
-    )
+    normalized_query: str | None = None
+    if isinstance(desired_object, DesiredMaterializedView):
+        normalized_query = desired_object.comparison_spec.query
+    elif isinstance(desired_object, DesiredView):
+        normalized_query = desired_object.query
     return ObjectStateRecord(
         deployment_id=reconcile_id,
         key=desired_object.key,
-        normalized_fingerprint=build_normalized_fingerprint(desired_object.spec),
+        normalized_fingerprint=build_normalized_fingerprint(
+            desired_object.comparison_spec
+            if isinstance(desired_object, DesiredMaterializedView)
+            else desired_object.spec
+        ),
         normalized_query=normalized_query,
         recorded_at=recorded_at,
         state_kind=VIRTUAL_OBJECT_STATE_KIND_RECONCILE,

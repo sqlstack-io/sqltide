@@ -391,13 +391,16 @@ fn deployment_offset_source_sql(request: &DeploymentReplay, has_lower_bound: boo
             .map(|name| format!("anchor.{name} AS {name}")),
         ", ",
     );
-    format!(
+    let source: String = format!(
         "SELECT {selected}\nFROM {}.{} AS anchor\nINNER JOIN cutoff_offsets\nON anchor.{} = \
          cutoff_offsets.{REPLAY_PARTITION}\n{lower_join}WHERE {upper_clause}\n{lower_clause}",
         replay.database, replay.relations.anchor, replay.columns.partition
-    )
-    .trim_end()
-    .to_owned()
+    );
+    if replay.dedupe_offsets {
+        format!("{}\n{}", source.trim_end(), offset_dedupe_clause(replay))
+    } else {
+        source.trim_end().to_owned()
+    }
 }
 
 /// Keep one row per source offset, so an anchor holding repeated copies of an offset replays it

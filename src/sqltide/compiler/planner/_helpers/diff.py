@@ -7,6 +7,7 @@ from collections.abc import Mapping
 import sqltide._native as _native
 from sqltide.compiler.compile.models import (
     Column,
+    DesiredMaterializedView,
     DesiredState,
     KafkaSettings,
     KafkaTableSpec,
@@ -50,7 +51,9 @@ def classify_object_changes(
         comparisons=[
             (
                 _native_spec(object_=object_),
-                _native_actual_spec(object_=actual_by_key.get(object_.key)),
+                _native_actual_spec(
+                    object_=_comparison_actual(object_=object_, by_key=actual_by_key)
+                ),
                 object_.key in full_refresh_keys or forced_start_time is not None,
             )
             for object_, forced_start_time in zip(
@@ -142,12 +145,24 @@ def _seed_compatibility(*, text: str | None) -> TableSchemaSeedCompatibility | N
     return None if text is None else TableSchemaSeedCompatibility(text)
 
 
-def _native_actual_spec(*, object_: ActualObject | None) -> NativeSpec | None:
+def _native_actual_spec(*, object_: DesiredObject | ActualObject | None) -> NativeSpec | None:
     return None if object_ is None else _native_spec(object_=object_)
 
 
+def _comparison_actual(
+    *, object_: DesiredObject, by_key: dict[ObjectKey, ActualObject]
+) -> DesiredObject | ActualObject | None:
+    """Treat a dead-letter view as unchanged: only its model's rebuild moves it."""
+
+    if isinstance(object_, DesiredMaterializedView) and object_.dead_letters:
+        return object_
+    return by_key.get(object_.key)
+
+
 def _native_spec(*, object_: DesiredObject | ActualObject) -> NativeSpec:
-    spec: TableSpec | KafkaTableSpec | MaterializedViewSpec | ViewSpec = object_.spec
+    spec: TableSpec | KafkaTableSpec | MaterializedViewSpec | ViewSpec = (
+        object_.comparison_spec if isinstance(object_, DesiredMaterializedView) else object_.spec
+    )
     if isinstance(spec, TableSpec):
         storage: TableStorage = spec.storage
         return (

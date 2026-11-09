@@ -8,6 +8,7 @@ from typing import cast
 
 import clickhouse_connect
 from clickhouse_connect.driver.client import Client
+from clickhouse_connect.driver.exceptions import DatabaseError
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
@@ -2209,3 +2210,36 @@ def virtual_deployment_metadata_row_count(
         f"WHERE deployment_id = '{deployment_id}')"
     ).result_rows
     return int(str(rows[0][0]))
+
+
+def make_project_virtual(*, project_root: Path) -> None:
+    """Switch a written project's default pipeline mode to virtual."""
+
+    config: Path = project_root / "sqltide_project.toml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "[targets.test]", '[defaults]\npipeline_mode = "virtual"\n\n[targets.test]', 1
+        ),
+        encoding="utf-8",
+    )
+
+
+def relation_names_like(*, client: Client, database: str, pattern: str) -> tuple[str, ...]:
+    """Return relation names in the database matching a LIKE pattern."""
+
+    return tuple(
+        str(row[0])
+        for row in client.query(
+            f"SELECT name FROM system.tables WHERE database = '{database}' "
+            f"AND name LIKE '{pattern}' ORDER BY name"
+        ).result_rows
+    )
+
+
+def real_cast_row_count(*, client: Client, table: str, target_type: str) -> int:
+    """Return rows a real CAST yields from the table, or 0 when the CAST raises."""
+
+    try:
+        return len(client.query(f"SELECT CAST(x AS {target_type}) AS v FROM {table}").result_rows)
+    except DatabaseError:
+        return 0

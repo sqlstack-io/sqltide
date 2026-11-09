@@ -62,6 +62,7 @@ def build_adapter_resource(
             database_template=_database_template(desired_object),
             refresh=desired_object.refresh,
             append=desired_object.append,
+            dead_letters=desired_object.dead_letters,
         )
     return AdapterView(
         name=desired_object.name,

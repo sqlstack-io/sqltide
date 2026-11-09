@@ -16,7 +16,7 @@ from sqltide.compiler.compile._helpers.retention import effective_model_retentio
 from sqltide.compiler.compile._helpers.transforms import (
     compile_model,
     compile_view,
-    inherited_row_error_policy,
+    row_error_context,
 )
 from sqltide.compiler.compile.exceptions import (
     PipelineCompileError,
@@ -27,7 +27,6 @@ from sqltide.compiler.compile.models import (
     CompiledPipeline,
     CompiledSource,
     LogicalResourceKey,
-    RowErrorContext,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.models import (
@@ -37,7 +36,7 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import PipelineMode, ReplayLineageMode
+from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
 from sqltide.diagnostics.types import DiagnosticPhase, DiagnosticSeverity
@@ -145,12 +144,7 @@ def _compile_models(
                         loaded_pipeline=loaded_pipeline,
                         transform=transform,
                     ),
-                    row_error_context=RowErrorContext(
-                        inherited_policy=inherited_row_error_policy(
-                            loaded_pipeline=loaded_pipeline
-                        ),
-                        pipeline_mode=PipelineMode(loaded_pipeline.pipeline.mode),
-                    ),
+                    row_error_context=row_error_context(loaded_pipeline=loaded_pipeline),
                 )
         except (TransformSqlContractError, PipelineCompileError) as error:
             if error.diagnostic is None:

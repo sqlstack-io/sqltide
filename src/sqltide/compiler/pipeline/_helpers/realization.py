@@ -99,6 +99,8 @@ def build_realized_project(
     )
     model_realizations: dict[LogicalResourceKey, AdapterModelRealization] = {}
     resolved_queries: dict[LogicalResourceKey, str] = {}
+    resolved_sql_by_key: dict[LogicalResourceKey, SqlResolvedQuery] = {}
+    view_owner: dict[str, str] = {}
     for model in project.models:
         resolved_query: SqlResolvedQuery = sql_analyzer.resolve(
             analysis=model.sql_analysis,
@@ -120,7 +122,11 @@ def build_realized_project(
             expected_relation_name=relation_names[model.key],
         )
         model_realizations[model.key] = realization
+        view_owner = _reject_dead_letter_view_collision(
+            model=model, realization=realization, seen=view_owner
+        )
         resolved_queries[model.key] = resolved_query.canonical_sql
+        resolved_sql_by_key[model.key] = resolved_query
     resources_by_key: dict[LogicalResourceKey, tuple[AdapterResource, ...]] = {
         key: realization.resources for key, realization in source_realizations.items()
     }
@@ -133,6 +139,7 @@ def build_realized_project(
         relation_name_by_logical_key=relation_names,
         resolved_query_by_model_key=resolved_queries,
         desired_state=_build_desired_state(
+            resolved_sql_by_key=resolved_sql_by_key,
             project=project,
             source_realizations=source_realizations,
             model_realizations=model_realizations,
@@ -307,6 +314,24 @@ def _adapter_column(column: Column) -> AdapterColumn:
     return AdapterColumn(name=column.name, type=column.type, default_expression=column.default)
 
 
+def _reject_dead_letter_view_collision(
+    *, model: CompiledModel, realization: AdapterModelRealization, seen: dict[str, str]
+) -> dict[str, str]:
+    """Return view owners, rejecting two models realizing the same materialized view name."""
+
+    for resource in realization.resources:
+        if not isinstance(resource, AdapterMaterializedView):
+            continue
+        owner: str | None = seen.get(resource.name)
+        if owner is not None:
+            raise PipelineCompileError(
+                f"Models '{owner}' and '{model.key.name}' both realize materialized view "
+                f"'{resource.name}'; rename one of them or set on_row_error = fail"
+            )
+        seen[resource.name] = model.key.name
+    return seen
+
+
 def _validate_model_relation_name(
     *,
     model: CompiledModel,
@@ -322,6 +347,7 @@ def _validate_model_relation_name(
 
 def _build_desired_state(
     *,
+    resolved_sql_by_key: dict[LogicalResourceKey, SqlResolvedQuery],
     project: CompiledProject,
     source_realizations: dict[LogicalResourceKey, AdapterSourceRealization],
     model_realizations: dict[LogicalResourceKey, AdapterModelRealization],
@@ -372,6 +398,7 @@ def _build_desired_state(
                     model=model,
                     realization=model_realizations[model.key],
                     relation_key_by_name=relation_key_by_name,
+                    resolved_query=resolved_sql_by_key[model.key],
                 )
             )
             objects.extend(model_objects)
@@ -436,6 +463,7 @@ def _model_desired_objects(
     model: CompiledTableModel,
     realization: AdapterModelRealization,
     relation_key_by_name: dict[str, ObjectKey],
+    resolved_query: SqlResolvedQuery,
 ) -> tuple[DesiredTable | DesiredMaterializedView, ...]:
     table: AdapterTable = _table_resource(
         resources=realization.resources,
@@ -456,10 +484,16 @@ def _model_desired_objects(
         logical_model_name=model.key.name,
         filters_row_errors=quarantines,
     )
+    if quarantines:
+        desired_view = replace(
+            desired_view,
+            authored_query=resolved_query.canonical_sql,
+            authored_database_template=resolved_query.database_template,
+        )
     dead_letter_views: tuple[DesiredMaterializedView, ...] = tuple(
         _desired_view(
             resource=resource,
-            deps=(*ref_keys, table_key, desired_view.key),
+            deps=(*ref_keys, table_key),
             logical_model_name=model.key.name,
         )
         for resource in realization.resources

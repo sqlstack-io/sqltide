@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from importlib.metadata import version
 
@@ -40,6 +41,9 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._with_metadata_dead_letter_target import (
+    with_metadata_dead_letter_target,
+)
 from sqltide.executor.population.main.plan_population_sources import plan_population_sources
 from sqltide.executor.population.models import (
     PopulationObject,
@@ -155,7 +159,9 @@ def _assemble_statements(
         client.render_migrate_metadata_state(request.metadata_database)
     )
     rendered_sources: list[tuple[str, str]] = _rendered_realizations(
-        client=client, realizations=source_realizations
+        client=client,
+        realizations=source_realizations,
+        metadata_database=request.metadata_database,
     )
     persist_metadata_sql: list[str] = list(
         client.render_persist_metadata_state(
@@ -165,6 +171,7 @@ def _assemble_statements(
     )
     rendered_objects: list[tuple[str, str]] = _rendered_realizations(
         client=client,
+        metadata_database=request.metadata_database,
         realizations=plan_population_objects(
             plan=population_plan,
             desired_state=request.desired_state,
@@ -242,13 +249,20 @@ def _prepared_relation(
 
 
 def _rendered_realizations(
-    *, client: AdapterConnection, realizations: tuple[PopulationRealization, ...]
+    *,
+    client: AdapterConnection,
+    realizations: tuple[PopulationRealization, ...],
+    metadata_database: str,
 ) -> list[tuple[str, str]]:
     return [
         (
             realization.resource.name,
             client.render_resource(
-                resource=realization.resource,
+                resource=with_metadata_dead_letter_target(
+                    resource=realization.resource,
+                    database=realization.database,
+                    metadata_database=metadata_database,
+                ),
                 database=realization.database,
                 if_not_exists=True,
             ),
@@ -283,9 +297,23 @@ def _native_root(
     root: PopulationRoot,
     replay: AdapterReplayRequest,
 ) -> NativeVirtualRoot:
+    anchor_exists: bool = target_catalog.relation(replay.relations.anchor) is not None
     rendered: tuple[str, ...] = client.render_replay_from_deployment(
         AdapterDeploymentReplayRequest(
-            replay=replay,
+            replay=replace(
+                replay,
+                dedupe_offsets=(
+                    anchor_exists
+                    and replay.mode is AdapterReplayBoundaryMode.OFFSETS
+                    and request.desired_state.is_managed_landing_table(replay.relations.anchor)
+                    and client.replay_anchor_has_repeated_offsets(
+                        database=replay.database,
+                        relation=replay.relations.anchor,
+                        partition_column=replay.columns.partition,
+                        offset_column=replay.columns.offset,
+                    )
+                ),
+            ),
             metadata_database=request.metadata_database,
             deployment_id=_confirmed_deployment_id(request),
             boundary_column_type=_boundary_column_type(

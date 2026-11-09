@@ -6,7 +6,6 @@ from dataclasses import replace
 
 import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.constants import METADATA_DEAD_LETTERS_TABLE_NAME
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
     AdapterMaterializedView,
@@ -50,6 +49,9 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._with_metadata_dead_letter_target import (
+    with_metadata_dead_letter_target,
+)
 from sqltide.executor.population.models import (
     PopulationManagedSource,
     PopulationPlan,
@@ -174,8 +176,10 @@ def _assemble_statements(
         (
             realization.resource.name,
             client.render_resource(
-                resource=_dead_letters_in_metadata_database(
-                    resource=realization.resource, request=request
+                resource=with_metadata_dead_letter_target(
+                    resource=realization.resource,
+                    database=realization.database,
+                    metadata_database=request.metadata_database,
                 ),
                 database=realization.database,
             ),
@@ -250,20 +254,16 @@ def _assemble_statements(
     return _warehouse_statements(statements), _warehouse_statements(recovery)
 
 
-def _dead_letters_in_metadata_database[ResourceT](
-    *, resource: ResourceT, request: DirectBuildRequest
-) -> ResourceT:
-    """Point a dead-letter view at the metadata database when it differs from the target."""
-
-    if (
-        not isinstance(resource, AdapterMaterializedView)
-        or resource.target_relation_name != METADATA_DEAD_LETTERS_TABLE_NAME
-        or request.metadata_database == request.database
-    ):
-        return resource
-    return replace(
-        resource,
-        target_relation_name=f"{request.metadata_database}.{METADATA_DEAD_LETTERS_TABLE_NAME}",
+def _render_view(
+    *, view: DesiredMaterializedView, request: DirectBuildRequest, client: AdapterConnection
+) -> str:
+    return client.render_resource(
+        resource=with_metadata_dead_letter_target(
+            resource=build_adapter_resource(view),
+            database=request.database,
+            metadata_database=request.metadata_database,
+        ),
+        database=view.key.database or request.database,
     )
 
 
@@ -287,21 +287,32 @@ def _policy_change_views(
     teardown: list[tuple[str, bool]] = []
     realizations: list[tuple[str, str]] = []
     for change in request.row_error_policy_changes:
-        teardown.extend([(change.dead_letter_view_name, False), (change.view_name, False)])
-        for view_name in (change.view_name, change.dead_letter_view_name):
-            view: DesiredMaterializedView | None = desired_views.get(view_name)
-            if view is not None:
-                realizations.append(
-                    (
-                        view_name,
-                        client.render_resource(
-                            resource=_dead_letters_in_metadata_database(
-                                resource=build_adapter_resource(view), request=request
-                            ),
-                            database=view.key.database or request.database,
-                        ),
-                    )
+        drop_view: str = f"DROP TABLE IF EXISTS {request.database}.{change.view_name} SYNC"
+        dead_letter_view: DesiredMaterializedView | None = desired_views.get(
+            change.dead_letter_view_name
+        )
+        if dead_letter_view is not None:
+            teardown.append((change.dead_letter_view_name, False))
+            realizations.append(
+                (
+                    change.dead_letter_view_name,
+                    _render_view(view=dead_letter_view, request=request, client=client),
                 )
+            )
+        realizations.append((f"replace_{change.view_name}", drop_view))
+        realizations.append(
+            (
+                change.view_name,
+                _render_view(view=desired_views[change.view_name], request=request, client=client),
+            )
+        )
+        if dead_letter_view is None:
+            realizations.append(
+                (
+                    f"retire_{change.dead_letter_view_name}",
+                    f"DROP TABLE IF EXISTS {request.database}.{change.dead_letter_view_name} SYNC",
+                )
+            )
     return teardown, realizations
 
 
@@ -412,7 +423,10 @@ def realize_direct_replay_statement(
             )
             for boundary_key, cutoff_value, cutoff_inclusive, partition_value in boundaries
         ),
-        dedupe_offsets=_capture_has_duplicate_offsets(capture=capture),
+        dedupe_offsets=(
+            runtime_replay.managed_landing_anchor
+            and _capture_has_duplicate_offsets(capture=capture)
+        ),
     )
     rendered_sql: str = client.render_replay_from_capture(
         AdapterCapturedReplayRequest(
@@ -505,6 +519,9 @@ def _runtime_replays(
             replay_step_id=replay_step_id,
             replay=replay,
             boundary_column_type=boundary_column_type,
+            managed_landing_anchor=request.realized_project.desired_state.is_managed_landing_table(
+                replay.relations.anchor
+            ),
         )
         for replay, (model_name, capture_step_id, replay_step_id, boundary_column_type) in zip(
             replay_templates, resolved, strict=True

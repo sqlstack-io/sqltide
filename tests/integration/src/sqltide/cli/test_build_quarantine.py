@@ -12,11 +12,13 @@ from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
     ClickHouseWarehouseHealthReader,
 )
 from tests.integration.src.sqltide.cli._test_types import (
+    FanOutDedupeIntegrationTestCase,
     QuarantineFailModeIntegrationTestCase,
     QuarantineInPlaceIntegrationTestCase,
     QuarantineLiveConsumerIntegrationTestCase,
     QuarantineLiveIntegrationTestCase,
     QuarantineMetadataDatabaseIntegrationTestCase,
+    QuarantineRepairIntegrationTestCase,
     QuarantineReplayIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
@@ -55,6 +57,9 @@ _QUARANTINE_MODEL: str = f'MODEL (on_row_error quarantine, order_by ["order_id"]
 _FAIL_MODEL: str = f'MODEL (order_by ["order_id"]);\n{_MODEL_BODY}'
 _TS: str = "'2026-07-28 00:00:01.000'"
 _DEDUPE_FRAGMENT: str = "LIMIT 1 BY"
+_DROP_MODEL_VIEW: str = "DROP TABLE {database}.mv__orders_enriched SYNC"
+_DROP_DEAD_LETTER_VIEW: str = "DROP TABLE {database}.mv__orders_enriched__dead_letters SYNC"
+_RECREATE_FAIL_VIEW: str = "DROP TABLE {database}.mv__orders_enriched SYNC"
 
 
 @pytest.mark.integration
@@ -69,14 +74,14 @@ _DEDUPE_FRAGMENT: str = "LIMIT 1 BY"
             expected_offsets=(2,),
         ),
         QuarantineLiveIntegrationTestCase(
-            description="unconvertible and out-of-range values are recorded",
+            description="unconvertible values are recorded while wrapped values stay good",
             values_sql=(
                 f"('order-1', '1', 0, 1, {_TS}), ('order-2', 'not-a-number', 0, 2, {_TS}), "
                 f"('order-3', '99999999999', 0, 3, {_TS})"
             ),
-            expected_order_ids=("order-1",),
-            expected_failed_columns=(("amount",), ("amount",)),
-            expected_offsets=(2, 3),
+            expected_order_ids=("order-1", "order-3"),
+            expected_failed_columns=(("amount",),),
+            expected_offsets=(2,),
         ),
     ],
     ids=lambda case: case.description,
@@ -170,14 +175,14 @@ def test_given_default_policy_when_a_bad_row_arrives_then_the_insert_errors(
     "test_case",
     [
         QuarantineReplayIntegrationTestCase(
-            description="replay deduplicates repeated offsets and skips bad rows silently",
+            description="adopted anchors are not deduplicated and bad rows are skipped",
             history_values_sql=(
                 f"('order-1', '1', 0, 1, {_TS}), ('order-1', '1', 0, 1, {_TS}), "
                 f"(NULL, '2', 0, 2, {_TS}), ('order-3', '3', 0, 3, {_TS})"
             ),
-            expected_order_ids=("order-1", "order-3"),
+            expected_order_ids=("order-1", "order-1", "order-3"),
             expected_dead_letter_count=0,
-            expected_dedupe=True,
+            expected_dedupe=False,
         ),
         QuarantineReplayIntegrationTestCase(
             description="replay without repeated offsets stays undeduplicated",
@@ -520,6 +525,218 @@ def test_given_separate_metadata_database_when_rows_fail_then_dead_letters_live_
     assert failed == test_case.expected_failed_columns
     assert health.dead_letters is not None
     assert health.dead_letters[0].row_count == test_case.expected_health_row_count
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineRepairIntegrationTestCase(
+            description="enable failed after creating the dead-letter view",
+            desired_model=_QUARANTINE_MODEL,
+            live_model=_FAIL_MODEL,
+            break_statements=(_DROP_MODEL_VIEW,),
+            expected_dead_letter_view_count=1,
+        ),
+        QuarantineRepairIntegrationTestCase(
+            description="enable never created the dead-letter view",
+            desired_model=_QUARANTINE_MODEL,
+            live_model=_QUARANTINE_MODEL,
+            break_statements=(_DROP_DEAD_LETTER_VIEW,),
+            expected_dead_letter_view_count=1,
+        ),
+        QuarantineRepairIntegrationTestCase(
+            description="disable left the dead-letter view behind",
+            desired_model=_FAIL_MODEL,
+            live_model=_QUARANTINE_MODEL,
+            break_statements=(_RECREATE_FAIL_VIEW,),
+            expected_dead_letter_view_count=0,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_half_applied_policy_switch_when_building_changed_then_it_repairs(
+    test_case: QuarantineRepairIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_adopted_source_project(
+        project_root=tmp_path, source_yml=_SOURCE_YML, model_sql=test_case.live_model
+    )
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    views: str = (
+        f"SELECT name FROM system.tables WHERE database = '{clickhouse_database}' "
+        "AND name IN ('mv__orders_enriched', 'mv__orders_enriched__dead_letters') ORDER BY name"
+    )
+    try:
+        clickhouse_client.command(
+            f"CREATE TABLE {clickhouse_database}.orders_existing ({_SOURCE_COLUMNS}) "
+            "ENGINE = MergeTree() ORDER BY event_offset"
+        )
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        for statement in test_case.break_statements:
+            clickhouse_client.command(statement.format(database=clickhouse_database))
+        model_path.write_text(test_case.desired_model, encoding="utf-8")
+        repair_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        names: tuple[str, ...] = tuple(
+            str(row[0]) for row in clickhouse_client.query(views).result_rows
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, repair_exit) == (0, 0)
+    assert "mv__orders_enriched" in names
+    assert len(names) == 1 + test_case.expected_dead_letter_view_count
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        FanOutDedupeIntegrationTestCase(
+            description="raw anchor is read once per offset before arrayJoin fans out",
+            expected_row_count=2,
+            expected_dedupe=True,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_fan_out_model_on_raw_anchor_when_replaying_repeats_then_no_rows_are_lost(
+    test_case: FanOutDedupeIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_build_project(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    model_path.write_text(
+        model_path.read_text(encoding="utf-8").replace(
+            "kafka_key::String AS order_id",
+            "arrayJoin(['a', 'b'])::String AS order_id",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        insert_landing_rows(
+            clickhouse_client=clickhouse_client,
+            database=clickhouse_database,
+            rows=(("order-1", 0, 1), ("order-1", 0, 1)),
+        )
+        second_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        row_count: int = int(
+            clickhouse_client.query(
+                f"SELECT count() FROM {clickhouse_database}.tbl__orders_enriched"
+            ).result_rows[0][0]
+        )
+        statements: str = " ".join(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT sql FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, second_exit) == (0, 0)
+    assert row_count == test_case.expected_row_count
+    assert ("LIMIT 1 BY" in statements) is test_case.expected_dedupe
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        FanOutDedupeIntegrationTestCase(
+            description="a downstream model anchor keeps every fanned-out row",
+            expected_row_count=4,
+            expected_dedupe=False,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_upstream_model_anchor_when_replaying_then_fan_out_rows_are_kept(
+    test_case: FanOutDedupeIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_build_project(project_root=tmp_path)
+    pipeline_root: Path = tmp_path / "pipelines" / "pl__orders"
+    model_path: Path = pipeline_root / "orders_enriched.sql"
+    model_path.write_text(
+        model_path.read_text(encoding="utf-8").replace(
+            "kafka_key::String AS order_id",
+            "arrayJoin(['a', 'b'])::String AS order_id",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    (pipeline_root / "orders_child.sql").write_text(
+        'MODEL (order_by ["order_id"]);\n'
+        "SELECT order_id::String AS order_id, "
+        "_replay_partition::Int32 AS _replay_partition, "
+        '_replay_offset::Int64 AS _replay_offset FROM __ref("orders_enriched")\n',
+        encoding="utf-8",
+    )
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        insert_landing_rows(
+            clickhouse_client=clickhouse_client,
+            database=clickhouse_database,
+            rows=(("order-1", 0, 1), ("order-2", 0, 2)),
+        )
+        clickhouse_client.command(f"TRUNCATE TABLE {clickhouse_database}._sqltide_run_statements")
+        second_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            selectors=("orders_child",),
+        )
+        row_count: int = int(
+            clickhouse_client.query(
+                f"SELECT count() FROM {clickhouse_database}.tbl__orders_child"
+            ).result_rows[0][0]
+        )
+        statements: str = " ".join(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT sql FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, second_exit) == (0, 0)
+    assert row_count == test_case.expected_row_count
+    assert ("LIMIT 1 BY" in statements) is test_case.expected_dedupe
 
 
 if __name__ == "__main__":

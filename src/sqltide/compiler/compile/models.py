@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
@@ -40,7 +40,6 @@ from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ModelKind,
     ModelReferenceScope,
-    PipelineMode,
     RefType,
     ReplayBoundaryMode,
     ReplayLineageMode,
@@ -222,6 +221,20 @@ class DesiredMaterializedView:
     append: bool = field(default=True, compare=False)
     filters_row_errors: bool = field(default=False, compare=False)
     dead_letters: bool = field(default=False, compare=False)
+    authored_query: str | None = field(default=None, compare=False)
+    authored_database_template: str | None = field(default=None, compare=False)
+
+    @property
+    def comparison_spec(self) -> MaterializedViewSpec:
+        """Return the spec change detection uses, ignoring the row-error rewrite."""
+
+        if self.authored_query is None:
+            return self.spec
+        return replace(
+            self.spec,
+            query=self.authored_query,
+            database_template=self.authored_database_template or self.authored_query,
+        )
 
     @property
     def name(self) -> str:
@@ -358,10 +371,10 @@ class CompiledModel:
 
 @dataclass(frozen=True)
 class RowErrorContext:
-    """The inherited setting and pipeline mode deciding a table model's row-error policy."""
+    """The inherited setting deciding a table model's row-error policy."""
 
     inherited_policy: RowErrorPolicy | None = None
-    pipeline_mode: PipelineMode = PipelineMode.DIRECT
+    refresh_source: bool = False
 
 
 @dataclass(frozen=True)
@@ -435,6 +448,19 @@ class DesiredState:
     replay_anchor_keys: frozenset[ObjectKey]
     mutable_ref_warning_keys: frozenset[ObjectKey]
     external_source_replay_configs: tuple[ExternalSourceReplayConfig, ...] = ()
+
+    def is_managed_landing_table(self, name: str) -> bool:
+        """Return whether a relation is a Kafka source's raw landing table."""
+
+        kafka_tables: frozenset[str] = frozenset(
+            desired.name for desired in self.objects if isinstance(desired, DesiredKafkaTable)
+        )
+        return any(
+            isinstance(desired, DesiredMaterializedView)
+            and desired.target_table_name == name
+            and desired.source_table_name in kafka_tables
+            for desired in self.objects
+        )
 
 
 @dataclass(frozen=True)

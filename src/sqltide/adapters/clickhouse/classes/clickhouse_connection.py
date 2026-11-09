@@ -258,6 +258,23 @@ class ClickHouseConnection(AdapterConnection):
 
         return load_clickhouse_refresh_states(connection=self, database=database)
 
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool:
+        """Return whether any partition holds more rows than its offset span."""
+
+        partition: str = _quote_clickhouse_identifier(partition_column)
+        offset: str = _quote_clickhouse_identifier(offset_column)
+        return bool(
+            self.query(
+                "SELECT 1 FROM (SELECT count() AS row_count, "
+                f"max({offset}) - min({offset}) + 1 AS offset_span "
+                f"FROM {_quote_clickhouse_identifier(database)}."
+                f"{_quote_clickhouse_identifier(relation)} GROUP BY {partition}) "
+                "WHERE row_count > offset_span LIMIT 1"
+            ).rows
+        )
+
     def load_warehouse_health(
         self,
         *,

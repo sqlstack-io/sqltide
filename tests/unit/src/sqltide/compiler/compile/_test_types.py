@@ -281,3 +281,24 @@ class PipelineRowErrorPolicyTestCase:
     description: str
     pipeline_toml: str
     expected_policy: RowErrorPolicy | None
+
+
+@dataclass(frozen=True)
+class RefreshSourceRowErrorTestCase:
+    description: str
+    model_contents: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class DeadLetterViewCollisionTestCase:
+    description: str
+    first_model: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class DeadLetterViewNameAllowedTestCase:
+    description: str
+    first_model: str
+    expected_model_count: int

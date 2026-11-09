@@ -26,6 +26,8 @@ pub enum SelectionMode {
 pub enum ResourceKind {
     Table,
     MaterializedView,
+    /// A model's generated view that records rows diverted by quarantine.
+    DeadLetterView,
     View,
 }
 
@@ -34,7 +36,7 @@ impl ResourceKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Table => "table",
-            Self::MaterializedView => "materialized_view",
+            Self::MaterializedView | Self::DeadLetterView => "materialized_view",
             Self::View => "view",
         }
     }
@@ -330,7 +332,12 @@ impl<'i, 'a> Planner<'i, 'a> {
                 .catalog
                 .iter()
                 .any(|relation| relation.materialized_view && relation.name == dead_letters);
-            if existing && !realized {
+            let owned_by_a_model: bool = self.input.nodes.iter().any(|node| {
+                node.resources
+                    .iter()
+                    .any(|(name, _)| *name == dead_letters.as_str())
+            });
+            if existing && !realized && !owned_by_a_model {
                 orphaned.push((dead_letters, entry.key, ResourceKind::MaterializedView));
             }
         }
@@ -354,10 +361,8 @@ impl<'i, 'a> Planner<'i, 'a> {
         if ordinary_views.len() == 1 && tables.is_empty() && views.is_empty() {
             return Ok(vec![(ordinary_views[0].to_owned(), ResourceKind::View)]);
         }
-        let (dead_letter_views, model_views): (Vec<&str>, Vec<&str>) = views
-            .iter()
-            .copied()
-            .partition(|name| name.ends_with(DEAD_LETTERS_VIEW_SUFFIX));
+        let dead_letter_views: Vec<&str> = named(ResourceKind::DeadLetterView);
+        let model_views: &Vec<&str> = &views;
         if tables.len() != 1
             || model_views.len() != 1
             || dead_letter_views.len() > 1
@@ -417,7 +422,12 @@ impl<'i, 'a> Planner<'i, 'a> {
             .execution_scope
             .iter()
             .flat_map(|&key| &self.node(key).resources)
-            .filter(|(_, kind)| *kind == Some(ResourceKind::MaterializedView))
+            .filter(|(_, kind)| {
+                matches!(
+                    *kind,
+                    Some(ResourceKind::MaterializedView | ResourceKind::DeadLetterView)
+                )
+            })
             .map(|(name, _)| *name)
             .collect();
         let mut consumers: Vec<&str> = self

@@ -543,6 +543,7 @@ fn resource_kind(kind: Option<&str>) -> PyResult<Option<ResourceKind>> {
         None => None,
         Some("table") => Some(ResourceKind::Table),
         Some("materialized_view") => Some(ResourceKind::MaterializedView),
+        Some("dead_letter_view") => Some(ResourceKind::DeadLetterView),
         Some("view") => Some(ResourceKind::View),
         Some(other) => {
             return Err(PyValueError::new_err(format!(

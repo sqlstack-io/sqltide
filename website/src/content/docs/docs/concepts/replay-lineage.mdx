@@ -33,9 +33,14 @@ Model SQL and ClickHouse engines own deduplication or aggregate idempotency.
 ## Repeated offsets
 
 When a direct build captures an offset replay, it compares the anchor's row count with the number of
-distinct offsets it captured. If the anchor holds repeated copies of an offset, the replay reads each
+distinct offsets it captured. Only a managed raw landing table is deduplicated, because it holds one
+row per Kafka message; a downstream model can legitimately hold several rows per offset. If the anchor holds repeated copies of an offset, the replay reads each
 offset once with `LIMIT 1 BY`, which holds every offset key in memory. Without repeated copies the
-replay SQL is unchanged. Virtual-environment replays do not deduplicate.
+replay SQL is unchanged.
+
+Virtual-environment replays render before their boundaries are captured, so the build checks the
+anchor first and uses the same `LIMIT 1 BY` when any partition holds more rows than its offset span.
+That check is cheap, but gaps in the offsets can hide a small number of repeats.
 
 ## Replay anchors
 

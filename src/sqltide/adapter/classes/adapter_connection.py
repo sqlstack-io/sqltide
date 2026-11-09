@@ -142,6 +142,14 @@ class AdapterConnection(ABC):
     def capture_warehouse_timestamp(self) -> str:
         """Capture the active warehouse server's UTC millisecond timestamp."""
 
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool:
+        """Return whether an offset replay anchor holds repeated copies of any offset."""
+
+        del database, relation, partition_column, offset_column
+        return False
+
     def load_warehouse_health(
         self,
         *,

@@ -24,7 +24,6 @@ from sqltide.adapters.clickhouse._helpers.inspection import quote_clickhouse_sql
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_CAPACITY_CRITICAL_AVAILABLE_FRACTION,
     CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,
-    CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX,
     CLICKHOUSE_STUCK_CONSUMER_ERROR_CHARS,
     CLICKHOUSE_STUCK_CONSUMER_MIN_ERRORS,
     CLICKHOUSE_STUCK_CONSUMER_WINDOW_SECONDS,
@@ -305,8 +304,7 @@ def _dead_letters_database(*, connection: AdapterConnection, database: str) -> s
             "SELECT extract(create_table_query, "
             f"'{_DEAD_LETTERS_TARGET_PATTERN}') AS target_database FROM system.tables "
             f"WHERE database = {quote_clickhouse_sql_string(database)} "
-            "AND engine = 'MaterializedView' AND endsWith(name, "
-            f"{quote_clickhouse_sql_string(CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX)}) LIMIT 1"
+            "AND engine = 'MaterializedView' AND target_database != '' LIMIT 1"
         ),
         decode=lambda row: row,
     )

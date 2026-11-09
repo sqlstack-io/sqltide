@@ -6,15 +6,20 @@ from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import CompiledTableModel
 from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
+from sqltide.compiler.discovery.models import LoadedPipeline
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from tests.unit.src.sqltide.compiler.compile._test_types import (
+    DeadLetterViewCollisionTestCase,
+    DeadLetterViewNameAllowedTestCase,
     PipelineRowErrorPolicyTestCase,
+    RefreshSourceRowErrorTestCase,
     RejectRowErrorPolicyTestCase,
     ResolveRowErrorPolicyTestCase,
     RowErrorHeaderRejectedTestCase,
 )
 from tests.unit.src.sqltide.compiler.compile.helpers import (
     build_row_error_model,
+    compile_and_realize_pipeline,
     write_registry_pipeline_project,
 )
 
@@ -29,6 +34,18 @@ source:
       _replay_partition: event_partition
       _replay_offset: event_offset
       _replay_timestamp: event_timestamp
+"""
+_REFRESH_SOURCE_CONTENTS: str = """
+source:
+  kind: postgres
+  name: rates
+  host: example.com
+  port: 5432
+  database: shop
+  table: rates
+  user: reader
+  password_env: SHOP_PASSWORD
+  refresh: 1 HOUR
 """
 _ROW_LEVEL_SELECT: str = (
     "SELECT JSONExtractString(kafka_value, 'id')::String AS order_id, "
@@ -125,12 +142,12 @@ _INNER_AGGREGATE_SELECT: str = (
             expected_policy=RowErrorPolicy.FAIL,
         ),
         ResolveRowErrorPolicyTestCase(
-            description="inherited quarantine leaves a virtual pipeline on fail",
+            description="inherited quarantine applies to a virtual pipeline",
             model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
             project_policy=RowErrorPolicy.QUARANTINE,
             pipeline_policy=None,
             pipeline_mode=PipelineMode.VIRTUAL,
-            expected_policy=RowErrorPolicy.FAIL,
+            expected_policy=RowErrorPolicy.QUARANTINE,
         ),
         ResolveRowErrorPolicyTestCase(
             description="pipeline value wins over the project default",
@@ -210,6 +227,35 @@ def test_given_row_error_settings_when_compiling_then_policy_resolves(
             expected_error_fragment="window function",
         ),
         RejectRowErrorPolicyTestCase(
+            description="outer distinct",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT DISTINCT kafka_key::String AS k, "
+                '_replay_timestamp::DateTime64(3) AS _replay_timestamp FROM __source("orders")'
+            ),
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_error_fragment="DISTINCT",
+        ),
+        RejectRowErrorPolicyTestCase(
+            description="outer limit by",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::String AS k, "
+                "_replay_timestamp::DateTime64(3) AS _replay_timestamp "
+                'FROM __source("orders") LIMIT 1 BY k2'
+            ),
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_error_fragment="LIMIT BY",
+        ),
+        RejectRowErrorPolicyTestCase(
+            description="clause referencing a self-shadowed alias",
+            model_contents=(
+                "MODEL (on_row_error quarantine); SELECT kafka_key::String AS kafka_key, "
+                "_replay_timestamp::DateTime64(3) AS _replay_timestamp "
+                "FROM __source(\"orders\") WHERE kafka_key != ''"
+            ),
+            pipeline_mode=PipelineMode.DIRECT,
+            expected_error_fragment="column 'kafka_key' is ineligible",
+        ),
+        RejectRowErrorPolicyTestCase(
             description="sibling alias names the column and reason",
             model_contents=(
                 "MODEL (on_row_error quarantine); SELECT kafka_key::String AS a, "
@@ -227,12 +273,6 @@ def test_given_row_error_settings_when_compiling_then_policy_resolves(
             ),
             pipeline_mode=PipelineMode.DIRECT,
             expected_error_fragment="column 'a' is ineligible.*Dynamic",
-        ),
-        RejectRowErrorPolicyTestCase(
-            description="virtual pipeline",
-            model_contents=f"MODEL (on_row_error quarantine); {_ROW_LEVEL_SELECT}",
-            pipeline_mode=PipelineMode.VIRTUAL,
-            expected_error_fragment="direct-mode",
         ),
     ],
     ids=lambda case: case.description,
@@ -312,6 +352,93 @@ def test_given_pipeline_toml_when_loading_then_row_error_policy_is_read(
         load_pipeline_directory(pipeline_dir).pipeline.model_on_row_error
         is test_case.expected_policy
     )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        RefreshSourceRowErrorTestCase(
+            description="an explicit quarantine on a refresh source is rejected",
+            model_contents=(
+                'MODEL (on_row_error quarantine, order_by ["id"]); '
+                "SELECT id::Int32 AS id FROM __source('rates')"
+            ),
+            expected_error_fragment="scheduled refresh source",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_refresh_source_when_quarantine_set_then_it_errors(
+    test_case: RefreshSourceRowErrorTestCase,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(PipelineCompileError, match=test_case.expected_error_fragment):
+        build_row_error_model(
+            tmp_path=tmp_path,
+            source_contents=_REFRESH_SOURCE_CONTENTS,
+            model_contents=test_case.model_contents,
+            project_policy=None,
+            pipeline_mode=PipelineMode.DIRECT,
+        )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DeadLetterViewCollisionTestCase(
+            description="a quarantine model colliding with it is a compile error",
+            first_model=f"MODEL (on_row_error quarantine); {_ROW_LEVEL_SELECT}",
+            expected_error_fragment="both realize materialized view",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_quarantine_colliding_with_a_model_view_when_realizing_then_it_errors(
+    test_case: DeadLetterViewCollisionTestCase,
+    tmp_path: Path,
+) -> None:
+    pipeline_dir: Path = write_registry_pipeline_project(
+        project_dir=tmp_path,
+        source_contents=_SOURCE_CONTENTS,
+        model_contents=test_case.first_model,
+    )
+    (pipeline_dir / "orders_enriched__dead_letters.sql").write_text(
+        f"MODEL (); {_ROW_LEVEL_SELECT}", encoding="utf-8"
+    )
+    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+
+    with pytest.raises(PipelineCompileError, match=test_case.expected_error_fragment):
+        compile_and_realize_pipeline(loaded)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DeadLetterViewNameAllowedTestCase(
+            description="a default model may use a dead-letter view name",
+            first_model=f"MODEL (); {_ROW_LEVEL_SELECT}",
+            expected_model_count=2,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_default_model_named_like_dead_letter_view_when_realizing_then_it_compiles(
+    test_case: DeadLetterViewNameAllowedTestCase,
+    tmp_path: Path,
+) -> None:
+    pipeline_dir: Path = write_registry_pipeline_project(
+        project_dir=tmp_path,
+        source_contents=_SOURCE_CONTENTS,
+        model_contents=test_case.first_model,
+    )
+    (pipeline_dir / "orders_enriched__dead_letters.sql").write_text(
+        f"MODEL (); {_ROW_LEVEL_SELECT}", encoding="utf-8"
+    )
+    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+
+    compiled, _ = compile_and_realize_pipeline(loaded)
+
+    assert len(compiled.models) == test_case.expected_model_count
 
 
 if __name__ == "__main__":
