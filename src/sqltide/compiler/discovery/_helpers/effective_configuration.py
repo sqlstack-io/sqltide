@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Mapping
 
 import sqltide._native as _native
@@ -23,9 +22,9 @@ def resolve_effective_project_configuration(
     """Resolve one connection-lazy effective project configuration."""
 
     return _native.resolve_effective_configuration(
-        tomllib.loads(loaded.project_source.contents),
+        _native.load_toml(loaded.project_source.contents),
         str(loaded.project_source.file_path),
-        None if loaded.local_source is None else tomllib.loads(loaded.local_source.contents),
+        None if loaded.local_source is None else _native.load_toml(loaded.local_source.contents),
         "" if loaded.local_source is None else str(loaded.local_source.file_path),
         selected_target,
         cli_variables,

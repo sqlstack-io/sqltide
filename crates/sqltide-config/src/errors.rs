@@ -7,6 +7,8 @@ pub enum ConfigErrorKind {
     Syntax,
     /// The document parses but a value cannot be built from it.
     Construct,
+    /// The document nests deeper than the loader reads.
+    TooDeep,
 }
 
 /// A configuration failure, at its one-based line and column where known.
