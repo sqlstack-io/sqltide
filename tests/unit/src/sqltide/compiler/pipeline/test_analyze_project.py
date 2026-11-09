@@ -1021,7 +1021,6 @@ def test_given_private_macro_modules_when_analyzing_then_only_public_modules_are
                 "pipelines/pl__zeta/zeta_model.sql",
                 "sources/alpha_source.yml",
                 "sources/zeta_source.yml",
-                "sqltide_project.toml",
                 "tests/quality/alpha_test.sql",
             ),
             expected_exit_code=0,

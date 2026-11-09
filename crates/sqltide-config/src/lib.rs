@@ -6,6 +6,7 @@ pub(crate) mod constants;
 pub mod errors;
 pub mod models;
 pub mod pipelines;
+pub mod project;
 pub mod toml;
 pub mod yaml;
 

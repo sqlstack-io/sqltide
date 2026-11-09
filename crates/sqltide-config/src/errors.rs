@@ -31,6 +31,16 @@ impl ConfigError {
         }
     }
 
+    /// The message with `tomllib.TOMLDecodeError`'s location suffix.
+    pub fn tomllib_text(&self) -> String {
+        match (self.line, self.column) {
+            (Some(line), Some(column)) => {
+                format!("{} (at line {line}, column {column})", self.message)
+            }
+            _ => format!("{} (at end of document)", self.message),
+        }
+    }
+
     /// This error at a one-based line and column, unless it already has a position.
     #[must_use]
     pub fn at(self, line: usize, column: usize) -> Self {
