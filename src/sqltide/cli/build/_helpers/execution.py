@@ -6,15 +6,13 @@ import sys
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build._helpers.confirmation import confirm_build
 from sqltide.cli.build._helpers.execution_artifacts import render_direct_execution_json
 from sqltide.cli.build.models import BuildCommandOptions, DirectWorkflowPreparation
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.planner.main.find_direct_out_of_scope_consumers import (
-    find_direct_out_of_scope_consumers,
-)
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
 from sqltide.executor.direct.main.build_direct_execution_result import (
     build_direct_execution_result,
@@ -150,7 +148,7 @@ def _reject_new_out_of_scope_consumers(
 ) -> None:
     if not preparation.request.plan.prerequisite_execution_scope:
         return
-    consumers: tuple[str, ...] = find_direct_out_of_scope_consumers(
+    consumers: tuple[str, ...] = _native.find_direct_out_of_scope_consumers(
         realized_project=preparation.request.realized_project,
         catalog=client.load_catalog(preparation.request.database),
         prerequisite_execution_scope=preparation.request.plan.prerequisite_execution_scope,

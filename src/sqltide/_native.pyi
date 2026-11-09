@@ -16,6 +16,7 @@ from sqltide.compiler.compile.models import (
     CompileProjectInputs,
     DesiredState,
     ExternalSourceReplayConfig,
+    LogicalResourceKey,
     ObjectKey,
 )
 from sqltide.compiler.discovery.models import (
@@ -36,12 +37,18 @@ from sqltide.compiler.discovery.models import (
     SourceFreshnessPolicy,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
+from sqltide.compiler.graph.models import ProjectGraph
+from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
+    DirectPlan,
+    DirectSourceDriftSelection,
+    DirectWarehouseSnapshot,
     PlannedObjectChange,
     RebuildSubtree,
 )
+from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -437,63 +444,23 @@ def plan_deployment(
 ) -> DeploymentPlan: ...
 def plan_direct_build(
     *,
-    nodes: list[
-        tuple[
-            str,
-            tuple[bool, bool, str, list[tuple[str, str]]] | None,
-            bool,
-            str,
-            list[tuple[str, str | None]],
-            str | None,
-            bool,
-            str | None,
-            list[tuple[int, bool]],
-            list[int],
-        ]
-    ],
+    graph: ProjectGraph,
+    realized_project: RealizedProject,
+    snapshot: DirectWarehouseSnapshot,
     database: str,
-    selection_mode: str,
-    selected: set[int],
-    source_drift: set[int],
+    selected_model_keys: frozenset[LogicalResourceKey],
+    selection_mode: DirectSelectionMode | None,
     include_missing_upstream: bool,
-    has_start_time: bool,
-    catalog: list[tuple[str, bool, list[str], list[str]]],
-    external_columns: list[
-        tuple[str, tuple[str | None, str | None, str | None, str | None, str | None]]
-    ],
-    fingerprints: tuple[bool, str | None, list[tuple[str, str, str]]],
-    mutable_ref_names: list[str],
-) -> tuple[
-    list[int],
-    list[int],
-    list[int],
-    list[tuple[int, str, bool, bool]],
-    list[
-        tuple[
-            int,
-            str,
-            list[tuple[str, str]],
-            int | None,
-            bool,
-            tuple[str, str, str | None, str | None, str | None, str | None],
-        ]
-    ],
-    list[
-        tuple[
-            int,
-            int,
-            str,
-            list[str],
-            str,
-            list[int],
-            bool,
-            list[tuple[str, str]],
-        ]
-    ],
-    list[tuple[str, int, str]],
-    list[tuple[str, int, str]],
-    list[int],
-]: ...
+    effective_start_time: str | None,
+    source_drift_selections: tuple[DirectSourceDriftSelection, ...],
+) -> DirectPlan: ...
+def find_direct_out_of_scope_consumers(
+    *,
+    realized_project: RealizedProject,
+    catalog: CatalogSnapshot,
+    prerequisite_execution_scope: tuple[LogicalResourceKey, ...],
+    execution_scope: tuple[LogicalResourceKey, ...],
+) -> tuple[str, ...]: ...
 def resolve_variable_values(
     values: Mapping[str, object],
     environment: Mapping[str, str],

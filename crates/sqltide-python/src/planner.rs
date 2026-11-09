@@ -10,7 +10,10 @@ use sqltide_planner::actual::{
     ActualSource, ActualStateLookup, DesiredFacts, DesiredObjectFacts, InspectionFacts,
     RecordFacts, RootFacts, actual_sources,
 };
-use sqltide_planner::deployment::{PlanKey, PlanSubtree, stage_deployment as stage};
+use sqltide_planner::deployment::{
+    MUTABLE_REF_WARNING_CODE, MUTABLE_REF_WARNING_MESSAGE, PlanKey, PlanSubtree,
+    stage_deployment as stage,
+};
 use sqltide_planner::desired::{
     CycleError, DesiredGraph, DesiredObject, KeyInfo, ObjectKind, ObjectType, ReplayMode,
     ReplayPolicy, ReplayRule,
@@ -1027,9 +1030,8 @@ fn plan_deployment<'py>(
         })
         .collect::<PyResult<_>>()?;
 
-    let planner_constants: Bound<'py, PyModule> = py.import(PLANNER_CONSTANTS)?;
-    let warning_code = planner_constants.getattr("MUTABLE_REF_WARNING_CODE")?;
-    let warning_message = planner_constants.getattr("MUTABLE_REF_WARNING_MESSAGE")?;
+    let warning_code = MUTABLE_REF_WARNING_CODE.into_bound_py_any(py)?;
+    let warning_message = MUTABLE_REF_WARNING_MESSAGE.into_bound_py_any(py)?;
     let warning_class = planner_models.getattr("PlannerWarning")?;
     let warnings: Vec<Bound<'py, PyAny>> = staged
         .mutable_ref_warnings
@@ -1116,11 +1118,11 @@ fn plan_deployment<'py>(
 }
 
 /// `(table, aggregate, query, replay settings)` for a model.
-type ModelArgument = (bool, bool, String, Vec<(String, String)>);
+pub(crate) type ModelArgument = (bool, bool, String, Vec<(String, String)>);
 /// `(name, model, source is framework managed, relation name, [(resource name, kind)], replay
 /// lineage, shares a postgres source name, producing pipeline, [(upstream, driving)],
 /// downstream)`.
-type NodeArgument = (
+pub(crate) type NodeArgument = (
     String,
     Option<ModelArgument>,
     bool,
@@ -1133,13 +1135,13 @@ type NodeArgument = (
     Vec<usize>,
 );
 /// `(name, is a materialized view, columns, source relation names)`.
-type CatalogArgument = (String, bool, Vec<String>, Vec<String>);
+pub(crate) type CatalogArgument = (String, bool, Vec<String>, Vec<String>);
 /// `(relation name, [partition, offset, timestamp, landed at, cursor] column overrides)`.
-type ExternalArgument = (String, [Option<String>; 5]);
+pub(crate) type ExternalArgument = (String, [Option<String>; 5]);
 /// `(available, warning, [(identity, definition SQL, definition hash)])`.
-type FingerprintArgument = (bool, Option<String>, Vec<(String, String, String)>);
+pub(crate) type FingerprintArgument = (bool, Option<String>, Vec<(String, String, String)>);
 /// `(status, current hash, previous SQL, previous hash, unified diff, warning)`.
-type SqlChangeResult = (
+pub(crate) type SqlChangeResult = (
     &'static str,
     String,
     Option<String>,
@@ -1148,7 +1150,7 @@ type SqlChangeResult = (
     Option<String>,
 );
 /// `(key, reason, [(relation name, kind)], driving input, is replay root, SQL change)`.
-type EntryResult = (
+pub(crate) type EntryResult = (
     usize,
     &'static str,
     Vec<(String, &'static str)>,
@@ -1158,7 +1160,7 @@ type EntryResult = (
 );
 /// `(key, driving input, driving relation, [partition, offset, timestamp, landed at, cursor],
 /// lineage, propagated keys, aggregate, replay settings)`.
-type ReplayRootResult = (
+pub(crate) type ReplayRootResult = (
     usize,
     usize,
     String,
@@ -1169,10 +1171,10 @@ type ReplayRootResult = (
     Vec<(String, String)>,
 );
 /// `(relation name, key, kind)`.
-type OperationResult = (String, usize, &'static str);
+pub(crate) type OperationResult = (String, usize, &'static str);
 /// `(user scope, execution scope, prerequisite execution scope, [(key, relation, present,
 /// framework managed)], entries, replay roots, teardown, creation, mutable-ref warning indexes)`.
-type DirectPlanResult = (
+pub(crate) type DirectPlanResult = (
     Vec<usize>,
     Vec<usize>,
     Vec<usize>,
@@ -1345,23 +1347,8 @@ fn direct_plan_result(plan: DirectPlan) -> DirectPlanResult {
 
 /// Plan the selected downstream closure over `nodes` in graph order. A violated rule raises
 /// `ValueError(message)`.
-#[pyfunction]
-#[pyo3(signature = (
-    *,
-    nodes,
-    database,
-    selection_mode,
-    selected,
-    source_drift,
-    include_missing_upstream,
-    has_start_time,
-    catalog,
-    external_columns,
-    fingerprints,
-    mutable_ref_names,
-))]
 #[allow(clippy::too_many_arguments)]
-fn plan_direct_build(
+pub(crate) fn run_direct_plan(
     py: Python<'_>,
     nodes: Vec<NodeArgument>,
     database: &str,
@@ -1711,7 +1698,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(direct_fingerprint_record, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_drift_reasons, module)?)?;
     module.add_function(wrap_pyfunction!(direct_model_identity_metadata, module)?)?;
-    module.add_function(wrap_pyfunction!(plan_direct_build, module)?)?;
     module.add_function(wrap_pyfunction!(plan_deployment, module)?)?;
     module.add_class::<PyDesiredGraph>()
 }

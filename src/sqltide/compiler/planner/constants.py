@@ -72,13 +72,6 @@ VIEW_RELATION_ENGINE: str = "View"
 ENGINE_ARGUMENT_OPEN: str = "("
 EMPTY_TUPLE_EXPRESSION: str = "tuple()"
 BLANK_VALUES: tuple[object, ...] = (None, "")
-CATALOG_MATERIALIZED_VIEW_ENGINE: str = "MaterializedView"
-
-MUTABLE_REF_WARNING_CODE: str = "mutable_ref_replay_not_guaranteed"
-MUTABLE_REF_WARNING_MESSAGE: str = (
-    "Transform uses mutable side refs; exact historical replay equivalence cannot be guaranteed "
-    "because side-table state may differ from the original processing time."
-)
 
 DESIRED_KAFKA_TABLE_KIND: str = "kafka_table"
 DESIRED_TABLE_KIND: str = "table"

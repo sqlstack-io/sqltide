@@ -10,6 +10,7 @@ mod clickhouse;
 mod compile;
 mod config;
 mod destruction;
+mod direct_plan;
 mod discovery;
 mod executor;
 mod graph;
@@ -83,6 +84,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     discovery::register(module)?;
     config::register(module)?;
     destruction::register(module)?;
+    direct_plan::register(module)?;
     executor::register(module)?;
     plan_render::register(module)?;
     planner::register(module)?;

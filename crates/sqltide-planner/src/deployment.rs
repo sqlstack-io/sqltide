@@ -3,6 +3,13 @@
 use std::collections::HashSet;
 
 /// One desired object a deployment plan can stage.
+/// The planner warning code for a target whose transform reads mutable side refs.
+pub const MUTABLE_REF_WARNING_CODE: &str = "mutable_ref_replay_not_guaranteed";
+/// The planner warning message for a target whose transform reads mutable side refs.
+pub const MUTABLE_REF_WARNING_MESSAGE: &str = "Transform uses mutable side refs; exact historical \
+     replay equivalence cannot be guaranteed because side-table state may differ from the original \
+     processing time.";
+
 pub struct PlanKey<'a> {
     /// The desired object type, such as `table` or `materialized_view`.
     pub object_type: &'a str,
