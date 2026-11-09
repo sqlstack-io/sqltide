@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.cli.build.models import (
@@ -8,9 +9,6 @@ from sqltide.cli.build.models import (
 )
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
-from sqltide.cli.plan.main._source_validation import (
-    validate_declared_external_sources,
-)
 from sqltide.cli.plan.main._warnings import add_empty_replay_source_warnings
 from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
@@ -64,7 +62,7 @@ def build_virtual_build_preview(
         database=resolved_database,
     )
     start_time: str | None = start_time_utc
-    validate_declared_external_sources(
+    _native.validate_declared_external_sources(
         catalog=snapshot.catalog,
         external_source_replay_configs=(
             analysis.realized_project.desired_state.external_source_replay_configs
