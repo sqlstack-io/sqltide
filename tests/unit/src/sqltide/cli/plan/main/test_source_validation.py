@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import validate_declared_external_sources
 from sqltide.adapter.models import (
     AdapterIdentity,
     CatalogColumn,
@@ -8,9 +9,6 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
 )
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.plan.main._source_validation import (
-    validate_declared_external_sources,
-)
 from tests.unit.src.sqltide.cli.plan.main._test_types import (
     CliExternalSourceValidationErrorTestCase,
 )
