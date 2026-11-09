@@ -12,7 +12,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.planner._helpers.diff import classify_object_changes
-from sqltide.compiler.planner._helpers.rebuild import emit_rebuild_subtrees_from_changes
 from sqltide.compiler.planner._helpers.sql_diffs import build_planned_sql_diffs
 from sqltide.compiler.planner.constants import (
     MUTABLE_REF_WARNING_CODE,
@@ -50,10 +49,9 @@ def build_deployment_plan(
         start_time_keys=start_time_keys,
         start_time=start_time,
     )
-    rebuild_subtrees: tuple[RebuildSubtree, ...] = emit_rebuild_subtrees_from_changes(
-        desired_state=desired_state,
-        object_changes=object_changes,
-    )
+    rebuild_subtrees: tuple[RebuildSubtree, ...] = _native.DesiredGraph(
+        desired_state
+    ).rebuild_subtrees(object_changes)
     steps, prepared_shadow_objects, warnings = stage_deployment(
         desired_state=desired_state,
         rebuild_subtrees=rebuild_subtrees,

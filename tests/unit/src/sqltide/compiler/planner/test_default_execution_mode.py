@@ -1,12 +1,12 @@
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import DesiredState
 from sqltide.compiler.discovery.models import (
     ReplayOnChangePolicy,
     ReplayOnChangeRule,
 )
 from sqltide.compiler.discovery.types import ReplayOnChangeMode
-from sqltide.compiler.planner._helpers.rebuild import emit_rebuild_subtrees_from_changes
 from sqltide.compiler.planner.constants import (
     PLANNED_CHANGE_TYPE_REBUILD,
     REBUILD_EXECUTION_MODE_FULL,
@@ -99,16 +99,17 @@ def test_given_planned_change_metadata_when_building_subtrees_then_it_sets_expec
     desired_state: DesiredState = build_example_desired_state_with_replay_on_change(
         replay_on_change=test_case.replay_on_change
     )
-    rebuild_subtrees: tuple[RebuildSubtree, ...] = emit_rebuild_subtrees_from_changes(
-        desired_state=desired_state,
-        object_changes=(
+    rebuild_subtrees: tuple[RebuildSubtree, ...] = _native.DesiredGraph(
+        desired_state
+    ).rebuild_subtrees(
+        (
             PlannedObjectChange(
                 key=build_key(None, "table", "tbl__orders_enriched"),
                 change_type=PLANNED_CHANGE_TYPE_REBUILD,
                 schema_change_kind=test_case.schema_change_kind,
                 seed_compatibility=test_case.seed_compatibility,
             ),
-        ),
+        )
     )
 
     assert rebuild_subtrees[0].execution_mode == test_case.expected_execution_mode

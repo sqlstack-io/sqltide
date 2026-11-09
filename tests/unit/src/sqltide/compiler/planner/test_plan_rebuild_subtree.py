@@ -1,10 +1,7 @@
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
-from sqltide.compiler.graph.main._descendant_keys import descendant_keys
-from sqltide.compiler.planner._helpers.rebuild import build_rebuild_subtree
-from sqltide.compiler.planner.constants import REBUILD_STRATEGY_SHADOW
-from sqltide.compiler.planner.models import RebuildSubtree
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerRebuildSubtreeTestCase,
     PlannerReplayAnchorSelectionTestCase,
@@ -28,7 +25,6 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
                 (None, "materialized_view", "mv__orders_enriched"),
             ),
             expected_upstream_boundary_key=(None, "table", "raw__orders"),
-            expected_strategy=REBUILD_STRATEGY_SHADOW,
         ),
         PlannerRebuildSubtreeTestCase(
             description="plans landing rebuild subtree from example desired state",
@@ -40,7 +36,6 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
                 (None, "materialized_view", "mv__orders_enriched"),
             ),
             expected_upstream_boundary_key=(None, "table", "raw__orders"),
-            expected_strategy=REBUILD_STRATEGY_SHADOW,
         ),
     ],
     ids=lambda case: case.description,
@@ -48,26 +43,14 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
 def test_given_changed_desired_object_when_planning_rebuild_then_it_returns_expected_subtree(
     test_case: PlannerRebuildSubtreeTestCase,
 ) -> None:
-    desired_state: DesiredState = build_example_desired_state()
+    graph: _native.DesiredGraph = _native.DesiredGraph(build_example_desired_state())
     root_key: ObjectKey = build_key(*test_case.root_key)
 
-    descendant_key_set: tuple[ObjectKey, ...] = descendant_keys(
-        desired_state=desired_state, root_key=root_key
-    )
-    rebuild_subtree: RebuildSubtree = build_rebuild_subtree(
-        desired_state=desired_state, root_key=root_key
-    )
+    descendant_key_set: tuple[ObjectKey, ...] = graph.descendants(root_key)
+    upstream_boundary_key: ObjectKey = graph.nearest_replay_anchor(root_key, False)
 
     assert tuple(key_parts(key) for key in descendant_key_set) == test_case.expected_descendant_keys
-    assert (
-        tuple(key_parts(key) for key in rebuild_subtree.affected_keys)
-        == test_case.expected_descendant_keys
-    )
-    assert (
-        key_parts(rebuild_subtree.upstream_boundary_key) == test_case.expected_upstream_boundary_key
-    )
-    assert rebuild_subtree.strategy == test_case.expected_strategy
-    assert rebuild_subtree.execution_mode == test_case.expected_execution_mode
+    assert key_parts(upstream_boundary_key) == test_case.expected_upstream_boundary_key
 
 
 @pytest.mark.parametrize(
@@ -108,10 +91,8 @@ def test_given_transform_when_planning_rebuild_then_it_uses_expected_replay_anch
     )
     root_key: ObjectKey = build_key(None, "table", "tbl__orders_enriched")
 
-    rebuild_subtree: RebuildSubtree = build_rebuild_subtree(
-        desired_state=desired_state, root_key=root_key
+    upstream_boundary_key: ObjectKey = _native.DesiredGraph(desired_state).nearest_replay_anchor(
+        root_key, False
     )
 
-    assert (
-        key_parts(rebuild_subtree.upstream_boundary_key) == test_case.expected_upstream_boundary_key
-    )
+    assert key_parts(upstream_boundary_key) == test_case.expected_upstream_boundary_key

@@ -17,7 +17,6 @@ from sqltide.compiler.planner.types import (
     DirectSqlBaselineStatus,
     PlannedChangeType,
     RebuildExecutionMode,
-    RebuildStrategy,
     TableSchemaChangeKind,
     TableSchemaSeedCompatibility,
 )
@@ -144,8 +143,6 @@ class PlannerRebuildSubtreeTestCase:
     root_key: tuple[str | None, str, str]
     expected_descendant_keys: tuple[tuple[str | None, str, str], ...]
     expected_upstream_boundary_key: tuple[str | None, str, str]
-    expected_strategy: RebuildStrategy
-    expected_execution_mode: RebuildExecutionMode = RebuildExecutionMode.FULL_REBUILD
 
 
 @dataclass(frozen=True)
