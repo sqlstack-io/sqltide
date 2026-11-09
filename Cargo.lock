@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-clickhouse"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "regex",
  "sha2",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-compile"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "sha2",
  "sqltide-discovery",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-config"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "regex",
  "saphyr-parser",
@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-discovery"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "regex",
  "sqltide-sqlanalysis",
@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-executor"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "regex",
  "serde",
@@ -684,11 +684,11 @@ dependencies = [
 
 [[package]]
 name = "sqltide-json"
-version = "0.65.0"
+version = "0.65.1"
 
 [[package]]
 name = "sqltide-planner"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "regex",
  "serde_json",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-python"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "fensu-policy",
  "polyglot-sql",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-sqlanalysis"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "polyglot-sql",
  "serde_json",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "sqltide-sqltext"
-version = "0.65.0"
+version = "0.65.1"
 
 [[package]]
 name = "stacker"
