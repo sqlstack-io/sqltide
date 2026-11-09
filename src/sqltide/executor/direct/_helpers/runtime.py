@@ -212,6 +212,11 @@ def _decode_capture(
     )
 
 
+def _optional_integer(*, row: Mapping[str, object], column: str) -> int | None:
+    value: object = row.get(column)
+    return None if value is None else int(str(value))
+
+
 def _decode_range(*, row: Mapping[str, object]) -> DirectReplayRange:
     return DirectReplayRange(
         partition_value=_optional_text(row=row, column="partition_value"),
@@ -222,7 +227,7 @@ def _decode_range(*, row: Mapping[str, object]) -> DirectReplayRange:
         upper_value=_required_text(row=row, column="upper_value"),
         replay_cutoff_value=_required_text(row=row, column="replay_cutoff_value"),
         cutoff_inclusive=bool(row.get("cutoff_inclusive", True)),
-        has_duplicate_offsets=bool(row.get("has_duplicate_offsets", False)),
+        anchor_row_count=_optional_integer(row=row, column="anchor_row_count"),
     )
 
 

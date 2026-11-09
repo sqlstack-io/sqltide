@@ -497,3 +497,11 @@ class QuarantineInPlaceIntegrationTestCase:
     expected_after_enable: tuple[str, ...]
     expected_failed_columns: tuple[tuple[str, ...], ...]
     expected_after_disable: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineLiveConsumerIntegrationTestCase:
+    description: str
+    history_rows: tuple[tuple[str, int, int], ...]
+    late_rows: tuple[tuple[str, int, int], ...]
+    expected_order_ids: tuple[str, ...]

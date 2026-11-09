@@ -274,3 +274,10 @@ class RowErrorHeaderRejectedTestCase:
     description: str
     model_contents: str
     expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class PipelineRowErrorPolicyTestCase:
+    description: str
+    pipeline_toml: str
+    expected_policy: RowErrorPolicy | None

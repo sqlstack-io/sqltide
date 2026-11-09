@@ -23,6 +23,7 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     ObjectKey,
 )
+from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
@@ -381,7 +382,7 @@ def realize_direct_replay_statement(
             )
             for boundary_key, cutoff_value, cutoff_inclusive, partition_value in boundaries
         ),
-        dedupe_offsets=any(replay_range.has_duplicate_offsets for replay_range in capture.ranges),
+        dedupe_offsets=_capture_has_duplicate_offsets(capture=capture),
     )
     rendered_sql: str = client.render_replay_from_capture(
         AdapterCapturedReplayRequest(
@@ -413,6 +414,21 @@ def realize_direct_replay_statement(
             else None
         ),
     )
+
+
+def _capture_has_duplicate_offsets(*, capture: DirectReplayCapture) -> bool:
+    """Return whether the anchor holds more rows than the captured ranges have distinct offsets."""
+
+    if capture.boundary_mode is not ReplayLineageMode.OFFSETS or not capture.ranges:
+        return False
+    anchor_row_count: int | None = capture.ranges[0].anchor_row_count
+    if anchor_row_count is None:
+        return False
+    distinct_offsets: int = sum(
+        int(replay_range.upper_value) - int(replay_range.lower_value) + 1
+        for replay_range in capture.ranges
+    )
+    return anchor_row_count > distinct_offsets
 
 
 def _runtime_replays(

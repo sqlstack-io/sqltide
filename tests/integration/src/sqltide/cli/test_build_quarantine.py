@@ -9,15 +9,18 @@ from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from tests.integration.src.sqltide.cli._test_types import (
     QuarantineFailModeIntegrationTestCase,
     QuarantineInPlaceIntegrationTestCase,
+    QuarantineLiveConsumerIntegrationTestCase,
     QuarantineLiveIntegrationTestCase,
     QuarantineReplayIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
     build_managed_clickhouse_client,
     direct_build_order_ids,
+    insert_landing_rows,
     run_direct_build,
     run_direct_plan,
     write_direct_adopted_source_project,
+    write_direct_build_project,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
@@ -376,6 +379,86 @@ def test_given_built_model_when_policy_changes_then_only_its_views_are_recreated
     assert failed == test_case.expected_failed_columns
     assert after_disable == test_case.expected_after_disable
     assert dead_letter_views == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        QuarantineLiveConsumerIntegrationTestCase(
+            description="a managed source is paused and resumed around the view swap",
+            history_rows=(("order-1", 0, 1),),
+            late_rows=(("order-2", 0, 2),),
+            expected_order_ids=("order-1", "order-2"),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_managed_source_when_policy_changes_then_consumer_is_paused_and_resumed(
+    test_case: QuarantineLiveConsumerIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    write_direct_build_project(project_root=tmp_path)
+    model_path: Path = tmp_path / "pipelines" / "pl__orders" / "orders_enriched.sql"
+    connection: AdapterConnection = build_managed_clickhouse_client(
+        clickhouse_connection_settings, database=clickhouse_database
+    )
+    try:
+        first_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        insert_landing_rows(
+            clickhouse_client=clickhouse_client,
+            database=clickhouse_database,
+            rows=test_case.history_rows,
+        )
+        second_exit: int = run_direct_build(
+            project_root=tmp_path, database=clickhouse_database, connection=connection
+        )
+        known: frozenset[str] = frozenset(
+            str(row[0])
+            for row in clickhouse_client.query(
+                f"SELECT DISTINCT invocation_id FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+        )
+        model_path.write_text(
+            model_path.read_text(encoding="utf-8").replace(
+                "MODEL (", "MODEL (on_row_error quarantine, ", 1
+            ),
+            encoding="utf-8",
+        )
+        change_exit: int = run_direct_build(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        step_ids: tuple[str, ...] = tuple(
+            str(row[1])
+            for row in clickhouse_client.query(
+                f"SELECT invocation_id, step_id FROM {clickhouse_database}._sqltide_run_statements"
+            ).result_rows
+            if str(row[0]) not in known
+        )
+        insert_landing_rows(
+            clickhouse_client=clickhouse_client,
+            database=clickhouse_database,
+            rows=test_case.late_rows,
+        )
+        order_ids: tuple[str, ...] = direct_build_order_ids(
+            clickhouse_client=clickhouse_client, database=clickhouse_database
+        )
+    finally:
+        connection.close()
+
+    assert (first_exit, second_exit, change_exit) == (0, 0, 0)
+    assert any(step_id.startswith("pause_source_") for step_id in step_ids)
+    assert any(step_id.startswith("activate_source_") for step_id in step_ids)
+    assert not any(step_id.startswith("capture_replay") for step_id in step_ids)
+    assert order_ids == test_case.expected_order_ids
 
 
 if __name__ == "__main__":

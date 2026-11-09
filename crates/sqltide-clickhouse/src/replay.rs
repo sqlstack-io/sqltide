@@ -595,7 +595,7 @@ fn required_deployment_boundary_type(request: &DeploymentReplay) -> ReplayResult
     }
 }
 
-fn coverage_columns(replay: &Replay, timestamp_column: &str) -> String {
+fn coverage_columns(replay: &Replay, timestamp_column: &str, anchor_row_count: &str) -> String {
     format!(
         "SELECT '{}' AS driving_input_relation_name, 'offsets' AS replay_boundary_mode, \
          concat('_replay_partition=', toString(partition_value)) AS boundary_key, \
@@ -603,11 +603,10 @@ fn coverage_columns(replay: &Replay, timestamp_column: &str) -> String {
          AS source_position_column_name, '{}' AS source_timestamp_column_name, \
          toString(lower_value) AS lower_value, toString(upper_value) AS upper_value, \
          toString(upper_value) AS replay_cutoff_value, true AS cutoff_inclusive, now64(9, 'UTC') \
-         AS captured_at, max_offset_copies > 1 AS has_duplicate_offsets\nFROM (\nSELECT \
-         partition_value, min(offset_value) AS lower_value, max(offset_value) AS upper_value, \
-         max(offset_copies) AS max_offset_copies\nFROM (\nSELECT {partition} AS partition_value, {offset} \
-         AS offset_value, offset_copies, {offset} - toInt64(row_number() OVER (PARTITION BY \
-         {partition} ORDER BY {offset})) AS sequence_group\n",
+         AS captured_at, ({anchor_row_count}) AS anchor_row_count\nFROM (\nSELECT \
+         partition_value, min(offset_value) AS lower_value, max(offset_value) AS upper_value\nFROM (\nSELECT {partition} AS partition_value, {offset} \
+         AS offset_value, {offset} - toInt64(row_number() OVER (PARTITION BY {partition} ORDER BY \
+         {offset})) AS sequence_group\n",
         escape_literal(&replay.relations.anchor),
         escape_literal(&replay.columns.partition),
         escape_literal(&replay.columns.offset),
@@ -627,9 +626,12 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
     let anchor = format!("{}.{}", replay.database, replay.relations.anchor);
     let Some(lower_cte) = replay_offset_lower_cte(replay, None, None)? else {
         return Ok(format!(
-            "{}FROM (SELECT {partition}, {offset}, count() AS offset_copies FROM {anchor} GROUP BY \
-             {partition}, {offset})\n)\n{COVERAGE_TAIL}",
-            coverage_columns(replay, timestamp_column)
+            "{}FROM (SELECT DISTINCT {partition}, {offset} FROM {anchor})\n)\n{COVERAGE_TAIL}",
+            coverage_columns(
+                replay,
+                timestamp_column,
+                &format!("SELECT count() FROM {anchor}")
+            )
         ));
     };
     let lower_alias = Some("coverage_start_offsets");
@@ -642,11 +644,16 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
         lower_alias,
     );
     Ok(format!(
-        "WITH {ACTIVE_START_OFFSETS} AS (\n{lower_cte}\n)\n{}FROM (SELECT anchor.{partition} AS \
-         {partition}, anchor.{offset} AS {offset}, count() AS offset_copies FROM {anchor} AS \
-         anchor\n{lower_join}WHERE true\n{lower_clause}GROUP BY {partition}, {offset})\n)\n\
-         {COVERAGE_TAIL}",
-        coverage_columns(replay, timestamp_column)
+        "WITH {ACTIVE_START_OFFSETS} AS (\n{lower_cte}\n)\n{}FROM (SELECT DISTINCT \
+         anchor.{partition} AS {partition}, anchor.{offset} AS {offset} FROM {anchor} AS \
+         anchor\n{lower_join}WHERE true\n{lower_clause})\n)\n{COVERAGE_TAIL}",
+        coverage_columns(
+            replay,
+            timestamp_column,
+            &format!(
+                "SELECT count() FROM {anchor} AS anchor\n{lower_join}WHERE true\n{lower_clause}"
+            )
+        )
     ))
 }
 

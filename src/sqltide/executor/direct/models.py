@@ -73,7 +73,7 @@ class DirectReplayRange:
     upper_value: str
     replay_cutoff_value: str
     cutoff_inclusive: bool
-    has_duplicate_offsets: bool = False
+    anchor_row_count: int | None = None
 
 
 @dataclass(frozen=True)

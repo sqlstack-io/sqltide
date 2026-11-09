@@ -618,7 +618,7 @@ class FakeAdapterConnection(AdapterConnection):
         return self._fingerprints
 
     def load_warehouse_health(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self, *, database: str, managed_source_names: tuple[str, ...] = (), include_dead_letters: bool = False
     ) -> AdapterWarehouseHealth:
         del database
         del managed_source_names

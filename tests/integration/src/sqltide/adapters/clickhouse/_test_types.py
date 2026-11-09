@@ -164,3 +164,17 @@ class WarehouseHealthDeadLettersTestCase:
     expected_row_count: int
     expected_failed_columns: tuple[str, ...]
     expected_payload_length: int
+
+
+@dataclass(frozen=True)
+class DedupedReplayProgressTestCase:
+    description: str
+    source_rows: tuple[tuple[str, int, int], ...]
+    expected_positions: tuple[tuple[int, int], ...]
+    expected_frontier: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class WarehouseHealthNoQuarantineTestCase:
+    description: str
+    expected_dead_letters: tuple[()]

@@ -27,6 +27,7 @@ from sqltide.compiler.planner.main.build_adapter_replay_query import (
     build_adapter_replay_query,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
+    OffsetDedupeRenderTestCase,
     RenderAggregateScalarPhysicalBoundaryTestCase,
     RenderDeploymentLookbackTestCase,
     RenderOffsetReplayStatementTestCase,
@@ -831,3 +832,72 @@ def test_given_placeholder_template_when_rendering_replay_then_author_bytes_are_
         assert expected_fragment in rendered_statements[0]
     for expected_absent_fragment in test_case.expected_absent_fragments:
         assert expected_absent_fragment not in rendered_statements[0]
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        OffsetDedupeRenderTestCase(
+            description="no repeated offsets keeps today's replay",
+            dedupe_offsets=False,
+            expected_clause_present=False,
+        ),
+        OffsetDedupeRenderTestCase(
+            description="repeated offsets read each offset once",
+            dedupe_offsets=True,
+            expected_clause_present=True,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_capture_duplicates_when_rendering_offset_replay_then_dedupe_follows_them(
+    test_case: OffsetDedupeRenderTestCase,
+) -> None:
+    rendered_statement: str = render_clickhouse_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=AdapterReplayRequest(
+                mode=AdapterReplayBoundaryMode.OFFSETS,
+                database="orders_demo",
+                relations=AdapterReplayRelations(
+                    root="tbl__orders", source="raw__orders", anchor="raw__orders", target="t"
+                ),
+                replay_query=build_adapter_replay_query(
+                    query="SELECT order_id::String AS order_id FROM raw__orders",
+                    source_relation_name="raw__orders",
+                    database="orders_demo",
+                    physical_relation_mappings=(),
+                ),
+                boundaries=(
+                    AdapterReplayBoundary(
+                        boundary_key="_replay_partition=0",
+                        cutoff_value="9",
+                        cutoff_inclusive=True,
+                        partition_value="0",
+                    ),
+                ),
+                columns=AdapterReplayColumns(
+                    partition="_replay_partition",
+                    offset="_replay_offset",
+                    timestamp="_replay_timestamp",
+                    landed_at="_replay_landed_at",
+                    cursor="_replay_cursor",
+                ),
+                window=AdapterReplayWindow(
+                    lower_bound_mode=AdapterReplayLowerBoundMode.NONE,
+                    lower_bound_inclusive=True,
+                    boundary_time="2026-04-08 13:00:00.000",
+                    forced_start_time=None,
+                    lookback_seconds=None,
+                ),
+                seed_mode=AdapterReplaySeedMode.NONE,
+                target_column_names=(),
+                dedupe_offsets=test_case.dedupe_offsets,
+            ),
+            boundary_column_type=None,
+            lower_bounds=(),
+        )
+    )
+
+    assert (
+        "LIMIT 1 BY anchor._replay_partition, anchor._replay_offset" in rendered_statement
+    ) is test_case.expected_clause_present

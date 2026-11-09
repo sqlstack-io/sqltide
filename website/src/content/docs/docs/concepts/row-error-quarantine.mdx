@@ -1,0 +1,99 @@
+---
+title: "Row-error quarantine"
+description: "Keep a streaming pipeline moving when a row cannot be converted to a model's typed columns."
+---
+
+A streaming model realizes as a target table and a materialized view. When a view fails on one
+row, ClickHouse does not commit the Kafka offset, so the same block is read again indefinitely and
+the raw table collects a new copy each time. Setting `on_row_error = "quarantine"` diverts rows the
+model cannot convert into a dead-letter table and lets every other row land.
+
+## Enabling it
+
+`on_row_error` accepts `"fail"` (the default) and `"quarantine"`. The most specific value wins:
+
+1. `MODEL (...)`: `on_row_error quarantine`
+2. `pipeline.toml`: `[defaults.models]`, then `on_row_error = "quarantine"`
+3. `sqltide_project.toml`: `[defaults.models]`, then `on_row_error = "quarantine"`
+4. The default, `"fail"`
+
+```sql
+MODEL (on_row_error quarantine, order_by ["order_id"]);
+
+SELECT
+  order_id::String AS order_id,
+  amount::Int32 AS amount,
+  _replay_partition::Int32 AS _replay_partition,
+  _replay_offset::Int64 AS _replay_offset
+FROM __ref("orders")
+```
+
+## What it generates
+
+SQLTide moves each authored expression into an inner query under a private name, then applies the
+authored casts outside it. For every column whose type is not `Nullable(...)`, a row is invalid
+when `accurateCastOrNull(value, 'T') IS NULL`.
+
+- `mv__<target>` writes rows with no invalid column to the target table.
+- `mv__<target>__dead_letters` writes rows with at least one invalid column to
+  `_sqltide_dead_letters`.
+
+Both views come from one rewrite, so they cannot disagree about which rows are valid. Replays use
+the kept-rows query: they never fail on invalid rows and never write dead letters.
+
+`LowCardinality(T)` columns are checked against `T`. `Array(...)`, `Map(...)` and `Tuple(...)`
+columns are not checked, so **a failure in one of those columns still raises exactly as it does
+under `fail`**, while the model's other columns are still checked.
+
+## Eligibility
+
+Only direct-mode, non-aggregating models can quarantine. A model is ineligible when:
+
+- its outer query uses `GROUP BY`, an aggregate-state engine, or a window function
+- a projection references another output column by its alias, unqualified, such as
+  `CAST(a + 1 AS Int32) AS b`. Reference the source column or compute the value in a subquery.
+  A self-reference such as `CAST(v AS String) AS v` is allowed.
+- a clause outside the projection, such as `WHERE`, references an output alias that is not a
+  self-reference
+- a column type cannot be checked: `Nested`, `Dynamic`, `AggregateFunction`, and the geo types
+
+A value set in the model's own `MODEL (...)` header on an ineligible model is a compile error
+naming the column and the reason. A value inherited from `pipeline.toml` or the project leaves that
+model on `fail` silently.
+
+## Limits
+
+Quarantine checks the final conversion of each outer projection. An error raised inside an
+expression still raises: a non-`OrNull` parse function, for example, or a failing inner subquery.
+Use the `OrNull` form so the failure reaches the check as a `NULL`.
+
+## Changing the policy
+
+Switching a live model between `fail` and `quarantine` does not count as a model change: it does not
+drop the target table and does not replay. `sqt build --changed` applies it in place by pausing the
+source's consumer, recreating `mv__<target>`, creating or dropping `mv__<target>__dead_letters`, and
+resuming. `sqt plan --changed` shows it as a view-only change with no replay roots. A model that
+also has a real SQL change takes the normal rebuild, using the desired policy.
+
+Adopted sources have no consumer to pause, so rows inserted while the views are being swapped are
+not processed by the model.
+
+Existing rows are not reprocessed by a policy change. To reprocess them, force a rebuild yourself:
+destroy and rebuild the model, or run a build with `--full-refresh`.
+
+## Reading dead letters
+
+The Overview page's Ingest panel shows counts per model for the last 24 hours and the latest failure
+when a project has quarantine models. To read the table directly:
+
+```sql
+SELECT model_name, failed_columns, payload, kafka_partition, kafka_offset, quarantined_at
+FROM _sqltide_dead_letters
+WHERE model_name = 'orders_enriched'
+ORDER BY quarantined_at DESC
+LIMIT 20
+```
+
+`payload` is JSON of the row's projected values as strings. `kafka_partition` and `kafka_offset` are
+populated when the model projects `_replay_partition` and `_replay_offset`, and `NULL` otherwise.
+Rows expire after 30 days.

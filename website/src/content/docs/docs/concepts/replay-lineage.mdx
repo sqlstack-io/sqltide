@@ -30,6 +30,13 @@ history and live ingestion; it does not deduplicate the target.
 
 Model SQL and ClickHouse engines own deduplication or aggregate idempotency.
 
+## Repeated offsets
+
+When a direct build captures an offset replay, it compares the anchor's row count with the number of
+distinct offsets it captured. If the anchor holds repeated copies of an offset, the replay reads each
+offset once with `LIMIT 1 BY`, which holds every offset key in memory. Without repeated copies the
+replay SQL is unchanged. Virtual-environment replays do not deduplicate.
+
 ## Replay anchors
 
 A replay starts at a source or eligible upstream model and flows through materialized views into the

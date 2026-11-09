@@ -128,6 +128,12 @@ For schema-checked expiry, prefer the typed `[defaults.sources.kafka.retention]`
 `[defaults.models.retention]` policies described in [Retention policies](/docs/concepts/retention/).
 Do not combine typed and free-form TTL defaults at the same scope.
 
+### Row errors
+
+`on_row_error` under `[defaults.models]` sets what a model does with a row it cannot convert: `"fail"`
+(the default) or `"quarantine"`. A `pipeline.toml` may set the same key, and a model's `MODEL (...)`
+header overrides both. See [Row-error quarantine](/docs/concepts/row-error-quarantine/).
+
 ## Pipeline naming
 
 Pipeline names must start with `pl__` by default:

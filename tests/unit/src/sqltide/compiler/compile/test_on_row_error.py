@@ -8,6 +8,7 @@ from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from tests.unit.src.sqltide.compiler.compile._test_types import (
+    PipelineRowErrorPolicyTestCase,
     RejectRowErrorPolicyTestCase,
     ResolveRowErrorPolicyTestCase,
     RowErrorHeaderRejectedTestCase,
@@ -278,6 +279,39 @@ def test_given_invalid_row_error_header_when_loading_then_it_is_rejected(
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
         load_pipeline_directory(pipeline_dir)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PipelineRowErrorPolicyTestCase(
+            description="pipeline.toml sets quarantine",
+            pipeline_toml='[defaults.models]\non_row_error = "quarantine"\n',
+            expected_policy=RowErrorPolicy.QUARANTINE,
+        ),
+        PipelineRowErrorPolicyTestCase(
+            description="pipeline.toml leaves it unset",
+            pipeline_toml="",
+            expected_policy=None,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_pipeline_toml_when_loading_then_row_error_policy_is_read(
+    test_case: PipelineRowErrorPolicyTestCase,
+    tmp_path: Path,
+) -> None:
+    pipeline_dir: Path = write_registry_pipeline_project(
+        project_dir=tmp_path,
+        source_contents=_SOURCE_CONTENTS,
+        model_contents=f"MODEL (); {_ROW_LEVEL_SELECT}",
+    )
+    (pipeline_dir / "pipeline.toml").write_text(test_case.pipeline_toml, encoding="utf-8")
+
+    assert (
+        load_pipeline_directory(pipeline_dir).pipeline.model_on_row_error
+        is test_case.expected_policy
+    )
 
 
 if __name__ == "__main__":

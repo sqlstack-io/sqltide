@@ -492,3 +492,10 @@ class ManifestLoadingTestCase:
     description: str
     expected_query: str
     expected_manifest: AdapterManifest
+
+
+@dataclass(frozen=True)
+class OffsetDedupeRenderTestCase:
+    description: str
+    dedupe_offsets: bool
+    expected_clause_present: bool

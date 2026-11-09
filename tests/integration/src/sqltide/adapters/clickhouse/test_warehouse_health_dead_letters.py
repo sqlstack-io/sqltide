@@ -9,6 +9,7 @@ from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
 from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     WarehouseHealthDeadLettersTestCase,
     WarehouseHealthMissingDeadLettersTestCase,
+    WarehouseHealthNoQuarantineTestCase,
 )
 
 
@@ -83,6 +84,29 @@ def test_given_dead_letters_when_reading_then_recent_counts_and_latest_row_are_r
     assert model.row_count == test_case.expected_row_count
     assert model.latest_failed_columns == test_case.expected_failed_columns
     assert len(model.latest_payload) == test_case.expected_payload_length
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        WarehouseHealthNoQuarantineTestCase(
+            description="a project without quarantine models reports nothing",
+            expected_dead_letters=(),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_no_quarantine_models_when_reading_then_dead_letters_are_not_queried(
+    test_case: WarehouseHealthNoQuarantineTestCase,
+    managed_clickhouse_client: AdapterConnection,
+    clickhouse_database: str,
+) -> None:
+    health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
+        connection=managed_clickhouse_client
+    ).read(database=clickhouse_database)
+
+    assert health.dead_letters == test_case.expected_dead_letters
 
 
 if __name__ == "__main__":
