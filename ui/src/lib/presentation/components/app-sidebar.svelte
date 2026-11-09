@@ -42,13 +42,20 @@
 	class="bg-sidebar flex h-screen w-14 shrink-0 flex-col border-r border-[var(--sidebar-border)] px-1 py-3 md:w-56 md:px-2.5 md:py-3.5"
 >
 	<div class="flex items-center justify-center gap-2 px-1 pb-3 md:justify-start md:px-2 md:pb-4">
-		<!-- Official SQLTide wordmark from the docs repo. Two files rather than
-		     one recoloured asset, because the mark's yellow stays constant while the
-		     wordmark inverts. -->
-		<span class="font-display text-[13px] font-bold md:hidden">SB</span>
-		<span class="hidden md:contents">
+		<!-- The website's logo files (website/public/assets): two files rather than one
+		     recoloured asset, because the cyan mark stays constant while the wordmark
+		     inverts. The collapsed sidebar shows the mark alone, as the favicon does. -->
+		<img src="/favicon.png" alt="SQLTide" class="h-[18px] w-auto md:hidden" />
+		<span class="hidden md:grid">
 			<img src="/logo-on-dark.png" alt="SQLTide" class="logo-dark h-[24px] w-auto" />
 			<img src="/logo-on-light.png" alt="SQLTide" class="logo-light h-[24px] w-auto" />
+			<a
+				href="https://sqlstack.io"
+				target="_blank"
+				rel="noreferrer"
+				class="text-[var(--sb-text-faint)] ms-[34%] text-[11px] leading-[14px] whitespace-nowrap no-underline hover:text-[var(--sb-text)] hover:underline"
+				>by SQLStack</a
+			>
 		</span>
 		{#if app.status?.toolVersion}
 			<span class="text-[var(--sb-text-faint)] ml-auto hidden font-mono text-[10px] tracking-wide md:inline"
