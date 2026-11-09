@@ -29,6 +29,7 @@ from sqltide.compiler.discovery.types import (
     ReplayBoundaryMode,
     ReplayOnChangeMode,
     RetentionMissingBehavior,
+    RowErrorPolicy,
     SourceKind,
     SourceNameOrigin,
 )
@@ -254,6 +255,11 @@ class ModelDefaults:
 
     retention: ModelRetentionPolicy | Literal[False] | None = None
     retention_template: object | None = field(default=None, repr=False, compare=False)
+    on_row_error: RowErrorPolicy | str | None = None
+
+    def __post_init__(self) -> None:
+        if self.on_row_error is not None:
+            object.__setattr__(self, "on_row_error", RowErrorPolicy(self.on_row_error))
 
 
 @dataclass(frozen=True)
@@ -537,8 +543,11 @@ class TransformStep:
     source_line: int = 1
     source_column: int = 1
     retention: ModelRetentionPolicy | Literal[False] | None = None
+    on_row_error: RowErrorPolicy | str | None = None
 
     def __post_init__(self) -> None:
+        if self.on_row_error is not None:
+            object.__setattr__(self, "on_row_error", RowErrorPolicy(self.on_row_error))
         object.__setattr__(self, "order_by", tuple(self.order_by))
         if self.settings is not None:
             object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
@@ -589,6 +598,7 @@ class Project:
     audit_scheduler: AuditSchedulerConfig = field(default_factory=AuditSchedulerConfig)
     model_retention: ModelRetentionPolicy | Literal[False] | None = None
     dependencies: ProjectDependencies = field(default_factory=ProjectDependencies)
+    model_on_row_error: RowErrorPolicy | None = None
 
     def __post_init__(self) -> None:
         if self.bounded_replay_fallback is not None:

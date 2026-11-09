@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 
-use crate::facts::tree_aggregate_facts;
+use crate::facts::{select_is_row_level, tree_aggregate_facts};
 use crate::relations::parse_relation;
 use crate::tree::{AnalysisError, AnalysisResult, Object, SqlDialect, identifier_name, object};
 
@@ -87,6 +87,16 @@ pub fn select_aggregate_facts(
     let mut tree: Value = dialect.parse_one(sql)?;
     select_mut(&mut tree)?;
     Ok(tree_aggregate_facts(&tree))
+}
+
+/// Whether the outer SELECT produces one row per input row.
+///
+/// # Errors
+///
+/// Returns the parse failure or a non-SELECT query.
+pub fn select_row_level(sql: &str, dialect: &SqlDialect) -> AnalysisResult<bool> {
+    let mut tree: Value = dialect.parse_one(sql)?;
+    Ok(select_is_row_level(select_mut(&mut tree)?))
 }
 
 fn select_ctes(select: &Object) -> &[Value] {

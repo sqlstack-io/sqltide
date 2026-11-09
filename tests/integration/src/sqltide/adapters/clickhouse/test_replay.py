@@ -30,7 +30,7 @@ from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     "test_case",
     [
         ClickHouseOffsetReplayIntegrationTestCase(
-            description="filters physical offset ranges and repeated copies before parsing raw payloads",
+            description="filters offset ranges and repeated copies before parsing payloads",
             source_rows=(
                 ("malformed outside lower bound", 0, 1),
                 ("2026-09-07 10:00:00", 0, 2),

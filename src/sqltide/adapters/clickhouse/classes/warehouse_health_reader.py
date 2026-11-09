@@ -7,9 +7,11 @@ from time import perf_counter
 from typing import cast
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.constants import METADATA_DEAD_LETTERS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import (
     AdapterWarehouseActivity,
+    AdapterWarehouseDeadLetterModel,
     AdapterWarehouseDisk,
     AdapterWarehouseHealth,
     AdapterWarehouseKafkaConsumers,
@@ -27,6 +29,8 @@ from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_STUCK_CONSUMER_WINDOW_SECONDS,
     CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
 )
+
+_DEAD_LETTER_PAYLOAD_CHARACTERS: int = 500
 
 
 class ClickHouseWarehouseHealthReader:
@@ -77,6 +81,7 @@ def _load_clickhouse_warehouse_health(
     memory: AdapterWarehouseMemory | None = None
     activity: AdapterWarehouseActivity | None = None
     kafka_consumers: AdapterWarehouseKafkaConsumers | None = None
+    dead_letters: tuple[AdapterWarehouseDeadLetterModel, ...] | None = None
     tables: tuple[AdapterWarehouseTable, ...] | None = None
 
     try:
@@ -161,6 +166,21 @@ def _load_clickhouse_warehouse_health(
         )
 
     try:
+        if _dead_letters_table_exists(connection=connection, database=database):
+            dead_letters = connection.query_many(
+                statement=_dead_letters_query(database),
+                decode=lambda row: AdapterWarehouseDeadLetterModel(
+                    model_name=str(row["model_name"]),
+                    row_count=int(str(row["row_count"])),
+                    latest_failed_columns=tuple(str(name) for name in row["latest_failed_columns"]),
+                    latest_payload=str(row["latest_payload"]),
+                    latest_quarantined_at=str(row["latest_quarantined_at"]),
+                ),
+            )
+    except (AdapterError, KeyError, TypeError, ValueError):
+        warnings.append("Dead-letter counts are unavailable.")
+
+    try:
         tables = connection.query_many(
             statement=_tables_query(database),
             decode=lambda row: AdapterWarehouseTable(
@@ -188,6 +208,7 @@ def _load_clickhouse_warehouse_health(
         tables=tables,
         collection_duration_ms=_elapsed_ms(started_at),
         kafka_consumers=kafka_consumers,
+        dead_letters=dead_letters,
         capacity_warning_fraction=CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,
         capacity_critical_fraction=CLICKHOUSE_CAPACITY_CRITICAL_AVAILABLE_FRACTION,
         warnings=tuple(warnings),
@@ -256,6 +277,30 @@ def _tables_query(database: str) -> str:
         "count() AS active_parts FROM system.parts "
         f"WHERE active AND database = {quoted_database} GROUP BY table "
         "ORDER BY bytes_on_disk DESC, table LIMIT 10"
+    )
+
+
+def _dead_letters_table_exists(*, connection: AdapterConnection, database: str) -> bool:
+    row: Mapping[str, object] | None = connection.query_one(
+        statement=(
+            "SELECT 1 AS present FROM system.tables "
+            f"WHERE database = {quote_clickhouse_sql_string(database)} "
+            f"AND name = {quote_clickhouse_sql_string(METADATA_DEAD_LETTERS_TABLE_NAME)}"
+        ),
+        decode=lambda row: row,
+    )
+    return row is not None
+
+
+def _dead_letters_query(database: str) -> str:
+    return (
+        "SELECT model_name, count() AS row_count, "
+        "argMax(failed_columns, quarantined_at) AS latest_failed_columns, "
+        f"substringUTF8(argMax(payload, quarantined_at), 1, {_DEAD_LETTER_PAYLOAD_CHARACTERS}) "
+        "AS latest_payload, toString(max(quarantined_at)) AS latest_quarantined_at "
+        f"FROM {database}.{METADATA_DEAD_LETTERS_TABLE_NAME} "
+        "WHERE quarantined_at >= now64(3) - INTERVAL 24 HOUR "
+        "GROUP BY model_name ORDER BY model_name"
     )
 
 

@@ -965,6 +965,17 @@ class AdapterWarehouseKafkaConsumers:
 
 
 @dataclass(frozen=True)
+class AdapterWarehouseDeadLetterModel:
+    """Quarantined rows of one model over the last 24 hours and its latest row."""
+
+    model_name: str
+    row_count: int
+    latest_failed_columns: tuple[str, ...]
+    latest_payload: str
+    latest_quarantined_at: str
+
+
+@dataclass(frozen=True)
 class AdapterWarehouseTable:
     """Active physical footprint for one project-database table."""
 
@@ -991,6 +1002,7 @@ class AdapterWarehouseHealth:
     tables: tuple[AdapterWarehouseTable, ...] | None
     collection_duration_ms: int
     kafka_consumers: AdapterWarehouseKafkaConsumers | None = None
+    dead_letters: tuple[AdapterWarehouseDeadLetterModel, ...] | None = None
     capacity_warning_fraction: float | None = None
     capacity_critical_fraction: float | None = None
     warnings: tuple[str, ...] = ()

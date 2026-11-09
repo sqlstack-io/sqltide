@@ -149,3 +149,18 @@ class StreamBuildMetadataRenameTestCase:
     extra_tables: tuple[str, ...]
     expected_error_fragment: str | None
     expected_table_prefix: str
+
+
+@dataclass(frozen=True)
+class WarehouseHealthMissingDeadLettersTestCase:
+    description: str
+    expected_dead_letters: None
+
+
+@dataclass(frozen=True)
+class WarehouseHealthDeadLettersTestCase:
+    description: str
+    payload_length: int
+    expected_row_count: int
+    expected_failed_columns: tuple[str, ...]
+    expected_payload_length: int

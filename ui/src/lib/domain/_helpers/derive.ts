@@ -902,6 +902,7 @@ function projectHealthSummary(project: Project) {
 	return {
 		freshness: freshnessSummary(project),
 		ingest: ingestHealthSummary(project),
+		deadLetters: project.warehouseHealth?.deadLetters ?? null,
 		drifted: driftedModels(project)
 	};
 }

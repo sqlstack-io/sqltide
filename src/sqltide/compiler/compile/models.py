@@ -40,9 +40,11 @@ from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ModelKind,
     ModelReferenceScope,
+    PipelineMode,
     RefType,
     ReplayBoundaryMode,
     ReplayLineageMode,
+    RowErrorPolicy,
     SourceKind,
     SqlRelationType,
 )
@@ -353,6 +355,14 @@ class CompiledModel:
 
 
 @dataclass(frozen=True)
+class RowErrorContext:
+    """The pipeline facts that decide a table model's row-error policy."""
+
+    project_policy: RowErrorPolicy | None = None
+    pipeline_mode: PipelineMode = PipelineMode.DIRECT
+
+
+@dataclass(frozen=True)
 class CompiledTableModel(CompiledModel):
     """One compiled streaming table model and its replay semantics."""
 
@@ -363,6 +373,7 @@ class CompiledTableModel(CompiledModel):
     replay_on_change: ReplayOnChangePolicy | None = None
     retention: ModelRetentionResolution = field(default_factory=ModelRetentionResolution)
     retention_applied: bool = False
+    on_row_error: RowErrorPolicy = RowErrorPolicy.FAIL
 
     @property
     def has_mutable_refs(self) -> bool:

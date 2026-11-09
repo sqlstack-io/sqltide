@@ -117,6 +117,12 @@ from tests.unit.src.sqltide.compiler.macros.helpers import (
             expected_query='SELECT kafka_key::String AS order_id FROM __source("orders")',
         ),
         ParseModelSqlHeaderTestCase(
+            description="accepts a row-error mode",
+            contents="MODEL (on_row_error quarantine); SELECT 1::UInt8 AS value",
+            expected_header_values={"on_row_error": "quarantine"},
+            expected_query="SELECT 1::UInt8 AS value",
+        ),
+        ParseModelSqlHeaderTestCase(
             description="accepts replay-scoped execution settings",
             contents="""
         MODEL (

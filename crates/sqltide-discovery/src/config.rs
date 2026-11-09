@@ -9,6 +9,7 @@ use crate::byte_size::{ByteSize, parse_byte_size};
 use crate::durations::{duration_seconds, parse_duration_seconds};
 use crate::errors::{ErrorKind, SpecResult, project};
 use crate::freshness::{Freshness, parse_freshness_policy};
+use crate::model_spec::ON_ROW_ERROR_VALUES;
 use crate::retention::{
     KafkaRetention, ModelRetention, Retention, parse_kafka_retention, parse_model_retention,
 };
@@ -83,7 +84,7 @@ const LOCAL_DEFAULTS_KEYS: [&str; 1] = ["pipeline_mode"];
 const DEPLOYMENT_READINESS_KEYS: [&str; 2] = ["maximum_lag", "minimum_staged_row_ratio"];
 const SOURCE_DEFAULT_KEYS: [&str; 1] = ["kafka"];
 const KAFKA_SOURCE_DEFAULT_KEYS: [&str; 2] = ["naming_macro", "retention"];
-const MODEL_DEFAULT_KEYS: [&str; 1] = ["retention"];
+const MODEL_DEFAULT_KEYS: [&str; 2] = ["retention", "on_row_error"];
 const PROJECT_NAMING_KEYS: [&str; 4] = [
     "pipeline_prefix",
     "pipeline_naming_macro",
@@ -245,6 +246,8 @@ pub struct ProjectDefaults {
     pub kafka_naming_macro: Option<String>,
     pub kafka_retention: RetentionDefault<KafkaRetention>,
     pub model_retention: RetentionDefault<ModelRetention>,
+    /// `fail` or `quarantine`; `None` leaves models on the `fail` default.
+    pub model_on_row_error: Option<String>,
 }
 
 /// Validates one configuration file; `timezone_exists` answers whether the runtime can load
@@ -623,6 +626,16 @@ impl Parser<'_> {
             "defaults.models.retention",
             parse_model_retention,
         )?;
+        let model_on_row_error: Option<String> = match field(models, "on_row_error") {
+            None => None,
+            Some(value) => match value.as_str() {
+                Some(mode) if ON_ROW_ERROR_VALUES.contains(&mode) => Some(mode.to_owned()),
+                _ => {
+                    return self
+                        .error("defaults.models.on_row_error must be 'fail' or 'quarantine'");
+                }
+            },
+        };
         if managed_source_ttl.is_some() && kafka_retention.is_set() {
             return self.error(
                 "defaults.managed_source_ttl cannot be combined with defaults.sources.kafka.retention",
@@ -704,6 +717,7 @@ impl Parser<'_> {
             kafka_naming_macro,
             kafka_retention,
             model_retention,
+            model_on_row_error,
         })
     }
 

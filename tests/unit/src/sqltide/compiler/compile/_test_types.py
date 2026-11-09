@@ -3,9 +3,11 @@ from dataclasses import dataclass
 from sqltide.compiler.discovery.models import Pipeline, ReplayOnChangePolicy
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
+    PipelineMode,
     ReplayAnchorMode,
     ReplayBoundaryMode,
     ReplayLineageMode,
+    RowErrorPolicy,
 )
 
 
@@ -247,3 +249,27 @@ class CompilePipelineReplayLineageModeResolutionTestCase:
     description: str
     pipeline: Pipeline
     expected_replay_lineage_mode: ReplayLineageMode
+
+
+@dataclass(frozen=True)
+class ResolveRowErrorPolicyTestCase:
+    description: str
+    model_contents: str
+    project_policy: RowErrorPolicy | None
+    pipeline_mode: PipelineMode
+    expected_policy: RowErrorPolicy
+
+
+@dataclass(frozen=True)
+class RejectRowErrorPolicyTestCase:
+    description: str
+    model_contents: str
+    pipeline_mode: PipelineMode
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class RowErrorHeaderRejectedTestCase:
+    description: str
+    model_contents: str
+    expected_error_fragment: str

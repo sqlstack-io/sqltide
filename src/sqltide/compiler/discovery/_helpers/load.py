@@ -147,6 +147,7 @@ def load_pipeline_directory(pipeline_dir: Path) -> LoadedPipeline:
             bounded_replay_fallback=effective.defaults.bounded_replay_fallback,
             model_ttl=effective.defaults.model_ttl,
             model_retention=effective.defaults.models.retention,
+            model_on_row_error=effective.defaults.models.on_row_error,
             default_database=effective.database,
             adapter=effective.adapter,
             naming=effective.naming,

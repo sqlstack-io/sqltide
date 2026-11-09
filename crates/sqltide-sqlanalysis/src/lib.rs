@@ -32,6 +32,7 @@ pub use relations::{
 };
 pub use rewriting::{
     NamedQuery, RelationRewrite, RewrittenQuery, rewrite_query, select_aggregate_facts,
+    select_row_level,
 };
 pub use storage::storage_column_names;
 pub use tree::{AnalysisError, SqlDialect};

@@ -11,7 +11,7 @@ use crate::retention::{ModelRetention, Retention, is_identifier, parse_model_ret
 use crate::text::python_strip;
 use crate::value::{Kind, Value};
 
-const ALLOWED_MODEL_KEYS: [&str; 16] = [
+const ALLOWED_MODEL_KEYS: [&str; 17] = [
     "kind",
     "description",
     "columns",
@@ -27,9 +27,10 @@ const ALLOWED_MODEL_KEYS: [&str; 16] = [
     "replay_anchor",
     "replay_on_change",
     "bounded_replay_fallback",
+    "on_row_error",
     "sql_analysis",
 ];
-const VIEW_FORBIDDEN_KEYS: [&str; 10] = [
+const VIEW_FORBIDDEN_KEYS: [&str; 11] = [
     "engine",
     "order_by",
     "partition_by",
@@ -40,12 +41,14 @@ const VIEW_FORBIDDEN_KEYS: [&str; 10] = [
     "replay_anchor",
     "replay_on_change",
     "bounded_replay_fallback",
+    "on_row_error",
 ];
 const COLUMN_KEYS: [&str; 2] = ["description", "audits"];
 const EXECUTION_SETTINGS_KEYS: [&str; 1] = ["replay"];
 const REPLAY_ON_CHANGE_KEYS: [&str; 2] = ["breaking", "non_breaking"];
 const REPLAY_ANCHORS: [&str; 2] = ["auto", "never"];
 const BOUNDED_REPLAY_FALLBACKS: [&str; 2] = ["full", "bounded_without_history"];
+pub(crate) const ON_ROW_ERROR_VALUES: [&str; 2] = ["fail", "quarantine"];
 const TABLE_KIND: &str = "table";
 const VIEW_KIND: &str = "view";
 const FULL_REPLAY: &str = "full";
@@ -86,6 +89,8 @@ pub struct TableSpec {
     pub replay_on_change: Option<ReplayOnChange>,
     /// `full` or `bounded_without_history`.
     pub bounded_replay_fallback: Option<String>,
+    /// `fail` or `quarantine`; `None` inherits the project default.
+    pub on_row_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -244,6 +249,13 @@ pub fn model_spec(
             }
         },
     };
+    let on_row_error: Option<String> = match field(header, "on_row_error") {
+        None => None,
+        Some(value) => match value.as_str() {
+            Some(mode) if ON_ROW_ERROR_VALUES.contains(&mode) => Some(mode.to_owned()),
+            _ => return parser.error("must define 'on_row_error' as 'fail' or 'quarantine'"),
+        },
+    };
     Ok(ModelSpec::Table(
         common,
         Box::new(TableSpec {
@@ -258,6 +270,7 @@ pub fn model_spec(
             replay_anchor,
             replay_on_change,
             bounded_replay_fallback,
+            on_row_error,
         }),
     ))
 }

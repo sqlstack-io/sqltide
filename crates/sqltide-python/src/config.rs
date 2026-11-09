@@ -463,10 +463,15 @@ impl<'py> Document<'py> {
             self.object(defaults.kafka_naming_macro.as_deref())?,
         )];
         kafka_fields.extend(kafka);
-        let models: [(&str, Bound<'py, PyAny>); 2] = self
+        let retention: [(&str, Bound<'py, PyAny>); 2] = self
             .retention(&defaults.model_retention, |policy| {
                 self.model_retention(policy)
             })?;
+        let mut models: Vec<(&str, Bound<'py, PyAny>)> = retention.into_iter().collect();
+        models.push((
+            "on_row_error",
+            self.object(defaults.model_on_row_error.as_deref())?,
+        ));
         self.model(
             "ProjectDefaults",
             &[
@@ -1168,6 +1173,7 @@ fn parse_model_spec<'py>(
         )?,
     )?;
     fields.set_item("replay_anchor", &table.replay_anchor)?;
+    fields.set_item("on_row_error", table.on_row_error.as_deref())?;
     fields.set_item(
         "replay_on_change",
         document.replay_on_change(table.replay_on_change)?,

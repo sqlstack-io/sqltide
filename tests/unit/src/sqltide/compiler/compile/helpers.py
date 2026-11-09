@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from textwrap import dedent, indent
 from typing import cast
@@ -19,6 +20,7 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
+from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
 from sqltide.compiler.discovery.main.load_project_input_for_path import (
     load_project_input_for_path,
@@ -29,8 +31,10 @@ from sqltide.compiler.discovery.models import (
     LoadedPipeline,
     LoadedProject,
     Pipeline,
+    Project,
     TransformStep,
 )
+from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
@@ -301,3 +305,28 @@ def build_invalid_storage_expression_pipeline(
         pipeline=pipeline,
         file_path=Path("tests/fixtures/basic_project/pipelines/pl__orders"),
     )
+
+
+def build_row_error_model(
+    *,
+    tmp_path: Path,
+    source_contents: str,
+    model_contents: str,
+    project_policy: RowErrorPolicy | None,
+    pipeline_mode: PipelineMode,
+) -> CompiledTableModel:
+    pipeline_dir: Path = write_registry_pipeline_project(
+        project_dir=tmp_path,
+        source_contents=source_contents,
+        model_contents=model_contents,
+    )
+    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    assert loaded.project is not None
+    project: Project = replace(loaded.project, model_on_row_error=project_policy)
+    pipeline: Pipeline = replace(loaded.pipeline, mode=pipeline_mode)
+    compiled: CompiledPipeline = compile_test_pipeline(
+        replace(loaded, project=project, pipeline=pipeline)
+    )
+    model: CompiledModel = compiled.models[0]
+    assert isinstance(model, CompiledTableModel)
+    return model

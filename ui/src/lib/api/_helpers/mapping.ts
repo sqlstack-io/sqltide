@@ -165,6 +165,16 @@ function warehouseHealthFromServer(value: unknown): WarehouseHealth | null {
 							})
 						)
 					},
+		deadLetters:
+			health.deadLetters === null || health.deadLetters === undefined
+				? null
+				: (health.deadLetters as Payload[]).map((model) => ({
+						modelName: String(model.modelName ?? ''),
+						rowCount: Number(model.rowCount ?? 0),
+						latestFailedColumns: stringArray(model.latestFailedColumns),
+						latestPayload: String(model.latestPayload ?? ''),
+						latestQuarantinedAt: String(model.latestQuarantinedAt ?? '')
+					})),
 		tables:
 			health.tables === null || health.tables === undefined
 				? null

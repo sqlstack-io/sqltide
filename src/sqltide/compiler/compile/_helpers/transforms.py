@@ -16,6 +16,7 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
     ModelRetentionResolution,
     ParsedRef,
+    RowErrorContext,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.constants import DEFAULT_SQL_MODEL_ENGINE
@@ -28,8 +29,10 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ModelKind,
+    PipelineMode,
     RefType,
     ReplayLineageMode,
+    RowErrorPolicy,
 )
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
@@ -46,6 +49,7 @@ def compile_model(
     sql_analyzer: SqlModelAnalyzer,
     replay_on_change: ReplayOnChangePolicy | None = None,
     model_retention: ModelRetentionResolution | None = None,
+    row_error_context: RowErrorContext | None = None,
 ) -> CompiledTableModel:
     """Compile one authored transform into a logical model."""
 
@@ -121,6 +125,12 @@ def compile_model(
         retention=retention,
         retention_applied=retention_applied,
         replay_on_change=replay_on_change,
+        on_row_error=_resolve_on_row_error(
+            transform=transform,
+            sql_analysis=sql_analysis,
+            sql_analyzer=sql_analyzer,
+            context=row_error_context or RowErrorContext(),
+        ),
     )
 
 
@@ -199,3 +209,35 @@ def _reference_arguments(
         )
         for parsed_ref in parsed_refs
     ]
+
+
+def _resolve_on_row_error(
+    *,
+    transform: TransformStep,
+    sql_analysis: SqlModelAnalysis,
+    sql_analyzer: SqlModelAnalyzer,
+    context: RowErrorContext,
+) -> RowErrorPolicy:
+    """Resolve the model, then project, row-error mode, enforcing quarantine eligibility."""
+
+    if transform.on_row_error is RowErrorPolicy.FAIL:
+        return RowErrorPolicy.FAIL
+    if transform.on_row_error is None and context.project_policy is not RowErrorPolicy.QUARANTINE:
+        return RowErrorPolicy.FAIL
+    ineligible_reason: str | None = None
+    if context.pipeline_mode is not PipelineMode.DIRECT:
+        ineligible_reason = "it is not in a direct-mode pipeline"
+    elif (
+        sql_analysis.aggregate_facts.engine_has_aggregate_semantics
+        or not sql_analyzer.is_row_level(analysis=sql_analysis)
+    ):
+        ineligible_reason = (
+            "its outer query uses GROUP BY, an aggregate-state engine, or a window function"
+        )
+    if ineligible_reason is None:
+        return RowErrorPolicy.QUARANTINE
+    if transform.on_row_error is RowErrorPolicy.QUARANTINE:
+        raise PipelineCompileError(
+            f"Transform '{transform.name}' sets on_row_error = quarantine, but {ineligible_reason}"
+        )
+    return RowErrorPolicy.FAIL

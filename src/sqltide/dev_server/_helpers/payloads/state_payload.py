@@ -265,6 +265,20 @@ def _warehouse_health_payload(
         "memory": memory,
         "activity": activity,
         "kafkaConsumers": kafka_consumers,
+        "deadLetters": (
+            None
+            if health.dead_letters is None
+            else [
+                {
+                    "modelName": model.model_name,
+                    "rowCount": model.row_count,
+                    "latestFailedColumns": list(model.latest_failed_columns),
+                    "latestPayload": model.latest_payload,
+                    "latestQuarantinedAt": model.latest_quarantined_at,
+                }
+                for model in health.dead_letters
+            ]
+        ),
         "tables": (
             None
             if health.tables is None
