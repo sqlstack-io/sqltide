@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.5](https://github.com/sqlstack-io/sqltide/compare/v0.65.4...v0.65.5) (2026-11-09)
+
+
+### Refactoring
+
+* compile pipelines and assemble projects natively ([#347](https://github.com/sqlstack-io/sqltide/issues/347)) ([394e97f](https://github.com/sqlstack-io/sqltide/commit/394e97f1b2ed2a45c242fd5fd791882137036d42))
+
 ## [0.65.4](https://github.com/sqlstack-io/sqltide/compare/v0.65.3...v0.65.4) (2026-11-09)
 
 
