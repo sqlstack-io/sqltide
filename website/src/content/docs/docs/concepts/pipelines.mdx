@@ -67,8 +67,8 @@ SQLTide creates the landing table without a TTL clause.
 `format` defaults to `JSONAsString`. This example sets `consumer_group` explicitly. SQLTide appends
 the target database, normalizing hyphens to underscores, so `sqltide_order_events` in database
 `analytics_dev` uses `sqltide_order_events_analytics_dev`. Inspect compiled DDL or Sources for the
-effective identity. Existing installations must follow the [upgrade guide](/docs/upgrade/) before
-changing consumer-group configuration; a new group does not inherit another group's offsets.
+effective identity. Changing consumer-group configuration creates a new group, which does not inherit
+the previous group's offsets.
 
 Typed [retention policies](/docs/concepts/retention/) provide validated project and per-source
 expiry settings in addition to free-form TTL.
