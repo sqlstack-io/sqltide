@@ -99,6 +99,7 @@ a target together.
 - [Deployments](https://sqltide.io/docs/concepts/deployments/)
 - [Destructive operations](https://sqltide.io/docs/concepts/destructive-operations/)
 - [Project configuration](https://sqltide.io/docs/concepts/project-configuration/)
+- [SQL Rules and formatting](https://sqltide.io/docs/concepts/sql-rules/)
 - [Changelog](CHANGELOG.md) and [contributing](CONTRIBUTING.md)
 
 ## License
