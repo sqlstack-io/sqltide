@@ -1,4 +1,4 @@
-.PHONY: dist rust-check rust-test test-browser test-e2e test-goldens test-integration ui-verify
+.PHONY: check-python-boundary dist rust-check rust-test test-browser test-e2e test-goldens test-integration ui-verify
 
 NPM_VERSION := 11.6.2
 
@@ -111,12 +111,16 @@ ui-dev:
 	cd ui && npm run dev
 
 
-check-ci:
+check-ci: check-python-boundary
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run ty check src tests scripts
 	uv run fensu check
 	$(MAKE) rust-check
+
+
+check-python-boundary:
+	uv run python -m scripts.check_python_boundary
 
 
 verify-ci:
