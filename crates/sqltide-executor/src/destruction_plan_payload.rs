@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use speedate::{DateTime, DateTimeConfig, MicrosecondsPrecisionOverflowBehavior, TimeConfig};
 use strum::EnumMessage;
 
+use crate::timestamps::{civil_from_days, days_from_civil};
+
 /// The envelope version this build writes and reads.
 pub const PAYLOAD_VERSION: i64 = 1;
 const SECONDS_PER_MINUTE: i32 = 60;
@@ -91,8 +93,8 @@ impl Timestamp {
         let clock: i64 = seconds.rem_euclid(86_400);
         Ok(Self {
             year,
-            month,
-            day,
+            month: month as u8,
+            day: day as u8,
             hour: (clock / 3_600) as u8,
             minute: (clock % 3_600 / 60) as u8,
             second: (clock % 60) as u8,
@@ -103,43 +105,17 @@ impl Timestamp {
 
     fn ordinal(&self) -> (i64, u32) {
         (
-            days_from_civil(self.year, self.month, self.day) * 86_400
+            days_from_civil(
+                i64::from(self.year),
+                i64::from(self.month),
+                i64::from(self.day),
+            ) * 86_400
                 + i64::from(self.hour) * 3_600
                 + i64::from(self.minute) * 60
                 + i64::from(self.second),
             self.microsecond,
         )
     }
-}
-
-/// Days since 1970-01-01 of a proleptic Gregorian date.
-fn days_from_civil(year: u16, month: u8, day: u8) -> i64 {
-    let year: i64 = i64::from(year) - i64::from(month <= 2);
-    let era: i64 = year.div_euclid(400);
-    let year_of_era: i64 = year - era * 400;
-    let month: i64 = i64::from(month);
-    let day_of_year: i64 =
-        (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
-    let day_of_era: i64 = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era - 719_468
-}
-
-fn civil_from_days(days: i64) -> (i64, u8, u8) {
-    let days: i64 = days + 719_468;
-    let era: i64 = days.div_euclid(146_097);
-    let day_of_era: i64 = days - era * 146_097;
-    let year_of_era: i64 =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year: i64 = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_index: i64 = (5 * day_of_year + 2) / 153;
-    let day: i64 = day_of_year - (153 * month_index + 2) / 5 + 1;
-    let month: i64 = if month_index < 10 {
-        month_index + 3
-    } else {
-        month_index - 9
-    };
-    let year: i64 = year_of_era + era * 400 + i64::from(month <= 2);
-    (year, month as u8, day as u8)
 }
 
 mod timestamp_text {

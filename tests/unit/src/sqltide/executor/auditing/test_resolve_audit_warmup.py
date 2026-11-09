@@ -2,10 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import resolve_audit_warmup_states
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.executor.auditing.main.resolve_audit_warmup_states import (
-    resolve_audit_warmup_states,
-)
 from sqltide.executor.auditing.models import AuditWarmupState
 from tests.unit.src.sqltide.executor.auditing._test_types import AuditWarmupStateTestCase
 

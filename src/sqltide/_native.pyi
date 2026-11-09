@@ -10,6 +10,7 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
 )
 from sqltide.compiler.access.models import CompiledAccessPolicy
+from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
@@ -28,6 +29,7 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
 from sqltide.compiler.planner.models import PlannedObjectChange, RebuildSubtree
+from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
 
 type _Span = tuple[int, int, int, int, int, int]
@@ -315,6 +317,22 @@ def destruction_plan_fingerprint(
     relation_drop_size_policy_observed: bool,
     include_orphans: bool,
 ) -> str: ...
+def normalize_cli_start_time(raw_value: str) -> str: ...
+def resolve_audit_warmup_states(
+    *,
+    audits: tuple[LoadedSqlAudit, ...],
+    anchors_by_model: dict[str, str],
+    materialized_model_names: frozenset[str],
+    warehouse_now: str,
+) -> dict[str, AuditWarmupState]: ...
+def audit_schedule_entry(
+    *,
+    audit: LoadedSqlAudit,
+    warmup: AuditWarmupState,
+    status: dict[str, object] | None,
+    warehouse_now: str,
+    anchors: dict[str, str],
+) -> dict[str, object]: ...
 def serialize_destruction_plan(plan: DestructionPlan) -> str: ...
 def deserialize_destruction_plan(payload_json: str) -> DestructionPlan: ...
 def list_destruction_inactive_pipelines(

@@ -3,6 +3,7 @@
 import json
 from dataclasses import replace
 
+from sqltide._native import normalize_cli_start_time
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build._helpers.audits import prepare_direct_build_audits
 from sqltide.cli.build._helpers.confirmation import build_protection_requirements
@@ -18,7 +19,6 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.plan.main._normalize_cli_start_time import normalize_cli_start_time
 from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
