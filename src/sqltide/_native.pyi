@@ -13,7 +13,9 @@ from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import (
+    CompiledProject,
     CompileProjectInputs,
+    CompilerAdapterProfile,
     DesiredState,
     ExternalSourceReplayConfig,
     LogicalResourceKey,
@@ -51,6 +53,7 @@ from sqltide.compiler.planner.models import (
     RebuildSubtree,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
+from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -965,6 +968,12 @@ def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
+def realize_project(
+    *,
+    project: CompiledProject,
+    adapter_profile: CompilerAdapterProfile,
+    sql_analyzer: SqlModelAnalyzer,
+) -> RealizedProject: ...
 def build_direct_reconcile_actual_state(
     *, desired_state: DesiredState, catalog: CatalogSnapshot
 ) -> ActualState: ...
