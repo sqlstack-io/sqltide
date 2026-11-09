@@ -67,6 +67,7 @@ def plan_row_error_policy_changes(
                 target_name=view.target_table_name,
                 landing_views=landing_views,
                 relation_by_name=relation_by_name,
+                views=views,
             )
             if not policy_pending and not landing_repair:
                 continue

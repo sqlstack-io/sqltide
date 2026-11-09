@@ -42,11 +42,14 @@ def landing_repair_pending(
     target_name: str,
     landing_views: tuple[str, ...],
     relation_by_name: dict[str, CatalogRelation],
+    views: tuple[DesiredMaterializedView, ...],
 ) -> bool:
-    """Return whether a live model's managed landing view is missing."""
+    """Return whether a live model's landing view is missing while its Kafka table is live."""
 
+    source_by_view: dict[str, str] = {view.name: view.source_table_name for view in views}
     return target_name in relation_by_name and any(
-        name not in relation_by_name for name in landing_views
+        name not in relation_by_name and source_by_view[name] in relation_by_name
+        for name in landing_views
     )
 
 

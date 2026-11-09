@@ -83,6 +83,7 @@ def plan_virtual_row_error_policy_changes(
                 target_name=physical_table,
                 landing_views=landing_views,
                 relation_by_name=relation_by_name,
+                views=views,
             )
             if not policy_pending and not landing_repair:
                 continue
