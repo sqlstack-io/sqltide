@@ -163,18 +163,6 @@ class RootDeploymentInspection:
 
 
 @dataclass(frozen=True)
-class ActualStateInspection:
-    """Live and persisted inputs needed to assemble actual state."""
-
-    existing_names: frozenset[str]
-    active_deployment_by_root: dict[ObjectKey, RootDeploymentInspection]
-    object_state_by_deployment_and_key: dict[tuple[str, ObjectKey], ObjectStateRecord]
-    latest_object_state_by_key: dict[ObjectKey, ObjectStateRecord]
-    active_physical_names_by_logical_name: dict[str, str]
-    active_table_specs_by_name: dict[str, TableSpec]
-
-
-@dataclass(frozen=True)
 class ObjectStateMetadataRow:
     """Row shape for persisted object-state metadata."""
 
@@ -187,33 +175,6 @@ class ObjectStateMetadataRow:
     recorded_at: str
     observation_id: str
     state_kind: str
-
-
-@dataclass(frozen=True)
-class TableNameSystemRow:
-    """Row shape for system table name lookups."""
-
-    name: str
-
-
-@dataclass(frozen=True)
-class TableColumnSystemRow:
-    """Row shape for system column inspection."""
-
-    table_name: str
-    name: str
-    type: str
-    default_expression: str | None
-
-
-@dataclass(frozen=True)
-class TableStorageSystemRow:
-    """Row shape for system table storage inspection."""
-
-    table_name: str
-    engine: str
-    sorting_key: str
-    partition_key: str | None
 
 
 @dataclass(frozen=True)

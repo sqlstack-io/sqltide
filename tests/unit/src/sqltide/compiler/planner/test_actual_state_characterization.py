@@ -1,46 +1,18 @@
-from collections.abc import Mapping
 from typing import cast
 
 import pytest
 
-from sqltide.adapter.models import (
-    AdapterIdentity,
-    CatalogColumn,
-    CatalogIdentity,
-    CatalogRelation,
-    CatalogSnapshot,
-)
-from sqltide.compiler.compile.models import DesiredState, TableSpec
-from sqltide.compiler.planner._helpers.actual_state import build_inspected_actual_objects
-from sqltide.compiler.planner._helpers.warehouse_catalog import (
-    active_table_specs_from_catalog as _active_table_specs_from_catalog,
-)
-from sqltide.compiler.planner._helpers.warehouse_catalog import (
-    decode_table_column_system_row as _decode_table_column_system_row,
-)
-from sqltide.compiler.planner._helpers.warehouse_catalog import (
-    decode_table_storage_system_row as _decode_table_storage_system_row,
-)
-from sqltide.compiler.planner._helpers.warehouse_catalog import (
-    normalize_storage_engine as _normalize_storage_engine,
-)
-from sqltide.compiler.planner._helpers.warehouse_catalog import (
-    parse_sorting_key as _parse_sorting_key,
-)
+import sqltide._native as _native
+from sqltide.compiler.compile.models import DesiredState
 from sqltide.compiler.planner.models import (
     ActualKafkaTable,
     ActualMaterializedView,
-    ActualStateInspection,
+    ActualState,
     ActualTable,
     ActualView,
-    TableColumnSystemRow,
-    TableStorageSystemRow,
+    PlanningWarehouseSnapshot,
 )
-from tests.unit.src.sqltide.compiler.planner._test_types import (
-    ActualStateProjectionTestCase,
-    ActualStateRowNormalizationTestCase,
-    PreservedCatalogProjectionTestCase,
-)
+from tests.unit.src.sqltide.compiler.planner._test_types import ActualStateProjectionTestCase
 from tests.unit.src.sqltide.compiler.planner.helpers import (
     build_projection_characterization_inputs,
 )
@@ -49,100 +21,14 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
 @pytest.mark.parametrize(
     "test_case",
     [
-        PreservedCatalogProjectionTestCase(
-            description="keeps newly inspected TTL and settings outside comparable actual state",
-            expected_ttl=None,
-            expected_settings=None,
-        )
-    ],
-    ids=lambda case: case.description,
-)
-def test_given_rich_catalog_when_projecting_actual_state_then_known_options_stay_unloaded(
-    test_case: PreservedCatalogProjectionTestCase,
-) -> None:
-    catalog: CatalogSnapshot = CatalogSnapshot(
-        identity=CatalogIdentity(
-            adapter=AdapterIdentity(name="clickhouse"),
-            database="analytics",
-        ),
-        warehouse_timezone="UTC",
-        relations=(
-            CatalogRelation(
-                name="tbl__orders__dep_a",
-                engine="MergeTree",
-                columns=(CatalogColumn(name="order_id", type="String"),),
-                order_by=("order_id",),
-                ttl="created_at + INTERVAL 30 DAY",
-                settings=(("index_granularity", "8192"),),
-            ),
-        ),
-    )
-
-    table_specs: dict[str, TableSpec] = _active_table_specs_from_catalog(
-        catalog=catalog,
-        database="analytics",
-        table_names=("tbl__orders__dep_a",),
-    )
-    table_spec: TableSpec = table_specs["tbl__orders__dep_a"]
-
-    assert table_spec.storage.ttl == test_case.expected_ttl
-    assert table_spec.storage.settings == test_case.expected_settings
-
-
-@pytest.mark.parametrize(
-    "test_case",
-    [
-        ActualStateRowNormalizationTestCase(
-            description="normalizes ClickHouse system rows into the current comparable shape",
-            raw_engine="MergeTree",
-            raw_sorting_key="(order_id, updated_at)",
-            raw_default_expression="",
-            raw_partition_key="tuple()",
-            expected_engine="MergeTree()",
-            expected_order_by=("order_id", "updated_at"),
-            expected_default_expression=None,
-            expected_partition_key=None,
-        )
-    ],
-    ids=lambda case: case.description,
-)
-def test_given_clickhouse_system_rows_when_normalizing_then_returns_current_comparable_values(
-    test_case: ActualStateRowNormalizationTestCase,
-) -> None:
-    column_row: TableColumnSystemRow = _decode_table_column_system_row(
-        cast(
-            Mapping[str, object],
-            {
-                "table": "tbl__orders_enriched__dep_a",
-                "name": "updated_at",
-                "type": "DateTime64(3)",
-                "default_expression": test_case.raw_default_expression,
-            },
-        )
-    )
-    storage_row: TableStorageSystemRow = _decode_table_storage_system_row(
-        cast(
-            Mapping[str, object],
-            {
-                "name": "tbl__orders_enriched__dep_a",
-                "engine": test_case.raw_engine,
-                "sorting_key": test_case.raw_sorting_key,
-                "partition_key": test_case.raw_partition_key,
-            },
-        )
-    )
-
-    assert _normalize_storage_engine(storage_row.engine) == test_case.expected_engine
-    assert _parse_sorting_key(storage_row.sorting_key) == test_case.expected_order_by
-    assert column_row.default_expression == test_case.expected_default_expression
-    assert storage_row.partition_key == test_case.expected_partition_key
-
-
-@pytest.mark.parametrize(
-    "test_case",
-    [
         ActualStateProjectionTestCase(
             description="preserves synthesized landing specs and unloaded transform options",
+            expected_ordered_names=(
+                "kafka__orders",
+                "mv__orders_landing",
+                "raw__orders",
+                "tbl__orders_enriched",
+            ),
             expected_kafka_columns=(("message", "String", None),),
             expected_kafka_broker_list="kafka:9092",
             expected_kafka_topic="source.orders.created",
@@ -172,14 +58,21 @@ def test_given_live_names_and_transform_spec_when_projecting_then_preserves_curr
     test_case: ActualStateProjectionTestCase,
 ) -> None:
     desired_state: DesiredState
-    inspection: ActualStateInspection
-    desired_state, inspection = build_projection_characterization_inputs()
+    snapshot: PlanningWarehouseSnapshot
+    desired_state, snapshot = build_projection_characterization_inputs()
+    actual_state: ActualState = _native.load_actual_state_from_snapshot(
+        snapshot=snapshot, desired_state=desired_state, database="analytics"
+    )
     actual_objects: tuple[
         ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView, ...
-    ] = build_inspected_actual_objects(desired_state=desired_state, inspection=inspection)
+    ] = actual_state.objects
     actual_by_name: dict[
         str, ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView
     ] = {actual_object.name: actual_object for actual_object in actual_objects}
+    assert (
+        tuple(actual_object.name for actual_object in actual_objects)
+        == test_case.expected_ordered_names
+    )
     kafka_table: ActualKafkaTable = cast(ActualKafkaTable, actual_by_name["kafka__orders"])
     raw_table: ActualTable = cast(ActualTable, actual_by_name["raw__orders"])
     landing_mv: ActualMaterializedView = cast(

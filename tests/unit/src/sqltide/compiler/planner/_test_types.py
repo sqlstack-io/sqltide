@@ -83,30 +83,9 @@ class DirectModelInputReplayColumnsTestCase:
 
 
 @dataclass(frozen=True)
-class BuildActualStateTestCase:
-    description: str
-    expected_ordered_keys: tuple[tuple[str | None, str, str], ...]
-    expected_first_table_settings: dict[str, str] | None
-    expected_first_mv_source_table_name: str
-    expected_first_kafka_consumer_group: str
-
-
-@dataclass(frozen=True)
-class ActualStateRowNormalizationTestCase:
-    description: str
-    raw_engine: str
-    raw_sorting_key: str
-    raw_default_expression: object
-    raw_partition_key: object
-    expected_engine: str
-    expected_order_by: tuple[str, ...]
-    expected_default_expression: str | None
-    expected_partition_key: str | None
-
-
-@dataclass(frozen=True)
 class ActualStateProjectionTestCase:
     description: str
+    expected_ordered_names: tuple[str, ...]
     expected_kafka_columns: tuple[tuple[str, str, str | None], ...]
     expected_kafka_broker_list: str
     expected_kafka_topic: str
@@ -128,13 +107,6 @@ class ActualStateProjectionTestCase:
     expected_transform_partition_by: str | None
     expected_transform_ttl: str | None
     expected_transform_settings: dict[str, str] | None
-
-
-@dataclass(frozen=True)
-class PreservedCatalogProjectionTestCase:
-    description: str
-    expected_ttl: str | None
-    expected_settings: dict[str, str] | None
 
 
 @dataclass(frozen=True)

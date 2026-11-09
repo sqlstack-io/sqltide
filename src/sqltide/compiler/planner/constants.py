@@ -69,14 +69,5 @@ DEPLOYMENT_ACTION_PUBLISH_SUBTREE: Final[DeploymentAction] = DeploymentAction(
 )
 
 VIEW_RELATION_ENGINE: str = "View"
-ENGINE_ARGUMENT_OPEN: str = "("
-EMPTY_TUPLE_EXPRESSION: str = "tuple()"
 BLANK_VALUES: tuple[object, ...] = (None, "")
-
-DESIRED_KAFKA_TABLE_KIND: str = "kafka_table"
-DESIRED_TABLE_KIND: str = "table"
-DESIRED_MATERIALIZED_VIEW_KIND: str = "materialized_view"
-DESIRED_VIEW_KIND: str = "view"
-ACTUAL_ACTIVE_TABLE_SOURCE: str = "active_table"
-ACTUAL_PHYSICAL_NAME_LOOKUP: str = "physical_name"
 DIRECT_DEAD_LETTERS_VIEW_SUFFIX: str = "__dead_letters"
