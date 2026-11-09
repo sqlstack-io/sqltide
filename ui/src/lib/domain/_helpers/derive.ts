@@ -898,17 +898,23 @@ function ingestHealthSummary(project: Project) {
 	};
 }
 
-export function deadLetterSummary(project: Project) {
+export interface DeadLetterSummary {
+	state: 'none' | 'unavailable' | 'present';
+	total: number;
+	models: NonNullable<WarehouseHealth['deadLetters']>;
+}
+
+export function deadLetterSummary(project: Project): DeadLetterSummary {
 	const deadLetters: WarehouseHealth['deadLetters'] | undefined = project.warehouseHealth?.deadLetters;
 	if (deadLetters === undefined) {
-		return { state: 'none' as const, total: 0, models: [] };
+		return { state: 'none', total: 0, models: [] };
 	}
 	if (deadLetters === null) {
-		return { state: 'unavailable' as const, total: 0, models: [] };
+		return { state: 'unavailable', total: 0, models: [] };
 	}
 	const total: number = deadLetters.reduce((sum, model) => sum + model.rowCount, 0);
 	return {
-		state: total > 0 ? ('present' as const) : ('none' as const),
+		state: total > 0 ? 'present' : 'none',
 		total,
 		models: deadLetters
 	};
