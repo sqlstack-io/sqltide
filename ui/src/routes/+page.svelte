@@ -24,6 +24,7 @@
 	const healthSummary = $derived(projectHealthSummary(project));
 	const freshness = $derived(healthSummary.freshness);
 	const ingest = $derived(healthSummary.ingest);
+	const deadLetters = $derived(healthSummary.deadLetters);
 	const ingestLabel = $derived(
 		ingest.state === 'healthy'
 			? 'Healthy'
@@ -132,8 +133,26 @@
 					{#if ingest.stuckConsumers.length}<span style:color="var(--sb-error)">{ingest.stuckConsumers.length} stuck</span>{/if}
 					<span>{ingest.behind} behind</span>
 					{#if ingest.lagUnavailable}<span>{ingest.lagUnavailable} lag unavailable</span>{/if}
+					{#if deadLetters.state === 'unavailable'}
+						<span>dead letters unavailable</span>
+					{:else if deadLetters.state === 'present'}
+						<span>{deadLetters.total} dead letters 24h</span>
+					{/if}
 				</span>
 			</div>
+			{#if deadLetters.state === 'present'}
+				<ul class="mb-2 space-y-1 font-mono text-[10px]" data-testid="dead-letters">
+					{#each deadLetters.models as model (model.modelName)}
+						<li class="flex flex-col gap-0.5">
+							<span>
+								{model.modelName}: {model.rowCount} in 24h, latest failed
+								{model.latestFailedColumns.join(', ')}
+							</span>
+							<span class="break-all text-[var(--sb-text-faint)]">{model.latestPayload}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 
 			{#if ingest.stuckConsumers.length}
 				<div class="mb-2 overflow-hidden rounded-[4px] border border-[var(--sb-error)]">

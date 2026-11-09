@@ -40,6 +40,7 @@ class BuildWorkflow:
     mode: WorkflowMode
     plan_json: str
     statements: tuple[WarehouseStatement, ...]
+    recovery_statements: tuple[WarehouseStatement, ...] = ()
 
     def __post_init__(self) -> None:
         expected_sequence: int = 1

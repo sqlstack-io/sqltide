@@ -5,6 +5,8 @@ use serde_json::Value;
 use crate::aggregates::aggregate_key_name;
 use crate::tree::{identifier_name, is_nested, object, with_ctes};
 
+const WINDOW_FUNCTION_KEY: &str = "window_function";
+
 /// One step from a tree root to a child.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Step {
@@ -41,6 +43,34 @@ pub(crate) fn collect_tree_facts(tree: &Value) -> TreeFacts {
 /// The aggregate function names, in first-seen order with repeats, and whether any GROUP BY
 /// appears.
 #[must_use]
+/// Whether the outer SELECT produces one row per input row: no GROUP BY, aggregate function, or
+/// window function in its own projections. Nested queries are not considered.
+pub(crate) fn select_is_row_level(select: &serde_json::Map<String, Value>) -> bool {
+    if select.get("group_by").is_some_and(|value| !value.is_null()) {
+        return false;
+    }
+    select
+        .get("expressions")
+        .is_none_or(|expressions| !has_row_combining_expression(expressions))
+}
+
+fn has_row_combining_expression(node: &Value) -> bool {
+    match node {
+        Value::Array(items) => items.iter().any(has_row_combining_expression),
+        Value::Object(entries) => {
+            if entries.contains_key("select") {
+                return false;
+            }
+            entries.iter().any(|(key, payload)| {
+                key == WINDOW_FUNCTION_KEY
+                    || aggregate_key_name(key, payload).is_some_and(|name| !name.is_empty())
+                    || has_row_combining_expression(payload)
+            })
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn tree_aggregate_facts(tree: &Value) -> (Vec<String>, bool) {
     let facts: TreeFacts = collect_tree_facts(tree);
     (facts.function_names, facts.has_group_by)

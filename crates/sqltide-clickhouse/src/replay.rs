@@ -135,6 +135,8 @@ pub struct Replay {
     pub target_column_names: Vec<String>,
     pub settings: Vec<(String, String)>,
     pub filter_boundaries_at_source: bool,
+    /// Read each source offset once; set only when capture observed repeated copies.
+    pub dedupe_offsets: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,9 +161,13 @@ pub struct DeploymentReplay {
 /// # Errors
 ///
 /// Returns a replay error when a scalar window lacks its boundary type or lower edge.
-pub fn coverage_query(replay: &Replay, boundary_column_type: Option<&str>) -> ReplayResult<String> {
+pub fn coverage_query(
+    replay: &Replay,
+    boundary_column_type: Option<&str>,
+    count_anchor_rows: bool,
+) -> ReplayResult<String> {
     if replay.mode == BoundaryMode::Offsets {
-        return offset_coverage_query(replay);
+        return offset_coverage_query(replay, count_anchor_rows);
     }
     scalar_coverage_query(replay, boundary_column_type)
 }
@@ -389,13 +395,25 @@ fn deployment_offset_source_sql(request: &DeploymentReplay, has_lower_bound: boo
             .map(|name| format!("anchor.{name} AS {name}")),
         ", ",
     );
-    format!(
+    let source: String = format!(
         "SELECT {selected}\nFROM {}.{} AS anchor\nINNER JOIN cutoff_offsets\nON anchor.{} = \
          cutoff_offsets.{REPLAY_PARTITION}\n{lower_join}WHERE {upper_clause}\n{lower_clause}",
         replay.database, replay.relations.anchor, replay.columns.partition
+    );
+    if replay.dedupe_offsets {
+        format!("{}\n{}", source.trim_end(), offset_dedupe_clause(replay))
+    } else {
+        source.trim_end().to_owned()
+    }
+}
+
+/// Keep one row per source offset, so an anchor holding repeated copies of an offset replays it
+/// once.
+fn offset_dedupe_clause(replay: &Replay) -> String {
+    format!(
+        "LIMIT 1 BY anchor.{}, anchor.{}",
+        replay.columns.partition, replay.columns.offset
     )
-    .trim_end()
-    .to_owned()
 }
 
 fn deployment_offset_cutoff_cte(request: &DeploymentReplay) -> String {
@@ -584,7 +602,14 @@ fn required_deployment_boundary_type(request: &DeploymentReplay) -> ReplayResult
     }
 }
 
-fn coverage_columns(replay: &Replay, timestamp_column: &str) -> String {
+fn coverage_columns(
+    replay: &Replay,
+    timestamp_column: &str,
+    anchor_row_count: Option<&str>,
+) -> String {
+    let anchor_row_count: String = anchor_row_count
+        .map(|query| format!(", ({query}) AS anchor_row_count"))
+        .unwrap_or_default();
     format!(
         "SELECT '{}' AS driving_input_relation_name, 'offsets' AS replay_boundary_mode, \
          concat('_replay_partition=', toString(partition_value)) AS boundary_key, \
@@ -592,8 +617,8 @@ fn coverage_columns(replay: &Replay, timestamp_column: &str) -> String {
          AS source_position_column_name, '{}' AS source_timestamp_column_name, \
          toString(lower_value) AS lower_value, toString(upper_value) AS upper_value, \
          toString(upper_value) AS replay_cutoff_value, true AS cutoff_inclusive, now64(9, 'UTC') \
-         AS captured_at\nFROM (\nSELECT partition_value, min(offset_value) AS lower_value, \
-         max(offset_value) AS upper_value\nFROM (\nSELECT {partition} AS partition_value, {offset} \
+         AS captured_at{anchor_row_count}\nFROM (\nSELECT \
+         partition_value, min(offset_value) AS lower_value, max(offset_value) AS upper_value\nFROM (\nSELECT {partition} AS partition_value, {offset} \
          AS offset_value, {offset} - toInt64(row_number() OVER (PARTITION BY {partition} ORDER BY \
          {offset})) AS sequence_group\n",
         escape_literal(&replay.relations.anchor),
@@ -608,7 +633,7 @@ fn coverage_columns(replay: &Replay, timestamp_column: &str) -> String {
 const COVERAGE_TAIL: &str =
     "GROUP BY partition_value, sequence_group\nORDER BY partition_value, lower_value\n)";
 
-fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
+fn offset_coverage_query(replay: &Replay, count_anchor_rows: bool) -> ReplayResult<String> {
     let timestamp_column = replay.columns.timestamp.as_str();
     let partition = &replay.columns.partition;
     let offset = &replay.columns.offset;
@@ -616,7 +641,13 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
     let Some(lower_cte) = replay_offset_lower_cte(replay, None, None)? else {
         return Ok(format!(
             "{}FROM (SELECT DISTINCT {partition}, {offset} FROM {anchor})\n)\n{COVERAGE_TAIL}",
-            coverage_columns(replay, timestamp_column)
+            coverage_columns(
+                replay,
+                timestamp_column,
+                count_anchor_rows
+                    .then(|| format!("SELECT count() FROM {anchor}"))
+                    .as_deref()
+            )
         ));
     };
     let lower_alias = Some("coverage_start_offsets");
@@ -632,7 +663,15 @@ fn offset_coverage_query(replay: &Replay) -> ReplayResult<String> {
         "WITH {ACTIVE_START_OFFSETS} AS (\n{lower_cte}\n)\n{}FROM (SELECT DISTINCT \
          anchor.{partition} AS {partition}, anchor.{offset} AS {offset} FROM {anchor} AS \
          anchor\n{lower_join}WHERE true\n{lower_clause})\n)\n{COVERAGE_TAIL}",
-        coverage_columns(replay, timestamp_column)
+        coverage_columns(
+            replay,
+            timestamp_column,
+            count_anchor_rows
+                .then(|| format!(
+                    "SELECT count() FROM {anchor} AS anchor\n{lower_join}WHERE true\n{lower_clause}"
+                ))
+                .as_deref()
+        )
     ))
 }
 
@@ -797,8 +836,14 @@ fn offset_replay(
 ) -> ReplayResult<String> {
     let predicate = offset_literal_predicate(replay, lower_by_partition)?;
     let filtered_source = format!(
-        "SELECT anchor.*\nFROM {}.{} AS anchor\nWHERE {predicate}",
-        replay.database, replay.relations.anchor
+        "SELECT anchor.*\nFROM {}.{} AS anchor\nWHERE {predicate}{}",
+        replay.database,
+        replay.relations.anchor,
+        if replay.dedupe_offsets {
+            format!("\n{}", offset_dedupe_clause(replay))
+        } else {
+            String::new()
+        }
     );
     let query = rewrite_replay_query(
         &replay.query,

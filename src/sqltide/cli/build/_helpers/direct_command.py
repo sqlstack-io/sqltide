@@ -96,6 +96,7 @@ def execute_direct_build_command(
         if (
             preparation.preview.plan.selection_mode == DirectSelectionMode.CHANGED
             and not preparation.preview.plan.execution_scope
+            and not preparation.preview.row_error_policy_changes
         ):
             invocation: AdapterInvocationRecord = _build_invocation(
                 started=started,

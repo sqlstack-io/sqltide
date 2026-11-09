@@ -8,6 +8,9 @@ from sqltide.adapter.models import (
     AdapterReplayBoundary,
     AdapterReplayColumns,
     AdapterReplayLowerBound,
+    AdapterReplayOffsetFrontier,
+    AdapterReplayOffsetProgressRequest,
+    AdapterReplayOffsetRange,
     AdapterReplayRelations,
     AdapterReplayRequest,
     AdapterReplayWindow,
@@ -22,6 +25,7 @@ from sqltide.compiler.planner.main.build_adapter_replay_query import (
 )
 from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     ClickHouseOffsetReplayIntegrationTestCase,
+    DedupedReplayProgressTestCase,
 )
 
 
@@ -157,6 +161,153 @@ def test_given_offset_replay_when_transforming_rows_then_only_physical_ranges_ar
         """
     ).rows
     assert rows == test_case.expected_positions
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DedupedReplayProgressTestCase(
+            description="repeated raw copies replay once and progress reaches the frontier",
+            source_rows=(
+                ("2026-09-07 10:00:00", 0, 2),
+                ("2026-09-07 10:01:00", 0, 3),
+                ("2026-09-07 10:01:00", 0, 3),
+                ("2026-09-07 11:00:00", 1, 11),
+            ),
+            expected_positions=((0, 2), (0, 3), (1, 11)),
+            expected_frontier=((0, 3), (1, 11)),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_repeated_offsets_when_replaying_with_dedupe_then_progress_stays_correct(
+    test_case: DedupedReplayProgressTestCase,
+    managed_clickhouse_client: AdapterConnection,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    clickhouse_client.command(
+        f"""
+        CREATE TABLE {clickhouse_database}.raw_events
+        (
+            kafka_value String,
+            event_partition Int32,
+            event_offset Int64
+        )
+        ENGINE = MergeTree
+        ORDER BY (event_partition, event_offset)
+        """
+    )
+    clickhouse_client.command(
+        f"""
+        CREATE TABLE {clickhouse_database}.replayed_events
+        (
+            event_time DateTime,
+            _replay_partition Int32,
+            _replay_offset Int64
+        )
+        ENGINE = MergeTree
+        ORDER BY (_replay_partition, _replay_offset)
+        """
+    )
+    clickhouse_client.insert(
+        f"{clickhouse_database}.raw_events",
+        [list(row) for row in test_case.source_rows],
+        column_names=["kafka_value", "event_partition", "event_offset"],
+    )
+    replay: AdapterReplayRequest = AdapterReplayRequest(
+        mode=AdapterReplayBoundaryMode.OFFSETS,
+        database=clickhouse_database,
+        relations=AdapterReplayRelations(
+            root="replayed_events",
+            source="raw_events",
+            anchor="raw_events",
+            target="replayed_events",
+        ),
+        replay_query=build_adapter_replay_query(
+            query=(
+                "SELECT parseDateTimeBestEffort(source.kafka_value) AS event_time, "
+                "CAST(source.event_partition AS Int32) AS _replay_partition, "
+                "CAST(source.event_offset AS Int64) AS _replay_offset "
+                "FROM raw_events AS source"
+            ),
+            source_relation_name="raw_events",
+            database=clickhouse_database,
+            physical_relation_mappings=(
+                AdapterPhysicalRelationMapping(
+                    logical_name="raw_events",
+                    physical_name="raw_events",
+                ),
+            ),
+        ),
+        boundaries=(
+            AdapterReplayBoundary(
+                boundary_key="_replay_partition=0",
+                cutoff_value="3",
+                cutoff_inclusive=True,
+                partition_value="0",
+            ),
+            AdapterReplayBoundary(
+                boundary_key="_replay_partition=1",
+                cutoff_value="12",
+                cutoff_inclusive=True,
+                partition_value="1",
+            ),
+        ),
+        columns=AdapterReplayColumns(
+            partition="event_partition",
+            offset="event_offset",
+            timestamp="event_timestamp",
+            landed_at="event_landed_at",
+            cursor="event_cursor",
+        ),
+        window=AdapterReplayWindow(
+            lower_bound_mode=AdapterReplayLowerBoundMode.ACTIVE_FRONTIER,
+            lower_bound_inclusive=True,
+            boundary_time="2026-09-07 12:00:00.000",
+            forced_start_time=None,
+            lookback_seconds=None,
+        ),
+        seed_mode=AdapterReplaySeedMode.NONE,
+        target_column_names=("event_time", "_replay_partition", "_replay_offset"),
+        dedupe_offsets=True,
+    )
+    statement: str = managed_clickhouse_client.render_replay_from_capture(
+        AdapterCapturedReplayRequest(
+            replay=replay,
+            boundary_column_type=None,
+            lower_bounds=(),
+        )
+    )
+
+    managed_clickhouse_client.execute_workflow_sql(statement)
+
+    rows: tuple[tuple[object, ...], ...] = managed_clickhouse_client.query(
+        f"SELECT _replay_partition, _replay_offset FROM {clickhouse_database}.replayed_events "
+        "ORDER BY _replay_partition, _replay_offset"
+    ).rows
+    frontiers: tuple[AdapterReplayOffsetFrontier, ...] | None = (
+        managed_clickhouse_client.load_replay_offset_frontiers(
+            query_id="deduped-replay",
+            request=AdapterReplayOffsetProgressRequest(
+                database=clickhouse_database,
+                relation="replayed_events",
+                partition_column="_replay_partition",
+                offset_column="_replay_offset",
+                ranges=(
+                    AdapterReplayOffsetRange(partition=0, lower_offset=2, upper_offset=3),
+                    AdapterReplayOffsetRange(partition=1, lower_offset=11, upper_offset=11),
+                ),
+            ),
+        )
+    )
+    assert rows == test_case.expected_positions
+    assert frontiers is not None
+    assert (
+        tuple((frontier.partition, frontier.completed_offset) for frontier in frontiers)
+        == test_case.expected_frontier
+    )
 
 
 if __name__ == "__main__":

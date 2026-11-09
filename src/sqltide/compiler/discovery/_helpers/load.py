@@ -80,6 +80,7 @@ class _PipelineDraft:
     audit_defaults: AuditDefaults
     execution_settings: ExecutionSettings
     model_retention: ModelRetentionPolicy | Literal[False] | None
+    model_on_row_error: str | None
 
 
 def load_pipeline_directory(pipeline_dir: Path) -> LoadedPipeline:
@@ -147,6 +148,7 @@ def load_pipeline_directory(pipeline_dir: Path) -> LoadedPipeline:
             bounded_replay_fallback=effective.defaults.bounded_replay_fallback,
             model_ttl=effective.defaults.model_ttl,
             model_retention=effective.defaults.models.retention,
+            model_on_row_error=effective.defaults.models.on_row_error,
             default_database=effective.database,
             adapter=effective.adapter,
             naming=effective.naming,
@@ -226,6 +228,7 @@ def load_pipeline_directories(
                 audit_defaults=draft.audit_defaults,
                 execution_settings=draft.execution_settings,
                 model_retention=draft.model_retention,
+                model_on_row_error=draft.model_on_row_error,
             )
         )
     return tuple(pipelines)
@@ -346,6 +349,7 @@ def _load_pipeline_draft(
         AuditDefaults,
         ExecutionSettings,
         ModelRetentionPolicy | Literal[False] | None,
+        str | None,
     ] = _native.parse_pipeline_settings(
         pipeline_values,
         str(config_path),
@@ -364,6 +368,7 @@ def _load_pipeline_draft(
         audit_defaults=settings[4],
         execution_settings=settings[5],
         model_retention=settings[6],
+        model_on_row_error=settings[7],
     )
 
 

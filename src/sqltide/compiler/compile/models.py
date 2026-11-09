@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
@@ -43,6 +43,7 @@ from sqltide.compiler.discovery.types import (
     RefType,
     ReplayBoundaryMode,
     ReplayLineageMode,
+    RowErrorPolicy,
     SourceKind,
     SqlRelationType,
 )
@@ -218,6 +219,22 @@ class DesiredMaterializedView:
     logical_model_name: str | None = field(default=None, compare=False)
     refresh: str | None = field(default=None, compare=False)
     append: bool = field(default=True, compare=False)
+    filters_row_errors: bool = field(default=False, compare=False)
+    dead_letters: bool = field(default=False, compare=False)
+    authored_query: str | None = field(default=None, compare=False)
+    authored_database_template: str | None = field(default=None, compare=False)
+
+    @property
+    def comparison_spec(self) -> MaterializedViewSpec:
+        """Return the spec change detection uses, ignoring the row-error rewrite."""
+
+        if self.authored_query is None:
+            return self.spec
+        return replace(
+            self.spec,
+            query=self.authored_query,
+            database_template=self.authored_database_template or self.authored_query,
+        )
 
     @property
     def name(self) -> str:
@@ -353,6 +370,14 @@ class CompiledModel:
 
 
 @dataclass(frozen=True)
+class RowErrorContext:
+    """The inherited setting deciding a table model's row-error policy."""
+
+    inherited_policy: RowErrorPolicy | None = None
+    refresh_source: bool = False
+
+
+@dataclass(frozen=True)
 class CompiledTableModel(CompiledModel):
     """One compiled streaming table model and its replay semantics."""
 
@@ -363,6 +388,7 @@ class CompiledTableModel(CompiledModel):
     replay_on_change: ReplayOnChangePolicy | None = None
     retention: ModelRetentionResolution = field(default_factory=ModelRetentionResolution)
     retention_applied: bool = False
+    on_row_error: RowErrorPolicy = RowErrorPolicy.FAIL
 
     @property
     def has_mutable_refs(self) -> bool:
@@ -422,6 +448,19 @@ class DesiredState:
     replay_anchor_keys: frozenset[ObjectKey]
     mutable_ref_warning_keys: frozenset[ObjectKey]
     external_source_replay_configs: tuple[ExternalSourceReplayConfig, ...] = ()
+
+    def is_managed_landing_table(self, name: str) -> bool:
+        """Return whether a relation is a Kafka source's raw landing table."""
+
+        kafka_tables: frozenset[str] = frozenset(
+            desired.name for desired in self.objects if isinstance(desired, DesiredKafkaTable)
+        )
+        return any(
+            isinstance(desired, DesiredMaterializedView)
+            and desired.target_table_name == name
+            and desired.source_table_name in kafka_tables
+            for desired in self.objects
+        )
 
 
 @dataclass(frozen=True)

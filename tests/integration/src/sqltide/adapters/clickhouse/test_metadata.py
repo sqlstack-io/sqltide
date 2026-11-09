@@ -72,6 +72,7 @@ def test_given_legacy_node_results_table_when_migrating_then_reset_instruction_i
         MetadataMigrationIntegrationTestCase(
             description="empty metadata state migrates repeatedly without duplicate versions",
             expected_table_names=(
+                "_sqltide_dead_letters",
                 "_sqltide_direct_fingerprints",
                 "_sqltide_invocations",
                 "_sqltide_manifests",
@@ -89,7 +90,7 @@ def test_given_legacy_node_results_table_when_migrating_then_reset_instruction_i
                 "_sqltide_virtual_publications",
                 "_sqltide_virtual_replay_boundaries",
             ),
-            expected_version_rows=((7,),),
+            expected_version_rows=((8,),),
         )
     ],
     ids=lambda case: case.description,
@@ -275,6 +276,7 @@ def test_given_v2_publication_rows_when_migrating_then_lifecycle_defaults_are_pr
         MetadataMigrationIntegrationTestCase(
             description="concurrent metadata migrations converge on one logical version",
             expected_table_names=(
+                "_sqltide_dead_letters",
                 "_sqltide_direct_fingerprints",
                 "_sqltide_invocations",
                 "_sqltide_manifests",
@@ -292,7 +294,7 @@ def test_given_v2_publication_rows_when_migrating_then_lifecycle_defaults_are_pr
                 "_sqltide_virtual_publications",
                 "_sqltide_virtual_replay_boundaries",
             ),
-            expected_version_rows=((7,),),
+            expected_version_rows=((8,),),
         )
     ],
     ids=lambda case: case.description,

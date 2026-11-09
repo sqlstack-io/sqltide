@@ -92,6 +92,7 @@ def test_given_empty_inventory_when_resolving_publish_without_deployment_id_then
             expected_target_table_name="tbl__orders_enriched__20260409T180000Z_ab12cd",
             expected_published_order_ids=("historical-order",),
             expected_full_layout=(
+                ("_sqltide_dead_letters", "MergeTree"),
                 ("_sqltide_direct_fingerprints", "MergeTree"),
                 ("_sqltide_invocations", "MergeTree"),
                 ("_sqltide_manifests", "MergeTree"),

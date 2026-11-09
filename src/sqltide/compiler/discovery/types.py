@@ -28,6 +28,13 @@ class ModelReferenceScope(StrEnum):
     PIPELINE = "pipeline"
 
 
+class RowErrorPolicy(StrEnum):
+    """What a streaming model does with a row its typed projection cannot produce."""
+
+    FAIL = "fail"
+    QUARANTINE = "quarantine"
+
+
 class ReplayAnchorMode(StrEnum):
     AUTO = "auto"
     NEVER = "never"

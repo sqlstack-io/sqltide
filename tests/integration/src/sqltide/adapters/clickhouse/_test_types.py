@@ -149,3 +149,32 @@ class StreamBuildMetadataRenameTestCase:
     extra_tables: tuple[str, ...]
     expected_error_fragment: str | None
     expected_table_prefix: str
+
+
+@dataclass(frozen=True)
+class WarehouseHealthMissingDeadLettersTestCase:
+    description: str
+    expected_dead_letters: None
+
+
+@dataclass(frozen=True)
+class WarehouseHealthDeadLettersTestCase:
+    description: str
+    payload_length: int
+    expected_row_count: int
+    expected_failed_columns: tuple[str, ...]
+    expected_payload_length: int
+
+
+@dataclass(frozen=True)
+class DedupedReplayProgressTestCase:
+    description: str
+    source_rows: tuple[tuple[str, int, int], ...]
+    expected_positions: tuple[tuple[int, int], ...]
+    expected_frontier: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class WarehouseHealthNoQuarantineTestCase:
+    description: str
+    expected_dead_letters: tuple[()]

@@ -99,6 +99,7 @@ fn replay(object: &Bound<'_, PyAny>) -> PyResult<Replay> {
         target_column_names: field(object, "target_column_names")?,
         settings: field(object, "settings")?,
         filter_boundaries_at_source: field(object, "filter_boundaries_at_source")?,
+        dedupe_offsets: field(object, "dedupe_offsets")?,
     })
 }
 
@@ -206,9 +207,11 @@ fn render_clickhouse_replay_coverage_query(
     request: &Bound<'_, PyAny>,
 ) -> PyResult<String> {
     let boundary_column_type: Option<String> = field(request, "boundary_column_type")?;
+    let count_anchor_rows: bool = field(request, "count_anchor_rows")?;
     coverage_query(
         &replay(&request.getattr("replay")?)?,
         boundary_column_type.as_deref(),
+        count_anchor_rows,
     )
     .map_err(|error| replay_error(py, error))
 }

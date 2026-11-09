@@ -1,5 +1,6 @@
 """Realize one logical model as ClickHouse resources."""
 
+from sqltide.adapter.constants import METADATA_DEAD_LETTERS_TABLE_NAME
 from sqltide.adapter.models import (
     AdapterMaterializedView,
     AdapterModelRealization,
@@ -8,7 +9,10 @@ from sqltide.adapter.models import (
     AdapterView,
     AdapterViewRealizationRequest,
 )
-from sqltide.adapters.clickhouse.constants import CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX
+from sqltide.adapters.clickhouse.constants import (
+    CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX,
+    CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX,
+)
 
 
 def realize_clickhouse_model(
@@ -28,6 +32,21 @@ def realize_clickhouse_model(
             ),
         )
 
+    view_name: str = f"{CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX}{request.logical_name}"
+    dead_letter_views: tuple[AdapterMaterializedView, ...] = (
+        ()
+        if request.dead_letter_query is None or request.dead_letter_database_template is None
+        else (
+            AdapterMaterializedView(
+                name=f"{view_name}{CLICKHOUSE_DEAD_LETTERS_VIEW_SUFFIX}",
+                source_relation_name=request.source_relation_name,
+                target_relation_name=METADATA_DEAD_LETTERS_TABLE_NAME,
+                query=request.dead_letter_query,
+                database_template=request.dead_letter_database_template,
+                dead_letters=True,
+            ),
+        )
+    )
     return AdapterModelRealization(
         relation_name=request.target_relation_name,
         resources=(
@@ -41,7 +60,7 @@ def realize_clickhouse_model(
                 settings=request.settings,
             ),
             AdapterMaterializedView(
-                name=f"{CLICKHOUSE_MATERIALIZED_VIEW_NAME_PREFIX}{request.logical_name}",
+                name=view_name,
                 source_relation_name=request.source_relation_name,
                 target_relation_name=request.target_relation_name,
                 query=request.resolved_query,
@@ -49,5 +68,6 @@ def realize_clickhouse_model(
                 refresh=request.refresh,
                 append=request.append,
             ),
+            *dead_letter_views,
         ),
     )

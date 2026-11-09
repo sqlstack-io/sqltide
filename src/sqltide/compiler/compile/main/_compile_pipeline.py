@@ -16,6 +16,7 @@ from sqltide.compiler.compile._helpers.retention import effective_model_retentio
 from sqltide.compiler.compile._helpers.transforms import (
     compile_model,
     compile_view,
+    row_error_context,
 )
 from sqltide.compiler.compile.exceptions import (
     PipelineCompileError,
@@ -143,6 +144,7 @@ def _compile_models(
                         loaded_pipeline=loaded_pipeline,
                         transform=transform,
                     ),
+                    row_error_context=row_error_context(loaded_pipeline=loaded_pipeline),
                 )
         except (TransformSqlContractError, PipelineCompileError) as error:
             if error.diagnostic is None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from sqltide.cli.plan.constants import DIRECT_MODE_LABEL
+from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
 from sqltide.cli.presentation.main._cli_style import cli_style
 from sqltide.compiler.compile.models import LogicalResourceKey, ObjectKey
 from sqltide.compiler.planner.models import (
@@ -13,6 +14,7 @@ from sqltide.compiler.planner.models import (
     DirectPrerequisite,
     DirectRelationOperation,
     DirectReplayRoot,
+    DirectRowErrorPolicyChange,
     DirectSourceDriftSelection,
     DirectSqlChange,
     PlannerWarning,
@@ -28,6 +30,7 @@ def render_direct_plan_json(
     plan: DirectPlan,
     adapter_name: str,
     source_recreations: tuple[PopulationSourceRecreation, ...] = (),
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = (),
 ) -> str:
     """Render one direct plan as deterministic JSON."""
 
@@ -57,6 +60,18 @@ def render_direct_plan_json(
         ],
         "warnings": [_warning_payload(warning) for warning in plan.warnings],
     }
+    if row_error_policy_changes:
+        payload["row_error_policy_changes"] = [
+            {
+                "model_key": _logical_key_payload(change.model_key),
+                "desired_policy": str(change.desired_policy),
+                "view": change.view_name,
+                "dead_letter_view": change.dead_letter_view_name,
+                "operation": "repair_landing_view" if change.landing_repair_only else "view_only",
+                "replay_roots": 0,
+            }
+            for change in row_error_policy_changes
+        ]
     return json.dumps(payload, indent=2) + "\n"
 
 
@@ -66,6 +81,7 @@ def render_direct_plan_text(
     adapter_name: str,
     verbose: bool = False,
     source_recreations: tuple[PopulationSourceRecreation, ...] = (),
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = (),
 ) -> str:
     """Render one direct plan as operator-facing text."""
 
@@ -91,7 +107,10 @@ def render_direct_plan_text(
     warning: PlannerWarning
     for warning in plan.warnings:
         lines.append(cli_style().warning(f"warning  {warning.message}"))
-    lines.append(_summary_line(plan=plan))
+    change: DirectRowErrorPolicyChange
+    for change in row_error_policy_changes:
+        lines.append(render_row_error_policy_line(change))
+    lines.append(_summary_line(plan=plan, row_error_policy_changes=row_error_policy_changes))
     return "\n".join(lines)
 
 
@@ -217,14 +236,23 @@ def _source_recreation_payload(recreation: PopulationSourceRecreation) -> dict[s
     }
 
 
-def _summary_line(*, plan: DirectPlan) -> str:
+def _summary_line(
+    *, plan: DirectPlan, row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...]
+) -> str:
     model_count: int = len(plan.execution_scope)
     relation_count: int = len(plan.creation_operations)
     replay_count: int = len(plan.replay_roots)
+    policy_count: int = len(row_error_policy_changes)
+    policy_suffix: str = (
+        ""
+        if policy_count == 0
+        else f", {policy_count} view-only row-error policy change"
+        f"{'s' if policy_count != 1 else ''} (no replay)"
+    )
     return (
         f"{model_count} model{'s' if model_count != 1 else ''} selected, "
         f"{relation_count} relation{'s' if relation_count != 1 else ''} rebuilt, "
-        f"{replay_count} replay root{'s' if replay_count != 1 else ''}"
+        f"{replay_count} replay root{'s' if replay_count != 1 else ''}{policy_suffix}"
     )
 
 

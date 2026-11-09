@@ -53,6 +53,7 @@ def load_project_input_for_path(
         replay_on_change=effective.defaults.replay_on_change,
         model_ttl=effective.defaults.model_ttl,
         model_retention=effective.defaults.models.retention,
+        model_on_row_error=effective.defaults.models.on_row_error,
         default_database=effective.database,
         adapter=effective.adapter,
         bounded_replay_fallback=effective.defaults.bounded_replay_fallback,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from importlib.metadata import version
 
@@ -32,6 +33,9 @@ from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import DeploymentPlan
 from sqltide.executor.backfill._helpers.metadata import build_deployment_metadata_state
+from sqltide.executor.backfill._helpers.row_error_policy import (
+    virtual_row_error_policy_statements,
+)
 from sqltide.executor.backfill.exceptions import BackfillExecutionError
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.backfill.types import NativeVirtualRoot
@@ -40,6 +44,9 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._with_metadata_dead_letter_target import (
+    with_metadata_dead_letter_target,
+)
 from sqltide.executor.population.main.plan_population_sources import plan_population_sources
 from sqltide.executor.population.models import (
     PopulationObject,
@@ -114,10 +121,26 @@ def assemble_virtual_build_workflow(
         population_plan=population_plan,
         replay_templates=replay_templates,
     )
+    recovery_statements: tuple[WarehouseStatement, ...] = ()
+    if request.row_error_policy_changes:
+        policy_statements: list[NativeStatement]
+        policy_recovery: list[NativeStatement]
+        policy_statements, policy_recovery = virtual_row_error_policy_statements(
+            request=request, client=client, target_catalog=target_catalog
+        )
+        recovery_statements = _warehouse_statements(
+            native_statements=policy_recovery, start=1, existing=()
+        )
+        statements = _warehouse_statements(
+            native_statements=policy_statements,
+            start=len(statements) + 1 if deployment_plan.rebuild_subtrees else 1,
+            existing=statements if deployment_plan.rebuild_subtrees else (),
+        )
     return BuildWorkflow(
         mode=WorkflowMode.VIRTUAL_ENVIRONMENT,
         plan_json=plan_json,
         statements=statements,
+        recovery_statements=recovery_statements,
     )
 
 
@@ -155,7 +178,9 @@ def _assemble_statements(
         client.render_migrate_metadata_state(request.metadata_database)
     )
     rendered_sources: list[tuple[str, str]] = _rendered_realizations(
-        client=client, realizations=source_realizations
+        client=client,
+        realizations=source_realizations,
+        metadata_database=request.metadata_database,
     )
     persist_metadata_sql: list[str] = list(
         client.render_persist_metadata_state(
@@ -165,6 +190,7 @@ def _assemble_statements(
     )
     rendered_objects: list[tuple[str, str]] = _rendered_realizations(
         client=client,
+        metadata_database=request.metadata_database,
         realizations=plan_population_objects(
             plan=population_plan,
             desired_state=request.desired_state,
@@ -242,13 +268,20 @@ def _prepared_relation(
 
 
 def _rendered_realizations(
-    *, client: AdapterConnection, realizations: tuple[PopulationRealization, ...]
+    *,
+    client: AdapterConnection,
+    realizations: tuple[PopulationRealization, ...],
+    metadata_database: str,
 ) -> list[tuple[str, str]]:
     return [
         (
             realization.resource.name,
             client.render_resource(
-                resource=realization.resource,
+                resource=with_metadata_dead_letter_target(
+                    resource=realization.resource,
+                    database=realization.database,
+                    metadata_database=metadata_database,
+                ),
                 database=realization.database,
                 if_not_exists=True,
             ),
@@ -283,9 +316,23 @@ def _native_root(
     root: PopulationRoot,
     replay: AdapterReplayRequest,
 ) -> NativeVirtualRoot:
+    anchor_exists: bool = target_catalog.relation(replay.relations.anchor) is not None
     rendered: tuple[str, ...] = client.render_replay_from_deployment(
         AdapterDeploymentReplayRequest(
-            replay=replay,
+            replay=replace(
+                replay,
+                dedupe_offsets=(
+                    anchor_exists
+                    and replay.mode is AdapterReplayBoundaryMode.OFFSETS
+                    and request.desired_state.is_managed_landing_table(replay.relations.anchor)
+                    and client.replay_anchor_has_repeated_offsets(
+                        database=replay.database,
+                        relation=replay.relations.anchor,
+                        partition_column=replay.columns.partition,
+                        offset_column=replay.columns.offset,
+                    )
+                ),
+            ),
             metadata_database=request.metadata_database,
             deployment_id=_confirmed_deployment_id(request),
             boundary_column_type=_boundary_column_type(
@@ -455,3 +502,27 @@ def _prepared_relation_names(request: BackfillBootstrapRequest) -> tuple[str, ..
 
 def _boundary_type_expression(mode: AdapterReplayBoundaryMode) -> str:
     return "UInt64" if mode == AdapterReplayBoundaryMode.CURSOR else "DateTime64(3, 'UTC')"
+
+
+def _warehouse_statements(
+    *,
+    native_statements: list[NativeStatement],
+    start: int,
+    existing: tuple[WarehouseStatement, ...],
+) -> tuple[WarehouseStatement, ...]:
+    return (
+        *existing,
+        *(
+            WarehouseStatement(
+                sequence=sequence,
+                step_id=step_id,
+                phase=WorkflowPhase(phase),
+                intent=StatementIntent(intent),
+                sql=sql,
+                continue_on_error=continue_on_error,
+            )
+            for sequence, (step_id, phase, intent, sql, continue_on_error) in enumerate(
+                native_statements, start=start
+            )
+        ),
+    )

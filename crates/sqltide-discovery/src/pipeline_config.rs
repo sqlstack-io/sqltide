@@ -4,6 +4,7 @@
 use crate::config::{AuditDefaults, ReplayOnChange, ReplayRule};
 use crate::durations::{duration_seconds, parse_duration_seconds};
 use crate::errors::{ErrorKind, SpecError, SpecResult};
+use crate::model_spec::ON_ROW_ERROR_VALUES;
 use crate::retention::{ModelRetention, Retention, is_identifier, parse_model_retention};
 use crate::value::{Kind, Value};
 
@@ -25,7 +26,7 @@ const AUDIT_SEVERITIES: [&str; 2] = ["error", "warning"];
 const EXECUTION_KEYS: [&str; 1] = ["replay"];
 const REPLAY_EXECUTION_KEYS: [&str; 1] = ["settings"];
 const DEFAULTS_KEYS: [&str; 1] = ["models"];
-const MODEL_DEFAULT_KEYS: [&str; 1] = ["retention"];
+const MODEL_DEFAULT_KEYS: [&str; 2] = ["retention", "on_row_error"];
 const PIPELINE_MODES: [&str; 2] = ["direct", "virtual"];
 const DIRECT_MODE: &str = "direct";
 const FULL_REPLAY: &str = "full";
@@ -47,6 +48,8 @@ pub struct PipelineSettings {
     /// Replay query settings in authored order, each value as Python `str()` renders it.
     pub replay_settings: Option<Vec<(String, String)>>,
     pub model_retention: Retention<ModelRetention>,
+    /// `fail` or `quarantine`; `None` inherits the project default.
+    pub model_on_row_error: Option<String>,
 }
 
 struct Parser<'a> {
@@ -113,6 +116,8 @@ pub fn parse_pipeline_settings(
         parser.execution(field(payload, "execution"))?;
     let model_retention: Retention<ModelRetention> =
         parser.model_retention(field(payload, "defaults"))?;
+    let model_on_row_error: Option<String> =
+        parser.model_on_row_error(field(payload, "defaults"))?;
     Ok(PipelineSettings {
         replay_on_change,
         bounded_replay_fallback,
@@ -122,6 +127,7 @@ pub fn parse_pipeline_settings(
         audit_defaults,
         replay_settings,
         model_retention,
+        model_on_row_error,
     })
 }
 
@@ -340,6 +346,20 @@ impl Parser<'_> {
                 .map(|(name, setting)| (name.python_str(), setting.python_str()))
                 .collect(),
         ))
+    }
+
+    fn model_on_row_error(&self, value: Option<&Value>) -> SpecResult<Option<String>> {
+        let Some(setting) = value
+            .and_then(|defaults| defaults.get("models"))
+            .and_then(|models| models.get("on_row_error"))
+            .filter(|setting| !setting.is_none())
+        else {
+            return Ok(None);
+        };
+        match setting.as_str() {
+            Some(mode) if ON_ROW_ERROR_VALUES.contains(&mode) => Ok(Some(mode.to_owned())),
+            _ => self.error("must define defaults.models.on_row_error as 'fail' or 'quarantine'"),
+        }
     }
 
     fn model_retention(&self, value: Option<&Value>) -> SpecResult<Retention<ModelRetention>> {

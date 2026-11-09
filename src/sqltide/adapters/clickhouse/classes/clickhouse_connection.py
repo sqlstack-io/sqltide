@@ -12,6 +12,7 @@ from clickhouse_connect.driver.summary import QuerySummary
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
+    METADATA_DEAD_LETTERS_TABLE_NAME,
     METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME,
     METADATA_DEPLOYMENTS_TABLE_NAME,
     METADATA_DIRECT_FINGERPRINTS_TABLE_NAME,
@@ -158,6 +159,7 @@ _METADATA_TABLE_NAMES: tuple[str, ...] = (
     METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME,
     METADATA_PUBLISH_HISTORY_TABLE_NAME,
     METADATA_DIRECT_FINGERPRINTS_TABLE_NAME,
+    METADATA_DEAD_LETTERS_TABLE_NAME,
     METADATA_MANIFESTS_TABLE_NAME,
     METADATA_INVOCATIONS_TABLE_NAME,
     METADATA_NODE_RESULTS_TABLE_NAME,
@@ -256,14 +258,36 @@ class ClickHouseConnection(AdapterConnection):
 
         return load_clickhouse_refresh_states(connection=self, database=database)
 
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool:
+        """Return whether any partition holds more rows than its offset span."""
+
+        partition: str = _quote_clickhouse_identifier(partition_column)
+        offset: str = _quote_clickhouse_identifier(offset_column)
+        return bool(
+            self.query(
+                "SELECT 1 FROM (SELECT count() AS row_count, "
+                f"max({offset}) - min({offset}) + 1 AS offset_span "
+                f"FROM {_quote_clickhouse_identifier(database)}."
+                f"{_quote_clickhouse_identifier(relation)} GROUP BY {partition}) "
+                "WHERE row_count > offset_span LIMIT 1"
+            ).rows
+        )
+
     def load_warehouse_health(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Read bounded ClickHouse system-table diagnostics."""
 
         return ClickHouseWarehouseHealthReader(connection=self).read(
             database=database,
             managed_source_names=managed_source_names,
+            include_dead_letters=include_dead_letters,
         )
 
     def metadata_columns(self, *, database: str, table: str) -> frozenset[str]:
@@ -876,6 +900,13 @@ class ClickHouseConnection(AdapterConnection):
         """Render exact ClickHouse stable binding SQL."""
 
         return render_clickhouse_stable_binding_replacement(connection=self, request=request)
+
+    def render_restore_materialized_view(self, definition_sql: str) -> str:
+        """Render the captured view definition so an existing view is left in place."""
+
+        return definition_sql.replace(
+            "CREATE MATERIALIZED VIEW ", "CREATE MATERIALIZED VIEW IF NOT EXISTS ", 1
+        )
 
     def render_cleanup_relations(self, request: AdapterRelationCleanupRequest) -> tuple[str, ...]:
         """Render guarded exact ClickHouse relation cleanup SQL."""

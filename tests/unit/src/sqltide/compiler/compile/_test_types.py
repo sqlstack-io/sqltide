@@ -3,9 +3,11 @@ from dataclasses import dataclass
 from sqltide.compiler.discovery.models import Pipeline, ReplayOnChangePolicy
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
+    PipelineMode,
     ReplayAnchorMode,
     ReplayBoundaryMode,
     ReplayLineageMode,
+    RowErrorPolicy,
 )
 
 
@@ -247,3 +249,63 @@ class CompilePipelineReplayLineageModeResolutionTestCase:
     description: str
     pipeline: Pipeline
     expected_replay_lineage_mode: ReplayLineageMode
+
+
+@dataclass(frozen=True)
+class ResolveRowErrorPolicyTestCase:
+    description: str
+    model_contents: str
+    project_policy: RowErrorPolicy | None
+    pipeline_policy: RowErrorPolicy | None
+    pipeline_mode: PipelineMode
+    expected_policy: RowErrorPolicy
+
+
+@dataclass(frozen=True)
+class RejectRowErrorPolicyTestCase:
+    description: str
+    model_contents: str
+    pipeline_mode: PipelineMode
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class RowErrorHeaderRejectedTestCase:
+    description: str
+    model_contents: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class PipelineRowErrorPolicyTestCase:
+    description: str
+    pipeline_toml: str
+    expected_policy: RowErrorPolicy | None
+
+
+@dataclass(frozen=True)
+class RefreshSourceRowErrorTestCase:
+    description: str
+    model_contents: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class DeadLetterViewCollisionTestCase:
+    description: str
+    first_model: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class DeadLetterViewNameAllowedTestCase:
+    description: str
+    first_model: str
+    expected_model_count: int
+
+
+@dataclass(frozen=True)
+class LiveQuarantineShapeTestCase:
+    description: str
+    view_sql: str
+    expected_quarantined: bool

@@ -23,7 +23,7 @@ from sqltide.compiler.discovery.models import (
     KafkaSettings,
     SourceFreshnessPolicy,
 )
-from sqltide.compiler.discovery.types import PipelineMode
+from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.dev_server._helpers.payloads.activity_payload import read_model_activity
@@ -106,6 +106,7 @@ def build_state_payload(
         database=database,
         measured_at=captured_at,
         managed_source_names=managed_source_names,
+        include_dead_letters=_has_quarantine_model(analysis),
     )
     catalog: CatalogSnapshot = connection.load_catalog(database)
     active_bindings: tuple[tuple[str, str], ...] = _active_bindings(
@@ -265,6 +266,20 @@ def _warehouse_health_payload(
         "memory": memory,
         "activity": activity,
         "kafkaConsumers": kafka_consumers,
+        "deadLetters": (
+            None
+            if health.dead_letters is None
+            else [
+                {
+                    "modelName": model.model_name,
+                    "rowCount": model.row_count,
+                    "latestFailedColumns": list(model.latest_failed_columns),
+                    "latestPayload": model.latest_payload,
+                    "latestQuarantinedAt": model.latest_quarantined_at,
+                }
+                for model in health.dead_letters
+            ]
+        ),
         "tables": (
             None
             if health.tables is None
@@ -279,6 +294,13 @@ def _warehouse_health_payload(
             ]
         ),
     }
+
+
+def _has_quarantine_model(analysis: CompileAnalysis) -> bool:
+    return any(
+        isinstance(model, CompiledTableModel) and model.on_row_error is RowErrorPolicy.QUARANTINE
+        for model in analysis.compiled_project.models
+    )
 
 
 def _managed_kafka_relation_names(analysis: CompileAnalysis) -> tuple[str, ...]:

@@ -142,13 +142,26 @@ class AdapterConnection(ABC):
     def capture_warehouse_timestamp(self) -> str:
         """Capture the active warehouse server's UTC millisecond timestamp."""
 
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool:
+        """Return whether an offset replay anchor holds repeated copies of any offset."""
+
+        del database, relation, partition_column, offset_column
+        return False
+
     def load_warehouse_health(
-        self, *, database: str, managed_source_names: tuple[str, ...] = ()
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Return optional adapter-neutral warehouse diagnostics."""
 
         del database
         del managed_source_names
+        del include_dead_letters
         return AdapterWarehouseHealth(
             availability="unavailable",
             status="unknown",
@@ -348,6 +361,14 @@ class AdapterConnection(ABC):
     @abstractmethod
     def render_replay_coverage_query(self, request: AdapterReplayCoverageRequest) -> str:
         """Render one query returning typed replay-window coverage rows."""
+
+    def render_restore_materialized_view(self, definition_sql: str) -> str:
+        """Render a statement recreating one captured materialized view when it is missing."""
+
+        del definition_sql
+        raise AdapterCapabilityError(
+            f"Adapter '{self.adapter_identity.name}' cannot restore materialized views"
+        )
 
     def render_replay_from_capture(self, request: AdapterCapturedReplayRequest) -> str:
         """Render one replay from boundaries owned by the current process."""

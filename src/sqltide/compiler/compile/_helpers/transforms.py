@@ -16,11 +16,14 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
     ModelRetentionResolution,
     ParsedRef,
+    RowErrorContext,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.constants import DEFAULT_SQL_MODEL_ENGINE
 from sqltide.compiler.discovery.models import (
+    LoadedPipeline,
     ModelRetentionPolicy,
+    PostgresRefreshSourceStep,
     ReplayOnChangePolicy,
     TransformStep,
     ViewStep,
@@ -30,6 +33,7 @@ from sqltide.compiler.discovery.types import (
     ModelKind,
     RefType,
     ReplayLineageMode,
+    RowErrorPolicy,
 )
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
@@ -46,6 +50,7 @@ def compile_model(
     sql_analyzer: SqlModelAnalyzer,
     replay_on_change: ReplayOnChangePolicy | None = None,
     model_retention: ModelRetentionResolution | None = None,
+    row_error_context: RowErrorContext | None = None,
 ) -> CompiledTableModel:
     """Compile one authored transform into a logical model."""
 
@@ -121,6 +126,12 @@ def compile_model(
         retention=retention,
         retention_applied=retention_applied,
         replay_on_change=replay_on_change,
+        on_row_error=_resolve_on_row_error(
+            transform=transform,
+            sql_analysis=sql_analysis,
+            sql_analyzer=sql_analyzer,
+            context=row_error_context or RowErrorContext(),
+        ),
     )
 
 
@@ -199,3 +210,63 @@ def _reference_arguments(
         )
         for parsed_ref in parsed_refs
     ]
+
+
+def _resolve_on_row_error(
+    *,
+    transform: TransformStep,
+    sql_analysis: SqlModelAnalysis,
+    sql_analyzer: SqlModelAnalyzer,
+    context: RowErrorContext,
+) -> RowErrorPolicy:
+    """Resolve the model, pipeline, then project policy; only a model value may raise."""
+
+    if transform.on_row_error is RowErrorPolicy.FAIL:
+        return RowErrorPolicy.FAIL
+    if transform.on_row_error is None and context.inherited_policy is not RowErrorPolicy.QUARANTINE:
+        return RowErrorPolicy.FAIL
+    ineligible_reason: str | None = None
+    if context.refresh_source:
+        ineligible_reason = "it reads a scheduled refresh source"
+    elif (
+        sql_analysis.aggregate_facts.engine_has_aggregate_semantics
+        or not sql_analyzer.is_row_level(analysis=sql_analysis)
+    ):
+        ineligible_reason = (
+            "its outer query uses GROUP BY, an aggregate-state engine, or a window function"
+        )
+    if ineligible_reason is None:
+        blocked: tuple[str, str] | None = sql_analyzer.quarantine_ineligibility(
+            analysis=sql_analysis
+        )
+        if blocked is None:
+            return RowErrorPolicy.QUARANTINE
+        ineligible_reason = (
+            blocked[1] if not blocked[0] else f"column '{blocked[0]}' is ineligible: {blocked[1]}"
+        )
+    if transform.on_row_error is RowErrorPolicy.QUARANTINE:
+        raise PipelineCompileError(
+            f"Transform '{transform.name}' sets on_row_error = quarantine, but {ineligible_reason}"
+        )
+    return RowErrorPolicy.FAIL
+
+
+def row_error_context(*, loaded_pipeline: LoadedPipeline) -> RowErrorContext:
+    """Return the facts deciding row-error policy for models in one pipeline."""
+
+    return RowErrorContext(
+        inherited_policy=inherited_row_error_policy(loaded_pipeline=loaded_pipeline),
+        refresh_source=isinstance(loaded_pipeline.pipeline.source, PostgresRefreshSourceStep),
+    )
+
+
+def inherited_row_error_policy(*, loaded_pipeline: LoadedPipeline) -> RowErrorPolicy | None:
+    """Return the pipeline value, else the project value, for a model that sets neither."""
+
+    pipeline_policy: RowErrorPolicy | str | None = loaded_pipeline.pipeline.model_on_row_error
+    if pipeline_policy is not None:
+        return RowErrorPolicy(pipeline_policy)
+    if loaded_pipeline.project is None:
+        return None
+    project_policy: RowErrorPolicy | str | None = loaded_pipeline.project.model_on_row_error
+    return None if project_policy is None else RowErrorPolicy(project_policy)

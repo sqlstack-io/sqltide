@@ -33,6 +33,9 @@ from sqltide.compiler.planner.models import (
     PlanningWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import RootDeploymentStateKind
+from sqltide.compiler.row_error_policy.main.plan_virtual_row_error_policy_changes import (
+    plan_virtual_row_error_policy_changes,
+)
 from sqltide.executor.backfill.main.build_backfill_deployment_identity import (
     build_backfill_deployment_identity,
 )
@@ -167,4 +170,10 @@ def build_virtual_build_preview(
         execution_logical_model_keys=selection.execution_logical_model_keys,
         run_execution_scope=run_execution_scope,
         run_context_scope=run_context_scope,
+        row_error_policy_changes=plan_virtual_row_error_policy_changes(
+            analysis=analysis,
+            planned_model_names=planned_model_names,
+            selected_model_keys=selection.selected_logical_model_keys,
+            relations=snapshot.catalog.relations,
+        ),
     )

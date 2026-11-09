@@ -20,6 +20,7 @@ class SqlModelAnalyzer:
     """Own private parsed model state for one complete compiler invocation."""
 
     def __init__(self, *, dialect: str) -> None:
+        self._dialect: str = dialect
         self._analyzer: _native.SqlTreeAnalyzer = _native.SqlTreeAnalyzer(dialect)
         self._tree_by_analysis: dict[SqlModelAnalysis, _native.SqlModelTree] = {}
 
@@ -100,6 +101,21 @@ class SqlModelAnalyzer:
             output_columns=output_columns,
             analyzer=self._analyzer,
         )
+
+    def is_row_level(self, *, analysis: SqlModelAnalysis) -> bool:
+        """Return whether the outer SELECT produces one row per input row."""
+
+        return _native.sql_select_is_row_level(analysis.authored_sql, self._dialect)
+
+    def quarantine_ineligibility(self, *, analysis: SqlModelAnalysis) -> tuple[str, str] | None:
+        """Return the first ``(column, reason)`` preventing a quarantine split."""
+
+        return _native.sql_quarantine_ineligibility(analysis.authored_sql, self._dialect)
+
+    def quarantine_split(self, *, sql: str, model_name: str) -> tuple[str, str]:
+        """Return the kept-rows and dead-letter queries generated from one resolved query."""
+
+        return _native.sql_quarantine_split(sql, model_name, self._dialect)
 
     def _tree(self, analysis: SqlModelAnalysis) -> _native.SqlModelTree:
         tree: _native.SqlModelTree | None = self._tree_by_analysis.get(analysis)

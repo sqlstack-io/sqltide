@@ -23,6 +23,7 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     ObjectKey,
 )
+from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
@@ -48,6 +49,15 @@ from sqltide.executor.population.main._build_population_replay_templates import 
 )
 from sqltide.executor.population.main._expand_population_plan import expand_population_plan
 from sqltide.executor.population.main._plan_population_objects import plan_population_objects
+from sqltide.executor.population.main._row_error_policy_restore_statements import (
+    row_error_policy_restore_statements,
+)
+from sqltide.executor.population.main._row_error_policy_view_steps import (
+    row_error_policy_view_steps,
+)
+from sqltide.executor.population.main._with_metadata_dead_letter_target import (
+    with_metadata_dead_letter_target,
+)
 from sqltide.executor.population.models import (
     PopulationManagedSource,
     PopulationPlan,
@@ -82,11 +92,15 @@ def assemble_direct_build_workflow(
         catalog=snapshot.catalog,
         database=request.database,
     )
+    policy_landing_view_names: frozenset[str] = _policy_landing_view_names(request=request)
     preserved_landing_views: tuple[DesiredMaterializedView, ...] = tuple(
         desired
         for desired in request.realized_project.desired_state.objects
         if isinstance(desired, DesiredMaterializedView)
-        and desired.name in source_preparation.preserved_relation_names
+        and (
+            desired.name in source_preparation.preserved_relation_names
+            or desired.name in policy_landing_view_names
+        )
     )
     population_plan: PopulationPlan = expand_population_plan(
         plan=build_direct_population_plan(
@@ -158,15 +172,28 @@ def _assemble_statements(
 ) -> tuple[tuple[WarehouseStatement, ...], tuple[WarehouseStatement, ...]]:
     """Return the workflow statements and the statements that recover paused sources."""
 
-    if not request.plan.execution_scope and not request.audits:
+    if (
+        not request.plan.execution_scope
+        and not request.audits
+        and not request.row_error_policy_changes
+    ):
         return (), ()
     rendered_realizations: list[tuple[str, str]] = [
         (
             realization.resource.name,
-            client.render_resource(resource=realization.resource, database=realization.database),
+            client.render_resource(
+                resource=with_metadata_dead_letter_target(
+                    resource=realization.resource,
+                    database=realization.database,
+                    metadata_database=request.metadata_database,
+                ),
+                database=realization.database,
+            ),
         )
         for realization in realizations
     ]
+    policy_teardown, policy_realizations = _policy_change_views(request=request, client=client)
+    rendered_realizations.extend(policy_realizations)
     ensure_database_sql: str = client.render_ensure_database(request.database)
     rendered_sources: list[tuple[str, str]] = [
         (
@@ -195,6 +222,7 @@ def _assemble_statements(
                 AdapterReplayCoverageRequest(
                     replay=runtime_replay.replay,
                     boundary_column_type=runtime_replay.boundary_column_type,
+                    count_anchor_rows=runtime_replay.managed_landing_anchor,
                 )
             ),
         )
@@ -222,14 +250,62 @@ def _assemble_statements(
             [
                 (operation.relation_name, operation.resource_kind == DirectResourceKind.VIEW)
                 for operation in request.plan.teardown_operations
-            ],
+            ]
+            + policy_teardown,
             rendered_realizations,
             coverage,
             [(audit.name, audit.query) for audit in request.audits],
             AUDIT_SAMPLE_LIMIT,
         ),
     )
-    return _warehouse_statements(statements), _warehouse_statements(recovery)
+    restores: list[NativeStatement] = row_error_policy_restore_statements(
+        changes=request.row_error_policy_changes,
+        render_restore=client.render_restore_materialized_view,
+        database=request.database,
+    )
+    return _warehouse_statements(statements), _warehouse_statements([*restores, *recovery])
+
+
+def _render_view(
+    *, view: DesiredMaterializedView, request: DirectBuildRequest, client: AdapterConnection
+) -> str:
+    return client.render_resource(
+        resource=with_metadata_dead_letter_target(
+            resource=build_adapter_resource(view),
+            database=request.database,
+            metadata_database=request.metadata_database,
+        ),
+        database=view.key.database or request.database,
+    )
+
+
+def _policy_landing_view_names(*, request: DirectBuildRequest) -> frozenset[str]:
+    names: set[str] = set()
+    for change in request.row_error_policy_changes:
+        names.update(change.landing_view_names)
+    return frozenset(names)
+
+
+def _policy_change_views(
+    *, request: DirectBuildRequest, client: AdapterConnection
+) -> tuple[list[tuple[str, bool]], list[tuple[str, str]]]:
+    """Return the view drops and creations applying each in-place row-error policy change."""
+
+    desired_views: dict[str, DesiredMaterializedView] = {
+        desired.name: desired
+        for desired in request.realized_project.desired_state.objects
+        if isinstance(desired, DesiredMaterializedView)
+    }
+
+    def render_view(name: str) -> str | None:
+        view: DesiredMaterializedView | None = desired_views.get(name)
+        return None if view is None else _render_view(view=view, request=request, client=client)
+
+    return row_error_policy_view_steps(
+        changes=request.row_error_policy_changes,
+        database=request.database,
+        render_view=render_view,
+    )
 
 
 def _warehouse_statements(statements: list[NativeStatement]) -> tuple[WarehouseStatement, ...]:
@@ -339,6 +415,10 @@ def realize_direct_replay_statement(
             )
             for boundary_key, cutoff_value, cutoff_inclusive, partition_value in boundaries
         ),
+        dedupe_offsets=(
+            runtime_replay.managed_landing_anchor
+            and _capture_has_duplicate_offsets(capture=capture)
+        ),
     )
     rendered_sql: str = client.render_replay_from_capture(
         AdapterCapturedReplayRequest(
@@ -370,6 +450,21 @@ def realize_direct_replay_statement(
             else None
         ),
     )
+
+
+def _capture_has_duplicate_offsets(*, capture: DirectReplayCapture) -> bool:
+    """Return whether the anchor holds more rows than the captured ranges have distinct offsets."""
+
+    if capture.boundary_mode is not ReplayLineageMode.OFFSETS or not capture.ranges:
+        return False
+    anchor_row_count: int | None = capture.ranges[0].anchor_row_count
+    if anchor_row_count is None:
+        return False
+    distinct_offsets: int = sum(
+        int(replay_range.upper_value) - int(replay_range.lower_value) + 1
+        for replay_range in capture.ranges
+    )
+    return anchor_row_count > distinct_offsets
 
 
 def _runtime_replays(
@@ -416,6 +511,9 @@ def _runtime_replays(
             replay_step_id=replay_step_id,
             replay=replay,
             boundary_column_type=boundary_column_type,
+            managed_landing_anchor=request.realized_project.desired_state.is_managed_landing_table(
+                replay.relations.anchor
+            ),
         )
         for replay, (model_name, capture_step_id, replay_step_id, boundary_column_type) in zip(
             replay_templates, resolved, strict=True

@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 
 use crate::unified_diff::unified_diff;
 
+const DEAD_LETTERS_VIEW_SUFFIX: &str = "__dead_letters";
 const PARTITION_COLUMN: &str = "_replay_partition";
 const OFFSET_COLUMN: &str = "_replay_offset";
 const TIMESTAMP_COLUMN: &str = "_replay_timestamp";
@@ -25,6 +26,8 @@ pub enum SelectionMode {
 pub enum ResourceKind {
     Table,
     MaterializedView,
+    /// A model's generated view that records rows diverted by quarantine.
+    DeadLetterView,
     View,
 }
 
@@ -33,7 +36,7 @@ impl ResourceKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Table => "table",
-            Self::MaterializedView => "materialized_view",
+            Self::MaterializedView | Self::DeadLetterView => "materialized_view",
             Self::View => "view",
         }
     }
@@ -276,6 +279,9 @@ impl<'i, 'a> Planner<'i, 'a> {
             ResourceKind::Table,
         ] {
             teardown.extend(relation_operations(entries.iter().rev(), kind));
+            if kind == ResourceKind::MaterializedView {
+                teardown.extend(self.orphaned_dead_letter_views(&entries));
+            }
         }
         let mut creation = Vec::new();
         for kind in [
@@ -304,6 +310,40 @@ impl<'i, 'a> Planner<'i, 'a> {
         })
     }
 
+    /// Dead-letter views left behind by a model that no longer quarantines, so a rebuild removes
+    /// them with the model.
+    fn orphaned_dead_letter_views(&self, entries: &[Entry]) -> Vec<RelationOperation> {
+        let mut orphaned: Vec<RelationOperation> = Vec::new();
+        for entry in entries.iter().rev() {
+            let Some((model_view, _)) = entry
+                .relations
+                .iter()
+                .find(|(_, kind)| *kind == ResourceKind::MaterializedView)
+            else {
+                continue;
+            };
+            let dead_letters: String = format!("{model_view}{DEAD_LETTERS_VIEW_SUFFIX}");
+            let realized: bool = entry
+                .relations
+                .iter()
+                .any(|(name, _)| *name == dead_letters);
+            let existing: bool = self
+                .input
+                .catalog
+                .iter()
+                .any(|relation| relation.materialized_view && relation.name == dead_letters);
+            let owned_by_a_model: bool = self.input.nodes.iter().any(|node| {
+                node.resources
+                    .iter()
+                    .any(|(name, _)| *name == dead_letters.as_str())
+            });
+            if existing && !realized && !owned_by_a_model {
+                orphaned.push((dead_letters, entry.key, ResourceKind::MaterializedView));
+            }
+        }
+        orphaned
+    }
+
     fn model_relations(&self, key: usize) -> Result<Vec<(String, ResourceKind)>, String> {
         let resources = &self.node(key).resources;
         let named = |wanted: ResourceKind| -> Vec<&str> {
@@ -321,16 +361,28 @@ impl<'i, 'a> Planner<'i, 'a> {
         if ordinary_views.len() == 1 && tables.is_empty() && views.is_empty() {
             return Ok(vec![(ordinary_views[0].to_owned(), ResourceKind::View)]);
         }
-        if tables.len() != 1 || views.len() != 1 || !ordinary_views.is_empty() {
+        let dead_letter_views: Vec<&str> = named(ResourceKind::DeadLetterView);
+        let model_views: &Vec<&str> = &views;
+        if tables.len() != 1
+            || model_views.len() != 1
+            || dead_letter_views.len() > 1
+            || !ordinary_views.is_empty()
+        {
             return Err(format!(
                 "Direct plan received invalid realized resources for '{}'",
                 self.node(key).name
             ));
         }
-        Ok(vec![
+        let mut relations: Vec<(String, ResourceKind)> = vec![
             (tables[0].to_owned(), ResourceKind::Table),
-            (views[0].to_owned(), ResourceKind::MaterializedView),
-        ])
+            (model_views[0].to_owned(), ResourceKind::MaterializedView),
+        ];
+        relations.extend(
+            dead_letter_views
+                .iter()
+                .map(|name| ((*name).to_owned(), ResourceKind::MaterializedView)),
+        );
+        Ok(relations)
     }
 
     fn reject_adopted_source_target_collisions(&self) -> Result<(), String> {
@@ -370,7 +422,12 @@ impl<'i, 'a> Planner<'i, 'a> {
             .execution_scope
             .iter()
             .flat_map(|&key| &self.node(key).resources)
-            .filter(|(_, kind)| *kind == Some(ResourceKind::MaterializedView))
+            .filter(|(_, kind)| {
+                matches!(
+                    *kind,
+                    Some(ResourceKind::MaterializedView | ResourceKind::DeadLetterView)
+                )
+            })
             .map(|(name, _)| *name)
             .collect();
         let mut consumers: Vec<&str> = self

@@ -96,7 +96,9 @@ def _build_requests(
         object_ for object_ in desired_state.objects if isinstance(object_, DesiredTable)
     ]
     views: list[DesiredMaterializedView] = [
-        object_ for object_ in desired_state.objects if isinstance(object_, DesiredMaterializedView)
+        object_
+        for object_ in desired_state.objects
+        if isinstance(object_, DesiredMaterializedView) and not object_.dead_letters
     ]
     mappings, replay_plans = _native.plan_population_replays(
         roots=[
@@ -237,6 +239,6 @@ def _replay_request(
             else AdapterReplaySeedMode.NONE,
             target_column_names=tuple(target_column_names),
             settings=tuple(settings),
-            filter_boundaries_at_source=filter_boundaries_at_source,
+            filter_boundaries_at_source=filter_boundaries_at_source or view.filters_row_errors,
         ),
     )

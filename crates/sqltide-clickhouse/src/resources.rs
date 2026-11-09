@@ -183,21 +183,22 @@ fn render_table(table: &Table, database: &str, if_not_exists: bool) -> String {
 
 fn materialized_view(view: &MaterializedView, database: &str, if_not_exists: bool) -> String {
     let query = with_database(&view.database_template, database);
+    let target = if view.target_relation_name.contains('.') {
+        view.target_relation_name.clone()
+    } else {
+        format!("{database}.{}", view.target_relation_name)
+    };
     let head = format!(
         "CREATE MATERIALIZED VIEW {}{database}.{}\n",
         if_not_exists_clause(if_not_exists),
         view.name
     );
     match &view.refresh {
-        None => format!(
-            "{head}TO {database}.{} AS\n{query}",
-            view.target_relation_name
-        ),
+        None => format!("{head}TO {target} AS\n{query}"),
         Some(refresh) => format!(
-            "{head}REFRESH EVERY {refresh}{}\nTO {database}.{} AS\n{query}\nSETTINGS \
+            "{head}REFRESH EVERY {refresh}{}\nTO {target} AS\n{query}\nSETTINGS \
              {REFRESHABLE_VIEW_SETTING}",
             if view.append { " APPEND" } else { "" },
-            view.target_relation_name
         ),
     }
 }

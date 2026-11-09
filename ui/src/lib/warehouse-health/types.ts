@@ -58,6 +58,13 @@ export type WarehouseHealth = {
 			latestError: string;
 		}[];
 	} | null;
+	deadLetters: {
+		modelName: string;
+		rowCount: number;
+		latestFailedColumns: string[];
+		latestPayload: string;
+		latestQuarantinedAt: string;
+	}[] | null;
 	tables: {
 		name: string;
 		rows: number | null;

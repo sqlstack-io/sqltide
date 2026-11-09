@@ -35,8 +35,14 @@ from sqltide.executor.observability.models import RunStartupTimings, TerminalInv
 from sqltide.executor.population.main.plan_population_sources import (
     plan_population_sources,
 )
+from sqltide.executor.population.main.row_error_policy_failure_message import (
+    row_error_policy_failure_message,
+)
 from sqltide.executor.workflow.exceptions import WorkflowExecutionError
 from sqltide.executor.workflow.main.execute_build_workflow import execute_build_workflow
+from sqltide.executor.workflow.main.execute_recovery_statements import (
+    execute_recovery_statements,
+)
 from sqltide.executor.workflow.main.target_mutation_lock import target_mutation_lock
 from sqltide.executor.workflow.models import PublishedBuildWorkflow, WorkflowExecutionResult
 
@@ -154,13 +160,43 @@ def execute_virtual_build_command(
         )
         with lock_context:
             _reset_fresh_landing_offsets_for_virtual_build(preparation=preparation)
-            execution: WorkflowExecutionResult = execute_build_workflow(
-                published_workflow=published_workflow,
-                connection=client,
-                emitter=sink,
-            )
+            try:
+                execution: WorkflowExecutionResult = execute_build_workflow(
+                    published_workflow=published_workflow,
+                    connection=client,
+                    emitter=sink,
+                )
+            except (WorkflowExecutionError, AdapterError, KeyboardInterrupt) as error:
+                _ = execute_recovery_statements(
+                    statements=preparation.workflow.recovery_statements,
+                    connection=client,
+                    emitter=sink,
+                    cause=error.cause if isinstance(error, WorkflowExecutionError) else error,
+                    start_sequence=len(preparation.workflow.statements) + 1,
+                    completed_step_ids=_completed_step_ids(error),
+                    retry_command="sqt build",
+                )
+                raise
     except (WorkflowExecutionError, AdapterError) as error:
         cause: BaseException = error.cause if isinstance(error, WorkflowExecutionError) else error
+        if preparation.workflow.recovery_statements and isinstance(cause, KeyboardInterrupt):
+            return _cancel_virtual_build(
+                started=started,
+                preparation=preparation,
+                options=options,
+                client=client,
+                sink=sink,
+                cause=cause,
+            )
+        failure_text: str = (
+            row_error_policy_failure_message(
+                changes=preparation.preview.row_error_policy_changes,
+                failed_step_id=error.failed_step_id,
+                cause=cause,
+            )
+            if isinstance(error, WorkflowExecutionError)
+            else None
+        ) or str(cause)
         _persist_virtual_invocation(
             started=started,
             preparation=preparation,
@@ -169,19 +205,24 @@ def execute_virtual_build_command(
             outcome="failed",
             exit_code=1,
             materialized_outcome=None,
-            error_message=str(cause),
+            error_message=failure_text,
         )
         if sink is not None:
-            sink.run_completed(outcome="failed", exit_code=1, error_message=str(cause))
-        print(str(cause), file=sys.stderr)
+            sink.run_completed(outcome="failed", exit_code=1, error_message=failure_text)
+        print(failure_text, file=sys.stderr)
         return 1
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as error:
         return _cancel_virtual_build(
             started=started,
             preparation=preparation,
             options=options,
             client=client,
             sink=sink,
+            cause=error,
+        )
+    if _is_policy_only(preparation):
+        return _finish_policy_only_build(
+            started=started, preparation=preparation, options=options, client=client, sink=sink
         )
     try:
         result: BackfillExecutionResult = build_virtual_execution_result(
@@ -220,6 +261,47 @@ def execute_virtual_build_command(
     return 0
 
 
+def _completed_step_ids(error: BaseException) -> frozenset[str] | None:
+    """Return the steps a failed workflow finished, or `None` when that is unknown."""
+
+    if not isinstance(error, WorkflowExecutionError) or not isinstance(
+        error.partial_result, WorkflowExecutionResult
+    ):
+        return None
+    return frozenset(result.step_id for result in error.partial_result.statement_results)
+
+
+def _is_policy_only(preparation: VirtualWorkflowPreparation) -> bool:
+    """Return whether the build only switches policy on live views, creating no deployment."""
+
+    return bool(preparation.preview.row_error_policy_changes) and not (
+        preparation.preview.plan.rebuild_subtrees
+    )
+
+
+def _finish_policy_only_build(
+    *,
+    started: tuple[str, str, int],
+    preparation: VirtualWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    sink: RunEventSink,
+) -> int:
+    _persist_virtual_invocation(
+        started=started,
+        preparation=preparation,
+        options=options,
+        client=client,
+        outcome="succeeded",
+        exit_code=0,
+        materialized_outcome="applied",
+        error_message=None,
+    )
+    sink.run_completed(outcome="succeeded", exit_code=0, error_message=None)
+    print(preparation.plan_text)
+    return 0
+
+
 def _reset_fresh_landing_offsets_for_virtual_build(
     *, preparation: VirtualWorkflowPreparation
 ) -> None:
@@ -252,6 +334,7 @@ def _cancel_virtual_build(
     options: BuildCommandOptions,
     client: AdapterConnection,
     sink: RunEventSink,
+    cause: BaseException | None = None,
 ) -> int:
     _persist_virtual_invocation(
         started=started,
@@ -267,6 +350,8 @@ def _cancel_virtual_build(
         sink.run_completed(outcome="cancelled", exit_code=_SIGINT_EXIT_CODE, error_message=None)
     try:
         print(render_interrupted_build_message(), file=sys.stderr)
+        for note in getattr(cause, "__notes__", ()):
+            print(note, file=sys.stderr)
     except Exception:
         pass
     return _SIGINT_EXIT_CODE
@@ -293,7 +378,9 @@ def _persist_virtual_invocation(
             outcome=outcome,
             exit_code=exit_code,
             materialized_outcome=materialized_outcome,
-            deployment_id=preparation.preview.deployment_id,
+            deployment_id=None
+            if _is_policy_only(preparation)
+            else preparation.preview.deployment_id,
             workflow_id=None,
             selected_node_count=len(preparation.preview.run_execution_scope),
             error_message=error_message,

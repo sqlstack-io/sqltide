@@ -13,3 +13,7 @@ WORKFLOW_PHASE_ORDER: tuple[WorkflowPhase, ...] = (
     WorkflowPhase.AUDIT,
     WorkflowPhase.FINALIZATION,
 )
+
+RECOVER_MODEL_VIEW_STEP_PREFIX: str = "recover_view_"
+RECOVER_SOURCE_STEP_PREFIX: str = "recover_source_"
+RECOVER_DEAD_LETTERS_STEP_PREFIX: str = "recover_dead_letters_"

@@ -13,6 +13,7 @@ mod catalog;
 mod facts;
 mod model;
 mod projections;
+mod quarantine;
 mod relations;
 mod rewriting;
 mod storage;
@@ -26,12 +27,16 @@ pub use catalog::{
 };
 pub use model::{ModelError, ParsedModel, analyze_model};
 pub use projections::{Projection, ProjectionTypeCache};
+pub use quarantine::{
+    QuarantineIneligibility, QuarantineSplit, quarantine_ineligibility, quarantine_split,
+};
 pub use relations::{
     ExpectedReference, RelationCache, ResolvedQuery, Resolver,
     canonical_query_with_database_template, validated_relation_rewrite,
 };
 pub use rewriting::{
     NamedQuery, RelationRewrite, RewrittenQuery, rewrite_query, select_aggregate_facts,
+    select_row_level,
 };
 pub use storage::storage_column_names;
 pub use tree::{AnalysisError, SqlDialect};

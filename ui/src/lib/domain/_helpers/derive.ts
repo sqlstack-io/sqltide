@@ -898,10 +898,33 @@ function ingestHealthSummary(project: Project) {
 	};
 }
 
+export interface DeadLetterSummary {
+	state: 'none' | 'unavailable' | 'present';
+	total: number;
+	models: NonNullable<WarehouseHealth['deadLetters']>;
+}
+
+export function deadLetterSummary(project: Project): DeadLetterSummary {
+	const deadLetters: WarehouseHealth['deadLetters'] | undefined = project.warehouseHealth?.deadLetters;
+	if (deadLetters === undefined) {
+		return { state: 'none', total: 0, models: [] };
+	}
+	if (deadLetters === null) {
+		return { state: 'unavailable', total: 0, models: [] };
+	}
+	const total: number = deadLetters.reduce((sum, model) => sum + model.rowCount, 0);
+	return {
+		state: total > 0 ? 'present' : 'none',
+		total,
+		models: deadLetters
+	};
+}
+
 function projectHealthSummary(project: Project) {
 	return {
 		freshness: freshnessSummary(project),
 		ingest: ingestHealthSummary(project),
+		deadLetters: deadLetterSummary(project),
 		drifted: driftedModels(project)
 	};
 }

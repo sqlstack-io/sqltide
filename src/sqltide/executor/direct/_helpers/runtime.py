@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from hashlib import sha256
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -19,9 +18,13 @@ from sqltide.executor.direct.models import (
     DirectRuntimeExecution,
     DirectRuntimeReplay,
 )
+from sqltide.executor.workflow.constants import RECOVER_MODEL_VIEW_STEP_PREFIX
 from sqltide.executor.workflow.exceptions import WorkflowExecutionError
 from sqltide.executor.workflow.main._execute_warehouse_workflow import (
     execute_warehouse_workflow,
+)
+from sqltide.executor.workflow.main.execute_recovery_statements import (
+    execute_recovery_statements,
 )
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -136,38 +139,28 @@ def _recover_managed_sources(
     failed_step_id: str,
     start_sequence: int,
 ) -> tuple[WarehouseStatement, ...]:
+    restores_views: bool = any(
+        statement.step_id.startswith(RECOVER_MODEL_VIEW_STEP_PREFIX)
+        for statement in workflow.source_recovery_statements
+    )
     source_was_paused: bool = failed_step_id.startswith(_PAUSED_SOURCE_STEP_PREFIXES) or any(
         step_id.startswith(_PAUSED_SOURCE_STEP_PREFIXES) for step_id in completed_step_ids
     )
-    if not source_was_paused:
+    if not source_was_paused and not restores_views:
         return ()
-    recovered: list[WarehouseStatement] = []
-    recovery_statement: WarehouseStatement
-    for recovery_statement in workflow.source_recovery_statements:
-        activation_step_id: str = recovery_statement.step_id.replace("recover_", "activate_", 1)
-        if activation_step_id in completed_step_ids:
-            continue
-        statement: WarehouseStatement = replace(
-            recovery_statement,
-            sequence=start_sequence + len(recovered),
-        )
-        try:
-            _ = execute_warehouse_workflow(
-                statements=(statement,),
-                connection=connection,
-                emitter=emitter,
-            )
-        except (AdapterError, KeyboardInterrupt, WorkflowExecutionError) as recovery_error:
-            recovery_cause: BaseException = (
-                recovery_error.cause
-                if isinstance(recovery_error, WorkflowExecutionError)
-                else recovery_error
-            )
-            cause.add_note(
-                f"Managed source recovery '{statement.step_id}' also failed: {recovery_cause}"
-            )
-        recovered.append(statement)
-    return tuple(recovered)
+    return execute_recovery_statements(
+        statements=tuple(
+            statement
+            for statement in workflow.source_recovery_statements
+            if statement.step_id.replace("recover_", "activate_", 1) not in completed_step_ids
+        ),
+        connection=connection,
+        emitter=emitter,
+        cause=cause,
+        start_sequence=start_sequence,
+        completed_step_ids=frozenset(completed_step_ids),
+        retry_command="sqt build --changed",
+    )
 
 
 def _emit_workflow_prepared(
@@ -212,6 +205,11 @@ def _decode_capture(
     )
 
 
+def _optional_integer(*, row: Mapping[str, object], column: str) -> int | None:
+    value: object = row.get(column)
+    return None if value is None else int(str(value))
+
+
 def _decode_range(*, row: Mapping[str, object]) -> DirectReplayRange:
     return DirectReplayRange(
         partition_value=_optional_text(row=row, column="partition_value"),
@@ -222,6 +220,7 @@ def _decode_range(*, row: Mapping[str, object]) -> DirectReplayRange:
         upper_value=_required_text(row=row, column="upper_value"),
         replay_cutoff_value=_required_text(row=row, column="replay_cutoff_value"),
         cutoff_inclusive=bool(row.get("cutoff_inclusive", True)),
+        anchor_row_count=_optional_integer(row=row, column="anchor_row_count"),
     )
 
 

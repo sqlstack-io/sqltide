@@ -79,7 +79,11 @@ def _build_object_state_records(
     for desired_object in desired_objects:
         normalized_query: str | None = None
         if isinstance(desired_object, (DesiredMaterializedView, DesiredView)):
-            normalized_query = desired_object.query
+            normalized_query = (
+                desired_object.comparison_spec.query
+                if isinstance(desired_object, DesiredMaterializedView)
+                else desired_object.query
+            )
         records.append(
             ObjectStateRecord(
                 deployment_id=deployment_id,
@@ -88,7 +92,11 @@ def _build_object_state_records(
                     object_type=desired_object.key.object_type,
                     name=desired_object.key.name,
                 ),
-                normalized_fingerprint=build_normalized_fingerprint(desired_object.spec),
+                normalized_fingerprint=build_normalized_fingerprint(
+                    desired_object.comparison_spec
+                    if isinstance(desired_object, DesiredMaterializedView)
+                    else desired_object.spec
+                ),
                 normalized_query=normalized_query,
                 recorded_at=recorded_at,
                 state_kind=VIRTUAL_OBJECT_STATE_KIND_DEPLOYMENT,

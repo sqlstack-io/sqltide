@@ -328,7 +328,7 @@ def _resource_kind(resource: object) -> str | None:
     if isinstance(resource, AdapterTable):
         return "table"
     if isinstance(resource, AdapterMaterializedView):
-        return "materialized_view"
+        return "dead_letter_view" if resource.dead_letters else "materialized_view"
     if isinstance(resource, AdapterView):
         return "view"
     return None

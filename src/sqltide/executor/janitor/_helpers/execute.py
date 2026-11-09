@@ -18,9 +18,11 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.compiler.compile.constants import (
+    DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
     DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
 )
+from sqltide.compiler.planner.constants import DIRECT_DEAD_LETTERS_VIEW_SUFFIX
 from sqltide.executor.janitor._helpers.workflow import assemble_janitor_workflow
 from sqltide.executor.janitor.models import (
     JanitorApplyResult,
@@ -91,13 +93,17 @@ def _preview_janitor(
         physical_relations,
         (database, retention_days, _micros(retention_cutoff), minimum_rollback_deployments),
     )
+    live_relation_names: frozenset[str] = client.load_catalog(database).relation_names()
     return JanitorPreviewResult(
         database=database,
         retention_days=retention_days,
         minimum_rollback_deployments=minimum_rollback_deployments,
         candidates=tuple(
             _preview_candidate(
-                deployment=inventory.deployments[position], deletable=deletable, reason=reason
+                deployment=inventory.deployments[position],
+                deletable=deletable,
+                reason=reason,
+                live_relation_names=live_relation_names,
             )
             for position, deletable, reason in decisions
         ),
@@ -105,7 +111,11 @@ def _preview_janitor(
 
 
 def _preview_candidate(
-    *, deployment: AdapterDeploymentRecord, deletable: bool, reason: str
+    *,
+    deployment: AdapterDeploymentRecord,
+    deletable: bool,
+    reason: str,
+    live_relation_names: frozenset[str],
 ) -> JanitorPreviewCandidate:
     return JanitorPreviewCandidate(
         deployment_id=deployment.deployment_id,
@@ -115,11 +125,32 @@ def _preview_candidate(
             sorted(mapping.logical_key.name for mapping in _publish_mappings(deployment))
         ),
         physical_object_names=tuple(
-            sorted(mapping.physical_name for mapping in deployment.prepared_object_mappings)
+            sorted(
+                {
+                    *(mapping.physical_name for mapping in deployment.prepared_object_mappings),
+                    *_in_place_dead_letter_views(
+                        deployment=deployment, live_relation_names=live_relation_names
+                    ),
+                }
+            )
         ),
         deletable=deletable,
         reason=reason,
     )
+
+
+def _in_place_dead_letter_views(
+    *, deployment: AdapterDeploymentRecord, live_relation_names: frozenset[str]
+) -> frozenset[str]:
+    """Return live dead-letter views a policy switch created for this deployment's models."""
+
+    candidates: tuple[str, ...] = tuple(
+        f"{mapping.logical_key.name}{DIRECT_DEAD_LETTERS_VIEW_SUFFIX}"
+        f"{mapping.physical_name.removeprefix(mapping.logical_key.name)}"
+        for mapping in deployment.prepared_object_mappings
+        if mapping.logical_key.object_type == DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW
+    )
+    return live_relation_names.intersection(candidates)
 
 
 def _apply_janitor(

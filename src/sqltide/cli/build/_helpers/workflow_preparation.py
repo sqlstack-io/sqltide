@@ -22,6 +22,7 @@ from sqltide.cli.plan.main._normalize_cli_start_time import normalize_cli_start_
 from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
+from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
 from sqltide.cli.selection.main._selection import resolve_selected_logical_model_keys
 from sqltide.compiler.compile.models import (
     CompiledTableModel,
@@ -223,12 +224,17 @@ def prepare_direct_build_workflow(
         metadata_database=preview.metadata_database,
         tool_version=SQLTIDE_TOOL_VERSION,
         audits=audits,
+        row_error_policy_changes=preview.row_error_policy_changes,
     )
     workflow: DirectBuildWorkflow = assemble_direct_build_workflow(
         request=request,
         client=client,
         snapshot=preview.warehouse_snapshot,
-        plan_json=render_direct_plan_json(plan=preview.plan, adapter_name=preview.adapter_name),
+        plan_json=render_direct_plan_json(
+            plan=preview.plan,
+            adapter_name=preview.adapter_name,
+            row_error_policy_changes=preview.row_error_policy_changes,
+        ),
     )
     if workflow.recreated_sources:
         workflow = replace(
@@ -239,6 +245,7 @@ def prepare_direct_build_workflow(
                     plan=preview.plan,
                     adapter_name=preview.adapter_name,
                     source_recreations=workflow.recreated_sources,
+                    row_error_policy_changes=preview.row_error_policy_changes,
                 ),
             ),
         )
@@ -251,6 +258,7 @@ def prepare_direct_build_workflow(
             adapter_name=preview.adapter_name,
             verbose=options.verbose,
             source_recreations=workflow.recreated_sources,
+            row_error_policy_changes=preview.row_error_policy_changes,
         ),
         protection_requirements=build_protection_requirements(
             compiled_project=analysis.compiled_project,
@@ -293,6 +301,24 @@ def prepare_virtual_build_workflow(
         )
     )
     serialized_plan_payload["deployment_created_at"] = preview.created_at
+    if preview.row_error_policy_changes:
+        serialized_plan_payload["row_error_policy_changes"] = [
+            {
+                "model_key": change.model_key.name,
+                "desired_policy": str(change.desired_policy),
+                "view": change.view_name,
+                "dead_letter_view": change.dead_letter_view_name,
+                "operation": "repair_landing_view" if change.landing_repair_only else "view_only",
+                "replay_roots": 0,
+            }
+            for change in preview.row_error_policy_changes
+        ]
+        plan_text = "\n".join(
+            [
+                plan_text,
+                *map(render_row_error_policy_line, preview.row_error_policy_changes),
+            ]
+        )
     request: BackfillBootstrapRequest = BackfillBootstrapRequest(
         desired_state=preview.desired_state,
         default_database=preview.database,
@@ -306,6 +332,7 @@ def prepare_virtual_build_workflow(
         created_at=preview.created_at,
         confirmed_target_catalog=preview.target_catalog,
         confirmed_metadata_catalog=preview.metadata_catalog,
+        row_error_policy_changes=preview.row_error_policy_changes,
     )
     workflow: BuildWorkflow = assemble_virtual_build_workflow(
         request=request,

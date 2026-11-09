@@ -57,7 +57,7 @@ from sqltide.compiler.discovery.models import (
     ReplayBoundary,
     ReplayBoundaryColumns,
 )
-from sqltide.compiler.discovery.types import BoundedReplayFallback
+from sqltide.compiler.discovery.types import BoundedReplayFallback, RowErrorPolicy
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.pipeline.types import AdapterResource, DesiredObject
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
@@ -99,6 +99,8 @@ def build_realized_project(
     )
     model_realizations: dict[LogicalResourceKey, AdapterModelRealization] = {}
     resolved_queries: dict[LogicalResourceKey, str] = {}
+    resolved_sql_by_key: dict[LogicalResourceKey, SqlResolvedQuery] = {}
+    view_owner: dict[str, str] = {}
     for model in project.models:
         resolved_query: SqlResolvedQuery = sql_analyzer.resolve(
             analysis=model.sql_analysis,
@@ -111,6 +113,7 @@ def build_realized_project(
                 relation_names=relation_names,
                 relation_name_by_logical_name=relation_name_by_logical_name,
                 postgres_by_source_name=postgres_by_source_name,
+                sql_analyzer=sql_analyzer,
             )
         )
         _validate_model_relation_name(
@@ -119,7 +122,11 @@ def build_realized_project(
             expected_relation_name=relation_names[model.key],
         )
         model_realizations[model.key] = realization
+        view_owner = _reject_dead_letter_view_collision(
+            model=model, realization=realization, seen=view_owner
+        )
         resolved_queries[model.key] = resolved_query.canonical_sql
+        resolved_sql_by_key[model.key] = resolved_query
     resources_by_key: dict[LogicalResourceKey, tuple[AdapterResource, ...]] = {
         key: realization.resources for key, realization in source_realizations.items()
     }
@@ -132,6 +139,7 @@ def build_realized_project(
         relation_name_by_logical_key=relation_names,
         resolved_query_by_model_key=resolved_queries,
         desired_state=_build_desired_state(
+            resolved_sql_by_key=resolved_sql_by_key,
             project=project,
             source_realizations=source_realizations,
             model_realizations=model_realizations,
@@ -254,6 +262,7 @@ def _model_request(
     relation_names: dict[LogicalResourceKey, str],
     relation_name_by_logical_name: dict[str, str],
     postgres_by_source_name: dict[str, PostgresRefreshSourceStep],
+    sql_analyzer: SqlModelAnalyzer,
 ) -> AdapterModelRealizationRequest | AdapterViewRealizationRequest:
     if isinstance(model, CompiledViewModel):
         return AdapterViewRealizationRequest(
@@ -271,12 +280,25 @@ def _model_request(
     postgres_source: PostgresRefreshSourceStep | None = postgres_by_source_name.get(
         model.transform.source
     )
+    query: str = resolved_query.canonical_sql
+    database_template: str = resolved_query.database_template
+    dead_letter_query: str | None = None
+    dead_letter_database_template: str | None = None
+    if model.on_row_error is RowErrorPolicy.QUARANTINE:
+        query, dead_letter_query = sql_analyzer.quarantine_split(
+            sql=resolved_query.canonical_sql, model_name=model.key.name
+        )
+        database_template, dead_letter_database_template = sql_analyzer.quarantine_split(
+            sql=resolved_query.database_template, model_name=model.key.name
+        )
     return AdapterModelRealizationRequest(
         logical_name=model.key.name,
         target_relation_name=relation_names[model.key],
         source_relation_name=source_relation_name,
-        resolved_query=resolved_query.canonical_sql,
-        resolved_database_template=resolved_query.database_template,
+        resolved_query=query,
+        resolved_database_template=database_template,
+        dead_letter_query=dead_letter_query,
+        dead_letter_database_template=dead_letter_database_template,
         columns=tuple(_adapter_column(column) for column in model.output_columns),
         engine=model.transform.engine,
         order_by=tuple(model.transform.order_by),
@@ -290,6 +312,24 @@ def _model_request(
 
 def _adapter_column(column: Column) -> AdapterColumn:
     return AdapterColumn(name=column.name, type=column.type, default_expression=column.default)
+
+
+def _reject_dead_letter_view_collision(
+    *, model: CompiledModel, realization: AdapterModelRealization, seen: dict[str, str]
+) -> dict[str, str]:
+    """Return view owners, rejecting two models realizing the same materialized view name."""
+
+    for resource in realization.resources:
+        if not isinstance(resource, AdapterMaterializedView):
+            continue
+        owner: str | None = seen.get(resource.name)
+        if owner is not None:
+            raise PipelineCompileError(
+                f"Models '{owner}' and '{model.key.name}' both realize materialized view "
+                f"'{resource.name}'; rename one of them or set on_row_error = fail"
+            )
+        seen[resource.name] = model.key.name
+    return seen
 
 
 def _validate_model_relation_name(
@@ -307,6 +347,7 @@ def _validate_model_relation_name(
 
 def _build_desired_state(
     *,
+    resolved_sql_by_key: dict[LogicalResourceKey, SqlResolvedQuery],
     project: CompiledProject,
     source_realizations: dict[LogicalResourceKey, AdapterSourceRealization],
     model_realizations: dict[LogicalResourceKey, AdapterModelRealization],
@@ -352,10 +393,13 @@ def _build_desired_state(
                 )
             )
         elif isinstance(model, CompiledTableModel):
-            model_objects: tuple[DesiredTable, DesiredMaterializedView] = _model_desired_objects(
-                model=model,
-                realization=model_realizations[model.key],
-                relation_key_by_name=relation_key_by_name,
+            model_objects: tuple[DesiredTable | DesiredMaterializedView, ...] = (
+                _model_desired_objects(
+                    model=model,
+                    realization=model_realizations[model.key],
+                    relation_key_by_name=relation_key_by_name,
+                    resolved_query=resolved_sql_by_key[model.key],
+                )
             )
             objects.extend(model_objects)
             if model.replay_anchor_eligible:
@@ -419,7 +463,8 @@ def _model_desired_objects(
     model: CompiledTableModel,
     realization: AdapterModelRealization,
     relation_key_by_name: dict[str, ObjectKey],
-) -> tuple[DesiredTable, DesiredMaterializedView]:
+    resolved_query: SqlResolvedQuery,
+) -> tuple[DesiredTable | DesiredMaterializedView, ...]:
     table: AdapterTable = _table_resource(
         resources=realization.resources,
         logical_name=model.key.name,
@@ -432,6 +477,28 @@ def _model_desired_objects(
     ref_keys: tuple[ObjectKey, ...] = tuple(
         dict.fromkeys(relation_key_by_name[parsed_ref.name] for parsed_ref in model.parsed_refs)
     )
+    quarantines: bool = model.on_row_error is RowErrorPolicy.QUARANTINE
+    desired_view: DesiredMaterializedView = _desired_view(
+        resource=view,
+        deps=(*ref_keys, table_key),
+        logical_model_name=model.key.name,
+        filters_row_errors=quarantines,
+    )
+    if quarantines:
+        desired_view = replace(
+            desired_view,
+            authored_query=resolved_query.canonical_sql,
+            authored_database_template=resolved_query.database_template,
+        )
+    dead_letter_views: tuple[DesiredMaterializedView, ...] = tuple(
+        _desired_view(
+            resource=resource,
+            deps=(*ref_keys, table_key),
+            logical_model_name=model.key.name,
+        )
+        for resource in realization.resources
+        if isinstance(resource, AdapterMaterializedView) and resource.dead_letters
+    )
     return (
         _desired_table(
             resource=table,
@@ -440,11 +507,8 @@ def _model_desired_objects(
             logical_model_name=model.key.name,
             model=model,
         ),
-        _desired_view(
-            resource=view,
-            deps=(*ref_keys, table_key),
-            logical_model_name=model.key.name,
-        ),
+        desired_view,
+        *dead_letter_views,
     )
 
 
@@ -529,6 +593,7 @@ def _desired_view(
     resource: AdapterMaterializedView,
     deps: tuple[ObjectKey, ...],
     logical_model_name: str,
+    filters_row_errors: bool = False,
 ) -> DesiredMaterializedView:
     return DesiredMaterializedView(
         key=_object_key(
@@ -545,6 +610,8 @@ def _desired_view(
         logical_model_name=logical_model_name,
         refresh=resource.refresh,
         append=resource.append,
+        filters_row_errors=filters_row_errors,
+        dead_letters=resource.dead_letters,
     )
 
 
@@ -603,7 +670,9 @@ def _view_resource(
     logical_name: str,
 ) -> AdapterMaterializedView:
     matches: tuple[AdapterMaterializedView, ...] = tuple(
-        resource for resource in resources if isinstance(resource, AdapterMaterializedView)
+        resource
+        for resource in resources
+        if isinstance(resource, AdapterMaterializedView) and not resource.dead_letters
     )
     if len(matches) != 1:
         raise PipelineCompileError(

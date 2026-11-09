@@ -460,3 +460,162 @@ class CliDirectPostgresRefreshIntegrationTestCase:
     description: str
     refresh: str
     expected_rows: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class QuarantineLiveIntegrationTestCase:
+    description: str
+    values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_offsets: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineFailModeIntegrationTestCase:
+    description: str
+    values_sql: str
+    expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class QuarantineReplayIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_dead_letter_count: int
+    expected_dedupe: bool
+
+
+@dataclass(frozen=True)
+class QuarantineInPlaceIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    bad_row_values_sql: str
+    good_row_values_sql: str
+    expected_after_enable: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_after_disable: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineLiveConsumerIntegrationTestCase:
+    description: str
+    history_rows: tuple[tuple[str, int, int], ...]
+    late_rows: tuple[tuple[str, int, int], ...]
+    expected_order_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class QuarantineMetadataDatabaseIntegrationTestCase:
+    description: str
+    metadata_database_suffix: str
+    values_sql: str
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_health_row_count: int
+
+
+@dataclass(frozen=True)
+class QuarantineCheckAgreementTestCase:
+    description: str
+    target_type: str
+    source_type: str
+    value_sql: str
+    expected_check_agrees_with_cast: bool
+
+
+@dataclass(frozen=True)
+class QuarantineRepairIntegrationTestCase:
+    description: str
+    desired_model: str
+    live_model: str
+    break_statements: tuple[str, ...]
+    expected_dead_letter_view_count: int
+
+
+@dataclass(frozen=True)
+class FanOutDedupeIntegrationTestCase:
+    description: str
+    expected_row_count: int
+    expected_dedupe: bool
+
+
+@dataclass(frozen=True)
+class VirtualQuarantineIntegrationTestCase:
+    description: str
+    history_values_sql: str
+    live_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+
+
+@dataclass(frozen=True)
+class VirtualDedupeIntegrationTestCase:
+    description: str
+    history_rows: tuple[tuple[str, int, int], ...]
+    expected_order_ids: tuple[str, ...]
+    expected_dedupe: bool
+
+
+@dataclass(frozen=True)
+class VirtualPolicySwitchIntegrationTestCase:
+    description: str
+    bad_values_sql: str
+    expected_order_ids: tuple[str, ...]
+    expected_failed_columns: tuple[tuple[str, ...], ...]
+    expected_deployment_count: int
+
+
+@dataclass(frozen=True)
+class VirtualPolicyRepairIntegrationTestCase:
+    description: str
+    desired_model: str
+    live_model: str
+    dropped_view_template: str
+    expected_dead_letter_view_count: int
+
+
+@dataclass(frozen=True)
+class PolicySwitchFailureIntegrationTestCase:
+    description: str
+    live_header: str
+    desired_header: str
+    broken_view: str
+    expected_live_quarantined_after_failure: bool
+    expected_live_quarantined_after_rerun: bool
+    expected_dead_letter_view_count_after_failure: int
+
+
+@dataclass(frozen=True)
+class MissingLandingRepairIntegrationTestCase:
+    description: str
+    model_header: str
+    expected_landing_view_count: int
+    expected_operation: str
+
+
+@dataclass(frozen=True)
+class VirtualSelectedPolicyIntegrationTestCase:
+    description: str
+    selectors: tuple[str, ...]
+    expected_selected_quarantined: bool
+    expected_unselected_quarantined: bool
+
+
+@dataclass(frozen=True)
+class InPlaceDeadLetterCleanupIntegrationTestCase:
+    description: str
+    expected_retired_view_count: int
+    expected_active_view_count: int
+
+
+@dataclass(frozen=True)
+class VirtualAdoptedChainIntegrationTestCase:
+    description: str
+    expected_logical_view_count: int
+
+
+@dataclass(frozen=True)
+class CancelledPausedSourceIntegrationTestCase:
+    description: str
+    expected_note_fragment: str

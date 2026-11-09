@@ -22,7 +22,7 @@ class WarehouseHealthReader:
         self._clock = clock
         self._cache_seconds = cache_seconds
         self._last_usable_by_target: dict[
-            tuple[str, str, tuple[str, ...]], tuple[float, AdapterWarehouseHealth]
+            tuple[str, str, tuple[str, ...], bool], tuple[float, AdapterWarehouseHealth]
         ] = {}
 
     def read(
@@ -32,13 +32,15 @@ class WarehouseHealthReader:
         database: str,
         measured_at: str,
         managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
     ) -> AdapterWarehouseHealth:
         """Read diagnostics and retain explicit failure semantics."""
 
-        target: tuple[str, str, tuple[str, ...]] = (
+        target: tuple[str, str, tuple[str, ...], bool] = (
             connection.adapter_identity.name,
             database,
             managed_source_names,
+            include_dead_letters,
         )
         now: float = self._clock()
         cached: tuple[float, AdapterWarehouseHealth] | None = self._last_usable_by_target.get(
@@ -50,6 +52,7 @@ class WarehouseHealthReader:
             current: AdapterWarehouseHealth = connection.load_warehouse_health(
                 database=database,
                 managed_source_names=managed_source_names,
+                include_dead_letters=include_dead_letters,
             )
         except Exception:
             current = AdapterWarehouseHealth(
