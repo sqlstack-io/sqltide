@@ -129,10 +129,32 @@
 					{#if ingest.polling !== null}<span>{ingest.polling}/{ingest.materialized} live polling</span>{/if}
 					{#if ingest.notBuilt}<span>{ingest.notBuilt} not built</span>{/if}
 					{#if ingest.exceptions !== null}<span>{ingest.exceptions} errors</span>{/if}
+					{#if ingest.stuckConsumers.length}<span style:color="var(--sb-error)">{ingest.stuckConsumers.length} stuck</span>{/if}
 					<span>{ingest.behind} behind</span>
 					{#if ingest.lagUnavailable}<span>{ingest.lagUnavailable} lag unavailable</span>{/if}
 				</span>
 			</div>
+
+			{#if ingest.stuckConsumers.length}
+				<div class="mb-2 overflow-hidden rounded-[4px] border border-[var(--sb-error)]">
+					{#each ingest.stuckConsumers as consumer (consumer.table)}
+						<div class="border-b border-[var(--border-subtle)] px-3.5 py-2 last:border-b-0">
+							<div class="flex items-baseline gap-3 font-mono text-[12px]">
+								<span class="text-primary font-medium">{consumer.table}</span>
+								<span style:color="var(--sb-error)">
+									{consumer.stuckSeconds === null
+										? 'no offset committed'
+										: `stuck for ${formatDuration(consumer.stuckSeconds)}`}
+								</span>
+								<span class="text-muted-foreground">{consumer.recentErrors} recent errors</span>
+							</div>
+							<div class="text-muted-foreground code mt-1 truncate text-[11px]" title={consumer.latestError}>
+								{consumer.latestError}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 
 			<!-- Sorted oldest-arrival-first and capped, so this holds up at 20+ sources:
 			     the question is "what is not moving", not "list everything". -->

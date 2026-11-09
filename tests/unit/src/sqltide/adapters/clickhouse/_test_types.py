@@ -8,6 +8,7 @@ from sqltide.adapter.models import (
     AdapterReplayOffsetProgressRequest,
     AdapterStatementProgress,
     AdapterTargetMutationLock,
+    AdapterWarehouseStuckKafkaConsumer,
 )
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 
@@ -423,6 +424,7 @@ class ClickHouseWarehouseHealthTestCase:
     expected_polling_tables: int
     expected_exception_tables: int
     expected_consumer_query_fragment: str
+    expected_stuck_consumers: tuple[AdapterWarehouseStuckKafkaConsumer, ...] = ()
 
 
 @dataclass(frozen=True)

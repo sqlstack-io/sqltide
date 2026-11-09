@@ -20,6 +20,7 @@ from sqltide.adapter.models import (
     AdapterStatementProgress,
     AdapterWarehouseDisk,
     AdapterWarehouseHealth,
+    AdapterWarehouseStuckKafkaConsumer,
     CatalogRelation,
     CatalogSnapshot,
 )
@@ -189,12 +190,20 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_table_name="tbl__orders",
             expected_query_count=6,
             managed_source_names=("kafka__orders", "kafka__payments"),
-            consumer_row=(1, ["kafka__orders"], 1, 1),
+            consumer_row=(1, ["kafka__orders"], 1, 1, [("kafka__orders", 7200, 10, "cast failed")]),
             expected_configured_tables=2,
             expected_materialized_tables=1,
             expected_materialized_table_names=("kafka__orders",),
             expected_polling_tables=1,
             expected_exception_tables=1,
+            expected_stuck_consumers=(
+                AdapterWarehouseStuckKafkaConsumer(
+                    table="kafka__orders",
+                    stuck_seconds=7200,
+                    recent_errors=10,
+                    latest_error="cast failed",
+                ),
+            ),
             expected_consumer_query_fragment="table IN ('kafka__orders', 'kafka__payments')",
         ),
         ClickHouseWarehouseHealthTestCase(
@@ -227,7 +236,7 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_table_name="tbl__orders",
             expected_query_count=6,
             managed_source_names=("kafka__orders",),
-            consumer_row=(1, ["kafka__orders"], 1, 0),
+            consumer_row=(1, ["kafka__orders"], 1, 0, []),
             expected_configured_tables=1,
             expected_materialized_tables=1,
             expected_materialized_table_names=("kafka__orders",),
@@ -257,7 +266,7 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
             expected_table_name="tbl__orders",
             expected_query_count=6,
             managed_source_names=("kafka__orders",),
-            consumer_row=(1, ["kafka__orders"], 1, 0),
+            consumer_row=(1, ["kafka__orders"], 1, 0, []),
             expected_configured_tables=1,
             expected_materialized_tables=1,
             expected_materialized_table_names=("kafka__orders",),
@@ -303,6 +312,7 @@ def test_given_clickhouse_system_metrics_when_reading_health_then_snapshot_is_tr
                 "materialized_table_names",
                 "polling_tables",
                 "exception_tables",
+                "stuck_consumers",
             ],
             result_rows=[list(test_case.consumer_row)],
         ),
@@ -341,6 +351,7 @@ def test_given_clickhouse_system_metrics_when_reading_health_then_snapshot_is_tr
     )
     assert health.kafka_consumers.polling_tables == test_case.expected_polling_tables
     assert health.kafka_consumers.exception_tables == test_case.expected_exception_tables
+    assert health.kafka_consumers.stuck_consumers == test_case.expected_stuck_consumers
     assert health.capacity_warning_fraction == CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION
     assert len(raw_client.statements) == test_case.expected_query_count
     assert "query_id != currentQueryID()" in raw_client.statements[3]

@@ -120,6 +120,7 @@ def test_given_unbuilt_kafka_source_when_viewing_overview_then_ingest_is_not_an_
         "materializedTableNames": ["kafka__built_events"],
         "pollingTables": 1,
         "exceptionTables": 0,
+        "stuckConsumers": [],
     }
     assert page.goto(base_url, wait_until="networkidle") is not None
     expect(page.get_by_text(test_case.expected_not_built_text, exact=True)).to_be_visible()

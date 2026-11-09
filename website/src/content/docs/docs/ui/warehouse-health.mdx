@@ -25,9 +25,18 @@ The snapshot reports:
 | Memory | ClickHouse server RSS and host or cgroup context when both sides are meaningful |
 | Activity | Queries other than the diagnostic query, active merges, and incomplete mutations |
 | Project storage | Active rows, bytes, and part counts for the selected project database's largest tables |
+| Kafka consumers | Polling state, current exceptions, and consumers that keep failing without committing an offset |
 
 Table-level measurements are restricted to the selected project database and returned as a bounded
 largest-table list. They are not a cluster-wide inventory.
+
+## Stuck Kafka consumers
+
+A Kafka table is **stuck** when its last committed offset is more than five minutes old and it has
+recorded at least three errors since that commit within the last five minutes. A quiet topic with an
+old commit and no errors is not stuck. Overview lists each stuck table with how long it has been
+stuck and its latest error. ClickHouse keeps only the last ten exceptions for each consumer, so the
+error count is a recent sample.
 
 ## Status and missing evidence
 

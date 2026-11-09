@@ -155,7 +155,15 @@ function warehouseHealthFromServer(value: unknown): WarehouseHealth | null {
 							(health.kafkaConsumers as Payload).materializedTableNames
 						),
 						pollingTables: Number((health.kafkaConsumers as Payload).pollingTables ?? 0),
-						exceptionTables: Number((health.kafkaConsumers as Payload).exceptionTables ?? 0)
+						exceptionTables: Number((health.kafkaConsumers as Payload).exceptionTables ?? 0),
+						stuckConsumers: (((health.kafkaConsumers as Payload).stuckConsumers ?? []) as Payload[]).map(
+							(consumer) => ({
+								table: String(consumer.table ?? ''),
+								stuckSeconds: nullableNumber(consumer.stuckSeconds),
+								recentErrors: Number(consumer.recentErrors ?? 0),
+								latestError: String(consumer.latestError ?? '')
+							})
+						)
 					},
 		tables:
 			health.tables === null || health.tables === undefined

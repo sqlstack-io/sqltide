@@ -547,5 +547,6 @@ def test_given_available_warehouse_health_when_reading_state_then_payload_is_tru
         "materializedTableNames": ["kafka__orders"],
         "pollingTables": test_case.expected_polling_tables,
         "exceptionTables": 0,
+        "stuckConsumers": [],
     }
     assert payload["capacityWarningFraction"] == test_case.expected_capacity_warning_fraction

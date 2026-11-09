@@ -943,6 +943,16 @@ class AdapterWarehouseActivity:
 
 
 @dataclass(frozen=True)
+class AdapterWarehouseStuckKafkaConsumer:
+    """A Kafka table that keeps failing without committing an offset."""
+
+    table: str
+    stuck_seconds: int | None
+    recent_errors: int
+    latest_error: str
+
+
+@dataclass(frozen=True)
 class AdapterWarehouseKafkaConsumers:
     """Managed Kafka consumer health observed inside the warehouse."""
 
@@ -951,6 +961,7 @@ class AdapterWarehouseKafkaConsumers:
     materialized_table_names: tuple[str, ...]
     polling_tables: int
     exception_tables: int
+    stuck_consumers: tuple[AdapterWarehouseStuckKafkaConsumer, ...] = ()
 
 
 @dataclass(frozen=True)
