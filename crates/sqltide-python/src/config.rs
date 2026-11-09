@@ -1,11 +1,12 @@
 //! Project and local configuration: decoded TOML in, the discovery dataclasses out.
 
 use std::cell::RefCell;
+use std::path::{Path, PathBuf};
 
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyInt, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::audits::{
     self, HeaderFields, Instance, RenderError, generic_audit_parameter_names as parameter_names,
 };
@@ -14,7 +15,7 @@ use sqltide_discovery::config::{
     ReplayOnChange, ReplayRule, RetentionDefault, SensorsOverride, Target,
 };
 use sqltide_discovery::durations;
-use sqltide_discovery::errors::{ErrorKind, SpecError};
+use sqltide_discovery::errors::{self, ErrorKind, SpecError};
 use sqltide_discovery::freshness::{self, Freshness};
 use sqltide_discovery::header_blocks::{self as test_blocks, Block, LeadingContent};
 use sqltide_discovery::pipeline_config::{self, PipelineSettings};
@@ -31,6 +32,9 @@ use std::collections::HashMap;
 use sqltide_discovery::model_spec::{self, ColumnSpec, ModelSpec};
 
 use crate::discovery::PyEnvironment;
+use crate::toml;
+use sqltide_config::project::{self, ConfigPaths, ConfigSource, SourceError, read_config_source};
+use sqltide_config::toml::main::load_toml::load_toml;
 use sqltide_discovery::retention::{KafkaRetention, ModelRetention, Retention};
 use sqltide_discovery::value::{Kind, Value};
 
@@ -541,47 +545,145 @@ pub(crate) fn spec_error(py: Python<'_>, error: SpecError) -> PyErr {
     }
 }
 
-/// Validate a decoded project configuration into `AuthoredProjectConfig`; `timezone_exists`
-/// reports whether the runtime can load a timezone.
-#[pyfunction]
-fn parse_project_config<'py>(
-    py: Python<'py>,
-    payload: &Bound<'py, PyAny>,
-    file_path: &str,
-    timezone_exists: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
-    let mut document: Document<'py> = Document::new(py)?;
-    let payload: Value = document.value(payload)?;
-    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
-    let mut exists = |name: &str| match timezone_exists
-        .call1((name,))
-        .and_then(|found| found.is_truthy())
-    {
-        Ok(found) => found,
-        Err(failure) => {
-            callback_error.replace(Some(failure));
-            false
+/// Whether `zoneinfo.ZoneInfo` loads the IANA timezone `name` from the host's database. Only a
+/// missing zone answers `false`; any other failure propagates.
+fn timezone_exists(py: Python<'_>, name: &str) -> PyResult<bool> {
+    let zoneinfo: Bound<'_, PyModule> = py.import("zoneinfo")?;
+    match zoneinfo.getattr("ZoneInfo")?.call1((name,)) {
+        Ok(_) => Ok(true),
+        Err(failure) if failure.is_instance(py, &zoneinfo.getattr("ZoneInfoNotFoundError")?) => {
+            Ok(false)
         }
-    };
-    let parsed = config::parse_project_config(&payload, file_path, &mut exists);
-    if let Some(failure) = callback_error.take() {
-        return Err(failure);
+        Err(failure) => Err(failure),
     }
-    document.project(&parsed.map_err(|error| spec_error(py, error))?)
 }
 
-/// Validate a decoded local configuration into `LocalProjectConfig`.
+/// Validate a decoded project configuration, raising a failed timezone lookup's own error.
+fn project_config(py: Python<'_>, payload: &Value, file_path: &str) -> PyResult<ProjectConfig> {
+    let lookup_error: RefCell<Option<PyErr>> = RefCell::new(None);
+    let mut exists = |name: &str| {
+        timezone_exists(py, name).unwrap_or_else(|failure| {
+            lookup_error.replace(Some(failure));
+            false
+        })
+    };
+    let parsed = config::parse_project_config(payload, file_path, &mut exists);
+    if let Some(failure) = lookup_error.take() {
+        return Err(failure);
+    }
+    parsed.map_err(|error| spec_error(py, error))
+}
+
+/// The `OSError` subclass `open` raises for `errno` on `path`.
+fn os_error(py: Python<'_>, errno: i32, path: &Path) -> PyResult<PyErr> {
+    let strerror: Bound<'_, PyAny> = py.import("os")?.getattr("strerror")?.call1((errno,))?;
+    let exception =
+        py.import("builtins")?
+            .getattr("OSError")?
+            .call1((errno, strerror, path.as_os_str()))?;
+    Ok(PyErr::from_value(exception))
+}
+
+/// A config file failure as the exception reading it in Python raised.
+fn source_error(py: Python<'_>, error: SourceError) -> PyErr {
+    match error {
+        SourceError::Invalid(message) => spec_error(py, errors::project(message)),
+        SourceError::InvalidToml { path, error } => {
+            let failure: PyErr = spec_error(
+                py,
+                errors::project(format!(
+                    "{} contains invalid TOML: {}",
+                    path.display(),
+                    error.tomllib_text()
+                )),
+            );
+            failure.set_cause(py, Some(toml::decode_error(py, &error)));
+            failure
+        }
+        SourceError::Read { path, error } => match error.raw_os_error() {
+            Some(errno) => os_error(py, errno, &path).unwrap_or_else(|failure| failure),
+            None => error.into(),
+        },
+        SourceError::NotUtf8 { bytes } => PyBytes::new(py, &bytes)
+            .call_method1("decode", ("utf-8",))
+            .map_or_else(|failure| failure, |_| PyValueError::new_err("not UTF-8")),
+    }
+}
+
+/// One config file as a `DiscoveredProjectFile`, and its document as Python values.
+fn config_file<'py>(
+    document: &mut Document<'py>,
+    file_path: &Bound<'py, PyAny>,
+    project_dir: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Value)> {
+    let py: Python<'py> = document.py;
+    let path: PathBuf = file_path.extract()?;
+    let source: ConfigSource =
+        read_config_source(&path).map_err(|error| source_error(py, error))?;
+    let payload: Value = document.value(&toml::python_document(py, source.document)?)?;
+    let file = document.model(
+        "DiscoveredProjectFile",
+        &[
+            ("file_path", file_path.clone()),
+            (
+                "relative_path",
+                file_path.call_method1("relative_to", (project_dir,))?,
+            ),
+            ("contents", document.object(source.contents)?),
+        ],
+    )?;
+    Ok((file, payload))
+}
+
+/// Load a project directory's committed config and optional local overrides into
+/// `LoadedProjectConfiguration`.
 #[pyfunction]
-fn parse_local_config<'py>(
+#[pyo3(signature = (*, project_dir))]
+fn load_project_configuration<'py>(
     py: Python<'py>,
-    payload: &Bound<'py, PyAny>,
-    file_path: &str,
+    project_dir: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let join = |name: &str| project_dir.call_method1("joinpath", (name,));
+    let project_path: Bound<'py, PyAny> = join(project::PROJECT_CONFIG_FILE_NAME)?;
+    let local_path: Bound<'py, PyAny> = join(project::LOCAL_CONFIG_FILE_NAME)?;
+    let paths = ConfigPaths {
+        project: project_path.extract()?,
+        legacy_project: join(project::LEGACY_PROJECT_CONFIG_FILE_NAME)?.extract()?,
+        local: local_path.extract()?,
+        legacy_local: join(project::LEGACY_LOCAL_CONFIG_FILE_NAME)?.extract()?,
+    };
+    project::check_config_paths(&paths).map_err(|error| source_error(py, error))?;
     let mut document: Document<'py> = Document::new(py)?;
-    let payload: Value = document.value(payload)?;
-    let parsed: LocalConfig =
-        config::parse_local_config(&payload, file_path).map_err(|error| spec_error(py, error))?;
-    document.local(&parsed)
+    let (project_file, payload) = config_file(&mut document, &project_path, project_dir)?;
+    let project_display: String = paths.project.display().to_string();
+    let project = document.project(&project_config(py, &payload, &project_display)?)?;
+    let (local, local_file) = if paths.local.exists() {
+        let (local_file, payload) = config_file(&mut document, &local_path, project_dir)?;
+        let parsed: LocalConfig =
+            config::parse_local_config(&payload, &paths.local.display().to_string())
+                .map_err(|error| spec_error(py, error))?;
+        (document.local(&parsed)?, local_file)
+    } else {
+        (
+            document.model("LocalProjectConfig", &[])?,
+            py.None().into_bound(py),
+        )
+    };
+    document.model(
+        "LoadedProjectConfiguration",
+        &[
+            ("project", project),
+            ("local", local),
+            ("project_source", project_file),
+            ("local_source", local_file),
+        ],
+    )
+}
+
+/// The nearest directory, from `path` upward, holding a project config.
+#[pyfunction]
+fn find_project_configuration_dir(path: PathBuf) -> Option<PathBuf> {
+    project::find_project_configuration_dir(&path)
 }
 
 fn retention_object<'py, T>(
@@ -985,46 +1087,44 @@ impl<'py> Document<'py> {
     }
 }
 
-/// Resolve the effective configuration for a target from the decoded project and optional
-/// local configuration, command-line variables, and the environment.
-#[pyfunction]
-#[allow(clippy::too_many_arguments)]
-fn resolve_effective_configuration<'py>(
+/// A retained config file's document, raising `tomllib.TOMLDecodeError` if it is not TOML.
+fn retained_document<'py>(
     py: Python<'py>,
-    project_payload: &Bound<'py, PyAny>,
-    project_path: &str,
-    local_payload: &Bound<'py, PyAny>,
-    local_path: &str,
+    source: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let contents: String = source.getattr("contents")?.extract()?;
+    let loaded = load_toml(&contents).map_err(|error| toml::decode_error(py, &error))?;
+    toml::python_document(py, loaded)
+}
+
+/// Resolve the effective configuration for a target from a loaded project configuration,
+/// command-line variables, and the environment.
+#[pyfunction]
+#[pyo3(signature = (*, loaded, selected_target, cli_variables, environment))]
+fn resolve_effective_project_configuration<'py>(
+    py: Python<'py>,
+    loaded: &Bound<'py, PyAny>,
     selected_target: Option<&str>,
     cli_variables: &Bound<'py, PyAny>,
     environment: Bound<'py, PyAny>,
-    timezone_exists: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let project_source: Bound<'py, PyAny> = loaded.getattr("project_source")?;
+    let project_path: String = project_source.getattr("file_path")?.str()?.to_string();
+    let project_path: &str = &project_path;
+    let local_source: Bound<'py, PyAny> = loaded.getattr("local_source")?;
     let mut document: Document<'py> = Document::new(py)?;
-    let project_payload: Value = document.value(project_payload)?;
-    let local_payload: Value = if local_payload.is_none() {
-        document.value(PyDict::new(py).as_any())?
+    let project_payload: Value = document.value(&retained_document(py, &project_source)?)?;
+    let (local_payload, local_display): (Value, String) = if local_source.is_none() {
+        (document.value(PyDict::new(py).as_any())?, String::new())
     } else {
-        document.value(local_payload)?
+        (
+            document.value(&retained_document(py, &local_source)?)?,
+            local_source.getattr("file_path")?.str()?.to_string(),
+        )
     };
     let cli_variables: Value = document.value(cli_variables)?;
-    let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
-    let mut exists = |name: &str| match timezone_exists
-        .call1((name,))
-        .and_then(|found| found.is_truthy())
-    {
-        Ok(found) => found,
-        Err(failure) => {
-            callback_error.replace(Some(failure));
-            false
-        }
-    };
-    let project_config = config::parse_project_config(&project_payload, project_path, &mut exists);
-    if let Some(failure) = callback_error.take() {
-        return Err(failure);
-    }
-    let project_config: ProjectConfig = project_config.map_err(|error| spec_error(py, error))?;
-    let local: LocalConfig = config::parse_local_config(&local_payload, local_path)
+    let project_config: ProjectConfig = project_config(py, &project_payload, project_path)?;
+    let local: LocalConfig = config::parse_local_config(&local_payload, &local_display)
         .map_err(|error| spec_error(py, error))?;
     let mut objects: HashMap<usize, &Value> = HashMap::new();
     index(&project_payload, &mut objects);
@@ -1509,12 +1609,15 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
     module.add_function(wrap_pyfunction!(check_model_header_keys, module)?)?;
     module.add_function(wrap_pyfunction!(parse_model_spec, module)?)?;
-    module.add_function(wrap_pyfunction!(resolve_effective_configuration, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        resolve_effective_project_configuration,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(parse_source_registry, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
     module.add_function(wrap_pyfunction!(parse_duration_seconds, module)?)?;
     module.add_function(wrap_pyfunction!(parse_freshness_policy, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_project_config, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_local_config, module)?)
+    module.add_function(wrap_pyfunction!(load_project_configuration, module)?)?;
+    module.add_function(wrap_pyfunction!(find_project_configuration_dir, module)?)
 }
