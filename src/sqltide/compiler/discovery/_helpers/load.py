@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -377,8 +376,8 @@ def _load_pipeline_config(*, pipeline_directory: DiscoveredPipelineDirectory) ->
     if config_file is None:
         return {}
     try:
-        pipeline_values: dict[str, object] = tomllib.loads(config_file.contents)
-    except tomllib.TOMLDecodeError as error:
+        pipeline_values: dict[str, object] = _native.load_toml(config_file.contents)
+    except ValueError as error:
         raise PipelineDiscoveryError(
             f"Pipeline config '{config_file.file_path}' contains invalid TOML: {error}"
         ) from error

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import tomllib
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.cli.entry.constants import (
     DIRECT_ONLY_COMMANDS,
     VIRTUAL_ENVIRONMENT_ONLY_COMMANDS,
@@ -45,16 +45,7 @@ def _virtual_environments_enabled(invocation: ResolvedCliInvocation) -> bool:
     pipelines_root: Path | None = invocation.pipelines_root
     if pipelines_root is None and invocation.project_dir is not None:
         pipelines_root = invocation.project_dir / "pipelines"
-    if pipelines_root is None or not pipelines_root.is_dir():
-        return False
-    for config_path in pipelines_root.glob("*/pipeline.toml"):
-        try:
-            values: dict[str, object] = tomllib.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, tomllib.TOMLDecodeError):
-            continue
-        if values.get("mode") == PipelineMode.VIRTUAL:
-            return True
-    return False
+    return pipelines_root is not None and _native.declares_virtual_pipeline(pipelines_root)
 
 
 def _is_virtual_environment_only(*, args: argparse.Namespace) -> bool:

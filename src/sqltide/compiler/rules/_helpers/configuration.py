@@ -1,6 +1,5 @@
 """Strict SQL Rules selection and reviewed exception configuration."""
 
-import tomllib
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -28,7 +27,7 @@ def rules_config(
     """Read retained project text, without rereading files or changing target resolution."""
 
     project: dict[str, object] = (
-        {} if loaded_project is None else tomllib.loads(loaded_project.source_file.contents)
+        {} if loaded_project is None else _native.load_toml(loaded_project.source_file.contents)
     )
     settings: dict[str, object] = _table(
         value=project.get("settings", {}), allowed={"sql_analysis"}
