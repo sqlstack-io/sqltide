@@ -15,7 +15,7 @@ use crate::access::{AccessPolicy, AccessPolicyError, compile_access_policy};
 const CORPUS: &str = include_str!("fixtures/access_corpus.json");
 const PIPELINES: [&str; 4] = ["orders", "customers", "inventory", "fulfillment"];
 /// Reviewed ways `saphyr-parser` reads YAML differently from PyYAML.
-const DIFFERENCES: [&str; 8] = [
+const DIFFERENCES: [&str; 9] = [
     "comment-without-space",
     "flow-key-line-break",
     "content-after-document-end",
@@ -23,6 +23,7 @@ const DIFFERENCES: [&str; 8] = [
     "flow-collection-indentation",
     "flow-adjacent-colon",
     "tab-separation",
+    "tag-before-flow-indicator",
     "unicode-line-break",
 ];
 
