@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.65.1](https://github.com/sqlstack-io/sqltide/compare/v0.65.0...v0.65.1) (2026-11-09)
+
+
+### Bug Fixes
+
+* always write timestamps before year 1000 with four-digit years, as ISO 8601 requires, on every platform ([363a314](https://github.com/sqlstack-io/sqltide/commit/363a31480f29f22f620b4a2b44288d9af5c8e4a4))
+* raise DestructionPlanCorruptError instead of OverflowError for destruction plan timestamps outside years 1 to 9999 in UTC ([196be44](https://github.com/sqlstack-io/sqltide/commit/196be44cff80990ac23b5d5cb504c83ba7ad2fa3))
+* reject non-ASCII digits in --start-time ([363a314](https://github.com/sqlstack-io/sqltide/commit/363a31480f29f22f620b4a2b44288d9af5c8e4a4))
+* reject stored destruction plans with integers outside 64 bits as corrupt ([196be44](https://github.com/sqlstack-io/sqltide/commit/196be44cff80990ac23b5d5cb504c83ba7ad2fa3))
+* use the website's logo and favicon in the UI and README ([#334](https://github.com/sqlstack-io/sqltide/issues/334)) ([1066d2c](https://github.com/sqlstack-io/sqltide/commit/1066d2c7fe9df4587608cd551b55dc57712e3705))
+
+
+### Refactoring
+
+* build the desired-state graph natively ([#332](https://github.com/sqlstack-io/sqltide/issues/332)) ([8ac98c7](https://github.com/sqlstack-io/sqltide/commit/8ac98c7694aba259bf0c8dc86433b929644c5c07))
+* compute CLI start times and audit timing natively ([363a314](https://github.com/sqlstack-io/sqltide/commit/363a31480f29f22f620b4a2b44288d9af5c8e4a4))
+* load project and local config natively ([#330](https://github.com/sqlstack-io/sqltide/issues/330)) ([7896b07](https://github.com/sqlstack-io/sqltide/commit/7896b07a97b5250e9ae449ef4dd34edf62d886d9))
+* serialize destruction plans natively ([196be44](https://github.com/sqlstack-io/sqltide/commit/196be44cff80990ac23b5d5cb504c83ba7ad2fa3))
+
 ## [0.65.0](https://github.com/sqlstack-io/sqltide/compare/v0.64.0...v0.65.0) (2026-11-09)
 
 
