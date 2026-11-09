@@ -583,6 +583,7 @@ class PolicySwitchFailureIntegrationTestCase:
     broken_view: str
     expected_live_quarantined_after_failure: bool
     expected_live_quarantined_after_rerun: bool
+    expected_dead_letter_view_count_after_failure: int
 
 
 @dataclass(frozen=True)
@@ -590,6 +591,7 @@ class MissingLandingRepairIntegrationTestCase:
     description: str
     model_header: str
     expected_landing_view_count: int
+    expected_operation: str
 
 
 @dataclass(frozen=True)
@@ -605,3 +607,15 @@ class InPlaceDeadLetterCleanupIntegrationTestCase:
     description: str
     expected_retired_view_count: int
     expected_active_view_count: int
+
+
+@dataclass(frozen=True)
+class VirtualAdoptedChainIntegrationTestCase:
+    description: str
+    expected_logical_view_count: int
+
+
+@dataclass(frozen=True)
+class CancelledPausedSourceIntegrationTestCase:
+    description: str
+    expected_note_fragment: str

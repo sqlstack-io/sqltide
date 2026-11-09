@@ -33,7 +33,10 @@ FROM __ref("orders")
 SQLTide moves each authored expression into an inner query under a private name, then applies the
 authored casts outside it. A check marks a row invalid only when the authored `CAST` would have
 raised on it, so enabling quarantine does not change which other rows reach the target or their
-values: a value that `CAST` truncates or wraps stays a good row.
+values: a value that `CAST` truncates or wraps stays a good row. The one exception is a fractional
+string such as `'1.5'` cast to `DateTime64`, which is diverted although `CAST` accepts it.
+
+Quarantine diverts rows whose cast fails. Dates that ClickHouse clamps or adjusts rather than rejects, such as out-of-range values or `2026-02-31`, are kept with the adjusted value, as under `fail`. Exactly which date strings are rejected follows your ClickHouse version; SQLTide is tested against 25.8.
 
 - `mv__<target>` writes rows with no invalid column to the target table.
 - `mv__<target>__dead_letters` writes rows with at least one invalid column to

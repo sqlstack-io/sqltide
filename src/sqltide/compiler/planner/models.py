@@ -523,6 +523,7 @@ class DirectRowErrorPolicyChange:
     logical_view_name: str = ""
     logical_dead_letter_view_name: str = ""
     previous_view_definition: str | None = None
+    landing_repair_only: bool = False
 
 
 @dataclass(frozen=True)

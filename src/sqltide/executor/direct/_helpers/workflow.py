@@ -261,6 +261,7 @@ def _assemble_statements(
     restores: list[NativeStatement] = row_error_policy_restore_statements(
         changes=request.row_error_policy_changes,
         render_restore=client.render_restore_materialized_view,
+        database=request.database,
     )
     return _warehouse_statements(statements), _warehouse_statements([*restores, *recovery])
 

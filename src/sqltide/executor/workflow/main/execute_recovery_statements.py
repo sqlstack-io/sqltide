@@ -5,6 +5,7 @@ from dataclasses import replace
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.executor.workflow.constants import (
+    RECOVER_DEAD_LETTERS_STEP_PREFIX,
     RECOVER_MODEL_VIEW_STEP_PREFIX,
     RECOVER_SOURCE_STEP_PREFIX,
 )
@@ -23,6 +24,8 @@ def execute_recovery_statements(
     emitter: WorkflowEventEmitter | None,
     cause: BaseException,
     start_sequence: int,
+    completed_step_ids: frozenset[str] | None,
+    retry_command: str,
 ) -> tuple[WarehouseStatement, ...]:
     """Run recovery in order, keeping sources paused when a model view could not be restored."""
 
@@ -35,8 +38,13 @@ def execute_recovery_statements(
         ):
             cause.add_note(
                 f"Managed source recovery '{recovery_statement.step_id}' was skipped: the source "
-                "stays paused because a model view could not be restored, so no rows are lost"
+                "stays paused because a model view could not be restored, so no rows are lost. "
+                f"Run `{retry_command}` once the cause is fixed to resume it"
             )
+            continue
+        if _new_view_may_be_live(
+            step_id=recovery_statement.step_id, completed_step_ids=completed_step_ids
+        ):
             continue
         statement: WarehouseStatement = replace(
             recovery_statement,
@@ -62,3 +70,12 @@ def execute_recovery_statements(
             )
         recovered.append(statement)
     return tuple(recovered)
+
+
+def _new_view_may_be_live(*, step_id: str, completed_step_ids: frozenset[str] | None) -> bool:
+    """Return whether dropping this dead-letter view could orphan a live quarantine view."""
+
+    if not step_id.startswith(RECOVER_DEAD_LETTERS_STEP_PREFIX):
+        return False
+    view_step: str = f"realize_{step_id.removeprefix(RECOVER_DEAD_LETTERS_STEP_PREFIX)}"
+    return completed_step_ids is None or view_step in completed_step_ids

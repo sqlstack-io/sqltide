@@ -110,7 +110,9 @@ def virtual_row_error_policy_statements(
         ),
     )
     restores: list[NativeStatement] = row_error_policy_restore_statements(
-        changes=changes, render_restore=client.render_restore_materialized_view
+        changes=changes,
+        render_restore=client.render_restore_materialized_view,
+        database=request.default_database,
     )
     return statements, [*restores, *recovery]
 

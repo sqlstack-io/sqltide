@@ -158,6 +158,8 @@ def _recover_managed_sources(
         emitter=emitter,
         cause=cause,
         start_sequence=start_sequence,
+        completed_step_ids=frozenset(completed_step_ids),
+        retry_command="sqt build --changed",
     )
 
 

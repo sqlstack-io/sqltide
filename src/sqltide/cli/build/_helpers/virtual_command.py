@@ -173,10 +173,21 @@ def execute_virtual_build_command(
                     emitter=sink,
                     cause=error.cause if isinstance(error, WorkflowExecutionError) else error,
                     start_sequence=len(preparation.workflow.statements) + 1,
+                    completed_step_ids=_completed_step_ids(error),
+                    retry_command="sqt build",
                 )
                 raise
     except (WorkflowExecutionError, AdapterError) as error:
         cause: BaseException = error.cause if isinstance(error, WorkflowExecutionError) else error
+        if preparation.workflow.recovery_statements and isinstance(cause, KeyboardInterrupt):
+            return _cancel_virtual_build(
+                started=started,
+                preparation=preparation,
+                options=options,
+                client=client,
+                sink=sink,
+                cause=cause,
+            )
         failure_text: str = (
             row_error_policy_failure_message(
                 changes=preparation.preview.row_error_policy_changes,
@@ -200,13 +211,14 @@ def execute_virtual_build_command(
             sink.run_completed(outcome="failed", exit_code=1, error_message=failure_text)
         print(failure_text, file=sys.stderr)
         return 1
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as error:
         return _cancel_virtual_build(
             started=started,
             preparation=preparation,
             options=options,
             client=client,
             sink=sink,
+            cause=error,
         )
     if _is_policy_only(preparation):
         return _finish_policy_only_build(
@@ -247,6 +259,16 @@ def execute_virtual_build_command(
         )
     )
     return 0
+
+
+def _completed_step_ids(error: BaseException) -> frozenset[str] | None:
+    """Return the steps a failed workflow finished, or `None` when that is unknown."""
+
+    if not isinstance(error, WorkflowExecutionError) or not isinstance(
+        error.partial_result, WorkflowExecutionResult
+    ):
+        return None
+    return frozenset(result.step_id for result in error.partial_result.statement_results)
 
 
 def _is_policy_only(preparation: VirtualWorkflowPreparation) -> bool:
@@ -312,6 +334,7 @@ def _cancel_virtual_build(
     options: BuildCommandOptions,
     client: AdapterConnection,
     sink: RunEventSink,
+    cause: BaseException | None = None,
 ) -> int:
     _persist_virtual_invocation(
         started=started,
@@ -327,6 +350,8 @@ def _cancel_virtual_build(
         sink.run_completed(outcome="cancelled", exit_code=_SIGINT_EXIT_CODE, error_message=None)
     try:
         print(render_interrupted_build_message(), file=sys.stderr)
+        for note in getattr(cause, "__notes__", ()):
+            print(note, file=sys.stderr)
     except Exception:
         pass
     return _SIGINT_EXIT_CODE

@@ -22,6 +22,7 @@ from sqltide.cli.plan.main._normalize_cli_start_time import normalize_cli_start_
 from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
+from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
 from sqltide.cli.selection.main._selection import resolve_selected_logical_model_keys
 from sqltide.compiler.compile.models import (
     CompiledTableModel,
@@ -307,7 +308,7 @@ def prepare_virtual_build_workflow(
                 "desired_policy": str(change.desired_policy),
                 "view": change.view_name,
                 "dead_letter_view": change.dead_letter_view_name,
-                "operation": "view_only",
+                "operation": "repair_landing_view" if change.landing_repair_only else "view_only",
                 "replay_roots": 0,
             }
             for change in preview.row_error_policy_changes
@@ -315,11 +316,7 @@ def prepare_virtual_build_workflow(
         plan_text = "\n".join(
             [
                 plan_text,
-                *(
-                    f"view-only  {change.model_key.name}: on_row_error -> "
-                    f"{change.desired_policy}, recreate {change.view_name}, no replay"
-                    for change in preview.row_error_policy_changes
-                ),
+                *map(render_row_error_policy_line, preview.row_error_policy_changes),
             ]
         )
     request: BackfillBootstrapRequest = BackfillBootstrapRequest(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from sqltide.cli.plan.constants import DIRECT_MODE_LABEL
+from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
 from sqltide.cli.presentation.main._cli_style import cli_style
 from sqltide.compiler.compile.models import LogicalResourceKey, ObjectKey
 from sqltide.compiler.planner.models import (
@@ -66,7 +67,7 @@ def render_direct_plan_json(
                 "desired_policy": str(change.desired_policy),
                 "view": change.view_name,
                 "dead_letter_view": change.dead_letter_view_name,
-                "operation": "view_only",
+                "operation": "repair_landing_view" if change.landing_repair_only else "view_only",
                 "replay_roots": 0,
             }
             for change in row_error_policy_changes
@@ -108,10 +109,7 @@ def render_direct_plan_text(
         lines.append(cli_style().warning(f"warning  {warning.message}"))
     change: DirectRowErrorPolicyChange
     for change in row_error_policy_changes:
-        lines.append(
-            f"view-only  {change.model_key.name}: on_row_error -> {change.desired_policy}, "
-            f"recreate {change.view_name}, no replay"
-        )
+        lines.append(render_row_error_policy_line(change))
     lines.append(_summary_line(plan=plan, row_error_policy_changes=row_error_policy_changes))
     return "\n".join(lines)
 

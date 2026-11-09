@@ -16,7 +16,7 @@ def row_error_policy_view_steps(
 
     teardown: list[tuple[str, bool]] = []
     realizations: list[tuple[str, str]] = []
-    for change in changes:
+    for change in (change for change in changes if not change.landing_repair_only):
         view_sql: str | None = render_view(change.logical_view_name)
         dead_letter_sql: str | None = render_view(change.logical_dead_letter_view_name)
         if view_sql is None or (

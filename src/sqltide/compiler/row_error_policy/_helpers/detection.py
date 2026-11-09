@@ -4,7 +4,11 @@ import re
 
 from sqltide.adapter.constants import QUARANTINE_LIVE_VIEW_PATTERN
 from sqltide.adapter.models import CatalogRelation
-from sqltide.compiler.compile.models import DesiredMaterializedView
+from sqltide.compiler.compile.models import (
+    DesiredKafkaTable,
+    DesiredMaterializedView,
+)
+from sqltide.compiler.planner.types import DesiredObject
 
 
 def change_pending(
@@ -15,14 +19,11 @@ def change_pending(
     relation_by_name: dict[str, CatalogRelation],
     dead_letter_name_owned_by_model: bool,
     quarantines: bool,
-    landing_view_names: tuple[str, ...],
 ) -> bool:
     """Return whether the live views differ from the policy, repairing a half-applied switch."""
 
     if target_name not in relation_by_name:
         return False
-    if any(name not in relation_by_name for name in landing_view_names):
-        return True
     live_view: CatalogRelation | None = relation_by_name.get(view_name)
     has_dead_letter_view: bool = (
         dead_letter_view_name in relation_by_name and not dead_letter_name_owned_by_model
@@ -36,10 +37,32 @@ def change_pending(
     return has_dead_letter_view or live_quarantines
 
 
+def landing_repair_pending(
+    *,
+    target_name: str,
+    landing_views: tuple[str, ...],
+    relation_by_name: dict[str, CatalogRelation],
+) -> bool:
+    """Return whether a live model's managed landing view is missing."""
+
+    return target_name in relation_by_name and any(
+        name not in relation_by_name for name in landing_views
+    )
+
+
+def kafka_table_names(*, objects: tuple[DesiredObject, ...]) -> frozenset[str]:
+    """Return the desired managed Kafka tables."""
+
+    return frozenset(desired.name for desired in objects if isinstance(desired, DesiredKafkaTable))
+
+
 def landing_view_names(
-    *, view: DesiredMaterializedView, views: tuple[DesiredMaterializedView, ...]
+    *,
+    view: DesiredMaterializedView,
+    views: tuple[DesiredMaterializedView, ...],
+    kafka_tables: frozenset[str],
 ) -> tuple[str, ...]:
-    """Return the landing view feeding this view, or nothing when it reads a landing table."""
+    """Return the Kafka landing view feeding this view, or nothing for any other source."""
 
     current: DesiredMaterializedView = view
     visited: set[str] = {current.name}
@@ -55,6 +78,9 @@ def landing_view_names(
             None,
         )
         if parent is None:
-            return () if current is view else (current.name,)
+            is_landing_view: bool = (
+                current is not view and current.source_table_name in kafka_tables
+            )
+            return (current.name,) if is_landing_view else ()
         visited.add(parent.name)
         current = parent

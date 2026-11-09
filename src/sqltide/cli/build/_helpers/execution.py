@@ -111,6 +111,10 @@ def execute_confirmed_direct_build(
                 failed_step_id=error.failed_step_id,
                 cause=error.cause,
             )
+            if preparation.request.row_error_policy_changes and isinstance(
+                error.cause, KeyboardInterrupt
+            ):
+                _print_optional_warning("\n".join(getattr(error.cause, "__notes__", ())) or None)
             if policy_failure is not None and isinstance(error.cause, AdapterError):
                 raise AdapterError(policy_failure) from error.cause
             raise error.cause from error

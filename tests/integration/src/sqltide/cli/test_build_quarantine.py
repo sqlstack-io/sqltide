@@ -766,6 +766,7 @@ def test_given_upstream_model_anchor_when_replaying_then_fan_out_rows_are_kept(
             broken_view="mv__orders_enriched__dead_letters",
             expected_live_quarantined_after_failure=False,
             expected_live_quarantined_after_rerun=True,
+            expected_dead_letter_view_count_after_failure=0,
         ),
         PolicySwitchFailureIntegrationTestCase(
             description="enable fails between the drop and the recreate",
@@ -774,6 +775,7 @@ def test_given_upstream_model_anchor_when_replaying_then_fan_out_rows_are_kept(
             broken_view="mv__orders_enriched",
             expected_live_quarantined_after_failure=False,
             expected_live_quarantined_after_rerun=True,
+            expected_dead_letter_view_count_after_failure=0,
         ),
         PolicySwitchFailureIntegrationTestCase(
             description="disable fails between the drop and the recreate",
@@ -782,6 +784,7 @@ def test_given_upstream_model_anchor_when_replaying_then_fan_out_rows_are_kept(
             broken_view="mv__orders_enriched",
             expected_live_quarantined_after_failure=True,
             expected_live_quarantined_after_rerun=False,
+            expected_dead_letter_view_count_after_failure=1,
         ),
     ],
     ids=lambda case: case.description,
@@ -829,6 +832,11 @@ def test_given_direct_switch_fails_when_building_then_old_view_keeps_consuming(
         landing_views: tuple[str, ...] = relation_names_like(
             client=clickhouse_client, database=clickhouse_database, pattern=_LANDING_VIEW_PATTERN
         )
+        dead_letter_views: tuple[str, ...] = relation_names_like(
+            client=clickhouse_client,
+            database=clickhouse_database,
+            pattern="mv\\_\\_orders\\_enriched\\_\\_dead\\_letters%",
+        )
         insert_landing_rows(
             clickhouse_client=clickhouse_client,
             database=clickhouse_database,
@@ -853,6 +861,7 @@ def test_given_direct_switch_fails_when_building_then_old_view_keeps_consuming(
     assert "orders_enriched" in failure_output
     assert quarantined_after_failure is test_case.expected_live_quarantined_after_failure
     assert len(landing_views) == 1
+    assert len(dead_letter_views) == test_case.expected_dead_letter_view_count_after_failure
     assert "order-late" in order_ids
     assert quarantined_after_rerun is test_case.expected_live_quarantined_after_rerun
 
@@ -865,6 +874,13 @@ def test_given_direct_switch_fails_when_building_then_old_view_keeps_consuming(
             description="a paused consumer on a quarantine model is resumed",
             model_header="MODEL (on_row_error quarantine, ",
             expected_landing_view_count=1,
+            expected_operation="repair_landing_view",
+        ),
+        MissingLandingRepairIntegrationTestCase(
+            description="a paused consumer on a default model is shown as a repair",
+            model_header="MODEL (",
+            expected_landing_view_count=1,
+            expected_operation="repair_landing_view",
         ),
     ],
     ids=lambda case: case.description,
@@ -872,6 +888,7 @@ def test_given_direct_switch_fails_when_building_then_old_view_keeps_consuming(
 def test_given_missing_landing_view_when_building_changed_then_it_is_repaired(
     test_case: MissingLandingRepairIntegrationTestCase,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     clickhouse_connection_settings: ClickHouseConnectionSettings,
     clickhouse_client: Client,
     clickhouse_database: str,
@@ -893,6 +910,14 @@ def test_given_missing_landing_view_when_building_changed_then_it_is_repaired(
             client=clickhouse_client, database=clickhouse_database, pattern=_LANDING_VIEW_PATTERN
         )[0]
         clickhouse_client.command(f"DROP TABLE {clickhouse_database}.{landing_view} SYNC")
+        capsys.readouterr()
+        plan_exit: int = run_direct_plan(
+            project_root=tmp_path,
+            database=clickhouse_database,
+            connection=connection,
+            changed=True,
+        )
+        plan_payload: dict[str, list[dict[str, object]]] = json.loads(capsys.readouterr().out)
         repair_exit: int = run_direct_build(
             project_root=tmp_path,
             database=clickhouse_database,
@@ -906,6 +931,8 @@ def test_given_missing_landing_view_when_building_changed_then_it_is_repaired(
         connection.close()
 
     assert (first_exit, repair_exit) == (0, 0)
+    assert plan_exit == 0
+    assert plan_payload["row_error_policy_changes"][0]["operation"] == test_case.expected_operation
     assert len(landing_views) == test_case.expected_landing_view_count
 
 
