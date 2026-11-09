@@ -57,6 +57,12 @@ from sqltide.compiler.planner.models import (
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
+from sqltide.compiler.sql_analysis.models import (
+    SqlAggregateFacts,
+    SqlModelAnalysis,
+    SqlOutputColumn,
+    SqlStorageExpression,
+)
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -930,6 +936,26 @@ def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
+def analyze_model_sql(
+    *,
+    sql: str,
+    engine: str,
+    order_by: tuple[str, ...],
+    partition_by: str | None,
+    ttl: str | None,
+    analyzer: SqlTreeAnalyzer,
+) -> tuple[SqlModelAnalysis, SqlModelTree]: ...
+def analyze_storage_expressions(
+    *,
+    order_by: tuple[str, ...],
+    partition_by: str | None,
+    ttl: str | None,
+    output_columns: tuple[SqlOutputColumn, ...],
+    analyzer: SqlTreeAnalyzer,
+) -> tuple[SqlStorageExpression, ...]: ...
+def build_aggregate_facts(
+    *, function_names: list[str], has_group_by: bool, engine: str
+) -> SqlAggregateFacts: ...
 def compile_pipeline(
     *, loaded_pipeline: LoadedPipeline, sql_analyzer: SqlModelAnalyzer
 ) -> CompiledPipeline: ...

@@ -4,9 +4,7 @@ from collections.abc import Mapping
 
 import sqltide._native as _native
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
-from sqltide.compiler.sql_analysis._helpers.model_analysis import analyze_model_sql_impl
 from sqltide.compiler.sql_analysis._helpers.polyglot import native_references, sql_tree_error
-from sqltide.compiler.sql_analysis._helpers.storage import analyze_storage_expressions
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
 from sqltide.compiler.sql_analysis.models import (
     SqlModelAnalysis,
@@ -37,7 +35,7 @@ class SqlModelAnalyzer:
 
         analysis: SqlModelAnalysis
         tree: _native.SqlModelTree
-        analysis, tree = analyze_model_sql_impl(
+        analysis, tree = _native.analyze_model_sql(
             sql=sql,
             engine=engine,
             order_by=order_by,
@@ -94,7 +92,7 @@ class SqlModelAnalyzer:
     ) -> tuple[SqlStorageExpression, ...]:
         """Analyze standalone storage clauses through this invocation's dialect."""
 
-        return analyze_storage_expressions(
+        return _native.analyze_storage_expressions(
             order_by=order_by,
             partition_by=partition_by,
             ttl=ttl,
