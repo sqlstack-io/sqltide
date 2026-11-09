@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from sqltide.cli.plan._helpers.result_rendering import (
-    render_plan_json,
-    render_plan_text,
-)
+import sqltide._native as _native
+from sqltide.cli.presentation.main._cli_style import cli_style
 from sqltide.compiler.compile.models import DesiredState
 from sqltide.compiler.planner.models import DeploymentPlan
 
@@ -20,10 +18,11 @@ def render_plan_result(
     verbose: bool = False,
 ) -> str:
     if json_output:
-        return render_plan_json(plan=plan, adapter_name=adapter_name)
-    return render_plan_text(
+        return _native.render_plan_json(plan=plan, adapter_name=adapter_name)
+    return _native.render_plan_text(
         plan=plan,
         desired_state=desired_state,
         database=database,
         verbose=verbose,
+        use_color=cli_style().use_color,
     )
