@@ -77,6 +77,7 @@ _REVISED: str = (
 def test_given_virtual_quarantine_when_deploying_then_lifecycle_keeps_dead_letters(
     test_case: VirtualQuarantineIntegrationTestCase,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     clickhouse_connection_settings: ClickHouseConnectionSettings,
     clickhouse_client: Client,
     clickhouse_database: str,
@@ -135,9 +136,11 @@ def test_given_virtual_quarantine_when_deploying_then_lifecycle_keeps_dead_lette
         )
 
         model_path.write_text(_FAIL, encoding="utf-8")
+        capsys.readouterr()
         plan_exit: int = run_direct_plan(
             project_root=tmp_path, database=clickhouse_database, connection=connection
         )
+        policy_only_plan: dict[str, object] = json.loads(capsys.readouterr().out)
         model_path.write_text(_REVISED, encoding="utf-8")
         second: AdapterDeploymentRecord = run_new_virtual_environment_deployment(
             project_root=tmp_path,
@@ -194,6 +197,7 @@ def test_given_virtual_quarantine_when_deploying_then_lifecycle_keeps_dead_lette
     assert tuple(tuple(row[1]) for row in live_dead_letters) == test_case.expected_failed_columns
     assert views_after_first == (f"mv__orders_enriched__dead_letters__{first.deployment_id}",)
     assert plan_exit == 0
+    assert policy_only_plan["rebuild_subtrees"] == []
     assert len(views_after_rollback) == 2
     assert after_rollback >= len(live_dead_letters)
     assert after_janitor == after_rollback

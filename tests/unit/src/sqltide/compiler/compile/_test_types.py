@@ -302,3 +302,10 @@ class DeadLetterViewNameAllowedTestCase:
     description: str
     first_model: str
     expected_model_count: int
+
+
+@dataclass(frozen=True)
+class LiveQuarantineShapeTestCase:
+    description: str
+    view_sql: str
+    expected_quarantined: bool

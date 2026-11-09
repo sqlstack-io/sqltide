@@ -1,7 +1,9 @@
+import re
 from pathlib import Path
 
 import pytest
 
+from sqltide.adapter.constants import QUARANTINE_LIVE_VIEW_PATTERN
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import CompiledTableModel
 from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
@@ -11,6 +13,7 @@ from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from tests.unit.src.sqltide.compiler.compile._test_types import (
     DeadLetterViewCollisionTestCase,
     DeadLetterViewNameAllowedTestCase,
+    LiveQuarantineShapeTestCase,
     PipelineRowErrorPolicyTestCase,
     RefreshSourceRowErrorTestCase,
     RejectRowErrorPolicyTestCase,
@@ -439,6 +442,35 @@ def test_given_default_model_named_like_dead_letter_view_when_realizing_then_it_
     compiled, _ = compile_and_realize_pipeline(loaded)
 
     assert len(compiled.models) == test_case.expected_model_count
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        LiveQuarantineShapeTestCase(
+            description="the generated shape marks a live quarantine view",
+            view_sql="SELECT CAST(__sqt_value_0 AS String) FROM (SELECT v AS __sqt_value_0 FROM t)",
+            expected_quarantined=True,
+        ),
+        LiveQuarantineShapeTestCase(
+            description="a longer private name is not the generated shape",
+            view_sql="SELECT v AS __sqt_value_01 FROM t",
+            expected_quarantined=False,
+        ),
+        LiveQuarantineShapeTestCase(
+            description="a bare substring is not the generated shape",
+            view_sql="SELECT x__sqt_value_0 AS v FROM t",
+            expected_quarantined=False,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_a_view_definition_when_detecting_policy_then_only_the_generated_shape_matches(
+    test_case: LiveQuarantineShapeTestCase,
+) -> None:
+    assert (
+        re.search(QUARANTINE_LIVE_VIEW_PATTERN, test_case.view_sql) is not None
+    ) is test_case.expected_quarantined
 
 
 if __name__ == "__main__":
