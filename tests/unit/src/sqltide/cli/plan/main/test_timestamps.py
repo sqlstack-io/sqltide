@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from sqltide._native import normalize_cli_start_time
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.plan.main.normalize_cli_start_time import normalize_cli_start_time
 from tests.unit.src.sqltide.cli.plan.main._test_types import (
     CliStartTimeNormalizationErrorTestCase,
     CliStartTimeNormalizationTestCase,
@@ -38,6 +38,11 @@ from tests.unit.src.sqltide.cli.plan.main._test_types import (
             raw_value="2026-11-01T06:30:00Z",
             expected_normalized_value="2026-11-01 06:30:00.000",
         ),
+        CliStartTimeNormalizationTestCase(
+            description="pads years before 1000 to four digits",
+            raw_value="0999-01-01T00:00:00",
+            expected_normalized_value="0999-01-01 00:00:00.000",
+        ),
     ],
     ids=lambda case: case.description,
 )
@@ -56,7 +61,12 @@ def test_given_valid_cli_start_time_when_normalizing_then_it_returns_internal_ti
             description="rejects non utc offset timestamps",
             raw_value="2026-04-01T12:30:45+02:00",
             expected_error_fragment="--start-time must be YYYY-MM-DD",
-        )
+        ),
+        CliStartTimeNormalizationErrorTestCase(
+            description="rejects non-ascii digits",
+            raw_value="\u0662\u0660\u0662\u0666-04-01",
+            expected_error_fragment="--start-time must be YYYY-MM-DD",
+        ),
     ],
     ids=lambda case: case.description,
 )

@@ -1,5 +1,6 @@
 //! Pure executor decisions for SQLTide. Plain Rust with no Python or warehouse dependency.
 
+pub mod audit_schedule;
 pub mod deployment_diff;
 pub mod destruction;
 pub mod destruction_plan_payload;
@@ -15,5 +16,6 @@ pub mod publications;
 pub mod readiness;
 pub mod reconcile;
 pub mod sources;
+pub mod timestamps;
 pub mod virtual_workflow;
 pub mod workflow;

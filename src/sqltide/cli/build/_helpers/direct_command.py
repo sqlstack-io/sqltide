@@ -3,6 +3,7 @@
 import json
 import sys
 
+from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
@@ -21,9 +22,6 @@ from sqltide.cli.build.models import (
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.quality.main.require_quality_identity import require_quality_identity
-from sqltide.executor.auditing.main.resolve_audit_warmup_states import (
-    resolve_audit_warmup_states,
-)
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import AuditSeverity
 from sqltide.executor.direct.exceptions import DirectBuildError

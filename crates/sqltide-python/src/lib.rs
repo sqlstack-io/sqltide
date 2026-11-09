@@ -19,6 +19,7 @@ mod population;
 mod sources;
 mod sql_scan;
 mod sqlclean;
+mod timestamps;
 mod toml;
 mod workflow;
 
@@ -86,6 +87,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     sources::register(module)?;
     sqlclean::register(module)?;
     sql_scan::register(module)?;
+    timestamps::register(module)?;
     toml::register(module)?;
     workflow::register(module)
 }
