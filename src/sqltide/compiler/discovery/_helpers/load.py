@@ -9,13 +9,6 @@ from pathlib import Path
 from typing import Literal
 
 import sqltide._native as _native
-from sqltide.compiler.discovery._helpers.configuration import (
-    find_project_configuration_dir,
-    load_project_configuration,
-)
-from sqltide.compiler.discovery._helpers.effective_configuration import (
-    resolve_effective_project_configuration,
-)
 from sqltide.compiler.discovery._helpers.model_sql import load_transform_from_sql_file
 from sqltide.compiler.discovery._helpers.replay_policy_validation import (
     validate_replay_policies_for_mode,
@@ -85,13 +78,13 @@ class _PipelineDraft:
 def load_pipeline_directory(pipeline_dir: Path) -> LoadedPipeline:
     """Load one pipeline directory without the project compiler's macro expansion phase."""
 
-    project_dir: Path | None = find_project_configuration_dir(pipeline_dir)
+    project_dir: Path | None = _native.find_project_configuration_dir(pipeline_dir)
     if project_dir is None:
         raise PipelineDiscoveryError(
             f"Pipeline directory '{pipeline_dir}' is not inside a sqltide_project.toml project"
         )
-    effective: EffectiveProjectConfiguration = resolve_effective_project_configuration(
-        loaded=load_project_configuration(project_dir=project_dir),
+    effective: EffectiveProjectConfiguration = _native.resolve_effective_project_configuration(
+        loaded=_native.load_project_configuration(project_dir=project_dir),
         selected_target=None,
         cli_variables={},
         environment={},

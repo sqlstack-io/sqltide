@@ -4,8 +4,8 @@ from typing import Literal, cast
 
 import pytest
 
-from sqltide.compiler.discovery._helpers.configuration import load_project_configuration
-from sqltide.compiler.discovery._helpers.effective_configuration import (
+from sqltide._native import (
+    load_project_configuration,
     resolve_effective_project_configuration,
 )
 from sqltide.compiler.discovery._helpers.interpolation import (

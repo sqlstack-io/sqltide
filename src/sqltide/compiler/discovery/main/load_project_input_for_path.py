@@ -3,13 +3,7 @@
 from collections.abc import Mapping
 from pathlib import Path
 
-from sqltide.compiler.discovery._helpers.configuration import (
-    find_project_configuration_dir,
-    load_project_configuration,
-)
-from sqltide.compiler.discovery._helpers.effective_configuration import (
-    resolve_effective_project_configuration,
-)
+import sqltide._native as _native
 from sqltide.compiler.discovery._helpers.source_registry import discover_source_registry
 from sqltide.compiler.discovery.models import (
     DiscoveredProjectFile,
@@ -32,11 +26,13 @@ def load_project_input_for_path(
 ) -> LoadedProject | None:
     """Load the nearest project config and retain the exact authored contents."""
 
-    project_dir: Path | None = find_project_configuration_dir(path)
+    project_dir: Path | None = _native.find_project_configuration_dir(path)
     if project_dir is None:
         return None
-    configuration: LoadedProjectConfiguration = load_project_configuration(project_dir=project_dir)
-    effective: EffectiveProjectConfiguration = resolve_effective_project_configuration(
+    configuration: LoadedProjectConfiguration = _native.load_project_configuration(
+        project_dir=project_dir
+    )
+    effective: EffectiveProjectConfiguration = _native.resolve_effective_project_configuration(
         loaded=configuration,
         selected_target=selected_target,
         cli_variables={} if cli_variables is None else cli_variables,

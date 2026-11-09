@@ -12,13 +12,12 @@ from sqltide.adapter.models import (
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
-    AuthoredProjectConfig,
     EffectiveProjectConfiguration,
     ExecutionSettings,
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
-    LocalProjectConfig,
+    LoadedProjectConfiguration,
     ModelRetentionPolicy,
     PipelineNaming,
     PipelineProtection,
@@ -534,20 +533,15 @@ def check_model_header_keys(header: Mapping[str, object], file_path: str) -> Non
 def parse_model_spec(
     header: Mapping[str, object], file_path: str, check_query: Callable[..., str | None]
 ) -> tuple[str, dict[str, Any]]: ...
-def resolve_effective_configuration(
-    project_payload: Mapping[str, object],
-    project_path: str,
-    local_payload: Mapping[str, object] | None,
-    local_path: str,
+def resolve_effective_project_configuration(
+    *,
+    loaded: LoadedProjectConfiguration,
     selected_target: str | None,
     cli_variables: Mapping[str, object],
     environment: Mapping[str, str],
-    timezone_exists: Callable[[str], bool],
 ) -> EffectiveProjectConfiguration: ...
-def parse_project_config(
-    payload: Mapping[str, object], file_path: str, timezone_exists: Callable[[str], bool]
-) -> AuthoredProjectConfig: ...
-def parse_local_config(payload: Mapping[str, object], file_path: str) -> LocalProjectConfig: ...
+def load_project_configuration(*, project_dir: Path) -> LoadedProjectConfiguration: ...
+def find_project_configuration_dir(path: Path) -> Path | None: ...
 def infer_pipeline_sources(
     pipelines: list[tuple[str, list[tuple[str, str]]]],
     inputs_by_transform: dict[str, str],

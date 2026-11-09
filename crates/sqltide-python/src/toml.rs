@@ -10,17 +10,12 @@ use sqltide_config::models::{ConfigDate, ConfigTime, ConfigValue};
 use sqltide_config::pipelines;
 use sqltide_config::toml::main::load_toml::load_toml as load_document;
 
-/// The failure as `tomllib.TOMLDecodeError`, with `tomllib`'s coordinate suffix.
-fn decode_error(py: Python<'_>, error: ConfigError) -> PyErr {
-    let coordinates: String = match (error.line, error.column) {
-        (Some(line), Some(column)) => format!("line {line}, column {column}"),
-        _ => "end of document".to_owned(),
-    };
-    let message: String = format!("{} (at {coordinates})", error.message);
+/// The failure as `tomllib.TOMLDecodeError`, with `tomllib`'s location suffix.
+pub(crate) fn decode_error(py: Python<'_>, error: &ConfigError) -> PyErr {
     match py
         .import("tomllib")
         .and_then(|module| module.getattr("TOMLDecodeError"))
-        .and_then(|class| class.call1((message,)))
+        .and_then(|class| class.call1((error.tomllib_text(),)))
     {
         Ok(exception) => PyErr::from_value(exception),
         Err(failure) => failure,
@@ -86,11 +81,19 @@ fn python_value<'py>(
     }
 }
 
+/// A loaded TOML document as the `dict` `tomllib.loads` returns.
+pub(crate) fn python_document<'py>(
+    py: Python<'py>,
+    document: ConfigValue,
+) -> PyResult<Bound<'py, PyAny>> {
+    python_value(py, &py.import("datetime")?, document)
+}
+
 /// `tomllib.loads(text)`, raising `tomllib.TOMLDecodeError` for an invalid document.
 #[pyfunction]
 fn load_toml<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    let document: ConfigValue = load_document(text).map_err(|error| decode_error(py, error))?;
-    python_value(py, &py.import("datetime")?, document)
+    let document: ConfigValue = load_document(text).map_err(|error| decode_error(py, &error))?;
+    python_document(py, document)
 }
 
 /// Whether any `<pipelines_root>/*/pipeline.toml` sets `mode = "virtual"`, skipping unreadable
