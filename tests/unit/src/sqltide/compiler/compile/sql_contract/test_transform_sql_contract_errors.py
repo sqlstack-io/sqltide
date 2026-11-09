@@ -1,8 +1,5 @@
 import pytest
 
-from sqltide.compiler.compile._helpers.sql_contract import (
-    derive_transform_output_columns,
-)
 from sqltide.compiler.compile.exceptions import (
     TransformSqlDuplicateAliasError,
     TransformSqlMultipleStatementsError,
@@ -10,10 +7,13 @@ from sqltide.compiler.compile.exceptions import (
     TransformSqlTopLevelSetOperationError,
     TransformSqlUntypedProjectionError,
 )
+from tests.unit.src.sqltide.compiler.compile.helpers import (
+    build_inline_sql_pipeline,
+    compile_test_pipeline,
+)
 from tests.unit.src.sqltide.compiler.compile.sql_contract._test_types import (
     DeriveTransformOutputColumnsErrorTestCase,
 )
-from tests.unit.src.sqltide.compiler.compile.sql_contract.helpers import build_sql_analyzer
 
 
 @pytest.mark.parametrize(
@@ -78,15 +78,11 @@ from tests.unit.src.sqltide.compiler.compile.sql_contract.helpers import build_s
     ],
     ids=lambda case: case.description,
 )
-def test_given_invalid_transform_sql_when_deriving_columns_then_it_raises_a_clear_custom_error(
+def test_given_invalid_transform_sql_when_compiling_then_it_raises_a_clear_custom_error(
     test_case: DeriveTransformOutputColumnsErrorTestCase,
 ) -> None:
     with pytest.raises(test_case.expected_error_type) as error_info:
-        derive_transform_output_columns(
-            analyzer=build_sql_analyzer(),
-            transform_name="orders_enriched",
-            query=test_case.query,
-        )
+        compile_test_pipeline(build_inline_sql_pipeline(test_case.query))
 
     error: Exception = error_info.value
     for attribute_name, expected_value in test_case.expected_error_attributes.items():
