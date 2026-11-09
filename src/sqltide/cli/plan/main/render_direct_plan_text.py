@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from sqltide.cli.plan._helpers.direct_rendering import (
-    render_direct_plan_text as render_direct_plan_text_impl,
-)
+import sqltide._native as _native
+from sqltide.cli.presentation.main._cli_style import cli_style
 from sqltide.compiler.planner.models import DirectPlan, DirectRowErrorPolicyChange
 from sqltide.executor.population.models import PopulationSourceRecreation
 
@@ -17,11 +16,12 @@ def render_direct_plan_text(
     source_recreations: tuple[PopulationSourceRecreation, ...] = (),
     row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = (),
 ) -> str:
-    """Render one direct plan as operator-facing text."""
+    """Render one direct plan as operator-facing text in the terminal's colour mode."""
 
-    return render_direct_plan_text_impl(
+    return _native.render_direct_plan_text(
         plan=plan,
         adapter_name=adapter_name,
+        use_color=cli_style().use_color,
         verbose=verbose,
         source_recreations=source_recreations,
         row_error_policy_changes=row_error_policy_changes,

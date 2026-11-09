@@ -1,6 +1,6 @@
 import pytest
 
-from sqltide.cli.plan.main.render_row_error_policy_line import render_row_error_policy_line
+from sqltide._native import render_row_error_policy_line
 from sqltide.compiler.compile.models import LogicalResourceKey, LogicalResourceType
 from sqltide.compiler.discovery.types import RowErrorPolicy
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
