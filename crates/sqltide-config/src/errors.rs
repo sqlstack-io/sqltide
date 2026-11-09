@@ -1,12 +1,14 @@
 //! Structured failures of reading configuration files.
 
-/// Why a configuration document could not be loaded.
+/// Why a configuration document could not be loaded natively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigErrorKind {
-    /// The text is not a valid document.
+    /// The text is not a valid document; Python's parser rejects it too.
     Syntax,
     /// The document parses but a value cannot be built from it.
     Construct,
+    /// The document uses a feature the native reader leaves to Python.
+    Unsupported,
 }
 
 /// A configuration failure, at its one-based line and column where known.
@@ -30,7 +32,6 @@ impl ConfigError {
     }
 
     /// This error at a one-based line and column, unless it already has a position.
-    #[must_use]
     pub fn at(self, line: usize, column: usize) -> Self {
         if self.line.is_some() {
             return self;

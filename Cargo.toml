@@ -47,6 +47,8 @@ sqltide-json = { path = "crates/sqltide-json" }
 sqltide-planner = { path = "crates/sqltide-planner" }
 sqltide-sqlanalysis = { path = "crates/sqltide-sqlanalysis" }
 sqltide-sqltext = { path = "crates/sqltide-sqltext" }
+toml_edit = { version = "0.25", default-features = false, features = ["parse"] }
+toml_parser = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
