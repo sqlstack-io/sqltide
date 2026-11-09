@@ -287,7 +287,7 @@ def test_given_repeated_offsets_when_replaying_with_dedupe_then_progress_stays_c
         f"SELECT _replay_partition, _replay_offset FROM {clickhouse_database}.replayed_events "
         "ORDER BY _replay_partition, _replay_offset"
     ).rows
-    frontiers: tuple[AdapterReplayOffsetFrontier, ...] = (
+    frontiers: tuple[AdapterReplayOffsetFrontier, ...] | None = (
         managed_clickhouse_client.load_replay_offset_frontiers(
             query_id="deduped-replay",
             request=AdapterReplayOffsetProgressRequest(
@@ -303,6 +303,7 @@ def test_given_repeated_offsets_when_replaying_with_dedupe_then_progress_stays_c
         )
     )
     assert rows == test_case.expected_positions
+    assert frontiers is not None
     assert (
         tuple((frontier.partition, frontier.completed_offset) for frontier in frontiers)
         == test_case.expected_frontier
