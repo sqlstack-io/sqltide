@@ -307,7 +307,7 @@ pub fn render_plan_json(plan: &Plan, adapter_name: &str) -> String {
     rendered
 }
 
-fn object(fields: Vec<(&str, JsonValue)>) -> JsonValue {
+pub(crate) fn object(fields: Vec<(&str, JsonValue)>) -> JsonValue {
     JsonValue::Object(
         fields
             .into_iter()

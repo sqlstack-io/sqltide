@@ -53,6 +53,11 @@ impl CliStyle {
         self.apply(BOLD, text)
     }
 
+    /// De-emphasised text.
+    pub fn muted(self, text: &str) -> String {
+        self.apply(DIM, text)
+    }
+
     /// Warning text.
     pub fn warning(self, text: &str) -> String {
         self.apply(YELLOW, text)

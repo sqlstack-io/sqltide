@@ -2,11 +2,8 @@ import json
 
 import pytest
 
+from sqltide._native import render_direct_plan_json, render_direct_plan_text
 from sqltide.adapter.models import AdapterReplayColumns
-from sqltide.cli.plan._helpers.direct_rendering import (
-    render_direct_plan_json,
-    render_direct_plan_text,
-)
 from sqltide.compiler.compile.models import LogicalResourceKey, ObjectKey
 from sqltide.compiler.planner.models import (
     DirectPlan,
@@ -304,7 +301,7 @@ def test_given_direct_replay_closure_when_rendering_then_rebuild_paths_form_a_fo
         creation_operations=(),
     )
 
-    rendered: str = render_direct_plan_text(plan=plan, adapter_name="clickhouse")
+    rendered: str = render_direct_plan_text(plan=plan, adapter_name="clickhouse", use_color=False)
 
     for expected_fragment in test_case.expected_fragments:
         assert expected_fragment in rendered

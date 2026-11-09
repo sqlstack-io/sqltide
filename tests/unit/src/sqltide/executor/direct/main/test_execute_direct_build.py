@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import render_direct_plan_json
 from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterReplayOffsetProgressRequest,
 )
-from sqltide.cli.plan.main._render_direct_plan_json import render_direct_plan_json
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.compiler.compile.models import CompiledModel, CompiledTableModel
 from sqltide.compiler.planner.types import DirectSelectionMode

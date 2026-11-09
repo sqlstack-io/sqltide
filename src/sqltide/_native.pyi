@@ -43,6 +43,7 @@ from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
     DirectPlan,
+    DirectRowErrorPolicyChange,
     DirectSourceDriftSelection,
     DirectWarehouseSnapshot,
     PlannedObjectChange,
@@ -52,6 +53,7 @@ from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
+from sqltide.executor.population.models import PopulationSourceRecreation
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -431,6 +433,24 @@ def render_plan_text(
     use_color: bool,
 ) -> str: ...
 def render_plan_json(*, plan: DeploymentPlan, adapter_name: str) -> str: ...
+def render_direct_plan_text(
+    *,
+    plan: DirectPlan,
+    adapter_name: str,
+    use_color: bool,
+    verbose: bool = False,
+    source_recreations: tuple[PopulationSourceRecreation, ...] | None = None,
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] | None = None,
+) -> str: ...
+def render_direct_plan_json(
+    *,
+    plan: DirectPlan,
+    adapter_name: str,
+    source_recreations: tuple[PopulationSourceRecreation, ...] | None = None,
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] | None = None,
+) -> str: ...
+def render_source_recreation_notice(recreation: PopulationSourceRecreation) -> str: ...
+def render_row_error_policy_line(change: DirectRowErrorPolicyChange) -> str: ...
 def plan_deployment(
     *,
     desired_state: DesiredState,
