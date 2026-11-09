@@ -13,6 +13,7 @@ from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import (
+    CompiledPipeline,
     CompiledProject,
     CompileProjectInputs,
     CompilerAdapterProfile,
@@ -29,6 +30,7 @@ from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
+    LoadedPipeline,
     LoadedProject,
     LoadedProjectConfiguration,
     ModelRetentionPolicy,
@@ -54,6 +56,7 @@ from sqltide.compiler.planner.models import (
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
+from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -512,18 +515,6 @@ def sql_test_chain_step_queries(
     actual_cte_name: str,
     expected_query: str,
 ) -> tuple[str, str]: ...
-def transform_contract(
-    transform_name: str,
-    source: str,
-    references_in_order: list[tuple[str, str, str | None]],
-    output_column_names: list[str],
-    replay_lineage_mode: str,
-    replay_anchor: str,
-    has_aggregate_semantics: bool,
-) -> tuple[bool, bool]: ...
-def view_ref_type_error(
-    view_name: str, references_in_order: list[tuple[str, str, str | None]]
-) -> str | None: ...
 def generic_audit_instances(
     file_path: str,
     raw_audits: object,
@@ -880,35 +871,6 @@ class DesiredGraph:
         self, object_changes: Iterable[PlannedObjectChange]
     ) -> tuple[RebuildSubtree, ...]: ...
 
-def resolve_model_relation_name(
-    logical_name: str,
-    is_table: bool,
-    exact_name: str | None,
-    pipeline_prefix: str | None,
-    project_prefix: str | None,
-) -> str: ...
-def validate_project_relation_names(
-    sources: list[tuple[str, str | None]],
-    models: list[tuple[str, str, bool]],
-) -> None: ...
-def render_kafka_retention_ttl(
-    duration_seconds: int, fallback_landed: bool, cap_at_landed: bool
-) -> str: ...
-def render_model_retention_ttl(
-    duration_seconds: int,
-    timestamp_column: str,
-    cap_at_column: str | None,
-    skip_when_missing: bool,
-    available_columns: dict[str, str],
-    model_name: str,
-) -> str | None: ...
-def resolve_audit_policies(
-    audits: list[
-        tuple[str, str, bool, bool, list[str], str, bool, int | None, int | None, bool | None]
-    ],
-    pipelines: list[tuple[tuple[str | None, int | None, int | None], list[str]]],
-    project: tuple[str | None, int | None, int | None],
-) -> list[tuple[str, int | None, int, bool]]: ...
 def validate_replay_policies(
     project_policy: tuple[str, bool, bool, bool] | None,
     pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
@@ -968,6 +930,15 @@ def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
+def compile_pipeline(
+    *, loaded_pipeline: LoadedPipeline, sql_analyzer: SqlModelAnalyzer
+) -> CompiledPipeline: ...
+def assemble_project(
+    *,
+    inputs: CompileProjectInputs,
+    reference_rewriter: SqlReferenceRewriter,
+    sql_analyzer: SqlModelAnalyzer,
+) -> CompiledProject: ...
 def realize_project(
     *,
     project: CompiledProject,

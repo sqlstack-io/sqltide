@@ -861,7 +861,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
         + Path(path).read_text(encoding="utf-8").count("compile_pipeline(")
         for path in test_case.expected_entrypoint_paths
     )
-    assembly_source: str = Path("src/sqltide/compiler/compile/main/_assemble_project.py").read_text(
+    assembly_source: str = Path("crates/sqltide-python/src/compilation.rs").read_text(
         encoding="utf-8"
     )
     analysis_source: str = Path("src/sqltide/compiler/pipeline/main/analyze_project.py").read_text(
@@ -878,7 +878,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     assert len(entrypoint_paths) == test_case.expected_entrypoint_count
     assert service_call_counts == (1,) * test_case.expected_entrypoint_count
     assert old_entrypoint_counts == (0,) * test_case.expected_entrypoint_count
-    assert assembly_source.count("build_sql_test_cases(") == test_case.expected_assembly_call_count
+    assert assembly_source.count('"build_sql_test_cases"') == test_case.expected_assembly_call_count
     assert analysis_source.count("realize_project(") == test_case.expected_realization_call_count
     assert analysis_source.index("assemble_project(") < analysis_source.index("realize_project(")
     assert assembly_source.count(".realize_model(") == test_case.expected_consumer_rebuild_count

@@ -8,6 +8,7 @@ mod adopted_sources;
 mod analysis;
 mod artifacts;
 mod clickhouse;
+mod compilation;
 mod compile;
 mod config;
 mod destruction;
@@ -81,6 +82,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis::register(module)?;
     artifacts::register(module)?;
     clickhouse::register(module)?;
+    compilation::register(module)?;
     compile::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
