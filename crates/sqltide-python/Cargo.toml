@@ -16,13 +16,11 @@ default = []
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-fensu-policy.workspace = true
 polyglot-sql.workspace = true
 pyo3.workspace = true
 pythonize.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlclean.workspace = true
 sqltide-clickhouse.workspace = true
 sqltide-compile.workspace = true
 sqltide-config.workspace = true
@@ -30,6 +28,7 @@ sqltide-discovery.workspace = true
 sqltide-executor.workspace = true
 sqltide-json.workspace = true
 sqltide-planner.workspace = true
+sqltide-rules.workspace = true
 sqltide-sqlanalysis.workspace = true
 sqltide-sqltext.workspace = true
 
