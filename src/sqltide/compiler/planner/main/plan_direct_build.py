@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import LogicalResourceKey
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.planner.classes.direct_plan_builder import DirectPlanBuilder
 from sqltide.compiler.planner.models import (
     DirectPlan,
     DirectSourceDriftSelection,
@@ -28,17 +28,14 @@ def plan_direct_build(
 ) -> DirectPlan:
     """Plan the complete selected downstream closure without change pruning."""
 
-    resolved_selection_mode: DirectSelectionMode = selection_mode or (
-        DirectSelectionMode.EXPLICIT if selected_model_keys else DirectSelectionMode.ALL_MODELS
-    )
-    return DirectPlanBuilder(
+    return _native.plan_direct_build(
         graph=graph,
         realized_project=realized_project,
         snapshot=snapshot,
         database=database,
         selected_model_keys=selected_model_keys,
-        selection_mode=resolved_selection_mode,
+        selection_mode=selection_mode,
         include_missing_upstream=include_missing_upstream,
         effective_start_time=effective_start_time,
         source_drift_selections=source_drift_selections,
-    ).build()
+    )
