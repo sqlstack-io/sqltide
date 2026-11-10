@@ -9,5 +9,3 @@
 ## Verification
 
 <!-- Commands or checks actually run. Do not paste full logs. -->
-
-<!-- Add "Closes CHI-123" when a Linear issue exists. -->
