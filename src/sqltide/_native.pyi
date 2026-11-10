@@ -13,9 +13,12 @@ from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
     AdapterAdoptedSourceRealizationRequest,
     AdapterBindingReplacementRequest,
+    AdapterCapabilities,
+    AdapterCapturedReplayRequest,
     AdapterConnectionConfig,
     AdapterCurrentQualityNode,
     AdapterDeploymentInventory,
+    AdapterDeploymentReplayRequest,
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
     AdapterIdentity,
@@ -28,14 +31,17 @@ from sqltide.adapter.models import (
     AdapterMetadataState,
     AdapterModelRealization,
     AdapterModelRealizationRequest,
+    AdapterMutationResult,
     AdapterNodeResultRecord,
     AdapterPhysicalRelationMapping,
     AdapterQueryCancellation,
+    AdapterQueryResult,
     AdapterReadinessRequest,
     AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
     AdapterReplayColumns,
+    AdapterReplayCoverageRequest,
     AdapterReplayOffsetFrontier,
     AdapterReplayOffsetProgressRequest,
     AdapterReplayQuery,
@@ -45,6 +51,7 @@ from sqltide.adapter.models import (
     AdapterSensorState,
     AdapterSensorStepRecord,
     AdapterSensorTickRecord,
+    AdapterSetDifferenceComparisonRequest,
     AdapterSourceRealization,
     AdapterStableView,
     AdapterStatementProgress,
@@ -59,6 +66,8 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
+from sqltide.adapters.clickhouse.types import RawClickHouseClient
 from sqltide.auth.models import (
     AccountAuditRecord,
     AuthSettings,
@@ -480,6 +489,190 @@ class RelationalDestructionPlanStore:
     def consume(
         self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
     ) -> DestructionPlan: ...
+
+class ClickHouseConnectionCore:
+    """A neutral adapter connection backed by the ClickHouse driver."""
+
+    def __init__(self, raw_client: RawClickHouseClient) -> None: ...
+    @property
+    def adapter_identity(self) -> AdapterIdentity: ...
+    @property
+    def capabilities(self) -> AdapterCapabilities: ...
+    def load_catalog(self, database: str) -> CatalogSnapshot: ...
+    def load_relation_drop_size_limit(self) -> int | None: ...
+    def load_relation_drop_size_server_default(self) -> int | None: ...
+    def load_external_dependants(
+        self, *, database: str, relation_names: tuple[str, ...]
+    ) -> tuple[str, ...]: ...
+    def load_refresh_states(self, database: str) -> tuple[AdapterRefreshState, ...]: ...
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool: ...
+    def load_warehouse_health(
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
+    ) -> AdapterWarehouseHealth: ...
+    def metadata_columns(self, *, database: str, table: str) -> frozenset[str]: ...
+    def inspect_managed_table_state(self, database: str) -> InspectedManagedTableState: ...
+    def query(self, statement: str) -> AdapterQueryResult: ...
+    def execute_workflow_query(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterQueryResult: ...
+    def _query(self, *, statement: str, query_id: str | None) -> AdapterQueryResult: ...
+    def execute_workflow_sql(self, statement: str) -> AdapterMutationResult: ...
+    def execute_workflow_mutation(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterMutationResult: ...
+    def _execute_workflow_sql(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterMutationResult: ...
+    def load_statement_progress(self, *, query_id: str) -> AdapterStatementProgress | None: ...
+    def cancel_workflow_query(self, *, query_id: str) -> AdapterQueryCancellation: ...
+    def load_replay_offset_frontiers(
+        self, *, query_id: str, request: AdapterReplayOffsetProgressRequest
+    ) -> tuple[AdapterReplayOffsetFrontier, ...]: ...
+    def capture_warehouse_timestamp(self) -> str: ...
+    def acquire_target_mutation_lock(
+        self, *, database: str, owner_id: str
+    ) -> AdapterTargetMutationLock: ...
+    def release_target_mutation_lock(self, lock: AdapterTargetMutationLock) -> None: ...
+    def render_ensure_database(self, database: str) -> str: ...
+    def database_exists(self, database: str) -> bool: ...
+    def render_resource(
+        self,
+        *,
+        resource: AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView,
+        database: str,
+        if_not_exists: bool = False,
+    ) -> str: ...
+    def rename_streambuild_metadata(self, database: str) -> None: ...
+    def render_migrate_metadata_state(self, database: str) -> tuple[str, ...]: ...
+    def render_persist_metadata_state(
+        self, *, database: str, state: AdapterMetadataState
+    ) -> tuple[str, ...]: ...
+    def render_terminal_observations(
+        self,
+        *,
+        database: str,
+        invocation: AdapterInvocationRecord,
+        node_results: tuple[AdapterNodeResultRecord, ...],
+    ) -> tuple[str, ...]: ...
+    def render_latest_node_status_query(
+        self,
+        *,
+        database: str,
+        project_identity: str,
+        target_identity: str,
+        nodes: tuple[AdapterCurrentQualityNode, ...],
+    ) -> str: ...
+    def validate_metadata_state(self, database: str) -> None: ...
+    def render_run_events(
+        self,
+        *,
+        database: str,
+        events: tuple[AdapterRunEventRecord, ...],
+        include_migration: bool = False,
+    ) -> tuple[str, ...]: ...
+    def render_run_statements(
+        self,
+        *,
+        database: str,
+        statements: tuple[AdapterRunStatementRecord, ...],
+        include_migration: bool = False,
+    ) -> tuple[str, ...]: ...
+    def render_sensor_state(
+        self, *, database: str, state: AdapterSensorState, include_migration: bool = False
+    ) -> tuple[str, ...]: ...
+    def render_sensor_retention_cleanup(
+        self, *, database: str, retention_days: int
+    ) -> tuple[str, ...]: ...
+    def load_direct_fingerprints(
+        self, *, database: str, logical_model_identities: tuple[str, ...]
+    ) -> AdapterDirectFingerprintSnapshot: ...
+    def render_direct_fingerprint_observations(
+        self, *, database: str, fingerprints: tuple[AdapterDirectFingerprintRecord, ...]
+    ) -> tuple[str, ...]: ...
+    def load_manifests(
+        self, *, database: str, project_identity: str, target_name: str, target_database: str
+    ) -> AdapterManifestSnapshot: ...
+    def render_manifest_publication(
+        self, *, database: str, manifest: AdapterManifest
+    ) -> tuple[str, ...]: ...
+    def catalog_resource_matches(
+        self,
+        *,
+        resource: AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView,
+        relation: CatalogRelation,
+        database: str,
+    ) -> bool: ...
+    def load_deployment_inventory(self, database: str) -> AdapterDeploymentInventory: ...
+    def render_replay_coverage_query(self, request: AdapterReplayCoverageRequest) -> str: ...
+    def render_replay_from_capture(self, request: AdapterCapturedReplayRequest) -> str: ...
+    def render_replay_from_deployment(
+        self, request: AdapterDeploymentReplayRequest
+    ) -> tuple[str, ...]: ...
+    def compare_readiness(
+        self, request: AdapterReadinessRequest
+    ) -> tuple[AdapterReadinessRootObservation, ...]: ...
+    def render_replace_stable_bindings(
+        self, request: AdapterBindingReplacementRequest
+    ) -> tuple[str, ...]: ...
+    def render_restore_materialized_view(self, definition_sql: str) -> str: ...
+    def render_cleanup_relations(
+        self, request: AdapterRelationCleanupRequest
+    ) -> tuple[str, ...]: ...
+    def close(self) -> None: ...
+
+class ClickHouseAdapterCore:
+    """The built-in ClickHouse adapter."""
+
+    @property
+    def identity(self) -> AdapterIdentity: ...
+    @property
+    def sql_analysis_dialect(self) -> str: ...
+    @property
+    def default_database(self) -> str: ...
+    @property
+    def default_schema(self) -> None: ...
+    def connect(self, config: AdapterConnectionConfig) -> ClickHouseConnection: ...
+    def build_connection_config(
+        self, *, values: Mapping[str, object], database: str | None
+    ) -> AdapterConnectionConfig: ...
+    def render_resource(
+        self,
+        *,
+        resource: AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView,
+        database: str,
+        if_not_exists: bool = False,
+    ) -> str: ...
+    def realize_source(
+        self,
+        *,
+        request: AdapterManagedSourceRealizationRequest | AdapterAdoptedSourceRealizationRequest,
+    ) -> AdapterSourceRealization: ...
+    def model_relation_name(self, *, logical_name: str) -> str: ...
+    def realize_model(
+        self, *, request: AdapterModelRealizationRequest | AdapterViewRealizationRequest
+    ) -> AdapterModelRealization: ...
+    def render_set_difference_comparison(
+        self, *, request: AdapterSetDifferenceComparisonRequest
+    ) -> str: ...
+    def _open_raw_client(self, config: AdapterConnectionConfig) -> RawClickHouseClient: ...
+
+def build_adapter_registry(adapters: tuple[Adapter, ...]) -> dict[str, Adapter]: ...
+def builtin_adapters() -> tuple[Adapter, ...]: ...
+def resolve_adapter(adapter_name: str) -> Adapter: ...
 
 class ControlStore:
     """Synchronous account repository shared by dev server worker threads and the CLI."""

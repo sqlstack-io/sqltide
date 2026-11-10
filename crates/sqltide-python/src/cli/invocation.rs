@@ -302,12 +302,8 @@ pub(crate) fn resolve_cli_invocation<'py>(
             effective.getattr("variables")?,
         )
     };
-    let adapter: Bound<'py, PyAny> = attr(
-        py,
-        "sqltide.adapter.main.resolve_adapter",
-        "resolve_adapter",
-    )?
-    .call1((adapter_name,))?;
+    let adapter: Bound<'py, PyAny> =
+        attr(py, "sqltide._native", "resolve_adapter")?.call1((adapter_name,))?;
     let database_arg: Bound<'py, PyAny> = getattr_none(args, "database")?;
     let database: Bound<'py, PyAny> = if database_arg.is_truthy()? {
         database_arg

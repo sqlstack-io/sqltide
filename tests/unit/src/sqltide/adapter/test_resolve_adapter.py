@@ -1,10 +1,9 @@
 import pytest
 
-from sqltide.adapter._helpers.registry import build_adapter_registry, builtin_adapters
+from sqltide._native import build_adapter_registry, builtin_adapters, resolve_adapter
 from sqltide.adapter.classes.adapter import Adapter
 from sqltide.adapter.exceptions import DuplicateAdapterError, UnknownAdapterError
-from sqltide.adapter.main.resolve_adapter import resolve_adapter
-from sqltide.adapters.clickhouse.main.build_clickhouse_adapter import build_clickhouse_adapter
+from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from tests.unit.src.sqltide.adapter._test_types import (
     BuiltinAdapterRegistryTestCase,
     DuplicateAdapterRegistryTestCase,
@@ -49,7 +48,7 @@ def test_given_duplicate_adapter_names_when_building_registry_then_it_rejects_th
     test_case: DuplicateAdapterRegistryTestCase,
 ) -> None:
     registrations: tuple[Adapter, ...] = tuple(
-        build_clickhouse_adapter() for _ in range(test_case.registration_count)
+        ClickHouseAdapter() for _ in range(test_case.registration_count)
     )
 
     with pytest.raises(DuplicateAdapterError) as error_info:

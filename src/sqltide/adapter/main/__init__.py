@@ -1,1 +1,0 @@
-"""Neutral adapter entry points."""

@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 9014
+remaining_lines = 8111
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -29,6 +29,16 @@ note = "Rule 1: Data-only AdapterError hierarchy the ClickHouse driver connectio
 path = "adapter/types.py"
 rule = 1
 note = "Rule 1: Data-only enums and logic-free protocols the adapter contract and the ClickHouse connection consume."
+
+[[stays]]
+path = "adapters/clickhouse/classes/clickhouse_adapter.py"
+rule = 1
+note = "Rule 1: Binds the native ClickHouse adapter core to the Adapter contract so the built-in adapter keeps its import path, isinstance checks and inherited defaults; no methods."
+
+[[stays]]
+path = "adapters/clickhouse/classes/clickhouse_connection.py"
+rule = 1
+note = "Rule 1: Binds the native ClickHouse connection core to the AdapterConnection contract consumed by the executor runtime; subclasses override its methods; no methods."
 
 [[stays]]
 path = "adapters/clickhouse/types.py"

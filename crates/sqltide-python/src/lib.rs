@@ -21,6 +21,7 @@ pub(crate) mod cli;
 mod clickhouse;
 mod clickhouse_adapter;
 mod clickhouse_catalog;
+mod clickhouse_connection;
 mod clickhouse_health;
 mod clickhouse_lifecycle;
 mod clickhouse_metadata;
@@ -184,6 +185,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     authorization::register(module)?;
     control_store::register(module)?;
     destruction_store::register(module)?;
+    clickhouse_connection::register(module)?;
     kafka_offsets::register(module)?;
     dev_server::register(module)?;
     events::register(module)?;

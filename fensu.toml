@@ -241,6 +241,16 @@ reason = "Native bindings own project analysis and its phases; this package only
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/adapter/__init__.py"
+reason = "Native bindings own adapter registration and resolution; this package only declares the neutral adapter and connection contracts, their models, types, constants and errors."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/adapters/clickhouse/__init__.py"
+reason = "Native bindings own the ClickHouse adapter and connection behaviour; this package only binds the native cores to the neutral contracts and declares the ClickHouse driver types and constants."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/compiler/planner/__init__.py"
 reason = "Native bindings own deployment and direct planning, adapter resource requests, replay queries, metadata state, warehouse snapshot loading and fingerprints; this package only declares the planner models, types, constants and errors they build and raise."
 
