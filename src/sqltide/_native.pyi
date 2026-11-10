@@ -223,7 +223,11 @@ from sqltide.executor.destruction.models import (
     DestructionRequest,
     InactivePipeline,
 )
-from sqltide.executor.destruction.types import DestructionPlanningConnection, DestructionPlanStore
+from sqltide.executor.destruction.types import (
+    DestructionClock,
+    DestructionPlanningConnection,
+    DestructionPlanStore,
+)
 from sqltide.executor.direct.models import (
     DirectBuildAudit,
     DirectBuildExecutionResult,
@@ -456,6 +460,20 @@ def default_control_store_url(*, project_dir: Path) -> str: ...
 def rename_streambuild_tables(*, url: str, sqlite_timeout_seconds: float | None = None) -> None: ...
 
 @final
+class RelationalDestructionPlanStore:
+    """SQLite/PostgreSQL store with durable review and atomic consumption state."""
+
+    def __init__(self, *, url: str, clock: DestructionClock | None = None) -> None: ...
+    def close(self) -> None: ...
+    def bootstrap(self) -> None: ...
+    def save(self, *, plan: DestructionPlan, actor: str) -> None: ...
+    def get(self, *, plan_id: str, actor: str) -> DestructionPlan: ...
+    def mark_reviewed(self, *, plan_id: str, actor: str) -> datetime: ...
+    def reviewed_at(self, *, plan_id: str, actor: str) -> datetime: ...
+    def consume(
+        self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
+    ) -> DestructionPlan: ...
+
 class ControlStore:
     """Synchronous account repository shared by dev server worker threads and the CLI."""
 

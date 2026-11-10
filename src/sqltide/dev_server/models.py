@@ -9,14 +9,11 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from sqltide._native import ControlStore
+from sqltide._native import ControlStore, RelationalDestructionPlanStore
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.discovery.constants import DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS
 from sqltide.compiler.pipeline.models import CompilationTimings, CompileAnalysis
 from sqltide.dev_server.types import CompileStateKind
-from sqltide.executor.destruction.classes.relational_destruction_plan_store import (
-    RelationalDestructionPlanStore,
-)
 
 
 @dataclass(frozen=True)

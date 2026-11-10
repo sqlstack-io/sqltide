@@ -255,12 +255,8 @@ pub(crate) fn create_dev_app(
     } else {
         accounts.getattr("url")?
     };
-    let plans = attr(
-        py,
-        "sqltide.executor.destruction.classes.relational_destruction_plan_store",
-        "RelationalDestructionPlanStore",
-    )?
-    .call((), Some(&py_kwargs!(py; url = plans_url)?));
+    let plans = attr(py, "sqltide._native", "RelationalDestructionPlanStore")?
+        .call((), Some(&py_kwargs!(py; url = plans_url)?));
     let plans = match plans {
         Ok(plans) => plans,
         Err(error) => {

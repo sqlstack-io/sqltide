@@ -38,6 +38,7 @@ mod destruction;
 mod destruction_command;
 mod destruction_execution;
 mod destruction_planning;
+mod destruction_store;
 mod dev_server;
 mod direct_build;
 mod direct_plan;
@@ -181,6 +182,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     destruction_planning::register(module)?;
     authorization::register(module)?;
     control_store::register(module)?;
+    destruction_store::register(module)?;
     dev_server::register(module)?;
     events::register(module)?;
     direct_build::register(module)?;

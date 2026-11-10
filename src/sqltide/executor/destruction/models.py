@@ -117,18 +117,6 @@ class DestructionPlan:
 
 
 @dataclass(frozen=True)
-class RelationalStoredDestructionPlan:
-    """Validated database state associated with one immutable plan payload."""
-
-    plan: DestructionPlan
-    payload_json: str
-    payload_sha256: str
-    status: str
-    reviewed_at: datetime | None
-    consumed_at: datetime | None
-
-
-@dataclass(frozen=True)
 class DestructionExecutionResult:
     """Terminal recorded outcome for one consumed frozen plan."""
 
