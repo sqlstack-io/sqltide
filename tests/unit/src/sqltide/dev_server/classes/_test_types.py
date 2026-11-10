@@ -1,5 +1,9 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
+
+from sqltide.dev_server.models import KafkaLagSnapshot
+from sqltide.dev_server.types import KafkaLagOffsets
 
 
 @dataclass(frozen=True)
@@ -104,6 +108,14 @@ class KafkaClientReuseTestCase:
     expected_client_count: int
     expected_query_count: int
     expected_close_count: int
+
+
+@dataclass(frozen=True)
+class KafkaLagReaderCacheTestCase:
+    description: str
+    respond: Callable[[], KafkaLagOffsets]
+    expected_snapshot: KafkaLagSnapshot | None
+    expected_collector_calls: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)

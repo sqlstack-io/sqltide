@@ -13,6 +13,7 @@ pub(crate) mod http;
 pub(crate) mod messages;
 pub(crate) mod payloads;
 pub(crate) mod plan;
+pub(crate) mod readers;
 pub(crate) mod routes;
 pub(crate) mod runs;
 pub(crate) mod sensors;

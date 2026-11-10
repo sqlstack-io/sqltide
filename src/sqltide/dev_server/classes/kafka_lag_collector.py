@@ -1,4 +1,4 @@
-"""Retained Kafka clients for consumer-group lag reads."""
+"""Retained kafka-python-ng clients for consumer-group offset reads."""
 
 import logging
 import threading
@@ -7,26 +7,18 @@ from collections.abc import Callable, Mapping
 from kafka import KafkaAdminClient, KafkaConsumer, TopicPartition
 from kafka.structs import OffsetAndMetadata
 
-from sqltide._native import database_scoped_consumer_group
-from sqltide.compiler.discovery.models import KafkaSettings
-from sqltide.dev_server._helpers.broker.client import (
-    build_kafka_client_config,
-    kafka_client_key,
-)
-from sqltide.dev_server._helpers.broker.snapshots import build_kafka_lag_snapshot
 from sqltide.dev_server.constants import (
     KAFKA_REUSE_LOG_FIRST_READ_COUNT,
     KAFKA_REUSE_LOG_INTERVAL,
 )
 from sqltide.dev_server.exceptions import KafkaCollectorClosedError
-from sqltide.dev_server.models import KafkaLagSnapshot
-from sqltide.dev_server.types import KafkaClientKey
+from sqltide.dev_server.types import KafkaClientKey, KafkaLagOffsets
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
 class KafkaLagCollector:
-    """Collect lag through retained clients shared by topics on the same brokers."""
+    """Retain kafka-python-ng clients shared by topics on the same brokers and credentials."""
 
     def __init__(
         self,
@@ -45,33 +37,32 @@ class KafkaLagCollector:
         self._closed_client_pairs = 0
         self._closed = False
 
-    def __call__(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot:
-        """Read one topic's lag while keeping its broker connections open."""
+    def __call__(
+        self,
+        *,
+        key: KafkaClientKey,
+        config: Mapping[str, object],
+        topic: str,
+        consumer_group: str,
+    ) -> KafkaLagOffsets:
+        """Read committed offsets, partitions and end offsets on the retained clients."""
 
-        if kafka.consumer_group is None:
-            return KafkaLagSnapshot(total_messages=None, partitions=())
-        key, admin, consumer, client_lock = self._acquire_clients(kafka=kafka)
-        consumer_group: str = database_scoped_consumer_group(
-            consumer_group=kafka.consumer_group,
-            database=database,
-        )
+        admin, consumer, client_lock = self._acquire_clients(key=key, config=config)
         try:
             raw_committed: Mapping[TopicPartition, OffsetAndMetadata] = (
                 admin.list_consumer_group_offsets(consumer_group)
             )
-            discovered_partitions: set[int] | None = consumer.partitions_for_topic(kafka.topic)
-            topic_partitions: frozenset[int] = frozenset(discovered_partitions or ())
-            partition_objects: tuple[TopicPartition, ...] = tuple(
-                TopicPartition(kafka.topic, partition) for partition in sorted(topic_partitions)
+            partitions: tuple[int, ...] = tuple(sorted(consumer.partitions_for_topic(topic) or ()))
+            raw_ends: Mapping[TopicPartition, int] = consumer.end_offsets(
+                tuple(TopicPartition(topic, partition) for partition in partitions)
             )
-            raw_ends: Mapping[TopicPartition, int] = consumer.end_offsets(partition_objects)
             self._reads[key] += 1
             reads: int = self._reads[key]
             if reads == KAFKA_REUSE_LOG_FIRST_READ_COUNT or reads % KAFKA_REUSE_LOG_INTERVAL == 0:
                 logger.warning(
                     "Kafka lag clients reused brokers=%s reads=%d opened_pairs=%d "
                     "closed_pairs=%d active_pairs=%d",
-                    kafka.broker_list,
+                    key[0],
                     reads,
                     self._opened_client_pairs,
                     self._closed_client_pairs,
@@ -79,20 +70,15 @@ class KafkaLagCollector:
                 )
         finally:
             client_lock.release()
-        committed_offsets: dict[int, int] = {
-            topic_partition.partition: int(metadata.offset)
-            for topic_partition, metadata in raw_committed.items()
-            if topic_partition.topic == kafka.topic
-            and metadata.offset is not None
-            and int(metadata.offset) >= 0
-        }
-        end_offsets: dict[int, int] = {
-            topic_partition.partition: int(offset) for topic_partition, offset in raw_ends.items()
-        }
-        return build_kafka_lag_snapshot(
-            partition_ids=topic_partitions,
-            committed_offsets=committed_offsets,
-            end_offsets=end_offsets,
+        return (
+            tuple(
+                (topic_partition.topic, topic_partition.partition, metadata.offset)
+                for topic_partition, metadata in raw_committed.items()
+            ),
+            partitions,
+            tuple(
+                (topic_partition.partition, offset) for topic_partition, offset in raw_ends.items()
+            ),
         )
 
     def close(self) -> None:
@@ -122,14 +108,12 @@ class KafkaLagCollector:
                     )
 
     def _acquire_clients(
-        self, *, kafka: KafkaSettings
-    ) -> tuple[KafkaClientKey, KafkaAdminClient, KafkaConsumer, threading.Lock]:
-        key: KafkaClientKey = kafka_client_key(kafka=kafka)
+        self, *, key: KafkaClientKey, config: Mapping[str, object]
+    ) -> tuple[KafkaAdminClient, KafkaConsumer, threading.Lock]:
         with self._lock:
             if self._closed:
                 raise KafkaCollectorClosedError("Kafka lag collector is closed")
             if key not in self._admins:
-                config: dict[str, object] = build_kafka_client_config(kafka=kafka)
                 admin: KafkaAdminClient = self._admin_factory(**config)
                 try:
                     consumer: KafkaConsumer = self._consumer_factory(
@@ -146,11 +130,11 @@ class KafkaLagCollector:
                 logger.warning(
                     "Kafka lag clients opened brokers=%s opened_pairs=%d closed_pairs=%d "
                     "active_pairs=%d",
-                    kafka.broker_list,
+                    key[0],
                     self._opened_client_pairs,
                     self._closed_client_pairs,
                     self._opened_client_pairs - self._closed_client_pairs,
                 )
             client_lock: threading.Lock = self._client_locks[key]
             client_lock.acquire()
-            return key, self._admins[key], self._consumers[key], client_lock
+            return self._admins[key], self._consumers[key], client_lock

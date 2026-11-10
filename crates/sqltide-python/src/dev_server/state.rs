@@ -861,7 +861,7 @@ pub(crate) fn build_state_payload<'py>(
     let captured_at: String = captured.extract()?;
     let health_reader: Any<'py> = match warehouse_health_reader {
         Some(health_reader) if health_reader.is_truthy()? => health_reader,
-        _ => attr(py, "sqltide.dev_server.classes.warehouse_health_reader", "WarehouseHealthReader")?.call0()?,
+        _ => attr(py, "sqltide._native", "WarehouseHealthReader")?.call0()?,
     };
     let health = health_reader.call_method(
         "read",

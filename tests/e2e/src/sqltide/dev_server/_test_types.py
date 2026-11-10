@@ -52,7 +52,8 @@ class MessageBrowserProcessE2ETestCase:
 class KafkaReaderReuseE2ETestCase:
     description: str
     consumer_group: str
-    expected_lag: int
+    expected_committed_offset: int
+    expected_end_offset: int
 
 
 @dataclass(frozen=True)

@@ -6,10 +6,17 @@ from kafka import KafkaConsumer, TopicPartition
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.structs import OffsetAndMetadata
 
+from sqltide._native import (
+    build_kafka_client_config,
+    build_kafka_topics_snapshot,
+    database_scoped_consumer_group,
+    kafka_client_key,
+)
 from sqltide.compiler.discovery.models import KafkaSettings
 from sqltide.dev_server.classes.kafka_lag_collector import KafkaLagCollector
 from sqltide.dev_server.classes.kafka_topic_collector import KafkaTopicCollector
-from sqltide.dev_server.models import KafkaLagSnapshot, KafkaTopicsSnapshot
+from sqltide.dev_server.models import KafkaTopicsSnapshot
+from sqltide.dev_server.types import KafkaLagOffsets
 from tests.e2e.src.sqltide.conftest import E2EKafkaConnectionSettings
 from tests.e2e.src.sqltide.dev_server._test_types import KafkaReaderReuseE2ETestCase
 
@@ -21,7 +28,8 @@ from tests.e2e.src.sqltide.dev_server._test_types import KafkaReaderReuseE2ETest
         KafkaReaderReuseE2ETestCase(
             description="retained clients remain usable",
             consumer_group="sqltide-reader-test",
-            expected_lag=0,
+            expected_committed_offset=0,
+            expected_end_offset=0,
         )
     ],
     ids=lambda case: case.description,
@@ -59,15 +67,33 @@ def test_given_live_broker_when_reading_repeatedly_then_retained_clients_remain_
         cleanup.callback(topic_collector.close)
         lag_collector: KafkaLagCollector = KafkaLagCollector()
         cleanup.callback(lag_collector.close)
-        first_topics: KafkaTopicsSnapshot = topic_collector(kafka=kafka)
-        second_topics: KafkaTopicsSnapshot = topic_collector(kafka=kafka)
-        first_lag: KafkaLagSnapshot = lag_collector(kafka=kafka, database="default")
-        second_lag: KafkaLagSnapshot = lag_collector(kafka=kafka, database="default")
+        key: tuple[str, tuple[tuple[str, str], ...]] = kafka_client_key(kafka=kafka)
+        config: dict[str, object] = build_kafka_client_config(kafka=kafka)
+        consumer_group: str = database_scoped_consumer_group(
+            consumer_group=test_case.consumer_group, database="default"
+        )
+
+        first_topics: KafkaTopicsSnapshot = build_kafka_topics_snapshot(
+            metadata=topic_collector(key=key, config=config)
+        )
+        second_topics: KafkaTopicsSnapshot = build_kafka_topics_snapshot(
+            metadata=topic_collector(key=key, config=config)
+        )
+        first_offsets: KafkaLagOffsets = lag_collector(
+            key=key, config=config, topic=topic, consumer_group=consumer_group
+        )
+        second_offsets: KafkaLagOffsets = lag_collector(
+            key=key, config=config, topic=topic, consumer_group=consumer_group
+        )
 
         assert topic in {item.name for item in first_topics.topics}
         assert first_topics == second_topics
-        assert first_lag.total_messages == test_case.expected_lag
-        assert first_lag == second_lag
+        assert first_offsets == (
+            ((topic, 0, test_case.expected_committed_offset),),
+            (0,),
+            ((0, test_case.expected_end_offset),),
+        )
+        assert first_offsets == second_offsets
 
 
 if __name__ == "__main__":

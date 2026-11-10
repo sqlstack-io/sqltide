@@ -50,7 +50,7 @@ fn state_snapshot<'py>(
         None
     } else {
         Some(
-            class(py, "overlay_reader", "OverlayReader")?
+            attr(py, "sqltide._native", "OverlayReader")?
                 .call(
                     (),
                     Some(&py_kwargs!(py; connection_factory = overlay_connection_factory, kafka_lag_reader = kafka_lag_reader)?),
@@ -58,7 +58,7 @@ fn state_snapshot<'py>(
                 .unbind(),
         )
     };
-    let health_reader: Py<PyAny> = class(py, "warehouse_health_reader", "WarehouseHealthReader")?.call0()?.unbind();
+    let health_reader: Py<PyAny> = attr(py, "sqltide._native", "WarehouseHealthReader")?.call0()?.unbind();
     let on_close: Bound<'py, PyAny> = match &reader {
         Some(reader) => reader.bind(py).getattr("close")?,
         None => py.None().into_bound(py),
@@ -185,8 +185,8 @@ pub(crate) fn create_dev_app(
             cancellation_reporter = cancellation.getattr("record_outcome")?,
         )?),
     )?;
-    let kafka_lag_reader = class(py, "kafka_lag_reader", "KafkaLagReader")?.call0()?;
-    let kafka_topic_reader = class(py, "kafka_topic_reader", "KafkaTopicReader")?.call0()?;
+    let kafka_lag_reader = attr(py, "sqltide._native", "KafkaLagReader")?.call0()?;
+    let kafka_topic_reader = attr(py, "sqltide._native", "KafkaTopicReader")?.call0()?;
     let presumed_failed_after_seconds = context.getattr("run_presumed_failed_after_seconds")?;
     let audit_scheduler = class(py, "audit_scheduler", "AuditScheduler")?.call(
         (),
@@ -400,5 +400,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::drift::register(module)?;
     super::state::register(module)?;
     super::runs::register(module)?;
-    super::messages::register(module)
+    super::messages::register(module)?;
+    super::readers::register(module)
 }

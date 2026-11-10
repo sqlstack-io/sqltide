@@ -9,6 +9,8 @@ from unittest.mock import MagicMock
 import sqltide._native as _native
 from sqltide._native import (
     DevApplication,
+    KafkaLagReader,
+    OverlayReader,
     analyze_project,
     build_activity_capabilities_query,
     build_extents_query,
@@ -73,9 +75,6 @@ from sqltide.compiler.planner.models import (
     PreparedShadowObject,
 )
 from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
-from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
-from sqltide.dev_server.classes.overlay_reader import OverlayReader
 from sqltide.dev_server.classes.state_snapshot import StateSnapshot
 from sqltide.dev_server.models import (
     KafkaLagSnapshot,
@@ -1146,11 +1145,10 @@ def write_adopted_dev_server_project(*, project_dir: Path) -> None:
     write_pipeline_file(project_dir / "sources" / "orders.yml", _ADOPTED_ORDERS_SOURCE)
 
 
-class FakeKafkaTopicReader(KafkaTopicReader):
+class FakeKafkaTopicReader:
     """Returns one canned inventory for every broker list without touching Kafka."""
 
     def __init__(self, *, snapshot: KafkaTopicsSnapshot | None) -> None:
-        super().__init__()
         self._snapshot = snapshot
 
     def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None:
@@ -1158,11 +1156,10 @@ class FakeKafkaTopicReader(KafkaTopicReader):
         return self._snapshot
 
 
-class FakeKafkaLagReader(KafkaLagReader):
+class FakeKafkaLagReader:
     """Returns one canned lag snapshot for every source without touching Kafka."""
 
     def __init__(self, *, snapshot: KafkaLagSnapshot | None) -> None:
-        super().__init__()
         self._snapshot = snapshot
 
     def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None:

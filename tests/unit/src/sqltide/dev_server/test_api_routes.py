@@ -541,10 +541,8 @@ def test_given_dev_app_context_when_lifespan_exits_then_owned_resources_are_clos
             "sqltide.dev_server.classes.sensor_scheduler.SensorScheduler"
         ) as sensor_scheduler_class,
         patch("sqltide.dev_server.classes.build_process.BuildProcessManager") as builds_class,
-        patch("sqltide.dev_server.classes.kafka_lag_reader.KafkaLagReader") as lag_reader_class,
-        patch(
-            "sqltide.dev_server.classes.kafka_topic_reader.KafkaTopicReader"
-        ) as topic_reader_class,
+        patch("sqltide._native.KafkaLagReader") as lag_reader_class,
+        patch("sqltide._native.KafkaTopicReader") as topic_reader_class,
     ):
         scheduler: MagicMock = scheduler_class.return_value
         sensor_scheduler: MagicMock = sensor_scheduler_class.return_value

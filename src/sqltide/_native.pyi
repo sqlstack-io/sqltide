@@ -2,7 +2,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, final
+from typing import Any, Literal, Protocol, final
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -95,6 +95,7 @@ from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
+    KafkaSettings,
     LoadedPipeline,
     LoadedProject,
     LoadedProjectConfiguration,
@@ -154,11 +155,10 @@ from sqltide.compiler.sql_analysis.models import (
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
-from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
-from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
 from sqltide.dev_server.models import (
     DevExecutionContext,
+    KafkaLagSnapshot,
+    KafkaTopicsSnapshot,
     MessageFacetsRequest,
     MessagesQueryRequest,
     ReplayOffsetProgress,
@@ -1709,7 +1709,7 @@ def build_state_payload(
     analysis: CompileAnalysis,
     connection: AdapterConnection,
     database: str,
-    kafka_lag_reader: KafkaLagReader | None = None,
+    kafka_lag_reader: KafkaLagSource | None = None,
     warehouse_health_reader: WarehouseHealthReader | None = None,
 ) -> dict[str, object]: ...
 def build_topics_payload(
@@ -1717,8 +1717,8 @@ def build_topics_payload(
     analysis: CompileAnalysis,
     connection: AdapterConnection | None,
     database: str | None,
-    topic_reader: KafkaTopicReader,
-    kafka_lag_reader: KafkaLagReader,
+    topic_reader: KafkaTopicSource,
+    kafka_lag_reader: KafkaLagSource,
 ) -> dict[str, object]: ...
 def derive_run_status(
     *,
@@ -1834,3 +1834,79 @@ def read_source_message_facets(
 def ensure_header_columns(
     *, connection: AdapterConnection, database: str, relation_name: str
 ) -> None: ...
+
+class KafkaLagSource(Protocol):
+    """Cached consumer-group lag for one managed Kafka source."""
+
+    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+
+class KafkaTopicSource(Protocol):
+    """Cached topic inventory for one broker configuration."""
+
+    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+
+def build_kafka_client_config(*, kafka: KafkaSettings) -> dict[str, object]: ...
+def kafka_client_key(*, kafka: KafkaSettings) -> tuple[str, tuple[tuple[str, str], ...]]: ...
+def build_kafka_lag_snapshot(
+    *,
+    partition_ids: frozenset[int],
+    committed_offsets: Mapping[int, int],
+    end_offsets: Mapping[int, int],
+) -> KafkaLagSnapshot: ...
+def build_kafka_topics_snapshot(*, metadata: object) -> KafkaTopicsSnapshot: ...
+
+@final
+class KafkaLagReader:
+    """Return cached lag immediately and refresh stale values on a worker thread."""
+
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] | None = None,
+        collector: Callable[..., object] | None = None,
+    ) -> None: ...
+    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def close(self) -> None: ...
+
+@final
+class KafkaTopicReader:
+    """Return cached topic inventories immediately and refresh stale entries."""
+
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] | None = None,
+        collector: Callable[..., object] | None = None,
+    ) -> None: ...
+    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def close(self) -> None: ...
+
+@final
+class WarehouseHealthReader:
+    """Preserve the last usable snapshot while marking failed refreshes stale."""
+
+    def __init__(
+        self, *, clock: Callable[[], float] | None = None, cache_seconds: float | None = None
+    ) -> None: ...
+    def read(
+        self,
+        *,
+        connection: AdapterConnection,
+        database: str,
+        measured_at: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
+    ) -> AdapterWarehouseHealth: ...
+
+@final
+class OverlayReader:
+    """Own one private connection so overlay refreshes never take the shared query lock."""
+
+    def __init__(
+        self,
+        *,
+        connection_factory: Callable[[], AdapterConnection],
+        kafka_lag_reader: KafkaLagSource,
+    ) -> None: ...
+    def close(self) -> None: ...
+    def read(self, *, analysis: CompileAnalysis, database: str) -> dict[str, object]: ...

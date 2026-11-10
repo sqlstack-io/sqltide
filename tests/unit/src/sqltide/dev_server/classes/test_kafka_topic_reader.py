@@ -4,8 +4,8 @@ from typing import cast
 import pytest
 from kafka import KafkaAdminClient
 
+from sqltide._native import build_kafka_client_config, build_kafka_topics_snapshot, kafka_client_key
 from sqltide.compiler.discovery.models import KafkaSettings
-from sqltide.dev_server._helpers.broker.snapshots import build_kafka_topics_snapshot
 from sqltide.dev_server.classes.kafka_topic_collector import KafkaTopicCollector
 from sqltide.dev_server.models import KafkaTopicsSnapshot
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
@@ -90,8 +90,11 @@ def test_given_repeated_topic_reads_when_collecting_then_reuses_and_closes_admin
     )
     kafka: KafkaSettings = KafkaSettings(broker_list=test_case.broker_list, topic="source.orders")
 
-    first: KafkaTopicsSnapshot = collector(kafka=kafka)
-    second: KafkaTopicsSnapshot = collector(kafka=kafka)
+    key: tuple[str, tuple[tuple[str, str], ...]] = kafka_client_key(kafka=kafka)
+    config: dict[str, object] = build_kafka_client_config(kafka=kafka)
+
+    first: object = collector(key=key, config=config)
+    second: object = collector(key=key, config=config)
     collector.close()
 
     assert first == second
