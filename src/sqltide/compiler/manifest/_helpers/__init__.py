@@ -1,1 +1,0 @@
-"""Internal manifest construction behavior."""

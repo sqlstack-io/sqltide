@@ -5,8 +5,10 @@ from typing import Any, Literal
 
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
+    AdapterManifest,
     AdapterManifestSnapshot,
     AdapterReplayRequest,
+    CatalogRelation,
     CatalogSnapshot,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
@@ -641,6 +643,7 @@ DEFAULT_ADAPTER_NAME: str
 DEFAULT_PIPELINE_PREFIX: str
 DEFAULT_TABLE_PREFIX: str
 DEFAULT_VIEW_PREFIX: str
+MANIFEST_VERSION: int
 RUN_UNRESPONSIVE_AFTER_SECONDS: int
 DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS: int
 DEFAULT_POSTGRES_PORT: int
@@ -950,14 +953,28 @@ def quality_audit_identity(
     definition_sql: str,
     execution_sql: str,
 ) -> tuple[str, str, str]: ...
-def build_manifest_contents(
+def plan_row_error_policy_changes(
+    *, analysis: CompileAnalysis, plan: DirectPlan, relations: tuple[CatalogRelation, ...]
+) -> tuple[DirectRowErrorPolicyChange, ...]: ...
+def plan_virtual_row_error_policy_changes(
+    *,
+    analysis: CompileAnalysis,
+    planned_model_names: frozenset[str],
+    selected_model_keys: frozenset[LogicalResourceKey],
+    relations: tuple[CatalogRelation, ...],
+) -> tuple[DirectRowErrorPolicyChange, ...]: ...
+def build_dag_json(*, graph: ProjectGraph, macro_registry: MacroRegistry) -> str: ...
+def resolve_manifest_project_identity(*, analysis: CompileAnalysis) -> str: ...
+def build_manifest(
+    *,
+    analysis: CompileAnalysis,
+    invocation_id: str,
     project_identity: str,
-    target_name: str,
     target_database: str,
-    is_production: bool,
-    pipeline_names: list[str],
-    logical_resources: list[tuple[str, str, list[str], list[tuple[str, str]]]],
-) -> tuple[list[str], list[list[str]], str]: ...
+    tool_version: str,
+    project_revision: str | None = None,
+    published_at: str | None = None,
+) -> AdapterManifest: ...
 def classify_sql_test_ctes(names: list[str], macro_mode: bool) -> list[str]: ...
 
 class SqlTestChainRegistry:

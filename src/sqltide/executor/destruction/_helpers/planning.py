@@ -13,6 +13,7 @@ from typing import NoReturn
 from uuid import uuid4
 
 import sqltide._native as _native
+from sqltide._native import MANIFEST_VERSION, resolve_manifest_project_identity
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterManagedSource,
@@ -26,10 +27,6 @@ from sqltide.adapter.models import (
 from sqltide.adapter.types import AdapterOptionalStateStatus
 from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey
 from sqltide.compiler.compile.types import DesiredObjectType, LogicalResourceType
-from sqltide.compiler.manifest.constants import MANIFEST_VERSION
-from sqltide.compiler.manifest.main.resolve_manifest_project_identity import (
-    resolve_manifest_project_identity,
-)
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction._helpers.ordering import (
     reverse_topologically_order_relations,
