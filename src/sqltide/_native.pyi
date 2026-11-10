@@ -29,6 +29,7 @@ from sqltide.adapter.models import (
     AdapterStableView,
     AdapterTable,
     AdapterView,
+    AdapterWarehouseHealth,
     CatalogRelation,
     CatalogSnapshot,
     InspectedManagedTableState,
@@ -965,6 +966,13 @@ def clickhouse_catalog_resource_matches(
     relation: CatalogRelation,
     database: str,
 ) -> bool: ...
+def load_clickhouse_warehouse_health(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    managed_source_names: tuple[str, ...] = (),
+    include_dead_letters: bool = False,
+) -> AdapterWarehouseHealth: ...
 def load_clickhouse_refresh_states(
     *, connection: AdapterConnection, database: str
 ) -> tuple[AdapterRefreshState, ...]: ...

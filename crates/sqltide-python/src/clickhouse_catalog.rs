@@ -93,7 +93,7 @@ pub(crate) fn analyze(py: Python<'_>, sql: &str) -> PyResult<CatalogAnalysis> {
 }
 
 /// `'value'` as one ClickHouse string literal.
-fn quote(value: &str) -> String {
+pub(crate) fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\\', "\\\\").replace('\'', "''"))
 }
 

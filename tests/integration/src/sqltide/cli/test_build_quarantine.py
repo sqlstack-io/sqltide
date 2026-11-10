@@ -8,9 +8,6 @@ from clickhouse_connect.driver.exceptions import DatabaseError
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterWarehouseHealth
-from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
-    ClickHouseWarehouseHealthReader,
-)
 from tests.integration.src.sqltide.cli._test_types import (
     FanOutDedupeIntegrationTestCase,
     MissingLandingRepairIntegrationTestCase,
@@ -521,9 +518,9 @@ def test_given_separate_metadata_database_when_rows_fail_then_dead_letters_live_
                 f"SELECT failed_columns FROM {metadata_database}._sqltide_dead_letters"
             ).result_rows
         )
-        health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
-            connection=connection
-        ).read(database=clickhouse_database, include_dead_letters=True)
+        health: AdapterWarehouseHealth = connection.load_warehouse_health(
+            database=clickhouse_database, include_dead_letters=True
+        )
     finally:
         connection.close()
         clickhouse_client.command(f"DROP DATABASE IF EXISTS {metadata_database} SYNC")

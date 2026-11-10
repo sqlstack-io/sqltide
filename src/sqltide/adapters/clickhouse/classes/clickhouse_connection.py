@@ -20,6 +20,7 @@ from sqltide._native import (
     load_clickhouse_external_dependants,
     load_clickhouse_manifests,
     load_clickhouse_refresh_states,
+    load_clickhouse_warehouse_health,
     render_clickhouse_direct_fingerprint_observations,
     render_clickhouse_latest_node_status_query,
     render_clickhouse_manifest_publication,
@@ -108,9 +109,6 @@ from sqltide.adapters.clickhouse._helpers.replay import (
     render_clickhouse_replay_coverage_query,
     render_clickhouse_replay_from_capture,
     render_clickhouse_replay_from_deployment,
-)
-from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
-    ClickHouseWarehouseHealthReader,
 )
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_ADAPTER_NAME,
@@ -278,7 +276,8 @@ class ClickHouseConnection(AdapterConnection):
     ) -> AdapterWarehouseHealth:
         """Read bounded ClickHouse system-table diagnostics."""
 
-        return ClickHouseWarehouseHealthReader(connection=self).read(
+        return load_clickhouse_warehouse_health(
+            connection=self,
             database=database,
             managed_source_names=managed_source_names,
             include_dead_letters=include_dead_letters,
