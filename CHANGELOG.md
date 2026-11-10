@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.9](https://github.com/sqlstack-io/sqltide/compare/v0.65.8...v0.65.9) (2026-11-10)
+
+
+### Refactoring
+
+* move executor planning and resolution to the native core ([#357](https://github.com/sqlstack-io/sqltide/issues/357)) ([e61c026](https://github.com/sqlstack-io/sqltide/commit/e61c0265edfb1efa7a474d232b2470893b67f3e6))
+
 ## [0.65.8](https://github.com/sqlstack-io/sqltide/compare/v0.65.7...v0.65.8) (2026-11-10)
 
 
