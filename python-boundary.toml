@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 55185
+remaining_lines = 53721
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -38,12 +38,12 @@ note = "Rule 1: Logic-free protocols describing the clickhouse-connect client an
 [[stays]]
 path = "compiler/macros/constants.py"
 rule = 2
-note = "Rule 2: Data-only names the user macro loader and invoker read: the ctx parameter, the context annotation names, the macro sigil and reserved names."
+note = "Rule 2: Data-only names the user macro loader reads: the reserved macro names and the constants and enums directory names."
 
 [[stays]]
 path = "compiler/macros/types.py"
 rule = 2
-note = "Rule 2: Data-only alias for the live user macro functions the loader holds and the invoker calls."
+note = "Rule 2: Data-only alias for the live user macro functions the loader holds."
 
 [[stays]]
 path = "events/__init__.py"

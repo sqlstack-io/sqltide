@@ -9,5 +9,3 @@ class SqlTestMode(StrEnum):
     MODEL = "model"
     MACRO = "macro"
 
-
-type NativeSqlTestBlock = tuple[int, tuple[str, str, int] | None]

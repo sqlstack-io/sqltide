@@ -2,9 +2,8 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
-from sqltide.compiler.test_discovery.main.sql_test_target_names import sql_test_target_names
 from sqltide.compiler.test_discovery.models import (
     LoadedSqlTest,
     SqlTestMacroPayload,
@@ -65,7 +64,7 @@ def test_given_macro_mode_test_file_when_discovering_then_it_returns_a_macro_pay
     tests_root: Path = tmp_path / "tests"
     write_sql_test_file(tests_root / "unit" / "test_macro.sql", test_case.file_contents)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(root=tests_root)
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(root=tests_root)
     payload: SqlTestMacroPayload = macro_payload(loaded_tests[0])
 
     assert loaded_tests[0].mode == SqlTestMode.MACRO
@@ -75,7 +74,7 @@ def test_given_macro_mode_test_file_when_discovering_then_it_returns_a_macro_pay
     )
     assert test_case.expected_actual_fragment in payload.actual.query
     assert test_case.expected_expected_fragment in payload.expected.query
-    assert sql_test_target_names(loaded_test=loaded_tests[0]) == ()
+    assert _native.sql_test_target_names(loaded_test=loaded_tests[0]) == ()
 
 
 @pytest.mark.parametrize(
@@ -130,13 +129,16 @@ def test_given_assertion_ctes_when_discovering_then_it_records_assertions_and_ta
     tests_root: Path = tmp_path / "tests"
     write_sql_test_file(tests_root / "unit" / "test_assert.sql", test_case.file_contents)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(root=tests_root)
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(root=tests_root)
     payload: SqlTestModelPayload = model_payload(loaded_tests[0])
 
     assert loaded_tests[0].mode == SqlTestMode.MODEL
     assert tuple(cte.name for cte in payload.assertions) == (test_case.expected_assertion_cte_names)
     assert payload.assertion_reference_names == test_case.expected_assertion_reference_names
-    assert sql_test_target_names(loaded_test=loaded_tests[0]) == test_case.expected_target_names
+    assert (
+        _native.sql_test_target_names(loaded_test=loaded_tests[0])
+        == test_case.expected_target_names
+    )
 
 
 @pytest.mark.parametrize(
@@ -205,7 +207,7 @@ def test_given_lexically_tricky_sql_when_discovering_then_the_scanner_finds_ever
     tests_root: Path = tmp_path / "tests"
     write_sql_test_file(tests_root / "unit" / "test_scanner.sql", test_case.file_contents)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(root=tests_root)
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(root=tests_root)
     payload: SqlTestModelPayload = model_payload(loaded_tests[0])
     discovered_cte_names: tuple[str, ...] = (
         *(cte.name for cte in loaded_tests[0].authored_ctes),
@@ -379,7 +381,7 @@ def test_given_unsupported_test_shapes_when_discovering_then_it_raises_clear_err
     write_sql_test_file(tests_root / test_case.relative_file_path, test_case.file_contents)
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        discover_sql_tests(root=tests_root)
+        _native.discover_sql_tests(root=tests_root)
 
 
 @pytest.mark.parametrize(
@@ -447,7 +449,7 @@ def test_given_macro_mode_restrictions_when_discovering_then_it_rejects_extra_ma
     macro_registry, macro_context = build_test_macro_runtime(tmp_path)
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        discover_sql_tests(
+        _native.discover_sql_tests(
             root=tests_root,
             macro_registry=macro_registry,
             macro_context=macro_context,
@@ -501,7 +503,7 @@ def test_given_macro_actual_cte_when_discovering_then_it_expands_through_the_reg
     macro_context: MacroContext
     macro_registry, macro_context = build_test_macro_runtime(tmp_path)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(
         root=tests_root,
         macro_registry=macro_registry,
         macro_context=macro_context,

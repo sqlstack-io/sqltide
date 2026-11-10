@@ -3,10 +3,6 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
-from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
-    build_model_audit_instances,
-)
-from sqltide.compiler.audit_discovery.main._discover_sql_audits import discover_sql_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.discovery.models import TransformStep, ViewStep
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
@@ -96,7 +92,7 @@ def test_given_valid_sql_audit_files_when_discovering_then_it_returns_loaded_sql
     audits_root: Path = tmp_path / "audits"
     write_sql_audit_file(audits_root / test_case.relative_file_path, test_case.file_contents)
 
-    loaded_audits: list[LoadedSqlAudit] = discover_sql_audits(root=audits_root)
+    loaded_audits: list[LoadedSqlAudit] = _native.discover_sql_audits(root=audits_root)
 
     assert (
         tuple(loaded_audit.name for loaded_audit in loaded_audits) == test_case.expected_audit_names
@@ -142,7 +138,7 @@ def test_given_audit_policy_when_discovering_then_it_parses_typed_overrides(
         f'AUDIT ({test_case.header}); SELECT * FROM __ref("orders")',
     )
 
-    audit: LoadedSqlAudit = discover_sql_audits(root=audits_root)[0]
+    audit: LoadedSqlAudit = _native.discover_sql_audits(root=audits_root)[0]
 
     assert audit.severity_is_explicit is test_case.expected_severity_explicit
     assert audit.cadence_seconds_override == test_case.expected_cadence_seconds
@@ -256,7 +252,7 @@ def test_given_invalid_sql_audit_files_when_discovering_then_it_raises_clear_err
     write_sql_audit_file(audits_root / test_case.relative_file_path, test_case.file_contents)
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        discover_sql_audits(root=audits_root)
+        _native.discover_sql_audits(root=audits_root)
 
 
 @pytest.mark.parametrize(
@@ -294,7 +290,7 @@ def test_given_sql_audit_macros_when_discovering_then_it_expands_audit_body(
     macro_context: MacroContext
     macro_registry, macro_context = build_test_macro_runtime(tmp_path)
 
-    loaded_audits: list[LoadedSqlAudit] = discover_sql_audits(
+    loaded_audits: list[LoadedSqlAudit] = _native.discover_sql_audits(
         root=audits_root,
         macro_registry=macro_registry,
         macro_context=macro_context,
@@ -386,9 +382,9 @@ def test_given_generic_sql_audits_when_discovering_then_it_renders_concrete_audi
     write_model_sql_file(model_path, test_case.model_file_contents)
     model: TransformStep | ViewStep = _native.load_transform_from_sql_file(file_path=model_path)
 
-    loaded_audits: list[LoadedSqlAudit] = discover_sql_audits(
+    loaded_audits: list[LoadedSqlAudit] = _native.discover_sql_audits(
         root=audits_root,
-        generic_audit_instances=build_model_audit_instances(models=(model,)),
+        generic_audit_instances=_native.build_model_audit_instances(models=(model,)),
     )
 
     assert loaded_audits[0].name == test_case.expected_name
@@ -427,4 +423,4 @@ def test_given_invalid_generic_sql_audit_when_discovering_then_it_raises_clear_e
     )
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        discover_sql_audits(root=audits_root)
+        _native.discover_sql_audits(root=audits_root)

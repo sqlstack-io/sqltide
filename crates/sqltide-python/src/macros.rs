@@ -1,13 +1,13 @@
 //! Authored `@name(...)` macro expansion: calls are scanned, nested and their arguments evaluated
-//! natively, and only the macro bodies run in Python through a callback.
+//! natively, errors are located natively, and only the authored macro bodies run as Python.
 
 use std::cell::RefCell;
 use std::collections::HashSet;
 
 use pyo3::IntoPyObjectExt;
-use pyo3::exceptions::PyKeyError;
+use pyo3::exceptions::{PyException, PyKeyError, PyTypeError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PySet, PyString, PyTuple};
 use sqltide_discovery::declarations::{
     ConstantValue, Declarations, EnumValue, load_declarations as load,
 };
@@ -18,9 +18,16 @@ use sqltide_sqltext::python_text::{python_isalnum, python_isspace, python_strip}
 use sqltide_sqltext::sql_scan::{find_matching_parenthesis, find_next_macro_start};
 
 use crate::config::spec_error;
+use crate::model_sql::{call, chained};
 use crate::sql_scan::scan_failure;
 
 const MACRO_CALL_CONTEXT: &str = "Macro call";
+const MACRO_SIGIL: char = '@';
+const MACRO_CONTEXT_PARAMETER: &str = "ctx";
+const MACRO_CONTEXT_ANNOTATION: &str = "MacroContext";
+const MACRO_EXCEPTIONS: &str = "sqltide.compiler.macros.exceptions";
+const MACRO_MODELS: &str = "sqltide.compiler.macros.models";
+const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
 const CONSTANT_CALL: &str = "const";
 const ENUM_CALL: &str = "enum";
 
@@ -53,14 +60,30 @@ impl PyDeclarations {
     }
 }
 
-/// Parse and validate the `(path, contents)` files under `constants/` and `enums/`.
+/// The `(relative path, contents)` of discovered project files.
+fn file_sources(files: &Bound<'_, PyAny>) -> PyResult<Vec<(String, String)>> {
+    files
+        .try_iter()?
+        .map(|file| {
+            let file: Bound<'_, PyAny> = file?;
+            Ok((
+                file.getattr("relative_path")?.str()?.extract()?,
+                file.getattr("contents")?.extract()?,
+            ))
+        })
+        .collect()
+}
+
+/// Validate every project-wide CONSTANT and ENUM declaration in the discovered files under
+/// `constants/` and `enums/` once.
 #[pyfunction]
+#[pyo3(signature = (*, constant_files, enum_files))]
 fn load_declarations(
     py: Python<'_>,
-    constant_files: Vec<(String, String)>,
-    enum_files: Vec<(String, String)>,
+    constant_files: &Bound<'_, PyAny>,
+    enum_files: &Bound<'_, PyAny>,
 ) -> PyResult<PyDeclarations> {
-    load(&constant_files, &enum_files)
+    load(&file_sources(constant_files)?, &file_sources(enum_files)?)
         .map(|declarations| PyDeclarations { declarations })
         .map_err(|error| spec_error(py, error))
 }
@@ -112,7 +135,223 @@ impl ArgumentHost for UnicodeHost<'_> {
     }
 }
 
-/// One expansion: the known macros and the Python callbacks that run and report them.
+/// The SQL body being expanded and the registry, context and diagnostic classes its macro calls
+/// and errors use.
+struct MacroSite<'py> {
+    macros: Bound<'py, PyAny>,
+    context: Bound<'py, PyAny>,
+    path: Bound<'py, PyAny>,
+    sql: Vec<char>,
+    line: i64,
+    column: i64,
+    macro_error: Bound<'py, PyAny>,
+    macro_context: Bound<'py, PyAny>,
+    source_location: Bound<'py, PyAny>,
+    related_location: Bound<'py, PyAny>,
+    signature: Bound<'py, PyAny>,
+}
+
+impl<'py> MacroSite<'py> {
+    /// The absolute location of top-level SQL index `index`.
+    fn locate(&self, index: usize) -> PyResult<Bound<'py, PyAny>> {
+        let before: &[char] = &self.sql[..index.min(self.sql.len())];
+        let relative_line: i64 = before
+            .iter()
+            .filter(|character| **character == '\n')
+            .count() as i64;
+        let previous_newline: i64 = before
+            .iter()
+            .rposition(|character| *character == '\n')
+            .map_or(-1, |position| position as i64);
+        let relative_column: i64 = index as i64 - previous_newline;
+        let column: i64 = if relative_line == 0 {
+            self.column + relative_column - 1
+        } else {
+            relative_column
+        };
+        let py: Python<'py> = self.path.py();
+        call(
+            &self.source_location,
+            &[
+                ("path", self.path.clone()),
+                ("line", (self.line + relative_line).into_bound_py_any(py)?),
+                ("column", column.into_bound_py_any(py)?),
+            ],
+        )
+    }
+
+    /// The `macro definition` related location of a loaded macro.
+    fn definition(&self, loaded: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let py: Python<'py> = self.path.py();
+        let location: Bound<'py, PyAny> = call(
+            &self.source_location,
+            &[
+                ("path", loaded.getattr("file_path")?),
+                ("line", loaded.getattr("definition_line")?),
+                ("column", 1.into_bound_py_any(py)?),
+            ],
+        )?;
+        let related: Bound<'py, PyAny> = call(
+            &self.related_location,
+            &[
+                ("label", PyString::new(py, "macro definition").into_any()),
+                ("location", location),
+            ],
+        )?;
+        Ok(PyTuple::new(py, [related])?.into_any())
+    }
+
+    fn related(&self, name: Option<&str>) -> PyResult<Bound<'py, PyAny>> {
+        match name {
+            Some(name) => self.definition(&self.macros.get_item(name)?),
+            None => Ok(PyTuple::empty(self.path.py()).into_any()),
+        }
+    }
+
+    fn located_error(
+        &self,
+        message: &str,
+        location: Bound<'py, PyAny>,
+        related: Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let kwargs: Bound<'py, PyDict> = PyDict::new(self.path.py());
+        kwargs.set_item("location", location)?;
+        kwargs.set_item("related_locations", related)?;
+        self.macro_error.call((message,), Some(&kwargs))
+    }
+
+    /// `MacroError(message)`, located at the call at `index` when there is one.
+    fn fail(
+        &self,
+        message: &str,
+        index: Option<usize>,
+        name: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let Some(index) = index else {
+            return self.macro_error.call1((message,));
+        };
+        let location: Bound<'py, PyAny> = self.locate(index)?;
+        self.located_error(message, location, self.related(name)?)
+    }
+
+    /// An unlocated `MacroError` placed at the call at `index`, caused by the original.
+    fn locate_error(
+        &self,
+        error: &Bound<'py, PyAny>,
+        index: usize,
+        name: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if !error.is_instance(&self.macro_error)? || !error.getattr("location")?.is_none() {
+            return Ok(error.clone());
+        }
+        let location: Bound<'py, PyAny> = self.locate(index)?;
+        let located: Bound<'py, PyAny> =
+            self.located_error(&error.str()?.to_cow()?, location, self.related(name)?)?;
+        located.setattr("__cause__", error)?;
+        Ok(located)
+    }
+
+    /// Run macro `name` with the evaluated arguments; failures other than `MacroError` become a
+    /// located `MacroError` caused by the original.
+    fn run(
+        &self,
+        name: &str,
+        args: Bound<'py, PyTuple>,
+        kwargs: Bound<'py, PyDict>,
+        index: usize,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py: Python<'py> = self.path.py();
+        let loaded: Bound<'py, PyAny> = self.macros.get_item(name)?;
+        let location: Bound<'py, PyAny> = self.locate(index)?;
+        let error: PyErr = match self.run_loaded(&loaded, args, kwargs, &location) {
+            Ok(result) => return Ok(result),
+            Err(error) => error,
+        };
+        let raised: Bound<'py, PyAny> = error.value(py).clone().into_any();
+        let reason: &str = if raised.is_instance(&self.macro_error)? {
+            return Err(error);
+        } else if error.is_instance_of::<PyTypeError>(py) {
+            "could not be called"
+        } else if error.is_instance_of::<PyException>(py) {
+            "failed"
+        } else {
+            return Err(error);
+        };
+        let wrapped: Bound<'py, PyAny> = self.located_error(
+            &format!(
+                "Macro '@{name}' in '{}' {reason}: {}",
+                self.path.str()?,
+                raised.str()?
+            ),
+            location,
+            self.definition(&loaded)?,
+        )?;
+        chained(&wrapped, &raised, Some(&raised))?;
+        Err(PyErr::from_value(wrapped))
+    }
+
+    fn run_loaded(
+        &self,
+        loaded: &Bound<'py, PyAny>,
+        args: Bound<'py, PyTuple>,
+        kwargs: Bound<'py, PyDict>,
+        location: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py: Python<'py> = self.path.py();
+        let function: Bound<'py, PyAny> = loaded.getattr("function")?;
+        let parameters: Bound<'py, PyTuple> = PyTuple::new(
+            py,
+            self.signature
+                .call1((&function,))?
+                .getattr("parameters")?
+                .call_method0("values")?
+                .try_iter()?
+                .collect::<PyResult<Vec<_>>>()?,
+        )?;
+        let first: Option<Bound<'py, PyAny>> = parameters.iter().next();
+        let accepts_context: bool = match &first {
+            Some(first) => first.getattr("name")?.eq(MACRO_CONTEXT_PARAMETER)?,
+            None => false,
+        };
+        if kwargs.contains(MACRO_CONTEXT_PARAMETER)? {
+            return Err(PyErr::from_value(self.located_error(
+                &format!(
+                    "Macro '@{}' in '{}' reserves keyword 'ctx'",
+                    loaded.getattr("name")?.str()?,
+                    self.path.str()?
+                ),
+                location.clone(),
+                self.definition(loaded)?,
+            )?));
+        }
+        let Some(first) = first.filter(|_| accepts_context) else {
+            return function.call(args, Some(&kwargs));
+        };
+        let allowed: Bound<'py, PySet> = PySet::new(
+            py,
+            [
+                self.macro_context.clone(),
+                PyString::new(py, MACRO_CONTEXT_ANNOTATION).into_any(),
+            ],
+        )?;
+        if !allowed.contains(first.getattr("annotation")?)? {
+            return Err(PyErr::from_value(self.located_error(
+                &format!(
+                    "Macro '@{}' in '{}' must annotate ctx as MacroContext",
+                    loaded.getattr("name")?.str()?,
+                    loaded.getattr("file_path")?.str()?
+                ),
+                location.clone(),
+                self.definition(loaded)?,
+            )?));
+        }
+        let mut arguments: Vec<Bound<'py, PyAny>> = vec![self.context.clone()];
+        arguments.extend(args.iter());
+        function.call(PyTuple::new(py, arguments)?, Some(&kwargs))
+    }
+}
+
+/// One expansion: the known macros and the site whose macro bodies run as Python.
 struct Expansion<'a, 'py> {
     py: Python<'py>,
     names: HashSet<String>,
@@ -120,12 +359,7 @@ struct Expansion<'a, 'py> {
     declarations: &'a Declarations,
     file_path: &'a str,
     host: UnicodeHost<'py>,
-    /// `call(name=, args=, kwargs=, index=)` runs one macro body.
-    call: &'a Bound<'py, PyAny>,
-    /// `fail(message=, index=, name=)` builds the error for a call at `index`, or unlocated.
-    fail: &'a Bound<'py, PyAny>,
-    /// `locate(error=, index=, name=)` places an unlocated error at the enclosing call.
-    locate: &'a Bound<'py, PyAny>,
+    site: &'a MacroSite<'py>,
 }
 
 /// An argument failure or a Python error raised while building argument values.
@@ -141,35 +375,16 @@ impl From<PyErr> for Evaluation {
 }
 
 impl<'py> Expansion<'_, 'py> {
-    fn kwargs(&self, entries: &[(&str, Bound<'py, PyAny>)]) -> PyResult<Bound<'py, PyDict>> {
-        let kwargs: Bound<'py, PyDict> = PyDict::new(self.py);
-        for (key, value) in entries {
-            kwargs.set_item(key, value)?;
-        }
-        Ok(kwargs)
-    }
-
     fn error(&self, message: &str, index: Option<usize>, name: Option<&str>) -> PyErr {
-        let built: PyResult<Bound<'py, PyAny>> = (|| {
-            let kwargs: Bound<'py, PyDict> = self.kwargs(&[
-                ("message", message.into_bound_py_any(self.py)?),
-                ("index", index.into_bound_py_any(self.py)?),
-                ("name", name.into_bound_py_any(self.py)?),
-            ])?;
-            self.fail.call((), Some(&kwargs))
-        })();
-        built.map_or_else(|error| error, PyErr::from_value)
+        self.site
+            .fail(message, index, name)
+            .map_or_else(|error| error, PyErr::from_value)
     }
 
     fn located(&self, error: PyErr, index: usize, name: Option<&str>) -> PyErr {
-        let relocated: PyResult<Bound<'py, PyAny>> = (|| {
-            let kwargs: Bound<'py, PyDict> = self.kwargs(&[
-                ("error", error.value(self.py).clone().into_any()),
-                ("index", index.into_bound_py_any(self.py)?),
-                ("name", name.into_bound_py_any(self.py)?),
-            ])?;
-            self.locate.call((), Some(&kwargs))
-        })();
+        let relocated: PyResult<Bound<'py, PyAny>> =
+            self.site
+                .locate_error(&error.value(self.py).clone().into_any(), index, name);
         match relocated {
             Ok(relocated) if relocated.is(error.value(self.py)) => error,
             Ok(relocated) => PyErr::from_value(relocated),
@@ -177,8 +392,14 @@ impl<'py> Expansion<'_, 'py> {
         }
     }
 
-    /// The SQL with every top-level macro call replaced by its result.
-    fn expand(&self, sql: &[char], capture: Option<&Bound<'py, PyAny>>) -> PyResult<String> {
+    /// The SQL with every top-level macro call replaced by its result; when any call expanded,
+    /// `capture(key, (rendered, spans))` records the source map.
+    fn expand(
+        &self,
+        sql: &[char],
+        capture: &Bound<'py, PyAny>,
+        key: &Bound<'py, PyTuple>,
+    ) -> PyResult<String> {
         let mut rendered: String = String::new();
         let mut spans: Vec<(usize, usize, usize, usize)> = Vec::new();
         let mut output_position: usize = 0;
@@ -200,10 +421,8 @@ impl<'py> Expansion<'_, 'py> {
             output_position = output_end;
             cursor = next;
         }
-        if !spans.is_empty()
-            && let Some(capture) = capture
-        {
-            capture.call1(((rendered.clone(), spans),))?;
+        if !spans.is_empty() {
+            capture.call1((key, (rendered.clone(), spans)))?;
         }
         Ok(rendered)
     }
@@ -246,13 +465,7 @@ impl<'py> Expansion<'_, 'py> {
         let (args, kwargs) = self
             .call_arguments(&text[open + 1..close], offset + open + 1)
             .map_err(|error| self.located(error, index, Some(&name)))?;
-        let call_kwargs: Bound<'py, PyDict> = self.kwargs(&[
-            ("name", PyString::new(self.py, &name).into_any()),
-            ("args", args.into_any()),
-            ("kwargs", kwargs.into_any()),
-            ("index", index.into_bound_py_any(self.py)?),
-        ])?;
-        let result: Bound<'py, PyAny> = self.call.call((), Some(&call_kwargs))?;
+        let result: Bound<'py, PyAny> = self.site.run(&name, args, kwargs, index)?;
         if top_level {
             let Ok(sql) = result.downcast::<PyString>() else {
                 return Err(self.error(
@@ -621,23 +834,55 @@ fn skip_whitespace(text: &[char], start: usize) -> usize {
         .map_or(text.len(), |offset| start + offset)
 }
 
-/// Expand every authored macro call and `@const`/`@enum` reference in `sql`. `macro_names` are
-/// the known macros, sorted; `call`, `fail` and `locate` are the Python callbacks `Expansion`
-/// describes.
-#[pyfunction]
-#[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (sql, macro_names, file_path, call, fail, locate, declarations, capture=None))]
-fn expand_macro_calls<'py>(
-    py: Python<'py>,
-    sql: &str,
-    macro_names: Vec<String>,
-    file_path: &str,
-    call: &Bound<'py, PyAny>,
-    fail: &Bound<'py, PyAny>,
-    locate: &Bound<'py, PyAny>,
-    declarations: Option<PyRef<'py, PyDeclarations>>,
-    capture: Option<&Bound<'py, PyAny>>,
-) -> PyResult<String> {
+/// Expand every authored macro call and `@const`/`@enum` reference in `sql`, a SQL body that
+/// starts at `source_line:source_column` of `file_path`, running macros from `registry` with
+/// `context` and recording the expansion source map in `registry.expansions`.
+pub(crate) fn expand_sql_macros_with<'py>(
+    sql: &Bound<'py, PyString>,
+    file_path: &Bound<'py, PyAny>,
+    registry: &Bound<'py, PyAny>,
+    context: &Bound<'py, PyAny>,
+    source_line: &Bound<'py, PyAny>,
+    source_column: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyString>> {
+    let py: Python<'py> = sql.py();
+    let text: String = sql.to_cow()?.into_owned();
+    if !text.contains(MACRO_SIGIL) {
+        return Ok(sql.clone());
+    }
+    let macros: Bound<'py, PyAny> = registry.getattr("macros")?;
+    let macro_names: Vec<String> = py
+        .import("builtins")?
+        .getattr("sorted")?
+        .call1((&macros,))?
+        .extract()?;
+    let declarations: Option<PyRef<'py, PyDeclarations>> =
+        registry.getattr("declarations")?.extract()?;
+    let capture_key: Bound<'py, PyTuple> = PyTuple::new(
+        py,
+        [
+            file_path.clone(),
+            sql.clone().into_any(),
+            source_line.clone(),
+            source_column.clone(),
+        ],
+    )?;
+    let capture: Bound<'py, PyAny> = registry.getattr("expansions")?.getattr("__setitem__")?;
+    let diagnostics: Bound<'py, PyModule> = py.import(DIAGNOSTICS_MODELS)?;
+    let site: MacroSite<'py> = MacroSite {
+        macros,
+        context: context.clone(),
+        path: file_path.clone(),
+        sql: text.chars().collect(),
+        line: source_line.extract()?,
+        column: source_column.extract()?,
+        macro_error: py.import(MACRO_EXCEPTIONS)?.getattr("MacroError")?,
+        macro_context: py.import(MACRO_MODELS)?.getattr("MacroContext")?,
+        source_location: diagnostics.getattr("SourceLocation")?,
+        related_location: diagnostics.getattr("RelatedDiagnosticLocation")?,
+        signature: py.import("inspect")?.getattr("signature")?,
+    };
+    let path: String = file_path.str()?.to_cow()?.into_owned();
     let empty: Declarations = Declarations::default();
     let expansion: Expansion<'_, 'py> = Expansion {
         py,
@@ -646,25 +891,59 @@ fn expand_macro_calls<'py>(
         declarations: declarations
             .as_ref()
             .map_or(&empty, |declarations| &declarations.declarations),
-        file_path,
+        file_path: &path,
         host: UnicodeHost {
             unicodedata: py.import("unicodedata")?,
             raised: RefCell::new(None),
         },
-        call,
-        fail,
-        locate,
+        site: &site,
     };
-    expansion.expand(&sql.chars().collect::<Vec<char>>(), capture)
+    let rendered: String = expansion.expand(&site.sql, &capture, &capture_key)?;
+    Ok(PyString::new(py, &rendered))
 }
 
-/// Unique top-level macro call names in encounter order, without `@const` and `@enum`, and the
-/// error of a call whose parentheses do not close.
+/// `expand_sql_macros_with` for Python callers.
 #[pyfunction]
-fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
+#[pyo3(signature = (*, sql, file_path, registry, context, source_line=None, source_column=None))]
+fn expand_sql_macros<'py>(
+    py: Python<'py>,
+    sql: &Bound<'py, PyString>,
+    file_path: &Bound<'py, PyAny>,
+    registry: &Bound<'py, PyAny>,
+    context: &Bound<'py, PyAny>,
+    source_line: Option<Bound<'py, PyAny>>,
+    source_column: Option<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyString>> {
+    let one = || 1.into_bound_py_any(py);
+    expand_sql_macros_with(
+        sql,
+        file_path,
+        registry,
+        context,
+        &source_line.map_or_else(one, Ok)?,
+        &source_column.map_or_else(one, Ok)?,
+    )
+}
+
+/// Unique top-level macro call names in encounter order, without `@const` and `@enum`; a call
+/// whose parentheses do not close raises `MacroError`.
+#[pyfunction]
+pub(crate) fn find_macro_call_names<'py>(
+    py: Python<'py>,
+    sql: &str,
+) -> PyResult<Bound<'py, PyTuple>> {
+    if !sql.contains(MACRO_SIGIL) {
+        return Ok(PyTuple::empty(py));
+    }
     let sql: Vec<char> = sql.chars().collect();
     let mut names: Vec<String> = Vec::new();
     let mut cursor: usize = 0;
+    let failure = |message: String| -> PyErr {
+        py.import(MACRO_EXCEPTIONS)
+            .and_then(|module| module.getattr("MacroError"))
+            .and_then(|class| class.call1((message,)))
+            .map_or_else(|error| error, PyErr::from_value)
+    };
     while cursor < sql.len() {
         let Some(start) = find_next_macro_start(&sql, cursor).map_err(scan_failure)? else {
             break;
@@ -675,18 +954,18 @@ fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
             names.push(name);
         }
         if sql.get(open) != Some(&'(') {
-            return Ok((names, Some("expected opening parenthesis".to_owned())));
+            return Err(failure("expected opening parenthesis".to_owned()));
         }
         match find_matching_parenthesis(&sql, open, MACRO_CALL_CONTEXT) {
             Ok(close) => cursor = close + 1,
-            Err(error) => return Ok((names, Some(error.message))),
+            Err(error) => return Err(failure(error.message)),
         }
     }
-    Ok((names, None))
+    PyTuple::new(py, names)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(expand_macro_calls, module)?)?;
+    module.add_function(wrap_pyfunction!(expand_sql_macros, module)?)?;
     module.add_function(wrap_pyfunction!(find_macro_call_names, module)?)?;
     module.add_function(wrap_pyfunction!(load_declarations, module)?)?;
     module.add_class::<PyDeclarations>()?;
