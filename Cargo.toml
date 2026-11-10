@@ -25,6 +25,7 @@ rust-version = "1.88"
 [workspace.dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 flate2 = "1"
+getrandom = "0.3"
 md-5 = "0.10"
 fensu-policy = "=0.22.0"
 # Published SQLClean 0.4.2; its Polyglot revision matches the compiler below.

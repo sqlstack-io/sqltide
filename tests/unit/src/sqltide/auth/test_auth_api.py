@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore
 from sqltide.auth.exceptions import AuthConfigurationError
 from sqltide.auth.models import AuthSettings, UserAccount
 from sqltide.auth.types import AuthenticationMode, UnknownUserPolicy

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import sqltide._native as _native
 from sqltide._native import (
+    ControlStore,
     DevApplication,
     DevServerState,
     KafkaLagReader,
@@ -55,7 +56,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import AuthSettings, UserAccount
 from sqltide.auth.types import AuthenticationMode, AuthenticationSource, UnknownUserPolicy
 from sqltide.cli.build.models import (

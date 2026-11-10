@@ -180,7 +180,7 @@ fn default_control_store_url<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     build(
         py,
-        "sqltide.auth.main.default_control_store_url",
+        "sqltide._native",
         "default_control_store_url",
         vec![("project_dir", project_dir.clone())],
     )

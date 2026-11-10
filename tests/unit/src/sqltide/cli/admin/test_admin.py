@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide._native import run_cli
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, run_cli
 from sqltide.auth.models import UserAccount
 from tests.unit.src.sqltide.cli.admin._test_types import AdminCliTestCase
 

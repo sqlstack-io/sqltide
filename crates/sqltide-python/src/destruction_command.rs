@@ -14,10 +14,8 @@ use crate::handling::{raise_from, while_handling};
 use crate::test_command::user_error;
 
 const NATIVE: &str = "sqltide._native";
-const CONTROL_STORE: &str = "sqltide.auth.classes.control_store";
 const AUTH_CONSTANTS: &str = "sqltide.auth.constants";
 const AUTH_EXCEPTIONS: &str = "sqltide.auth.exceptions";
-const DEFAULT_CONTROL_STORE_URL: &str = "sqltide.auth.main.default_control_store_url";
 const ENTRY_CONSTANTS: &str = "sqltide.cli.entry.constants";
 const PLAN_STORE: &str = "sqltide.executor.destruction.classes.relational_destruction_plan_store";
 const DESTRUCTION_EXCEPTIONS: &str = "sqltide.executor.destruction.exceptions";
@@ -505,7 +503,7 @@ fn run_authorized_destruction<'py>(
     {
         call(
             py,
-            DEFAULT_CONTROL_STORE_URL,
+            NATIVE,
             "default_control_store_url",
             &[("project_dir", options.getattr("project_dir")?)],
         )?
@@ -621,7 +619,7 @@ fn run_destruction<'py>(
 ) -> PyResult<i64> {
     let control_store: Value<'py> = match build(
         py,
-        CONTROL_STORE,
+        NATIVE,
         "ControlStore",
         &[("url", options.getattr("control_store_url")?)],
     ) {

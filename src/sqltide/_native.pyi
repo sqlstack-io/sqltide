@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol, Self, final
+from uuid import UUID
 
 from sqltide.adapter.classes.adapter import Adapter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -56,8 +57,15 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
-from sqltide.auth.classes.control_store import ControlStore
-from sqltide.auth.models import AuthSettings
+from sqltide.auth.models import (
+    AccountAuditRecord,
+    AuthSettings,
+    ProjectRoleAssignment,
+    ResolvedSession,
+    SessionCredentials,
+    UserAccount,
+)
+from sqltide.auth.types import AuthenticationSource
 from sqltide.authorization.models import (
     AuthorizationDecision,
     AuthorizationRequest,
@@ -348,6 +356,99 @@ def polling_sensor(
 def effective_sensor_status(
     *, sensor: LoadedSensor, overrides: Mapping[str, SensorOverrideStatus]
 ) -> SensorOverrideStatus: ...
+def canonical_username(value: str) -> str: ...
+def default_control_store_url(*, project_dir: Path) -> str: ...
+def rename_streambuild_tables(*, url: str) -> None: ...
+
+@final
+class ControlStore:
+    """Synchronous account repository shared by dev server worker threads and the CLI."""
+
+    def __init__(self, *, url: str) -> None: ...
+    def close(self) -> None: ...
+    @property
+    def url(self) -> str: ...
+    @property
+    def authentication_revision(self) -> int: ...
+    def bootstrap(self) -> None: ...
+    def list_users(self) -> tuple[UserAccount, ...]: ...
+    def get_user_by_id(self, *, user_id: UUID) -> UserAccount | None: ...
+    def get_user_by_username(self, *, username: str) -> UserAccount | None: ...
+    def create_user(
+        self,
+        *,
+        username: str,
+        display_name: str | None = None,
+        email: str | None = None,
+        password: str | None = None,
+        authentication_source: AuthenticationSource | None = None,
+        external_subject: str | None = None,
+        roles: tuple[str, ...] = ("viewer",),
+        actor_user_id: UUID | None = None,
+    ) -> UserAccount: ...
+    def resolve_external_identity(
+        self, *, source: AuthenticationSource, subject: str
+    ) -> UserAccount | None: ...
+    def provision_proxy_user(
+        self,
+        *,
+        subject: str,
+        username: str,
+        display_name: str | None,
+        email: str | None,
+        default_role: str,
+    ) -> UserAccount: ...
+    def authenticate_password(
+        self, *, username: str, password: str, session_ttl_seconds: int
+    ) -> tuple[UserAccount, SessionCredentials] | None: ...
+    def resolve_session(self, *, token: str) -> ResolvedSession | None: ...
+    def revoke_session(self, *, token: str, actor_user_id: UUID | None = None) -> None: ...
+    def set_user_active(
+        self, *, user_id: UUID, is_active: bool, actor_user_id: UUID | None
+    ) -> UserAccount: ...
+    def update_profile(
+        self,
+        *,
+        user_id: UUID,
+        display_name: str | None,
+        email: str | None,
+        actor_user_id: UUID | None,
+    ) -> UserAccount: ...
+    def update_account(
+        self,
+        *,
+        user_id: UUID,
+        display_name: str | None,
+        email: str | None,
+        is_active: bool,
+        actor_user_id: UUID | None,
+    ) -> UserAccount: ...
+    def reset_password(
+        self, *, user_id: UUID, password: str, actor_user_id: UUID | None
+    ) -> None: ...
+    def grant_role(
+        self, *, user_id: UUID, role_name: str, actor_user_id: UUID | None
+    ) -> UserAccount: ...
+    def revoke_role(
+        self, *, user_id: UUID, role_name: str, actor_user_id: UUID | None
+    ) -> UserAccount: ...
+    def grant_project_role(
+        self,
+        *,
+        user_id: UUID,
+        project_name: str,
+        role_name: str,
+        target_name: str | None,
+        actor_user_id: UUID | None,
+    ) -> ProjectRoleAssignment: ...
+    def revoke_project_role(
+        self, *, assignment_id: UUID, actor_user_id: UUID | None
+    ) -> ProjectRoleAssignment: ...
+    def list_project_role_assignments(
+        self, *, user_id: UUID, project_name: str, include_revoked: bool = False
+    ) -> tuple[ProjectRoleAssignment, ...]: ...
+    def list_audit_records(self) -> tuple[AccountAuditRecord, ...]: ...
+    def prune_sessions(self) -> int: ...
 
 class SensorStateRepository:
     def __new__(cls, *, connection: AdapterConnection, database: str) -> Self: ...

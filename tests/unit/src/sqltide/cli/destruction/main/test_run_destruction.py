@@ -7,9 +7,8 @@ from uuid import UUID
 
 import pytest
 
-from sqltide._native import run_destruction
+from sqltide._native import ControlStore, run_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.auth.classes.control_store import ControlStore
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -85,7 +84,7 @@ def test_given_reviewed_plan_when_running_destruction_then_executes_frozen_actor
     monkeypatch.setattr("sqltide._native.plan_destruction", planner_mock)
     monkeypatch.setattr("sqltide._native.execute_destruction", execute_mock)
     monkeypatch.setattr(
-        "sqltide.auth.classes.control_store.ControlStore",
+        "sqltide._native.ControlStore",
         control_store_factory,
     )
     monkeypatch.setattr(
@@ -176,7 +175,7 @@ def test_given_admin_changes_after_review_when_challenges_finish_then_refuses_be
     execute_mock: MagicMock = MagicMock()
     planner_mock: MagicMock = MagicMock(return_value=plan)
     monkeypatch.setattr(
-        "sqltide.auth.classes.control_store.ControlStore",
+        "sqltide._native.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(
@@ -245,7 +244,7 @@ def test_given_plan_without_review_when_running_destruction_then_execution_is_ca
     )
     monkeypatch.setattr("sqltide._native.execute_destruction", execute_mock)
     monkeypatch.setattr(
-        "sqltide.auth.classes.control_store.ControlStore",
+        "sqltide._native.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(
@@ -300,7 +299,7 @@ def test_given_unauthorized_os_account_when_running_destruction_then_refuses_bef
     planner: MagicMock = MagicMock()
     analyzer: MagicMock = MagicMock()
     monkeypatch.setattr(
-        "sqltide.auth.classes.control_store.ControlStore",
+        "sqltide._native.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(

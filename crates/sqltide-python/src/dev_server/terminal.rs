@@ -481,12 +481,8 @@ pub(crate) fn run_dev<'py>(
     let auth_settings: Any<'py> = if configured.is_truthy()? {
         configured
     } else {
-        let control_store_url: Any<'py> = attr(
-            py,
-            "sqltide.auth.main.default_control_store_url",
-            "default_control_store_url",
-        )?
-        .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
+        let control_store_url: Any<'py> = attr(py, "sqltide._native", "default_control_store_url")?
+            .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
         attr(py, "sqltide.auth.models", "AuthSettings")?.call(
             (),
             Some(&py_kwargs!(py;

@@ -8,8 +8,7 @@ from unittest.mock import PropertyMock, patch
 
 import pytest
 
-from sqltide._native import WarehouseRuntime
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, WarehouseRuntime
 from sqltide.authorization.models import AuthorizationDecision
 from sqltide.authorization.types import AuthorizationReason
 from sqltide.compiler.access.types import Permission

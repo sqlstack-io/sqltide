@@ -9,8 +9,8 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sqltide._native import ControlStore
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.auth.classes.control_store import ControlStore
 from sqltide.compiler.discovery.constants import DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS
 from sqltide.compiler.pipeline.models import CompilationTimings, CompileAnalysis
 from sqltide.dev_server.types import CompileStateKind

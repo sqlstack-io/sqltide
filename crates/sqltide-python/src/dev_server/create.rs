@@ -22,13 +22,9 @@ fn default_control_store_url(
     py: Python<'_>,
     project_dir: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
-    Ok(attr(
-        py,
-        "sqltide.auth.main.default_control_store_url",
-        "default_control_store_url",
-    )?
-    .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))?
-    .unbind())
+    Ok(attr(py, "sqltide._native", "default_control_store_url")?
+        .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))?
+        .unbind())
 }
 
 fn disabled_settings<'py>(
@@ -191,7 +187,7 @@ pub(crate) fn create_dev_app(
     let owns_accounts: bool = control_store.is_none();
     let accounts = match control_store {
         Some(store) => store,
-        None => attr(py, "sqltide.auth.classes.control_store", "ControlStore")?.call(
+        None => attr(py, "sqltide._native", "ControlStore")?.call(
             (),
             Some(&py_kwargs!(py; url = settings.getattr("control_store_url")?)?),
         )?,

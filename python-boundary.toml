@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 13484
+remaining_lines = 12240
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -34,6 +34,16 @@ note = "Rule 1: Data-only enums and logic-free protocols the adapter contract an
 path = "adapters/clickhouse/types.py"
 rule = 1
 note = "Rule 1: Logic-free protocols describing the clickhouse-connect client and query result the ClickHouse connection wraps."
+
+[[stays]]
+path = "auth/_helpers/password_hashing.py"
+rule = 4
+note = "Rule 4: glue around argon2-cffi; RustCrypto's argon2 cannot accept every hash libargon2 accepts (its output and salt length limits, a missing version field and other versions differ), so stored hashes would stop verifying. Calls PasswordHasher hash, verify and check_needs_rehash and returns plain values. Password validation and when to hash, verify or store a replacement are native."
+
+[[stays]]
+path = "auth/classes/relational_driver.py"
+rule = 4
+note = "Rule 4: glue around SQLAlchemy/psycopg; connection URL, libpq environment, TLS and service-file handling stay with the driver. Creates the pooled engine from the URL, opens and commits or rolls back one transaction, executes native statement text with bound parameters, returns plain rows and row counts, and classifies driver errors as integrity or other. All SQL and DDL, row mapping, sessions, tokens, auditing and role rules are native."
 
 [[stays]]
 path = "compiler/macros/_helpers/registry.py"

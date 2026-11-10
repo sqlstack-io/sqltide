@@ -33,19 +33,13 @@ pub(crate) fn run_admin_command<'py>(
     if !url.is_truthy()? {
         let kwargs: Bound<'py, PyDict> = PyDict::new(py);
         kwargs.set_item("project_dir", &project_dir)?;
-        url = attr(
-            py,
-            "sqltide.auth.main.default_control_store_url",
-            "default_control_store_url",
-        )?
-        .call((), Some(&kwargs))?;
+        url = attr(py, "sqltide._native", "default_control_store_url")?.call((), Some(&kwargs))?;
     }
     let outcome: PyResult<i64> = (|| {
         let kwargs: Bound<'py, PyDict> = PyDict::new(py);
         kwargs.set_item("url", &url)?;
         let store: Bound<'py, PyAny> =
-            attr(py, "sqltide.auth.classes.control_store", "ControlStore")?
-                .call((), Some(&kwargs))?;
+            attr(py, "sqltide._native", "ControlStore")?.call((), Some(&kwargs))?;
         let dispatched: PyResult<i64> = dispatch_admin_command(py, args, &store);
         match store.call_method0("close") {
             Ok(_) => dispatched,

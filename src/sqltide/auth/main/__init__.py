@@ -1,1 +1,0 @@
-"""Public authentication entry points."""

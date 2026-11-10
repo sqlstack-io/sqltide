@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore
 from sqltide.auth.models import AuthenticatedRequest, Principal, UserAccount
 from sqltide.auth.types import AuthenticationSource
 from sqltide.authorization.models import AuthorizationRequest

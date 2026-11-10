@@ -4,9 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, default_control_store_url
 from sqltide.auth.exceptions import AccountConflictError
-from sqltide.auth.main.default_control_store_url import default_control_store_url
 from sqltide.auth.models import (
     AccountAuditRecord,
     ProjectRoleAssignment,
