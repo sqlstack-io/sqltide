@@ -99,7 +99,7 @@ fn run_doctor(py: Python<'_>, database: Any<'_>, client: Any<'_>) -> PyResult<i6
         )?;
         let result: Any<'_> = run(
             py,
-            "sqltide.executor.doctor.main.execute_doctor",
+            "sqltide._native",
             "execute_doctor",
             &[("request", request), ("client", client)],
         )?;
@@ -154,7 +154,7 @@ fn run_repair_active_view(
         )?;
         let result: Any<'_> = run(
             py,
-            "sqltide.executor.repair.main.execute_repair_active_view",
+            "sqltide._native",
             "execute_repair_active_view",
             &[("request", request), ("client", client)],
         )?;

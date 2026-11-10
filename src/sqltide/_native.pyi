@@ -234,6 +234,7 @@ from sqltide.executor.direct.models import (
     DirectRuntimeExecution,
     DriftedManagedSource,
 )
+from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
 from sqltide.executor.janitor.models import (
     JanitorApplyResult,
     JanitorPreviewResult,
@@ -267,6 +268,7 @@ from sqltide.executor.readiness.models import (
     RootAuditResult,
 )
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
+from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -1236,6 +1238,10 @@ def infer_pipeline_sources(
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
+def execute_doctor(*, request: DoctorRequest, client: AdapterConnection) -> DoctorResult: ...
+def execute_repair_active_view(
+    *, request: RepairActiveViewRequest, client: AdapterConnection
+) -> RepairActiveViewResult: ...
 def execute_reconcile(
     *,
     client: AdapterConnection,

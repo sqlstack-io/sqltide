@@ -48,6 +48,7 @@ mod graph;
 mod handling;
 mod janitor_command;
 mod macros;
+mod maintenance_command;
 mod model_analysis;
 mod model_sql;
 mod observation;
@@ -164,6 +165,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     deployment_command::register(module)?;
     promotion_command::register(module)?;
     reconcile_command::register(module)?;
+    maintenance_command::register(module)?;
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;

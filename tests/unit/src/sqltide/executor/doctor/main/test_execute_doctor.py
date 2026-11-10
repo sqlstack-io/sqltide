@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import execute_doctor
 from sqltide.adapter.models import CatalogRelation
-from sqltide.executor.doctor.main.execute_doctor import execute_doctor
 from sqltide.executor.doctor.models import ActiveViewStatus, DoctorRequest, DoctorResult
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.doctor.main._test_types import (

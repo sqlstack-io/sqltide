@@ -95,7 +95,6 @@ WORKFLOW_ASSEMBLER_PATHS: tuple[tuple[str, ...], ...] = (
     ("src", "sqltide", "executor", "direct", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "backfill", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "population", "_helpers", "workflow.py"),
-    ("src", "sqltide", "executor", "repair", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "destruction", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "workflow", "main", "target_mutation_lock.py"),
     ("src", "sqltide", "executor", "auditing", "_helpers", "schedule_claim_workflow.py"),

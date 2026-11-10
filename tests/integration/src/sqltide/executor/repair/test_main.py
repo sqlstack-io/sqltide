@@ -3,10 +3,10 @@ from collections.abc import Sequence
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_repair_active_view
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.executor.repair.main.execute_repair_active_view import execute_repair_active_view
 from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import render_create_view_ddl
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
