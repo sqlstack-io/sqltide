@@ -17,6 +17,8 @@ from sqltide.adapter.models import (
     AdapterMaterializedView,
     AdapterMetadataState,
     AdapterPhysicalRelationMapping,
+    AdapterReadinessRequest,
+    AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
     AdapterReplayQuery,
@@ -989,6 +991,9 @@ def load_clickhouse_manifests(
     target_name: str,
     target_database: str,
 ) -> AdapterManifestSnapshot: ...
+def compare_clickhouse_readiness(
+    *, connection: AdapterConnection, request: AdapterReadinessRequest
+) -> tuple[AdapterReadinessRootObservation, ...]: ...
 def build_adapter_resource(
     desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
 ) -> (

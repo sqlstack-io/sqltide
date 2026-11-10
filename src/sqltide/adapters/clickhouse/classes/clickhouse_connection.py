@@ -13,6 +13,7 @@ from clickhouse_connect.driver.summary import QuerySummary
 from sqltide._native import (
     build_inspected_managed_table_state,
     clickhouse_catalog_resource_matches,
+    compare_clickhouse_readiness,
     load_clickhouse_catalog,
     load_clickhouse_deployment_inventory,
     load_clickhouse_direct_fingerprints,
@@ -99,7 +100,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse._helpers.errors import translate_driver_error
-from sqltide.adapters.clickhouse._helpers.readiness import compare_clickhouse_readiness
 from sqltide.adapters.clickhouse._helpers.rendering import (
     render_clickhouse_ensure_database,
     render_clickhouse_resource,
