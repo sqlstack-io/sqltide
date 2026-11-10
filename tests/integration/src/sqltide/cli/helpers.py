@@ -11,6 +11,7 @@ import pytest
 from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
+import sqltide._native as _native
 from sqltide._native import render_direct_plan_json
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
@@ -63,9 +64,6 @@ from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
@@ -1065,7 +1063,7 @@ def run_direct_plan(
             changed=changed,
         ),
         client=connection,
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -1540,7 +1538,7 @@ def run_direct_build(
         ),
         client=connection,
         observation_client=connection,
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -1694,7 +1692,7 @@ def execute_direct_build_directly(
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     preview: DirectBuildPreviewContext = build_direct_build_preview(
@@ -1761,7 +1759,7 @@ def publish_direct_workflow(
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     preview: DirectBuildPreviewContext = build_direct_build_preview(
@@ -1817,7 +1815,7 @@ def publish_virtual_workflow(
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     options: WorkflowPreparationOptions = WorkflowPreparationOptions(
@@ -1932,7 +1930,7 @@ def run_virtual_environment_build(
         ),
         client=connection,
         observation_client=connection,
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

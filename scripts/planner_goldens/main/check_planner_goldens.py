@@ -5,6 +5,7 @@ import tempfile
 from dataclasses import asdict
 from pathlib import Path
 
+import sqltide._native as _native
 from scripts.compiler_goldens.constants import (
     CORPUS_PROJECT_DIRECTORIES,
     GENERATED_CHAIN_PROJECT_NAME,
@@ -17,9 +18,6 @@ from scripts.planner_goldens.constants import GOLDEN_DIRECTORY, PLANNER_CHAIN_MO
 from scripts.planner_goldens.models import PlannerCapture
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 
 
@@ -51,7 +49,7 @@ def _capture(*, name: str, project_dir: Path) -> PlannerCapture:
         scenarios=planner_scenarios(
             analysis=analyze_project(
                 pipelines_root=project_dir / "pipelines",
-                loaded_project=load_project_input_for_path(path=project_dir),
+                loaded_project=_native.load_project_input_for_path(path=project_dir),
                 adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
             )
         ),

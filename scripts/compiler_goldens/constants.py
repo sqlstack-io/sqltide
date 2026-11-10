@@ -23,15 +23,15 @@ COMPILE_ENVIRONMENT: dict[str, str] = {"NO_COLOR": "1", "TERM": "dumb", "COLUMNS
 DEFINITIONS_SCRIPT: str = """
 import json, sys
 from pathlib import Path
+import sqltide._native as _native
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.discovery.main.load_project_input_for_path import load_project_input_for_path
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.dev_server._helpers.payloads.definitions_payload import build_definitions_payload
 project_dir = Path(sys.argv[1])
 analysis = analyze_project(
     pipelines_root=project_dir / "pipelines",
-    loaded_project=load_project_input_for_path(path=project_dir),
+    loaded_project=_native.load_project_input_for_path(path=project_dir),
     adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
 )
 print(json.dumps(build_definitions_payload(analysis=analysis, version_key="golden"), default=str))

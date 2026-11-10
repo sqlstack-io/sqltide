@@ -7,8 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList, PyMapping, PyString, PyTuple};
 use sqltide_discovery::interpolation::{self, Environment, Value};
 use sqltide_discovery::project_validation::{
-    ModelFacts, PipelineFacts, ProjectInputFacts, ProjectPolicyFacts, ProjectReferenceFacts,
-    ReplayPolicyFacts, validate_project_inputs, validate_replay_policies,
+    ModelFacts, PipelineFacts, ProjectPolicyFacts, ReplayPolicyFacts,
 };
 use sqltide_discovery::sources::{PipelineTransforms, pipeline_sources};
 use sqltide_discovery::sql_test_classification::{
@@ -113,8 +112,28 @@ impl Environment for PyEnvironment<'_> {
     }
 }
 
-/// Resolve every project variable, returned in the order they finish resolving. Raises `ValueError` with the message.
+/// The `ProjectConfigError(message)` for one interpolation failure, raised `from None`.
+fn config_error(py: Python<'_>, message: String) -> PyErr {
+    let raised = || -> PyResult<PyErr> {
+        let context: Bound<'_, PyAny> = PyValueError::new_err(message.clone())
+            .value(py)
+            .clone()
+            .into_any();
+        let error: Bound<'_, PyAny> = py
+            .import("sqltide.compiler.discovery.exceptions")?
+            .getattr("ProjectConfigError")?
+            .call1((message,))?;
+        error.setattr("__context__", context)?;
+        error.setattr("__cause__", py.None())?;
+        Ok(PyErr::from_value(error))
+    };
+    raised().unwrap_or_else(|error| error)
+}
+
+/// Resolve every project variable, returned in the order they finish resolving. Raises
+/// `ProjectConfigError` with the message.
 #[pyfunction]
+#[pyo3(signature = (*, values, environment, field_path_prefix, defer_missing_environment=false))]
 fn resolve_variable_values<'py>(
     py: Python<'py>,
     values: &Bound<'py, PyAny>,
@@ -133,7 +152,7 @@ fn resolve_variable_values<'py>(
         field_path_prefix,
         defer_missing_environment,
     )
-    .map_err(PyValueError::new_err)?;
+    .map_err(|message| config_error(py, message))?;
     let dict: Bound<'py, PyDict> = PyDict::new(py);
     for (name, value) in resolved {
         dict.set_item(name, objects.object(value)?)?;
@@ -141,8 +160,9 @@ fn resolve_variable_values<'py>(
     Ok(dict)
 }
 
-/// Interpolate one configuration value. Raises `ValueError` with the message.
+/// Interpolate one configuration value. Raises `ProjectConfigError` with the message.
 #[pyfunction]
+#[pyo3(signature = (*, value, variables, environment, field_path))]
 fn interpolate_config_value<'py>(
     py: Python<'py>,
     value: &Bound<'py, PyAny>,
@@ -162,7 +182,7 @@ fn interpolate_config_value<'py>(
         &PyEnvironment(environment),
         field_path,
     )
-    .map_err(PyValueError::new_err)?;
+    .map_err(|message| config_error(py, message))?;
     objects.object(interpolated)
 }
 
@@ -185,15 +205,15 @@ pub(crate) fn infer_pipeline_sources(
 }
 
 /// `(name, is table, defines replay_on_change, defines bounded_replay_fallback)`.
-type ModelFactsArgument = (String, bool, bool, bool);
+pub(crate) type ModelFactsArgument = (String, bool, bool, bool);
 /// `(name, file path, is virtual, defines replay_on_change, defines bounded_replay_fallback,
 /// models)`.
-type PipelineFactsArgument = (String, String, bool, bool, bool, Vec<ModelFactsArgument>);
+pub(crate) type PipelineFactsArgument = (String, String, bool, bool, bool, Vec<ModelFactsArgument>);
 /// `(project file path, default mode is direct, defines replay_on_change, defines
 /// bounded_replay_fallback)`.
-type ProjectPolicyArgument = (String, bool, bool, bool);
+pub(crate) type ProjectPolicyArgument = (String, bool, bool, bool);
 
-fn pipeline_facts(pipelines: Vec<PipelineFactsArgument>) -> Vec<PipelineFacts> {
+pub(crate) fn pipeline_facts(pipelines: Vec<PipelineFactsArgument>) -> Vec<PipelineFacts> {
     pipelines
         .into_iter()
         .map(
@@ -227,7 +247,9 @@ fn pipeline_facts(pipelines: Vec<PipelineFactsArgument>) -> Vec<PipelineFacts> {
         .collect()
 }
 
-fn project_policy_facts(project: Option<ProjectPolicyArgument>) -> Option<ProjectPolicyFacts> {
+pub(crate) fn project_policy_facts(
+    project: Option<ProjectPolicyArgument>,
+) -> Option<ProjectPolicyFacts> {
     project.map(
         |(file_path, default_mode_is_direct, replay_on_change, bounded_replay_fallback)| {
             ProjectPolicyFacts {
@@ -240,48 +262,6 @@ fn project_policy_facts(project: Option<ProjectPolicyArgument>) -> Option<Projec
             }
         },
     )
-}
-
-/// Reject direct-mode replay policy; a violation raises `ValueError(message)`.
-#[pyfunction]
-#[pyo3(name = "validate_replay_policies")]
-fn validate_replay_policies_py(
-    project_policy: Option<ProjectPolicyArgument>,
-    pipelines: Vec<PipelineFactsArgument>,
-) -> PyResult<()> {
-    validate_replay_policies(
-        project_policy_facts(project_policy).as_ref(),
-        &pipeline_facts(pipelines),
-    )
-    .map_err(PyValueError::new_err)
-}
-
-/// Reject duplicate project identities and invalid replay policy; a violation raises
-/// `ValueError(message)`.
-#[pyfunction]
-#[pyo3(name = "validate_project_inputs")]
-fn validate_project_inputs_py(
-    sources: Vec<(String, String)>,
-    pipelines: Vec<PipelineFactsArgument>,
-    project_references: Option<(String, Vec<(String, String)>)>,
-    project_policy: Option<ProjectPolicyArgument>,
-    tests: Vec<(String, String)>,
-    audits: Vec<(String, String)>,
-) -> PyResult<()> {
-    validate_project_inputs(&ProjectInputFacts {
-        sources,
-        pipelines: pipeline_facts(pipelines),
-        project_references: project_references.map(
-            |(file_path, allowed_cross_pipeline_references)| ProjectReferenceFacts {
-                file_path,
-                allowed_cross_pipeline_references,
-            },
-        ),
-        project_policy: project_policy_facts(project_policy),
-        tests,
-        audits,
-    })
-    .map_err(PyValueError::new_err)
 }
 
 /// Each SQL test CTE's role (`helper`, `ref_mock`, `source_mock`, `expected`, `assertion`,
@@ -304,7 +284,5 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(infer_pipeline_sources, module)?)?;
     module.add_function(wrap_pyfunction!(resolve_variable_values, module)?)?;
     module.add_function(wrap_pyfunction!(interpolate_config_value, module)?)?;
-    module.add_function(wrap_pyfunction!(validate_replay_policies_py, module)?)?;
-    module.add_function(wrap_pyfunction!(validate_project_inputs_py, module)?)?;
     module.add_function(wrap_pyfunction!(classify_sql_test_ctes, module)?)
 }

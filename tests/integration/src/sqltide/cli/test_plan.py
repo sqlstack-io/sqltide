@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
@@ -18,9 +19,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
     TableSpec,
     TableStorage,
-)
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
 )
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.discovery.types import ReplayLineageMode
@@ -240,7 +238,7 @@ def test_given_real_source_mode_when_planning_then_snapshot_validation_succeeds(
     before_relation_names: tuple[str, ...] = tuple(
         str(row[0]) for row in clickhouse_client.query(relation_query).result_rows
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=pipelines_root)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=pipelines_root)
     adapter_profile: CompilerAdapterProfile = build_compiler_adapter_profile(ClickHouseAdapter())
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=pipelines_root,

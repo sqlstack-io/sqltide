@@ -23,12 +23,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
 )
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
-from sqltide.compiler.discovery.main._discover_project_inputs import (
-    discover_project_inputs,
-)
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import KafkaLandingStep, LoadedPipeline, LoadedProject
 from sqltide.compiler.graph.main._build_project_graph import (
     build_project_graph_from_compiled_project,
@@ -101,7 +95,7 @@ def test_given_changed_destruction_policy_when_recompiling_then_fresh_limit_is_r
 
     initial: CompileAnalysis = analyze_project(
         pipelines_root=tmp_path / "pipelines",
-        loaded_project=load_project_input_for_path(path=tmp_path),
+        loaded_project=_native.load_project_input_for_path(path=tmp_path),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     config_path.write_text(
@@ -110,7 +104,7 @@ def test_given_changed_destruction_policy_when_recompiling_then_fresh_limit_is_r
     )
     fresh: CompileAnalysis = analyze_project(
         pipelines_root=tmp_path / "pipelines",
-        loaded_project=load_project_input_for_path(path=tmp_path),
+        loaded_project=_native.load_project_input_for_path(path=tmp_path),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -154,7 +148,7 @@ def test_given_pipeline_and_model_replay_settings_when_analyzing_then_model_valu
         """,
         pipeline_name="pl_orders",
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=tmp_path)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=tmp_path)
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=pipeline_dir.parent,
@@ -236,7 +230,7 @@ def test_given_audit_policy_layers_when_compiling_then_effective_policy_is_expli
         SELECT order_id FROM __ref("alpha_model") WHERE order_id = 0
         """,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_dir / "pipelines",
@@ -272,7 +266,7 @@ def test_given_adapter_profile_when_analyzing_then_references_use_its_dialect(
         build_compiler_adapter_profile(ClickHouseAdapter()),
         sql_analysis_dialect=test_case.dialect,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     with pytest.raises(PipelineCompileError, match=test_case.expected_error_fragment):
         analyze_project(
@@ -299,7 +293,7 @@ def test_given_complete_project_when_analyzing_then_polyglot_calls_remain_bounde
 ) -> None:
     project_dir: Path = tmp_path / "project"
     write_compilation_project(project_dir)
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     with (
         patch(
@@ -375,12 +369,12 @@ def test_given_project_sources_when_analyzing_then_builds_one_stable_offline_res
         model_relation_name=model_relation_name,
         realize_model=realize_model,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     with (
         patch(
-            "sqltide.compiler.pipeline.main.analyze_project.discover_project_inputs",
-            wraps=discover_project_inputs,
+            "sqltide._native.discover_project_inputs",
+            wraps=_native.discover_project_inputs,
         ) as discover_phase,
         patch(
             "sqltide.compiler.pipeline.main.analyze_project.build_compile_inputs",
@@ -511,7 +505,7 @@ def test_given_two_pipelines_share_source_when_analyzing_then_realizes_source_on
 ) -> None:
     project_dir: Path = tmp_path / "project"
     write_shared_source_project(project_dir)
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
     adapter: ClickHouseAdapter = ClickHouseAdapter()
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_dir / "pipelines",
@@ -581,7 +575,7 @@ def test_given_managed_source_ttl_when_analyzing_then_applies_source_over_projec
         project_default_ttl=test_case.project_default_ttl,
         source_ttl_declaration=test_case.source_ttl_declaration,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
     loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(
         project_dir / "pipelines" / "pl__orders"
     )
@@ -649,7 +643,7 @@ def test_given_typed_managed_source_retention_when_analyzing_then_renders_effect
         project_dir=project_dir,
         source_retention_declaration=test_case.source_retention_declaration,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_dir / "pipelines",
@@ -685,7 +679,7 @@ def test_given_cross_file_duplicate_when_analyzing_then_rejects_aggregate(
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
         analyze_project(
             pipelines_root=project_dir / "pipelines",
-            loaded_project=load_project_input_for_path(path=project_dir),
+            loaded_project=_native.load_project_input_for_path(path=project_dir),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
 
@@ -711,7 +705,7 @@ def test_given_source_and_model_share_name_when_analyzing_then_rejects_logical_c
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
         analyze_project(
             pipelines_root=project_dir / "pipelines",
-            loaded_project=load_project_input_for_path(path=project_dir),
+            loaded_project=_native.load_project_input_for_path(path=project_dir),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
 
@@ -813,7 +807,7 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
         analyze_project(
             pipelines_root=project_dir / "pipelines",
-            loaded_project=load_project_input_for_path(path=project_dir),
+            loaded_project=_native.load_project_input_for_path(path=project_dir),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
 
@@ -908,7 +902,7 @@ def test_given_complete_project_when_expanding_macros_then_all_inputs_share_one_
 ) -> None:
     project_dir: Path = tmp_path / "project"
     write_compilation_project(project_dir)
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     with (
         patch(
@@ -997,7 +991,7 @@ def test_given_private_macro_modules_when_analyzing_then_only_public_modules_are
     private_macro_path.write_text("raise RuntimeError('private module loaded')\n", encoding="utf-8")
     initializer_path: Path = project_dir / "macros" / "__init__.py"
     initializer_path.write_text("raise RuntimeError('initializer loaded')\n", encoding="utf-8")
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_dir / "pipelines",
@@ -1062,7 +1056,7 @@ def test_given_compile_artifacts_when_writing_then_discovered_sources_are_not_re
             side_effect=original_loader_get_data,
         ) as loader_get_data,
     ):
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
         exit_code: int = run_compile(
             pipelines_root=project_dir / "pipelines",
             loaded_project=loaded_project,

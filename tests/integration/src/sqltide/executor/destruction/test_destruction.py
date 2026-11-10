@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -19,9 +20,6 @@ from sqltide.cli.entry._helpers.compiler_profile import (
     build_compiler_adapter_profile,
 )
 from sqltide.compiler.compile.models import CompilerAdapterProfile, LogicalResourceKey
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -143,7 +141,7 @@ def test_given_historical_orphan_when_destroying_selected_pipeline_then_guarded_
             execution_connection.execute_workflow_sql(statement)
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
-            loaded_project=load_project_input_for_path(path=project_root),
+            loaded_project=_native.load_project_input_for_path(path=project_root),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
         request: DestructionRequest = DestructionRequest(
@@ -226,7 +224,9 @@ def test_given_real_target_when_destroying_and_resetting_then_scope_and_evidence
             connection=execution_connection,
         )
         assert build_exit_code == 0
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         adapter_profile: CompilerAdapterProfile = build_compiler_adapter_profile(
             ClickHouseAdapter()
         )
@@ -401,7 +401,9 @@ def test_given_manually_recreated_relation_when_replanning_then_frozen_generatio
             )
             == 0
         )
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,
@@ -485,7 +487,9 @@ def test_given_second_drop_failure_when_destroying_then_catalog_has_exact_comple
             )
             == 0
         )
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,
@@ -580,7 +584,9 @@ def test_given_drop_completion_event_failure_when_destroying_then_partial_eviden
             )
             == 0
         )
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,
@@ -710,7 +716,9 @@ def test_given_recorded_virtual_history_when_resetting_then_live_generations_are
         database=clickhouse_database,
     )
     try:
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,
@@ -827,7 +835,9 @@ def test_given_cross_database_dependant_when_planning_then_destruction_is_blocke
             f"CREATE VIEW {external_database}.external_reader AS SELECT * FROM "
             f"{clickhouse_database}.tbl__orders_enriched;"
         )
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,
@@ -901,7 +911,9 @@ def test_given_live_manifest_ddl_mismatch_when_planning_then_relation_is_include
         database=clickhouse_database,
     )
     try:
-        loaded_project: LoadedProject | None = load_project_input_for_path(path=project_root)
+        loaded_project: LoadedProject | None = _native.load_project_input_for_path(
+            path=project_root
+        )
         analysis: CompileAnalysis = analyze_project(
             pipelines_root=project_root / "pipelines",
             loaded_project=loaded_project,

@@ -13,7 +13,6 @@ from sqltide.compiler.audit_discovery.models import (
 )
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError
-from sqltide.compiler.discovery.main._parse_sql_header import parse_sql_header
 from sqltide.compiler.discovery.types import SqlRelationType
 from sqltide.compiler.macros.main._expand_macro_calls import expand_macro_calls
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
@@ -240,7 +239,7 @@ def _parse_audit_header(*, header: str, file_path: Path) -> dict[str, Any]:
     if not stripped_header:
         return {}
     try:
-        parsed_header: dict[str, object] = parse_sql_header(header=stripped_header)
+        parsed_header: dict[str, object] = _native.parse_sql_header(header=stripped_header)
     except ModelHeaderSyntaxError as error:
         raise SqlAuditParseError(
             f"AUDIT() header in '{file_path}' uses invalid SQLBuild syntax: {error}"

@@ -70,9 +70,6 @@ from sqltide.compiler.compile.models import (
     KafkaSettings as CompiledKafkaSettings,
 )
 from sqltide.compiler.compile.types import DesiredObjectType
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
@@ -689,7 +686,7 @@ def analyze_direct_scope_project(*, project_root: Path) -> CompileAnalysis:
 
     return analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

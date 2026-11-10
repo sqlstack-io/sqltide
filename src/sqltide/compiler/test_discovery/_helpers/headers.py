@@ -6,7 +6,6 @@ from pathlib import Path
 
 import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError
-from sqltide.compiler.discovery.main._parse_sql_header import parse_sql_header
 from sqltide.compiler.test_discovery.constants import (
     DEFAULT_SQL_TEST_MODE,
 )
@@ -33,7 +32,7 @@ def parse_test_header(*, file_path: Path, header_contents: str) -> SqlTestHeader
 
 def _parse_header_mapping(*, file_path: Path, header_contents: str) -> dict[str, object]:
     try:
-        return parse_sql_header(header=header_contents)
+        return _native.parse_sql_header(header=header_contents)
     except ModelHeaderSyntaxError as error:
         raise SqlTestParseError(
             f"TEST() header in '{file_path}' uses invalid SQLBuild syntax: {error}"

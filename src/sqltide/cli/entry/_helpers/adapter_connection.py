@@ -3,6 +3,7 @@
 from collections.abc import Callable, Mapping
 from functools import partial
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterConfigurationError
 from sqltide.adapter.models import AdapterConnectionConfig
@@ -14,9 +15,6 @@ from sqltide.cli.entry.models import (
     ResolvedInvocationConnection,
 )
 from sqltide.cli.entry.types import CliCommand
-from sqltide.compiler.discovery.main.interpolate_configuration_value import (
-    interpolate_configuration_value,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 
 
@@ -145,7 +143,7 @@ def resolve_invocation_connection_config(
     environment: Mapping[str, str] = invocation.connection.environment or {}
     variables: dict[str, object] = dict(invocation.connection.variables)
     expanded_values: dict[str, object] = {
-        name: interpolate_configuration_value(
+        name: _native.interpolate_config_value(
             value=raw_value,
             variables=variables,
             environment=environment,

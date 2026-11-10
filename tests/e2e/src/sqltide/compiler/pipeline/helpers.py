@@ -1,11 +1,9 @@
 import time
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 
 
@@ -14,7 +12,7 @@ def run_compile_benchmark(*, project_dir: Path, model_count: int) -> float:
     start: float = time.perf_counter()
     _ = analyze_project(
         pipelines_root=project_dir / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_dir),
+        loaded_project=_native.load_project_input_for_path(path=project_dir),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     return time.perf_counter() - start

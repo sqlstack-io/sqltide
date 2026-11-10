@@ -4,6 +4,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.access.main._compile_access_policy import compile_access_policy
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.compile.main._assemble_project import assemble_project
@@ -12,9 +13,6 @@ from sqltide.compiler.compile.models import (
     CompiledProject,
     CompileProjectInputs,
     CompilerAdapterProfile,
-)
-from sqltide.compiler.discovery.main._discover_project_inputs import (
-    discover_project_inputs,
 )
 from sqltide.compiler.discovery.models import DiscoveredProjectInputs, LoadedProject
 from sqltide.compiler.graph.main._build_project_graph import (
@@ -55,7 +53,7 @@ def analyze_project(
 
     discovery_start: int = time.monotonic_ns()
     try:
-        discovered_inputs: DiscoveredProjectInputs = discover_project_inputs(
+        discovered_inputs: DiscoveredProjectInputs = _native.discover_project_inputs(
             pipelines_root=pipelines_root,
             loaded_project=loaded_project,
         )

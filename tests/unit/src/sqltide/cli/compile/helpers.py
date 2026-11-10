@@ -3,6 +3,7 @@ from dataclasses import replace
 from pathlib import Path
 from shutil import copytree
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -13,9 +14,6 @@ from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAda
 from sqltide.cli.compile.main._run_compile import run_compile
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 
 
@@ -183,7 +181,7 @@ def compile_project(
     target_dir: Path,
     environment: Mapping[str, str] | None = None,
 ) -> int:
-    loaded_project: LoadedProject | None = load_project_input_for_path(
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(
         path=project_dir,
         environment=environment,
     )
@@ -201,7 +199,7 @@ def compile_project_with_render_failure(*, project_dir: Path, target_dir: Path) 
         profile,
         render_resource=_raise_render_failure,
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
     return run_compile(
         pipelines_root=project_dir / "pipelines",
         loaded_project=loaded_project,

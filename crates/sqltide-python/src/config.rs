@@ -1280,11 +1280,10 @@ pub(crate) fn parse_model_spec<'py>(
 }
 
 /// Parse `[(path, payload, decode_error)]` source files in order into one tuple of sources
-/// per file. `derive_name(topic=, label=, file_path=)` runs the Kafka naming macro and returns
+/// per file. `derive_name(topic, label, file_path)` runs the Kafka naming macro and returns
 /// `(name, macro_name, fingerprint)`.
-#[pyfunction]
 #[allow(clippy::too_many_arguments)]
-fn parse_source_registry<'py>(
+pub(crate) fn parse_source_registry<'py>(
     py: Python<'py>,
     files: Vec<(String, Bound<'py, PyAny>, Option<String>)>,
     variables: &Bound<'py, PyAny>,
@@ -1293,7 +1292,7 @@ fn parse_source_registry<'py>(
     default_retention: Bound<'py, PyAny>,
     default_broker_list: Option<String>,
     default_freshness: Bound<'py, PyAny>,
-    derive_name: &Bound<'py, PyAny>,
+    derive_name: &mut dyn FnMut(&str, &str, &str) -> PyResult<DerivedName>,
 ) -> PyResult<Vec<Bound<'py, PyTuple>>> {
     let mut document: Document<'py> = Document::new(py)?;
     let variables: Value = document.value(variables)?;
@@ -1317,17 +1316,10 @@ fn parse_source_registry<'py>(
     let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
     let mut derive =
         |topic: &str, label: &str, file_path: &str| -> Result<DerivedName, SpecError> {
-            let kwargs: Bound<'py, PyDict> = PyDict::new(py);
-            kwargs
-                .set_item("topic", topic)
-                .and_then(|()| kwargs.set_item("label", label))
-                .and_then(|()| kwargs.set_item("file_path", file_path))
-                .and_then(|()| derive_name.call((), Some(&kwargs)))
-                .and_then(|result| result.extract::<DerivedName>())
-                .map_err(|failure| {
-                    callback_error.replace(Some(failure));
-                    SpecError::new(ErrorKind::PipelineDiscovery, String::new())
-                })
+            derive_name(topic, label, file_path).map_err(|failure| {
+                callback_error.replace(Some(failure));
+                SpecError::new(ErrorKind::PipelineDiscovery, String::new())
+            })
         };
     let parsed = source_registry::parse_source_registry(
         &source_files,
@@ -1604,7 +1596,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         resolve_effective_project_configuration,
         module
     )?)?;
-    module.add_function(wrap_pyfunction!(parse_source_registry, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_mode, module)?)?;
     module.add_function(wrap_pyfunction!(parse_pipeline_settings, module)?)?;
     module.add_function(wrap_pyfunction!(parse_duration_seconds, module)?)?;

@@ -3,6 +3,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.models import (
     AdapterDirectFingerprintSnapshot,
     AdapterMutationResult,
@@ -19,9 +20,6 @@ from sqltide.cli.build.models import (
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
@@ -181,7 +179,7 @@ def run_scope_project_build_with_connection(
         ),
         client=connection,
         observation_client=connection,
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -194,7 +192,7 @@ def publish_scope_project_virtual_workflow(
     connection: RecordingAdapterConnection = RecordingAdapterConnection()
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
     options: WorkflowPreparationOptions = WorkflowPreparationOptions(
@@ -258,7 +256,7 @@ def run_scope_project_virtual_build(*, project_root: Path, deployment_id: str) -
         ),
         client=_VirtualArtifactConnection(),
         observation_client=_VirtualArtifactConnection(),
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

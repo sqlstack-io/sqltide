@@ -3,8 +3,8 @@ from typing import cast
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
-from sqltide.compiler.discovery.main._discover_pipelines import discover_pipelines
 from sqltide.compiler.discovery.models import KafkaLandingStep, LoadedPipeline
 from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
     write_pipeline_file,
@@ -39,7 +39,7 @@ from tests.unit.src.sqltide.compiler.discovery.helpers import (
 def test_given_pipeline_root_when_discovering_pipelines_then_returns_loaded_pipelines(
     test_case: DiscoverPipelinesTestCase,
 ) -> None:
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(test_case.pipelines_root)
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(test_case.pipelines_root)
 
     assert [
         pipeline.pipeline.name for pipeline in loaded_pipelines
@@ -71,7 +71,7 @@ def test_given_default_pipeline_prefix_when_directory_is_unprefixed_then_discove
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        discover_pipelines(tmp_path / "pipelines")
+        _native.discover_pipelines(tmp_path / "pipelines")
 
 
 @pytest.mark.parametrize(
@@ -141,7 +141,7 @@ def test_given_pipeline_naming_macro_when_context_matches_then_pipeline_is_loade
         f'MODEL (); SELECT 1 AS order_id FROM __source("{test_case.source_name}")',
     )
 
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(tmp_path / "pipelines")
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(tmp_path / "pipelines")
 
     assert [
         loaded.pipeline.name for loaded in loaded_pipelines
@@ -187,7 +187,7 @@ def test_given_pipeline_naming_macro_when_expected_name_differs_then_discovery_r
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        discover_pipelines(tmp_path / "pipelines")
+        _native.discover_pipelines(tmp_path / "pipelines")
 
 
 @pytest.mark.parametrize(
@@ -244,7 +244,7 @@ def test_given_transitive_driving_inputs_when_discovering_then_infers_pipeline_s
         contents=test_case.source_contents,
     )
 
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(pipelines_root)
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(pipelines_root)
 
     assert (
         tuple(
@@ -332,7 +332,7 @@ def test_given_views_when_discovering_then_ignores_them_for_pipeline_source_infe
         contents=test_case.source_contents,
     )
 
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(pipelines_root)
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(pipelines_root)
 
     assert (
         tuple(
@@ -399,7 +399,7 @@ def test_given_multiple_source_roots_when_discovering_then_rejects_pipeline(
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        discover_pipelines(pipelines_root)
+        _native.discover_pipelines(pipelines_root)
 
 
 @pytest.mark.parametrize(
@@ -459,7 +459,7 @@ def test_given_duplicate_logical_names_when_discovering_then_it_raises_expected_
     )
 
     with pytest.raises(test_case.expected_error_type, match=test_case.expected_error_fragment):
-        discover_pipelines(pipelines_root)
+        _native.discover_pipelines(pipelines_root)
 
 
 if __name__ == "__main__":
