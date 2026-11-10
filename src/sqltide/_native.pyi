@@ -253,6 +253,7 @@ from sqltide.executor.population.models import (
 )
 from sqltide.executor.promotion.models import (
     DeploymentPromotionPreview,
+    PublishRequest,
     PublishResult,
     RollbackPlan,
     RollbackRequest,
@@ -1009,6 +1010,12 @@ def build_audit_deployment_candidates(
 def build_publish_deployment_candidates(
     *, client: AdapterConnection, metadata_database: str, default_database: str
 ) -> tuple[AuditDeploymentCandidate, ...]: ...
+def execute_publish(
+    *,
+    request: PublishRequest,
+    client: AdapterConnection,
+    emitter: WorkflowEventEmitter | None = None,
+) -> PublishResult: ...
 def resolve_publish_deployment_id(
     *,
     client: AdapterConnection,

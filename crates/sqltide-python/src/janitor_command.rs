@@ -13,6 +13,7 @@ use crate::executor::{
 };
 use crate::handling::within;
 use crate::py_kwargs;
+use crate::workflow_statements::numbered;
 
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
@@ -20,8 +21,6 @@ const ADAPTER_EXCEPTIONS: &str = "sqltide.adapter.exceptions";
 const COMPILE_CONSTANTS: &str = "sqltide.compiler.compile.constants";
 const PLANNER_CONSTANTS: &str = "sqltide.compiler.planner.constants";
 const JANITOR_MODELS: &str = "sqltide.executor.janitor.models";
-const WORKFLOW_MODELS: &str = "sqltide.executor.workflow.models";
-const WORKFLOW_TYPES: &str = "sqltide.executor.workflow.types";
 const WAREHOUSE_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_warehouse_workflow";
 const MUTATION_LOCK: &str = "sqltide.executor.workflow.main.target_mutation_lock";
 
@@ -284,32 +283,6 @@ fn preview<'py>(client: &Any<'py>, request: &Any<'py>, state: &Any<'py>) -> PyRe
     )
 }
 
-/// Numbered teardown statements for one rendered SQL batch.
-fn teardown_statements<'py>(
-    rendered: &Any<'py>,
-    first: usize,
-    prefix: &str,
-) -> PyResult<Vec<Any<'py>>> {
-    let py: Python<'py> = rendered.py();
-    let statement: Any<'py> = attr(py, WORKFLOW_MODELS, "WarehouseStatement")?;
-    let teardown: Any<'py> = attr(py, WORKFLOW_TYPES, "WorkflowPhase")?.getattr("TEARDOWN")?;
-    let mutation: Any<'py> = attr(py, WORKFLOW_TYPES, "StatementIntent")?.getattr("MUTATION")?;
-    let mut statements: Vec<Any<'py>> = Vec::new();
-    for (offset, sql) in rendered.try_iter()?.enumerate() {
-        statements.push(statement.call(
-            (),
-            Some(&py_kwargs!(py;
-                sequence = first + offset,
-                step_id = format!("{prefix}_{:04}", offset + 1),
-                phase = &teardown,
-                intent = &mutation,
-                sql = sql?,
-            )?),
-        )?);
-    }
-    Ok(statements)
-}
-
 fn apply<'py>(client: &Any<'py>, request: &Any<'py>, state: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = client.py();
     let database: Any<'py> = request.getattr("database")?;
@@ -385,9 +358,14 @@ fn apply<'py>(client: &Any<'py>, request: &Any<'py>, state: &Any<'py>) -> PyResu
     let cleanup_sql: Any<'py> =
         client.call_method1("render_cleanup_relations", (&cleanup_request,))?;
     let mut statements: Vec<Any<'py>> =
-        teardown_statements(&binding_sql, 1, "remove_obsolete_binding")?;
+        numbered(&binding_sql, 1, "remove_obsolete_binding", "TEARDOWN")?;
     let next: usize = statements.len() + 1;
-    statements.extend(teardown_statements(&cleanup_sql, next, "cleanup_relation")?);
+    statements.extend(numbered(
+        &cleanup_sql,
+        next,
+        "cleanup_relation",
+        "TEARDOWN",
+    )?);
     attr(py, WAREHOUSE_WORKFLOW, "execute_warehouse_workflow")?.call(
         (),
         Some(&py_kwargs!(py; statements = PyTuple::new(py, statements)?, connection = client)?),

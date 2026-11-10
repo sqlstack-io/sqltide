@@ -181,7 +181,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         )?;
         call(
             py,
-            "sqltide.executor.promotion.main.execute_deployment_promotion",
+            "sqltide._native",
             "execute_publish",
             py_kwargs!(py; request = request, client = connection, emitter = &sink)?,
         )

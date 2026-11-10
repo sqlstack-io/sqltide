@@ -18,6 +18,7 @@ from sqltide._native import (
     build_root_backfill_reports,
     build_virtual_bootstrap_workflow,
     build_virtual_execution_result,
+    execute_publish,
     load_planning_warehouse_snapshot,
     plan_deployment,
     publish_build_workflow,
@@ -76,7 +77,6 @@ from sqltide.executor.backfill.models import (
     BackfillExecutionResult,
     RootBackfillReport,
 )
-from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishRequest
 from sqltide.executor.workflow.main.execute_build_workflow import execute_build_workflow
 from sqltide.executor.workflow.models import (

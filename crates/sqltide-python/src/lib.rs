@@ -61,6 +61,7 @@ mod population;
 mod population_planning;
 mod project_analysis;
 mod project_discovery;
+mod promotion_command;
 mod realization;
 mod row_error_policy;
 mod rules;
@@ -75,6 +76,7 @@ mod testing;
 mod timestamps;
 mod toml;
 mod workflow;
+mod workflow_statements;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -159,6 +161,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     run_events::register(module)?;
     janitor_command::register(module)?;
     deployment_command::register(module)?;
+    promotion_command::register(module)?;
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;

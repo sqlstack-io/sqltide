@@ -1073,7 +1073,7 @@ fn run_deployment_promotion(
         )?;
         call(
             py,
-            "sqltide.executor.promotion.main.execute_deployment_promotion",
+            "sqltide._native",
             "execute_publish",
             &[("request", request), ("client", client.clone())],
         )
