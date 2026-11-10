@@ -815,15 +815,14 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
     "test_case",
     [
         CompilationEntrypointsTestCase(
-            description="routes exactly five Python command paths through one compilation service",
+            description="routes exactly four Python command paths through one compilation service",
             expected_entrypoint_paths=(
-                "src/sqltide/cli/dev/main/_run_dev.py",
                 "src/sqltide/cli/discover/main/_run_discover.py",
                 "src/sqltide/cli/readiness/main/_run_deployment_audit.py",
                 "src/sqltide/cli/reconcile/main/_run_reconcile.py",
                 "src/sqltide/cli/sql/main/_run_sql.py",
             ),
-            expected_entrypoint_count=5,
+            expected_entrypoint_count=4,
             expected_assembly_call_count=1,
             expected_realization_call_count=1,
             expected_consumer_rebuild_count=0,

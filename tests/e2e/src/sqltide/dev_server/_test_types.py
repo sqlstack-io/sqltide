@@ -52,7 +52,8 @@ class MessageBrowserProcessE2ETestCase:
 class KafkaReaderReuseE2ETestCase:
     description: str
     consumer_group: str
-    expected_lag: int
+    expected_committed_offset: int
+    expected_end_offset: int
 
 
 @dataclass(frozen=True)
@@ -237,3 +238,13 @@ class PlanSourceRecreationBrowserE2ETestCase:
     expected_section_fragments: tuple[str, ...]
     expected_summary_fragment: str
     expected_warning_count: int
+
+
+@dataclass(frozen=True)
+class DevServerConcurrencyE2ETestCase:
+    description: str
+    slow_seconds: float
+    fast_requests: int
+    expected_result: tuple[int, bool, int, bool, frozenset[int], bool, bool]
+    expected_fast_budget_seconds: float
+    expected_minimum_busy_ratio: float

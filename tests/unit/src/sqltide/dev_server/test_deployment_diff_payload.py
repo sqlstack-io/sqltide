@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.dev_server._helpers.server.deployment_operations import diff_payload
+from sqltide._native import deployment_diff_payload
 from sqltide.executor.deployment.models import (
     DeploymentDiffColumn,
     DeploymentDiffRelation,
@@ -67,7 +67,7 @@ _RESULT: DeploymentDiffResult = DeploymentDiffResult(
 def test_given_a_deployment_comparison_when_serializing_then_column_drift_is_named(
     test_case: DeploymentDiffPayloadTestCase,
 ) -> None:
-    payload: dict[str, object] = diff_payload(result=_RESULT)
+    payload: dict[str, object] = deployment_diff_payload(result=_RESULT)
 
     relations: list[dict[str, object]] = cast(list[dict[str, object]], payload["relations"])
     assert tuple(str(item["status"]) for item in relations) == test_case.expected_statuses

@@ -1,8 +1,9 @@
 import os
+import threading
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol, final
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -29,6 +30,7 @@ from sqltide.adapter.models import (
     AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
+    AdapterReplayColumns,
     AdapterReplayOffsetFrontier,
     AdapterReplayOffsetProgressRequest,
     AdapterReplayQuery,
@@ -50,6 +52,8 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.auth.classes.control_store import ControlStore
+from sqltide.auth.models import AuthSettings
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     BuildProtectionRequirement,
@@ -61,7 +65,9 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.destruction.models import DestructionCommandOptions
+from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.plan.models import PlanCommandOptions
+from sqltide.cli.presentation.classes.cli_style import CliStyle
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
@@ -92,6 +98,7 @@ from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
+    KafkaSettings,
     LoadedPipeline,
     LoadedProject,
     LoadedProjectConfiguration,
@@ -150,6 +157,23 @@ from sqltide.compiler.sql_analysis.models import (
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
+from sqltide.dev_server.models import (
+    BuildCancellationOutcome,
+    CompileErrorInfo,
+    CompileOutcome,
+    DevExecutionContext,
+    KafkaLagSnapshot,
+    KafkaTopicsSnapshot,
+    MessageFacetsRequest,
+    MessagesQueryRequest,
+    ReplayOffsetProgress,
+)
+from sqltide.dev_server.types import (
+    ActivityTone,
+    CompileAuthorizationGuard,
+    DevServerReporter,
+    RunPresentationStatus,
+)
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
 from sqltide.executor.backfill.models import (
@@ -158,6 +182,7 @@ from sqltide.executor.backfill.models import (
     BackfillExecutionResult,
     RootBackfillReport,
 )
+from sqltide.executor.deployment.models import DeploymentDiffResult
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,
@@ -204,6 +229,9 @@ from sqltide.executor.workflow.models import (
     WorkflowExecutionResult,
 )
 from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
+from sqltide.sensors.classes.sensor_dispatcher import SensorDispatcher
+from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
+from sqltide.sensors.models import SensorDispatchSummary
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -1575,3 +1603,640 @@ class InMemoryDestructionPlanStore:
     def consume(
         self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
     ) -> DestructionPlan: ...
+
+class DevApplication:
+    @property
+    def state(self) -> DevServerState: ...
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        query_string: str = "",
+        headers: list[tuple[str, str]] = ...,
+        body: bytes = b"",
+        client: str | None = None,
+    ) -> tuple[int, list[tuple[str, str]], bytes]: ...
+    def routes(self) -> list[tuple[list[str], str]]: ...
+    def mount_static_assets(self, assets_root: Path) -> None: ...
+    def startup(self) -> None: ...
+    def shutdown(self) -> None: ...
+    def serve(self, host: str, port: int) -> None: ...
+
+def create_dev_app(
+    *,
+    state: DevServerState,
+    connection: AdapterConnection | None = None,
+    observation_connection: AdapterConnection | None = None,
+    database: str | None = None,
+    project_dir: Path | None = None,
+    reporter: DevServerReporter | None = None,
+    execution_context: DevExecutionContext | None = None,
+    auth_settings: AuthSettings | None = None,
+    control_store: ControlStore | None = None,
+) -> DevApplication: ...
+def static_assets_root() -> Path: ...
+def static_assets_present(*, assets_root: Path) -> bool: ...
+def startup_lines(
+    *,
+    style: CliStyle,
+    outcome: CompileOutcome,
+    project_dir: Path,
+    database: str | None,
+    warehouse_connected: bool = True,
+    host: str,
+    port: int,
+    tool_version: str,
+) -> tuple[str, ...]: ...
+def reload_summary(*, outcome: CompileOutcome) -> tuple[str, ActivityTone, str]: ...
+def activity_line(
+    *,
+    style: CliStyle,
+    timestamp: str,
+    category: str,
+    status: str,
+    tone: ActivityTone,
+    detail: str,
+) -> str: ...
+
+@final
+class DevTerminalReporter:
+    """Prints the startup banner and one aligned activity line per server event."""
+
+    def __init__(self, *, style: CliStyle) -> None: ...
+    def report_startup(
+        self,
+        *,
+        outcome: CompileOutcome,
+        project_dir: Path,
+        database: str | None,
+        warehouse_connected: bool,
+        host: str,
+        port: int,
+    ) -> None: ...
+    def report_reload(self, *, outcome: CompileOutcome) -> None: ...
+    def report_activity(
+        self, *, category: str, status: str, tone: ActivityTone, detail: str
+    ) -> None: ...
+    def report_shutdown(self) -> None: ...
+
+def run_dev(
+    *,
+    options: DevCommandOptions,
+    client: AdapterConnection | None,
+    observation_client: AdapterConnection | None = None,
+    connection_factory: Callable[[], AdapterConnection] | None = None,
+    observation_connection_factory: Callable[[], AdapterConnection] | None = None,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def run_dev_server(
+    *,
+    run_compile: Callable[[], CompileAnalysis],
+    connection: AdapterConnection | None,
+    observation_connection: AdapterConnection | None,
+    database: str | None,
+    project_dir: Path,
+    host: str,
+    port: int,
+    reporter: DevServerReporter,
+    execution_context: DevExecutionContext | None = None,
+    auth_settings: AuthSettings | None = None,
+) -> int: ...
+def build_sensors_payload(
+    *,
+    analysis: CompileAnalysis,
+    repository: SensorStateRepository | None,
+    health: dict[str, object],
+) -> dict[str, object]: ...
+def build_sensor_ticks_payload(
+    *,
+    repository: SensorStateRepository | None,
+    sensor_name: str,
+    limit: int,
+    after: str | None = None,
+    before: str | None = None,
+) -> dict[str, object]: ...
+def build_dead_letters_payload(
+    *, repository: SensorStateRepository | None
+) -> dict[str, object]: ...
+def build_deployments_payload(
+    *, connection: AdapterConnection, database: str, metadata_database: str
+) -> dict[str, object]: ...
+def build_deployment_detail_payload(
+    *, connection: AdapterConnection, database: str, metadata_database: str, deployment_id: str
+) -> dict[str, object] | None: ...
+def build_definitions_payload(
+    *, analysis: CompileAnalysis, version_key: str
+) -> dict[str, object]: ...
+def build_mode_aware_plan_payload(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+    selectors: tuple[str, ...],
+    planned_at: str,
+    replay_row_counts: dict[str, int | None],
+    command: str,
+) -> dict[str, object]: ...
+def count_replay_rows(
+    *, connection: AdapterConnection, database: str, plan: DirectPlan, start_time: str | None
+) -> dict[str, int | None]: ...
+def replay_time_column(*, boundary_mode: str, columns: AdapterReplayColumns) -> str: ...
+def build_replay_count_query(
+    *, database: str, relation_name: str, time_column: str, start_time: str | None
+) -> str: ...
+def build_activity_capabilities_query() -> str: ...
+def build_query_views_activity_query(*, database: str, window_seconds: int) -> str: ...
+def build_part_log_activity_query(*, database: str, window_seconds: int) -> str: ...
+def build_parts_activity_query(*, database: str) -> str: ...
+def read_model_activity(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_names: tuple[str, ...],
+    captured_at: str,
+    active_bindings: tuple[tuple[str, str], ...] = (),
+    window_seconds: int = 120,
+) -> dict[str, dict[str, object]]: ...
+def model_drift_payload(
+    *, analysis: CompileAnalysis, model: CompiledModel, catalog: CatalogSnapshot
+) -> dict[str, object]: ...
+def build_relation_stats_query(*, database: str) -> str: ...
+def build_parts_query(*, database: str) -> str: ...
+def build_extents_query(*, database: str, relation_names: tuple[str, ...]) -> str: ...
+def build_throughputs_query(*, database: str, windows: tuple[tuple[str, int, int], ...]) -> str: ...
+def build_partitions_query(*, database: str, relation_names: tuple[str, ...]) -> str: ...
+def choose_throughput_window(*, newest_age_seconds: float | None) -> tuple[int, int]: ...
+def apply_bound_relation_stats(
+    *, stats: dict[str, dict[str, int]], bindings: tuple[tuple[str, str], ...]
+) -> dict[str, dict[str, int]]: ...
+def build_state_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    kafka_lag_reader: KafkaLagSource | None = None,
+    warehouse_health_reader: WarehouseHealthReader | None = None,
+) -> dict[str, object]: ...
+def build_topics_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection | None,
+    database: str | None,
+    topic_reader: KafkaTopicSource,
+    kafka_lag_reader: KafkaLagSource,
+) -> dict[str, object]: ...
+def derive_run_status(
+    *,
+    terminal_outcome: str | None,
+    completed_event_outcome: str | None,
+    last_signal_at: datetime,
+    warehouse_now: datetime,
+    presumed_failed_after_seconds: int = 600,
+) -> RunPresentationStatus: ...
+def derive_run_duration_ms(
+    *, started_at: str, completed_at: str | None, warehouse_now: datetime
+) -> int: ...
+def terminal_audit_summary(
+    *, command: str, mode: str, summary_json: object
+) -> dict[str, int] | None: ...
+def assemble_runs(
+    *,
+    terminal_by_id: dict[str, dict[str, object]],
+    streams: dict[str, list[dict[str, object]]],
+    warehouse_now: datetime,
+    limit: int | None = None,
+    presumed_failed_after_seconds: int = 600,
+) -> list[dict[str, object]]: ...
+def statement_progress(
+    *, connection: AdapterConnection, events: list[dict[str, object]], observed_at: str
+) -> dict[str, object] | None: ...
+def read_runs(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    limit: int | None = 100,
+    presumed_failed_after_seconds: int = 600,
+) -> list[dict[str, object]]: ...
+def read_active_runs(
+    *, connection: AdapterConnection, database: str, presumed_failed_after_seconds: int = 600
+) -> list[dict[str, object]]: ...
+def read_run_events(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    invocation_id: str,
+    after: int = 0,
+    presumed_failed_after_seconds: int = 600,
+) -> dict[str, object]: ...
+def read_run_statement(
+    *, connection: AdapterConnection, database: str, invocation_id: str, statement_sequence: int
+) -> dict[str, object]: ...
+def read_terminal_run(
+    *, connection: AdapterConnection, database: str, invocation_id: str
+) -> dict[str, object] | None: ...
+def read_destruction_recovery_run(
+    *, connection: AdapterConnection, database: str, invocation_id: str
+) -> dict[str, object] | None: ...
+def read_latest_direct_build_materialization(
+    *, connection: AdapterConnection, database: str, project_identity: str
+) -> str | None: ...
+def read_latest_applied_direct_build_at(
+    *, connection: AdapterConnection, database: str, project_identity: str
+) -> str | None: ...
+def decode_replay_offset_progress_request(
+    value: object,
+) -> AdapterReplayOffsetProgressRequest | None: ...
+def calculate_replay_offset_progress(
+    *,
+    request: AdapterReplayOffsetProgressRequest,
+    frontiers: tuple[AdapterReplayOffsetFrontier, ...],
+    elapsed_seconds: float,
+    completed: bool = False,
+) -> ReplayOffsetProgress | None: ...
+
+@final
+class MessagesQueryDocument:
+    """One validated message browsing request compiled to SQL fragments."""
+
+def parse_messages_document(request: MessagesQueryRequest) -> MessagesQueryDocument: ...
+def build_messages_sql(
+    *,
+    database: str,
+    relation_name: str,
+    document: MessagesQueryDocument,
+    window_seconds: int | None,
+) -> str: ...
+def read_source_messages(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    request: MessagesQueryRequest,
+) -> dict[str, object]: ...
+def build_record_sql(*, database: str, relation_name: str, partition: int, offset: int) -> str: ...
+def read_source_message_record(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    partition: int,
+    offset: int,
+) -> dict[str, object] | None: ...
+def build_facets_sql(
+    *,
+    database: str,
+    relation_name: str,
+    document: MessagesQueryDocument,
+    facet_path: tuple[str | int, ...],
+) -> tuple[str, str]: ...
+def read_source_message_facets(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    request: MessageFacetsRequest,
+) -> dict[str, object]: ...
+def ensure_header_columns(
+    *, connection: AdapterConnection, database: str, relation_name: str
+) -> None: ...
+
+class KafkaLagSource(Protocol):
+    """Cached consumer-group lag for one managed Kafka source."""
+
+    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+
+class KafkaTopicSource(Protocol):
+    """Cached topic inventory for one broker configuration."""
+
+    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+
+def build_kafka_client_config(*, kafka: KafkaSettings) -> dict[str, object]: ...
+def kafka_client_key(*, kafka: KafkaSettings) -> tuple[str, tuple[tuple[str, str], ...]]: ...
+def build_kafka_lag_snapshot(
+    *,
+    partition_ids: frozenset[int],
+    committed_offsets: Mapping[int, int],
+    end_offsets: Mapping[int, int],
+) -> KafkaLagSnapshot: ...
+def build_kafka_topics_snapshot(*, metadata: object) -> KafkaTopicsSnapshot: ...
+
+@final
+class KafkaLagReader:
+    """Return cached lag immediately and refresh stale values on a worker thread."""
+
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] | None = None,
+        collector: Callable[..., object] | None = None,
+    ) -> None: ...
+    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def close(self) -> None: ...
+
+@final
+class KafkaTopicReader:
+    """Return cached topic inventories immediately and refresh stale entries."""
+
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] | None = None,
+        collector: Callable[..., object] | None = None,
+    ) -> None: ...
+    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def close(self) -> None: ...
+
+@final
+class WarehouseHealthReader:
+    """Preserve the last usable snapshot while marking failed refreshes stale."""
+
+    def __init__(
+        self, *, clock: Callable[[], float] | None = None, cache_seconds: float | None = None
+    ) -> None: ...
+    def read(
+        self,
+        *,
+        connection: AdapterConnection,
+        database: str,
+        measured_at: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
+    ) -> AdapterWarehouseHealth: ...
+
+@final
+class OverlayReader:
+    """Own one private connection so overlay refreshes never take the shared query lock."""
+
+    def __init__(
+        self,
+        *,
+        connection_factory: Callable[[], AdapterConnection],
+        kafka_lag_reader: KafkaLagSource,
+    ) -> None: ...
+    def close(self) -> None: ...
+    def read(self, *, analysis: CompileAnalysis, database: str) -> dict[str, object]: ...
+
+def build_compile_outcome(*, run_compile: Callable[[], CompileAnalysis]) -> CompileOutcome: ...
+def describe_compile_error(*, error: Exception) -> CompileErrorInfo: ...
+def build_status_payload(
+    *, outcome: CompileOutcome, warehouse_status: dict[str, object]
+) -> dict[str, object]: ...
+
+@final
+class StateSnapshot:
+    """Hold one warehouse overlay so requests never wait on per-relation reads."""
+
+    def __init__(
+        self,
+        *,
+        build: Callable[[], dict[str, object]],
+        refresh_seconds: float | None = None,
+        on_close: Callable[[], None] | None = None,
+    ) -> None: ...
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def current(self) -> dict[str, object]: ...
+    def held(self) -> dict[str, object] | None: ...
+    def refresh(self) -> dict[str, object]: ...
+    def invalidate(self) -> None: ...
+
+@final
+class DevServerState:
+    """One long-running server's source of truth between requests."""
+
+    def __init__(self, *, run_compile: Callable[[], CompileAnalysis]) -> None: ...
+    @property
+    def snapshot(self) -> StateSnapshot: ...
+    def attach_snapshot(self, snapshot: StateSnapshot) -> None: ...
+    @property
+    def query_lock(self) -> threading.Lock: ...
+    def reload(self) -> CompileOutcome: ...
+    def reload_guarded(self, *, guard: CompileAuthorizationGuard) -> CompileOutcome: ...
+    def current(self) -> CompileOutcome: ...
+    def current_analysis(self) -> CompileAnalysis: ...
+    def current_servable_outcome(self) -> CompileOutcome: ...
+
+@final
+class SilentDevServerReporter:
+    """A DevServerReporter that says nothing; the default for embedded use."""
+
+    def report_startup(
+        self,
+        *,
+        outcome: CompileOutcome,
+        project_dir: Path,
+        database: str | None,
+        warehouse_connected: bool,
+        host: str,
+        port: int,
+    ) -> None: ...
+    def report_reload(self, *, outcome: CompileOutcome) -> None: ...
+    def report_activity(
+        self, *, category: str, status: str, tone: ActivityTone, detail: str
+    ) -> None: ...
+    def report_shutdown(self) -> None: ...
+
+def scheduler_enabled(analysis: CompileAnalysis) -> bool: ...
+def sensors_enabled(analysis: CompileAnalysis) -> bool: ...
+def build_audit_scheduler_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def execute_due_audits(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    observation_connection: AdapterConnection | None = None,
+    database: str,
+    project_dir: Path,
+    due: tuple[dict[str, object], ...],
+) -> int: ...
+def run_one_audit(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    name: str,
+    project_dir: Path,
+    database: str,
+) -> dict[str, object]: ...
+def run_audit_batch(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    names: tuple[str, ...],
+    project_dir: Path,
+    database: str,
+) -> list[dict[str, object]]: ...
+def run_one_test(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    name: str,
+    project_dir: Path,
+    database: str,
+) -> dict[str, object]: ...
+def build_checks_status_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    project_dir: Path,
+) -> list[dict[str, object]]: ...
+def promotion_executed_logical_ids(
+    *, connection: AdapterConnection, metadata_database: str, deployment_id: str
+) -> tuple[str, ...]: ...
+def run_dev_deployment_promotion(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    deployment_id: str,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def run_dev_deployment_cleanup(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    retention_days: int,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def build_deployment_diff_payload(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    comparison: str,
+) -> dict[str, object]: ...
+def deployment_diff_payload(*, result: DeploymentDiffResult) -> dict[str, object]: ...
+def build_invocation(
+    *,
+    selectors: tuple[str, ...],
+    start_time: str | None,
+    execution_context: DevExecutionContext | None,
+    changed: bool = False,
+    include_missing_upstream: bool = False,
+    deployment_id: str | None = None,
+    confirmations: tuple[str, ...] | None = None,
+) -> tuple[list[str], str]: ...
+def build_child_environment(
+    *,
+    execution_context: DevExecutionContext | None,
+    display_command: str | None = None,
+    invocation_id: str | None = None,
+    expected_write_scope: frozenset[str] | None = None,
+    expected_read_scope: frozenset[str] | None = None,
+    expected_pipeline_scope: frozenset[str] | None = None,
+) -> dict[str, str]: ...
+
+@final
+class BuildProcessManager:
+    """Owns at most one running `sqt build` child and its live event feed."""
+
+    def __init__(
+        self,
+        *,
+        reporter: DevServerReporter,
+        execution_context: DevExecutionContext | None = None,
+        query_canceller: Callable[[str], AdapterQueryCancellation] | None = None,
+        cancellation_reporter: Callable[[BuildCancellationOutcome], None] | None = None,
+    ) -> None: ...
+    def start(
+        self,
+        *,
+        project_dir: Path,
+        selectors: tuple[str, ...],
+        start_time: str | None,
+        changed: bool = False,
+        include_missing_upstream: bool = False,
+        deployment_id: str | None = None,
+        confirmations: tuple[str, ...] | None = None,
+        expected_write_scope: frozenset[str] | None = None,
+        expected_read_scope: frozenset[str] | None = None,
+        expected_pipeline_scope: frozenset[str] | None = None,
+    ) -> dict[str, object]: ...
+    def feed(self, *, after: int) -> dict[str, object]: ...
+    def cancel(self, *, invocation_id: str) -> dict[str, object]: ...
+    def kill(self, *, invocation_id: str) -> dict[str, object]: ...
+    def close(self) -> None: ...
+
+@final
+class AuditScheduler:
+    """Poll current compile and metadata state, then run one due batch at a time."""
+
+    def __init__(
+        self,
+        *,
+        state: DevServerState,
+        warehouse: WarehouseRuntime | None = None,
+        connection: AdapterConnection | None = None,
+        observation_connection: AdapterConnection | None = None,
+        database: str | None,
+        project_dir: Path,
+        builds: BuildProcessManager,
+        presumed_failed_after_seconds: int | None = None,
+    ) -> None: ...
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def tick(self) -> int: ...
+    def health(self) -> dict[str, object]: ...
+
+@final
+class ReadConnection:
+    """The context manager WarehouseRuntime.read_connection returns."""
+
+    def __enter__(self) -> AdapterConnection | None: ...
+    def __exit__(self, *exc_info: object) -> bool: ...
+
+@final
+class WarehouseRuntime:
+    """Hold primary and observation connections, reconnecting without stopping the UI."""
+
+    def __init__(
+        self,
+        *,
+        connection: AdapterConnection | None,
+        observation_connection: AdapterConnection | None,
+        connection_factory: Callable[[], AdapterConnection] | None,
+        observation_connection_factory: Callable[[], AdapterConnection] | None,
+        database: str | None,
+        query_lock: threading.Lock | threading.RLock | None = None,
+    ) -> None: ...
+    @property
+    def connection(self) -> AdapterConnection | None: ...
+    @property
+    def observation_connection(self) -> AdapterConnection | None: ...
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def connect_now(self) -> bool: ...
+    def request_health_check(self) -> None: ...
+    def status(self) -> dict[str, object]: ...
+    def read_connection(self) -> ReadConnection: ...
+
+@final
+class BuildCancellationCoordinator:
+    """Cancel an exact workflow query and retain the confirmed outcome."""
+
+    def __init__(self, *, warehouse: WarehouseRuntime, database: str | None) -> None: ...
+    def cancel_query(self, query_id: str) -> AdapterQueryCancellation: ...
+    def record_outcome(self, outcome: BuildCancellationOutcome) -> None: ...
+
+@final
+class SensorScheduler:
+    """Poll current compile state and dispatch running sensors one pass at a time."""
+
+    def __init__(
+        self, *, state: DevServerState, warehouse: WarehouseRuntime, database: str | None
+    ) -> None: ...
+    @property
+    def repository(self) -> SensorStateRepository | None: ...
+    def build_dispatcher(self, *, analysis: CompileAnalysis) -> SensorDispatcher | None: ...
+    def start(self) -> None: ...
+    def initialize_event_checkpoints(self) -> None: ...
+    def close(self) -> None: ...
+    def tick(self) -> SensorDispatchSummary | None: ...
+    def health(self) -> dict[str, object]: ...

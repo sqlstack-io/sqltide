@@ -160,7 +160,7 @@ _ACCOUNT_AUDIT: Table = Table(
 
 
 class ControlStore:
-    """Synchronous account repository shared by FastAPI worker threads and CLI."""
+    """Synchronous account repository shared by dev server worker threads and the CLI."""
 
     def __init__(self, *, url: str) -> None:
         self._url = url

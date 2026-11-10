@@ -272,17 +272,3 @@ class SensorDeadLetterActionRequest(BaseModel):
     sensorName: str
     eventId: str
     reason: str | None = None
-
-
-@dataclass(frozen=True)
-class DeploymentOperationRecord:
-    """Terminal facts for one UI-triggered deployment lifecycle operation."""
-
-    command: str
-    deployment_id: str | None
-    outcome: str
-    exit_code: int
-    materialized_outcome: str | None
-    error_message: str | None
-    summary: dict[str, object]
-    selected_node_count: int = 0

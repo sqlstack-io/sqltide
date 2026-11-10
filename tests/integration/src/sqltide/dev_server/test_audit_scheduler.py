@@ -4,16 +4,18 @@ from pathlib import Path
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide._native import analyze_project
+from sqltide._native import (
+    AuditScheduler,
+    BuildProcessManager,
+    DevServerState,
+    SilentDevServerReporter,
+    analyze_project,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.audit_scheduler import AuditScheduler
-from sqltide.dev_server.classes.build_process import BuildProcessManager
-from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.classes.silent_reporter import SilentDevServerReporter
 from sqltide.dev_server.models import DevExecutionContext
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     execute_rendered_statements,

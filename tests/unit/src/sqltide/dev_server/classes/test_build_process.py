@@ -5,9 +5,8 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import BuildProcessManager, SilentDevServerReporter
 from sqltide.adapter.models import AdapterQueryCancellation
-from sqltide.dev_server.classes.build_process import BuildProcessManager
-from sqltide.dev_server.classes.silent_reporter import SilentDevServerReporter
 from sqltide.dev_server.models import BuildCancellationOutcome
 from sqltide.executor.observability.constants import RUN_INVOCATION_ID_ENV_VAR
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
@@ -37,21 +36,24 @@ from tests.unit.src.sqltide.dev_server.classes.helpers import (
 )
 def test_given_graceful_cancel_timeout_when_polling_then_force_action_remains_available(
     test_case: BuildCancellationStateTestCase,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process: CancellingProcess = CancellingProcess()
     outcome_ready: threading.Event = threading.Event()
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
     manager: BuildProcessManager = BuildProcessManager(
         reporter=SilentDevServerReporter(),
         cancellation_reporter=lambda outcome: outcome_ready.set(),
     )
-    manager._process = cast(subprocess.Popen[str], process)
-    manager._invocation_id = test_case.invocation_id
+    invocation_id: str = str(
+        manager.start(project_dir=Path("/project"), selectors=(), start_time=None)["invocationId"]
+    )
 
-    result: dict[str, object] = manager.cancel(invocation_id=test_case.invocation_id)
+    result: dict[str, object] = manager.cancel(invocation_id=invocation_id)
     assert process.terminate_requested.wait(timeout=2.0)
     feed: dict[str, object] = manager.feed(after=0)
-    repeated: dict[str, object] = manager.cancel(invocation_id=test_case.invocation_id)
-    manager.kill(invocation_id=test_case.invocation_id)
+    repeated: dict[str, object] = manager.cancel(invocation_id=invocation_id)
+    manager.kill(invocation_id=invocation_id)
     assert outcome_ready.wait(timeout=2.0)
 
     assert result["status"] == test_case.expected_cancel_status
@@ -88,8 +90,12 @@ def test_given_graceful_cancel_timeout_when_polling_then_force_action_remains_av
 )
 def test_given_active_query_when_cancelling_then_manager_reports_confirmed_warehouse_outcome(
     test_case: BuildWarehouseCancellationTestCase,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    process: PendingBuildProcess = PendingBuildProcess()
+    process: ActiveQueryBuildProcess = ActiveQueryBuildProcess(
+        invocation_id=test_case.invocation_id, query_id=test_case.query_id
+    )
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
     outcome_ready: threading.Event = threading.Event()
     outcomes: list[BuildCancellationOutcome] = []
 
@@ -111,11 +117,12 @@ def test_given_active_query_when_cancelling_then_manager_reports_confirmed_wareh
         query_canceller=cancel_query,
         cancellation_reporter=record_outcome,
     )
-    manager._process = cast(subprocess.Popen[str], process)
-    manager._invocation_id = test_case.invocation_id
-    manager._active_query_id = test_case.query_id
+    invocation_id: str = str(
+        manager.start(project_dir=Path("/project"), selectors=(), start_time=None)["invocationId"]
+    )
+    assert process.stdout.started.wait(timeout=2.0)
 
-    initial: dict[str, object] = manager.cancel(invocation_id=test_case.invocation_id)
+    initial: dict[str, object] = manager.cancel(invocation_id=invocation_id)
     process.finish()
     assert outcome_ready.wait(timeout=2.0)
     terminal: dict[str, object] = manager.feed(after=0)
@@ -145,10 +152,12 @@ def test_given_active_query_when_cancelling_then_manager_reports_confirmed_wareh
 )
 def test_given_statement_started_event_when_cancelling_then_exact_query_id_is_forwarded(
     test_case: BuildWarehouseCancellationTestCase,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process: ActiveQueryBuildProcess = ActiveQueryBuildProcess(
         invocation_id=test_case.invocation_id, query_id=test_case.query_id
     )
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: process)
     cancelled_query_ids: list[str] = []
     cancellation_started: threading.Event = threading.Event()
     outcome_ready: threading.Event = threading.Event()
@@ -168,21 +177,15 @@ def test_given_statement_started_event_when_cancelling_then_exact_query_id_is_fo
         query_canceller=cancel_query,
         cancellation_reporter=lambda outcome: outcome_ready.set(),
     )
-    manager._process = cast(subprocess.Popen[str], process)
-    manager._invocation_id = test_case.invocation_id
-    consumer: threading.Thread = threading.Thread(
-        target=manager._consume_stdout,
-        kwargs={"process": manager._process, "launch_invocation_id": test_case.invocation_id},
-        daemon=True,
+    invocation_id: str = str(
+        manager.start(project_dir=Path("/project"), selectors=(), start_time=None)["invocationId"]
     )
-    consumer.start()
     assert process.stdout.started.wait(timeout=2.0)
 
-    result: dict[str, object] = manager.cancel(invocation_id=test_case.invocation_id)
+    result: dict[str, object] = manager.cancel(invocation_id=invocation_id)
     assert cancellation_started.wait(timeout=2.0)
     process.finish()
     assert outcome_ready.wait(timeout=2.0)
-    consumer.join(timeout=2.0)
 
     assert result["queryId"] == test_case.query_id
     assert cancelled_query_ids == [test_case.query_id]

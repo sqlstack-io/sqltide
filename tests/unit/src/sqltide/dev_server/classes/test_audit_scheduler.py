@@ -5,12 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sqltide._native import AuditScheduler, BuildProcessManager, DevServerState
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.audit_scheduler import AuditScheduler
-from sqltide.dev_server.classes.build_process import BuildProcessManager
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     AuditSchedulerActiveRunTestCase,
     AuditSchedulerBackoffTestCase,
@@ -103,19 +101,19 @@ def test_given_active_run_history_when_ticking_then_scheduler_uses_recoverable_s
     )
     with (
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.scheduler_enabled",
+            "sqltide._native.scheduler_enabled",
             return_value=True,
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=list(test_case.active_runs),
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.read_latest_applied_direct_build_at",
+            "sqltide._native.read_latest_applied_direct_build_at",
             return_value=test_case.latest_applied_at,
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.build_audit_scheduler_payload",
+            "sqltide._native.build_audit_scheduler_payload",
             return_value={
                 "enabled": True,
                 "state": "idle",
@@ -157,9 +155,7 @@ def test_given_build_starts_during_lock_wait_when_ticking_then_guard_is_rechecke
         builds=cast(BuildProcessManager, builds_mock),
     )
 
-    with patch(
-        "sqltide.dev_server.classes.audit_scheduler.build_audit_scheduler_payload"
-    ) as build_payload:
+    with patch("sqltide._native.build_audit_scheduler_payload") as build_payload:
         result_count: int = scheduler.tick()
 
     assert result_count == 0
@@ -211,25 +207,25 @@ def test_given_scheduler_read_error_when_warehouse_recovers_then_backoff_is_clea
         ],
     }
     with (
-        patch("sqltide.dev_server.classes.audit_scheduler.monotonic", clock),
+        patch("time.monotonic", clock),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.scheduler_enabled",
+            "sqltide._native.scheduler_enabled",
             return_value=True,
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[],
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.read_latest_applied_direct_build_at",
+            "sqltide._native.read_latest_applied_direct_build_at",
             return_value=None,
         ),
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.build_audit_scheduler_payload",
+            "sqltide._native.build_audit_scheduler_payload",
             side_effect=[AdapterWarehouseError(test_case.error_message), recovered_payload],
         ) as build_payload,
         patch(
-            "sqltide.dev_server.classes.audit_scheduler.execute_due_audits",
+            "sqltide._native.execute_due_audits",
             return_value=test_case.expected_result_count_after_recovery,
         ),
     ):

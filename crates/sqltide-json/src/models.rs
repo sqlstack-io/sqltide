@@ -69,6 +69,8 @@ pub enum JsonDialect {
     Stdlib(StdlibJsonOptions),
     /// `orjson.dumps`.
     Orjson(OrjsonOptions),
+    /// pydantic's `dump_json`: orjson's layout without its integer range limit.
+    Pydantic,
 }
 
 /// Options of `json.dumps`, with the same meaning and defaults.

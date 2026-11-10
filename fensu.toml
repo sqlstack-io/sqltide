@@ -67,6 +67,16 @@ reason = "The runnable orders-demo producer lives outside the installable packag
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/dev_server/__init__.py"
+reason = "Native bindings own the dev server: HTTP serving, routes, authorization, payloads, warehouse reads, compile state, readers, manual checks, deployment operations, the build child process and the audit and sensor schedulers; this package declares the request and response models, types, constants and errors they build and raise, plus the kafka-python-ng client glue."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/cli/dev/__init__.py"
+reason = "Native bindings own the dev command handler, its startup banner and its activity lines; this package only declares the command option shape the CLI dispatcher builds."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/cli/selection/__init__.py"
 reason = "Native bindings own model selection, its downstream execution closure, the included sources and dependencies, and the replay lineage mode check; this package only declares the selection result they build."
 

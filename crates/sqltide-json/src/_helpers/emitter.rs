@@ -18,6 +18,8 @@ struct Layout<'options> {
     escaping: StringEscaping,
     orjson: bool,
     allow_nan: bool,
+    /// orjson refuses integers outside `[-2**63, 2**64 - 1]`.
+    bounded_integers: bool,
 }
 
 impl<'options> Layout<'options> {
@@ -35,6 +37,7 @@ impl<'options> Layout<'options> {
                 },
                 orjson: false,
                 allow_nan: options.allow_nan,
+                bounded_integers: false,
             },
             JsonDialect::Orjson(options) => Self {
                 indent: options.indent_2.then_some("  "),
@@ -44,6 +47,17 @@ impl<'options> Layout<'options> {
                 escaping: StringEscaping::Unicode,
                 orjson: true,
                 allow_nan: true,
+                bounded_integers: true,
+            },
+            JsonDialect::Pydantic => Self {
+                indent: None,
+                item_separator: ",",
+                key_separator: ":",
+                sort_keys: false,
+                escaping: StringEscaping::Unicode,
+                orjson: true,
+                allow_nan: true,
+                bounded_integers: false,
             },
         }
     }
@@ -62,7 +76,7 @@ impl<'options> Layout<'options> {
         let in_range = value
             .to_i128()
             .is_some_and(|number| (ORJSON_MIN_INTEGER..=ORJSON_MAX_INTEGER).contains(&number));
-        if self.orjson && !in_range {
+        if self.bounded_integers && !in_range {
             return Err(JsonEmitError::IntegerOutOfRange);
         }
         let digits = value.as_str().trim_start_matches('-').len();

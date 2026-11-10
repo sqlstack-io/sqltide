@@ -9,11 +9,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sqltide._native import run_dev
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterTimeoutError
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.cli.build.models import BuildCommandOptions
-from sqltide.cli.dev.main._run_dev import run_dev
 from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.entry._helpers.entrypoint import (
     resolve_adapter_connection_config,
@@ -601,8 +601,8 @@ def test_given_resolved_dev_context_when_reloading_then_compilation_reuses_it(
         "sqltide._native.load_project_input_for_path",
         fake_load_project_input_for_path,
     )
-    monkeypatch.setattr("sqltide.cli.dev.main._run_dev.analyze_project", fake_analyze_project)
-    monkeypatch.setattr("sqltide.cli.dev.main._run_dev.run_dev_server", fake_run_dev_server)
+    monkeypatch.setattr("sqltide._native.analyze_project", fake_analyze_project)
+    monkeypatch.setattr("sqltide._native.run_dev_server", fake_run_dev_server)
     environment: dict[str, str] = {"SQLTIDE_ENV": "dev"}
 
     exit_code: int = run_dev(

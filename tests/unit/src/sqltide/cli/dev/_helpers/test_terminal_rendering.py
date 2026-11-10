@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.dev._helpers.terminal_rendering import (
+from sqltide._native import (
     activity_line,
     reload_summary,
     startup_lines,

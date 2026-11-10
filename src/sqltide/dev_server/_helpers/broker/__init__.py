@@ -1,1 +1,0 @@
-"""Kafka broker observation helpers."""

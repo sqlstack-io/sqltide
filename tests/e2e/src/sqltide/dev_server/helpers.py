@@ -1,9 +1,13 @@
+import itertools
 import json
 import os
 import signal
 import socket
 import subprocess
+import threading
 import time
+from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 from shutil import copytree
 from typing import cast
@@ -13,9 +17,15 @@ from urllib.request import Request, urlopen
 from clickhouse_connect.driver.client import Client
 from playwright.sync_api import Page
 
+from sqltide._native import DevApplication, DevServerState, create_dev_app
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import UserAccount
 from sqltide.auth.types import AuthenticationSource
+from sqltide.compiler.pipeline.models import CompileAnalysis
+from tests.unit.src.sqltide.dev_server.helpers import (
+    build_compile_callable,
+    write_dev_server_project,
+)
 
 LINEAGE_BROWSER_PROJECT_DIR: Path = Path("tests/fixtures/lineage_browser_project")
 
@@ -697,3 +707,96 @@ def build_source_recreation_plan_payload(
         "deploymentId": None,
         "upperBoundary": {"mode": "captured_at_execution", "continuesLive": True},
     }
+
+
+def run_slow_reload_dev_server(arguments: list[str]) -> None:
+    """Serve an offline dev app whose reloads compile slowly, then report a busy thread's progress.
+
+    Arguments: project directory, port, reload delay in seconds, report path. The first compile
+    is immediate and every later one sleeps for the delay. The busy thread counts iterations
+    before serving and while serving; the server must leave it the interpreter lock while it
+    waits for connections and while a handler sleeps.
+    """
+
+    project_dir, port, delay, report_path = arguments
+    write_dev_server_project(project_dir=Path(project_dir))
+    compile_project: Callable[[], CompileAnalysis] = build_compile_callable(
+        project_dir=Path(project_dir)
+    )
+    compiles: itertools.count[int] = itertools.count()
+
+    def slow_compile() -> CompileAnalysis:
+        time.sleep(float(delay) * min(next(compiles), 1))
+        return compile_project()
+
+    app: DevApplication = create_dev_app(
+        state=DevServerState(run_compile=slow_compile), project_dir=Path(project_dir)
+    )
+    ticks: itertools.count[int] = itertools.count()
+    stop: threading.Event = threading.Event()
+    busy: threading.Thread = threading.Thread(
+        target=lambda: deque(iter(lambda: (next(ticks), stop.is_set())[1], True), maxlen=0)
+    )
+    busy.start()
+    time.sleep(_BUSY_BASELINE_SECONDS)
+    baseline: int = next(ticks)
+    started: float = time.monotonic()
+    app.serve("127.0.0.1", int(port))
+    serving_seconds: float = time.monotonic() - started
+    serving: int = next(ticks) - baseline
+    stop.set()
+    busy.join()
+    Path(report_path).write_text(
+        json.dumps(
+            {
+                "baselineRate": baseline / _BUSY_BASELINE_SECONDS,
+                "servingRate": serving / serving_seconds,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def start_slow_reload_dev_server(
+    *,
+    repository_root: Path,
+    project_dir: Path,
+    port: int,
+    delay_seconds: float,
+    report_path: Path,
+    log_path: Path,
+) -> subprocess.Popen[str]:
+    with log_path.open("w", encoding="utf-8") as log_file:
+        return subprocess.Popen(
+            [
+                str(repository_root / ".venv" / "bin" / "python"),
+                "-c",
+                "import sys; from tests.e2e.src.sqltide.dev_server.helpers import "
+                "run_slow_reload_dev_server; run_slow_reload_dev_server(sys.argv[1:])",
+                str(project_dir),
+                str(port),
+                str(delay_seconds),
+                str(report_path),
+            ],
+            cwd=repository_root,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            text=True,
+        )
+
+
+def timed_status(url: str, method: str = "GET") -> tuple[int, float]:
+    """The status of one request and how long it took."""
+
+    request: Request = Request(  # noqa: S310 - loopback test server only
+        url, method=method, headers={"X-SQLTide-CSRF": "trusted-proxy"}
+    )
+    started: float = time.monotonic()
+    with urlopen(request, timeout=30) as response:  # noqa: S310 - loopback test server only
+        response.read()
+        return int(response.status), time.monotonic() - started
+
+
+_BUSY_BASELINE_SECONDS: float = 0.5

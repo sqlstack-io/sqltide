@@ -33,6 +33,7 @@ mod destruction;
 mod destruction_command;
 mod destruction_execution;
 mod destruction_planning;
+mod dev_server;
 mod direct_build;
 mod direct_plan;
 mod discovery;
@@ -153,6 +154,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     destruction::register(module)?;
     destruction_execution::register(module)?;
     destruction_planning::register(module)?;
+    dev_server::register(module)?;
     direct_build::register(module)?;
     direct_plan::register(module)?;
     execution_results::register(module)?;

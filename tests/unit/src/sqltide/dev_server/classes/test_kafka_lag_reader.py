@@ -5,15 +5,25 @@ import pytest
 from kafka import KafkaAdminClient, KafkaConsumer, TopicPartition
 from kafka.structs import OffsetAndMetadata
 
+from sqltide._native import (
+    KafkaLagReader,
+    build_kafka_client_config,
+    build_kafka_lag_snapshot,
+    kafka_client_key,
+)
 from sqltide.compiler.discovery.models import KafkaSettings
-from sqltide.dev_server._helpers.broker.client import kafka_client_key
-from sqltide.dev_server._helpers.broker.snapshots import build_kafka_lag_snapshot
 from sqltide.dev_server.classes.kafka_lag_collector import KafkaLagCollector
-from sqltide.dev_server.models import KafkaLagSnapshot
+from sqltide.dev_server.models import KafkaLagSnapshot, KafkaPartitionLag
+from sqltide.dev_server.types import KafkaLagOffsets
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     KafkaClientReuseTestCase,
     KafkaCredentialIsolationTestCase,
+    KafkaLagReaderCacheTestCase,
     KafkaLagSnapshotTestCase,
+)
+from tests.unit.src.sqltide.dev_server.classes.helpers import (
+    ScriptedLagCollector,
+    broker_unavailable,
 )
 
 
@@ -104,23 +114,24 @@ def test_given_multiple_topics_when_collecting_lag_then_reuses_and_closes_broker
         admin_factory=cast("Callable[..., KafkaAdminClient]", admin_factory),
         consumer_factory=cast("Callable[..., KafkaConsumer]", consumer_factory),
     )
-    first_kafka: KafkaSettings = KafkaSettings(
+    kafka: KafkaSettings = KafkaSettings(
         broker_list=test_case.broker_list,
         topic="source.orders",
         consumer_group="sqltide-orders",
     )
-    second_kafka: KafkaSettings = KafkaSettings(
-        broker_list=test_case.broker_list,
-        topic="source.prices",
-        consumer_group="sqltide-prices",
-    )
+    key: tuple[str, tuple[tuple[str, str], ...]] = kafka_client_key(kafka=kafka)
+    config: dict[str, object] = build_kafka_client_config(kafka=kafka)
 
-    first: KafkaLagSnapshot = collector(kafka=first_kafka, database="default")
-    second: KafkaLagSnapshot = collector(kafka=second_kafka, database="default")
+    first: KafkaLagOffsets = collector(
+        key=key, config=config, topic="source.orders", consumer_group="sqltide-orders_default"
+    )
+    second: KafkaLagOffsets = collector(
+        key=key, config=config, topic="source.prices", consumer_group="sqltide-prices_default"
+    )
     collector.close()
 
-    assert first.total_messages == 5
-    assert second.total_messages == 5
+    assert first == ((("source.orders", 0, 5),), (0,), ((0, 10),))
+    assert second == ((("source.prices", 0, 5),), (0,), ((0, 10),))
     assert len(admins) == test_case.expected_client_count
     assert len(consumers) == test_case.expected_client_count
     assert admins[0].offset_calls == test_case.expected_query_count
@@ -168,6 +179,56 @@ class _FakeConsumer:
 
     def close(self) -> None:
         self.close_calls += 1
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        KafkaLagReaderCacheTestCase(
+            description="refresh derives lag from this topic's non-negative commits only",
+            respond=lambda: (
+                (("source.orders", 0, 95), ("source.orders", 1, -1), ("source.prices", 1, 3)),
+                (0, 1),
+                ((0, 100), (1, 0)),
+            ),
+            expected_snapshot=KafkaLagSnapshot(
+                total_messages=5,
+                partitions=(
+                    KafkaPartitionLag(
+                        partition=0, committed_offset=95, end_offset=100, lag_messages=5
+                    ),
+                    KafkaPartitionLag(
+                        partition=1, committed_offset=None, end_offset=0, lag_messages=0
+                    ),
+                ),
+            ),
+            expected_collector_calls=(("sqltide-orders_analytics_eu", "source.orders"),),
+        ),
+        KafkaLagReaderCacheTestCase(
+            description="failed refresh caches no snapshot and is not retried immediately",
+            respond=broker_unavailable,
+            expected_snapshot=None,
+            expected_collector_calls=(("sqltide-orders_analytics_eu", "source.orders"),),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_stale_cache_when_reading_lag_then_returns_cached_value_and_refreshes_in_background(
+    test_case: KafkaLagReaderCacheTestCase,
+) -> None:
+    collector: ScriptedLagCollector = ScriptedLagCollector(respond=test_case.respond)
+    reader: KafkaLagReader = KafkaLagReader(clock=lambda: 0.0, collector=collector)
+    kafka: KafkaSettings = KafkaSettings(
+        broker_list="broker:9092", topic="source.orders", consumer_group="sqltide-orders"
+    )
+
+    before_refresh: KafkaLagSnapshot | None = reader.read(kafka=kafka, database="analytics-eu")
+    reader.close()
+    after_refresh: KafkaLagSnapshot | None = reader.read(kafka=kafka, database="analytics-eu")
+
+    assert before_refresh is None
+    assert after_refresh == test_case.expected_snapshot
+    assert collector.calls == test_case.expected_collector_calls
 
 
 @pytest.mark.parametrize(

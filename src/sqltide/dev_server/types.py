@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from sqltide.dev_server.models import CompileOutcome
 
 type KafkaClientKey = tuple[str, tuple[tuple[str, str], ...]]
+type KafkaLagOffsets = tuple[
+    tuple[tuple[str, int, int | None], ...], tuple[int, ...], tuple[tuple[int, int], ...]
+]
 
 
 class ActivityTone(StrEnum):

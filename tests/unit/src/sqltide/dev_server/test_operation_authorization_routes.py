@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from httpx import Response
 
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeResponse
 from tests.unit.src.sqltide.dev_server._test_types import (
     OperationAuthorizationRouteTestCase,
 )
@@ -35,24 +35,24 @@ def test_given_pipeline_build_role_when_starting_build_then_http_boundary_enforc
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.prepare_build_workflow",
+            "sqltide._native.prepare_build_workflow",
             return_value=build_direct_plan_preparation(),
         ),
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[],
         ),
         patch(
-            "sqltide.dev_server.classes.build_process.BuildProcessManager.start",
+            "sqltide._native.BuildProcessManager.start",
             return_value={"invocationId": "run-1", "status": "starting"},
         ),
     ):
-        denied: Response = client.post(
+        denied: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="bob"),
         )
-        allowed: Response = client.post(
+        allowed: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="alice"),
@@ -95,24 +95,24 @@ def test_given_run_control_role_when_signalling_build_then_http_boundary_enforce
     ]
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=active_runs,
         ),
         patch(
-            "sqltide.dev_server.classes.build_process.BuildProcessManager.cancel",
+            "sqltide._native.BuildProcessManager.cancel",
             return_value={"invocationId": "run-1", "status": "cancelling"},
         ),
         patch(
-            "sqltide.dev_server.classes.build_process.BuildProcessManager.kill",
+            "sqltide._native.BuildProcessManager.kill",
             return_value={"invocationId": "run-1", "status": "killed"},
         ),
     ):
-        denied: Response = client.post(
+        denied: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="bob"),
         )
-        allowed: Response = client.post(
+        allowed: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="alice"),
@@ -147,24 +147,24 @@ def test_given_deployment_role_when_mutating_deployments_then_http_boundary_enfo
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.promotion_executed_logical_ids",
+            "sqltide._native.promotion_executed_logical_ids",
             return_value=("model:orders_clean",),
         ),
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.run_deployment_promotion",
+            "sqltide._native.run_dev_deployment_promotion",
             return_value={"deploymentId": "deployment-1", "status": "published"},
         ),
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.run_deployment_cleanup",
+            "sqltide._native.run_dev_deployment_cleanup",
             return_value={"removed": []},
         ),
     ):
-        denied: Response = client.post(
+        denied: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="bob"),
         )
-        allowed: Response = client.post(
+        allowed: NativeResponse = client.post(
             test_case.path,
             json=test_case.body,
             headers=proxy_proof_headers(username="alice"),
@@ -192,12 +192,12 @@ def test_given_automation_role_when_changing_sensor_then_http_boundary_enforces_
 ) -> None:
     client, store = build_assigned_proxy_operations_client_without_warehouse(project_dir=tmp_path)
 
-    denied: Response = client.post(
+    denied: NativeResponse = client.post(
         test_case.path,
         json=test_case.body,
         headers=proxy_proof_headers(username="bob"),
     )
-    allowed: Response = client.post(
+    allowed: NativeResponse = client.post(
         test_case.path,
         json=test_case.body,
         headers=proxy_proof_headers(username="alice"),

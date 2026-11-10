@@ -7,12 +7,12 @@ from time import monotonic
 from unittest.mock import PropertyMock, patch
 
 import pytest
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
-from httpx import Response
 
+from sqltide._native import WarehouseRuntime
 from sqltide.auth.classes.control_store import ControlStore
-from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
+from sqltide.authorization.models import AuthorizationDecision
+from sqltide.authorization.types import AuthorizationReason
+from sqltide.compiler.access.types import Permission
 from sqltide.executor.destruction.exceptions import (
     DestructionDependencyError,
     DestructionResourceError,
@@ -24,6 +24,10 @@ from sqltide.executor.destruction.models import (
 )
 from sqltide.executor.observability.main.logical_project_identity import (
     logical_project_identity,
+)
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
 )
 from tests.unit.src.sqltide.dev_server._test_types import (
     DestructionActorBindingRouteTestCase,
@@ -65,11 +69,11 @@ def test_given_inactive_pipeline_ownership_when_listing_then_api_returns_histori
     tmp_path: Path,
     test_case: InactivePipelineRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.list_inactive_pipelines",
+        "sqltide._native.list_inactive_pipelines",
         return_value=(
             InactivePipeline(
                 name=test_case.expected_pipeline_name,
@@ -79,7 +83,7 @@ def test_given_inactive_pipeline_ownership_when_listing_then_api_returns_histori
             ),
         ),
     ):
-        response: Response = client.get(
+        response: NativeResponse = client.get(
             "/api/destruction/pipelines/inactive",
             headers=proxy_proof_headers(username="alice"),
         )
@@ -116,19 +120,19 @@ def test_given_destroy_permission_when_planning_then_http_boundary_enforces_scop
     tmp_path: Path,
     test_case: DestructionAuthorizationRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+        "sqltide._native.plan_destruction",
         return_value=build_pipeline_destruction_route_plan(),
     ) as planner:
-        denied: Response = client.post(
+        denied: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=proxy_proof_headers(username="bob"),
         )
-        allowed: Response = client.post(
+        allowed: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=proxy_proof_headers(username="alice"),
@@ -159,14 +163,14 @@ def test_given_resource_conflict_when_planning_then_api_returns_actionable_confl
     tmp_path: Path,
     test_case: DestructionResourceConflictRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+        "sqltide._native.plan_destruction",
         side_effect=DestructionResourceError(test_case.conflict_message),
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=proxy_proof_headers(username="alice"),
@@ -198,7 +202,7 @@ def test_given_unauthorized_dependant_when_planning_then_suggested_closure_is_hi
     tmp_path: Path,
     test_case: DestructionClosureAuthorizationRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     blocked_plan: DestructionPlan = replace(
@@ -206,27 +210,38 @@ def test_given_unauthorized_dependant_when_planning_then_suggested_closure_is_hi
         included_dependent_pipeline_names=(test_case.dependent_pipeline,),
         affected_pipeline_names=("order_events", test_case.dependent_pipeline),
     )
+    denied: AuthorizationDecision = AuthorizationDecision(
+        allowed=False,
+        reason=AuthorizationReason.NO_MATCHING_ASSIGNMENT,
+        permission=Permission(test_case.expected_permission),
+        project_name="test_project",
+        target_name="dev",
+        affected_pipelines=("order_events", test_case.dependent_pipeline),
+    )
     with (
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+            "sqltide._native.plan_destruction",
             side_effect=(
                 DestructionDependencyError((test_case.dependent_pipeline,)),
                 blocked_plan,
             ),
         ) as planner,
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes."
-            "require_destruction_authorization",
+            "sqltide.authorization.main.authorize_operation.authorize_operation",
             side_effect=(
-                None,
-                HTTPException(
-                    status_code=test_case.expected_status,
-                    detail={"permission": test_case.expected_permission},
+                AuthorizationDecision(
+                    allowed=True,
+                    reason=AuthorizationReason.SYSTEM_ADMIN,
+                    permission=Permission(test_case.expected_permission),
+                    project_name="test_project",
+                    target_name="dev",
+                    affected_pipelines=("order_events",),
                 ),
+                denied,
             ),
         ) as authorization,
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=proxy_proof_headers(username="alice"),
@@ -254,14 +269,14 @@ def test_given_target_reset_permission_when_planning_then_reset_scope_is_allowed
     tmp_path: Path,
     test_case: DestructionResetRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+        "sqltide._native.plan_destruction",
         return_value=build_target_reset_route_plan(),
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "reset_target", "pipelineNames": []},
             headers=proxy_proof_headers(username="alice"),
@@ -287,20 +302,20 @@ def test_given_unreviewed_plan_when_executing_then_server_review_gate_blocks(
     tmp_path: Path,
     test_case: DestructionReviewGateRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     headers: dict[str, str] = proxy_proof_headers(username="alice")
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+        "sqltide._native.plan_destruction",
         return_value=build_pipeline_destruction_route_plan(),
     ):
-        created: Response = client.post(
+        created: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=headers,
         )
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             f"/api/destruction/plans/{created.json()['planId']}/execute",
             json={"responses": ["order_events"]},
             headers=headers,
@@ -339,7 +354,7 @@ def test_given_failed_destruction_run_when_recovering_then_server_replans_record
     tmp_path: Path,
     test_case: DestructionRecoveryRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     headers: dict[str, str] = proxy_proof_headers(username="alice")
@@ -366,11 +381,11 @@ def test_given_failed_destruction_run_when_recovering_then_server_replans_record
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+            "sqltide._native.plan_destruction",
             return_value=replace(
                 {
                     "destroy_pipelines": build_pipeline_destruction_route_plan(),
@@ -381,7 +396,7 @@ def test_given_failed_destruction_run_when_recovering_then_server_replans_record
             ),
         ) as planner,
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             f"/api/runs/{test_case.invocation_id}/recovery-plan",
             headers=headers,
             json={
@@ -390,7 +405,7 @@ def test_given_failed_destruction_run_when_recovering_then_server_replans_record
                 "sql": "DROP TABLE everything",
             },
         )
-        stored: Response = client.get(
+        stored: NativeResponse = client.get(
             f"/api/destruction/plans/{test_case.expected_plan_id}",
             headers=headers,
         )
@@ -478,7 +493,7 @@ def test_given_invalid_durable_run_when_recovering_then_no_plan_is_created(
     tmp_path: Path,
     test_case: DestructionRecoveryRejectionRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     headers: dict[str, str] = proxy_proof_headers(username="alice")
@@ -507,12 +522,12 @@ def test_given_invalid_durable_run_when_recovering_then_no_plan_is_created(
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
-        patch("sqltide.dev_server._helpers.server.destruction_routes.plan_destruction") as planner,
+        patch("sqltide._native.plan_destruction") as planner,
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/runs/invalid-destruction/recovery-plan",
             headers=headers,
         )
@@ -538,7 +553,7 @@ def test_given_new_dependency_when_recovering_then_it_is_not_silently_included(
     tmp_path: Path,
     test_case: DestructionRecoveryDependencyRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     run: dict[str, object] = {
@@ -562,15 +577,15 @@ def test_given_new_dependency_when_recovering_then_it_is_not_silently_included(
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+            "sqltide._native.plan_destruction",
             side_effect=DestructionDependencyError(test_case.newly_required_pipelines),
         ),
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/runs/dependency-drift/recovery-plan",
             headers=proxy_proof_headers(username="alice"),
         )
@@ -596,7 +611,7 @@ def test_given_reviewed_plan_when_executing_then_api_returns_run_identity_before
     tmp_path: Path,
     test_case: DestructionAsyncExecutionRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     headers: dict[str, str] = proxy_proof_headers(username="alice")
@@ -613,11 +628,11 @@ def test_given_reviewed_plan_when_executing_then_api_returns_run_identity_before
 
     with (
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+            "sqltide._native.plan_destruction",
             return_value=build_pipeline_destruction_route_plan(),
         ),
         patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.execute_destruction",
+            "sqltide._native.execute_destruction",
             side_effect=execute_worker,
         ),
         patch.object(
@@ -627,7 +642,7 @@ def test_given_reviewed_plan_when_executing_then_api_returns_run_identity_before
             return_value=object(),
         ),
     ):
-        created: Response = client.post(
+        created: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=headers,
@@ -639,7 +654,7 @@ def test_given_reviewed_plan_when_executing_then_api_returns_run_identity_before
         timeout_release: Timer = Timer(2, release.set)
         timeout_release.start()
         request_started: float = monotonic()
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             f"/api/destruction/plans/{created.json()['planId']}/execute",
             json={"responses": ["order_events"]},
             headers=headers,
@@ -672,19 +687,19 @@ def test_given_another_actor_plan_when_reviewing_then_creator_binding_hides_plan
     tmp_path: Path,
     test_case: DestructionActorBindingRouteTestCase,
 ) -> None:
-    client: TestClient
+    client: NativeTestClient
     store: ControlStore
     client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+        "sqltide._native.plan_destruction",
         return_value=build_pipeline_destruction_route_plan(),
     ):
-        created: Response = client.post(
+        created: NativeResponse = client.post(
             "/api/destruction/plans",
             json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
             headers=proxy_proof_headers(username="alice"),
         )
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             f"/api/destruction/plans/{created.json()['planId']}/review",
             headers=proxy_proof_headers(username="bob"),
         )
@@ -710,32 +725,32 @@ def test_given_reviewed_plan_when_dev_app_is_reconstructed_then_http_plan_surviv
     tmp_path: Path,
     test_case: DestructionRestartRouteTestCase,
 ) -> None:
-    first_client: TestClient
+    first_client: NativeTestClient
     store: ControlStore
     first_client, store = build_assigned_proxy_operations_client(project_dir=tmp_path)
     headers: dict[str, str] = proxy_proof_headers(username="alice")
     with first_client:
         with patch(
-            "sqltide.dev_server._helpers.server.destruction_routes.plan_destruction",
+            "sqltide._native.plan_destruction",
             return_value=build_pipeline_destruction_route_plan(),
         ):
-            created: Response = first_client.post(
+            created: NativeResponse = first_client.post(
                 "/api/destruction/plans",
                 json={"operation": "destroy_pipelines", "pipelineNames": ["order_events"]},
                 headers=headers,
             )
-            reviewed: Response = first_client.post(
+            reviewed: NativeResponse = first_client.post(
                 f"/api/destruction/plans/{created.json()['planId']}/review",
                 headers=headers,
             )
 
-    second_client: TestClient = build_proxy_test_client(project_dir=tmp_path, store=store)
+    second_client: NativeTestClient = build_proxy_test_client(project_dir=tmp_path, store=store)
     with second_client:
-        reloaded: Response = second_client.get(
+        reloaded: NativeResponse = second_client.get(
             f"/api/destruction/plans/{test_case.expected_plan_id}",
             headers=headers,
         )
-        mismatched_review: Response = second_client.post(
+        mismatched_review: NativeResponse = second_client.post(
             f"/api/destruction/plans/{test_case.expected_plan_id}/review",
             headers=headers,
         )

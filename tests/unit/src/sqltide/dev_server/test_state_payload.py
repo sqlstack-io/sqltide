@@ -2,10 +2,14 @@ import json
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
-from sqltide._native import DirectModelFingerprint
+from sqltide._native import (
+    DevServerState,
+    DirectModelFingerprint,
+    build_partitions_query,
+    build_throughputs_query,
+    create_dev_app,
+)
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
@@ -23,12 +27,10 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server._helpers.payloads.state_payload import (
-    build_partitions_query,
-    build_throughputs_query,
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
 )
-from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.main._create_dev_app import create_dev_app
 from tests.unit.src.sqltide.dev_server._test_types import (
     ModelDriftDifferencePayloadTestCase,
     ModelDriftUnavailablePayloadTestCase,
@@ -209,7 +211,7 @@ def test_given_warehouse_reads_when_reading_state_then_assembles_expected_overla
         status=test_case.fingerprint_status,
         baselines=(baseline,),
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(fingerprints=fingerprints),
@@ -218,7 +220,7 @@ def test_given_warehouse_reads_when_reading_state_then_assembles_expected_overla
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     payload: dict = response.json()
 
     assert response.status_code == 200
@@ -278,7 +280,7 @@ def test_given_missing_live_relation_when_reading_state_then_semantic_drift_is_u
         warehouse_timezone="UTC",
         relations=(),
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(catalog=empty_catalog),
@@ -287,7 +289,7 @@ def test_given_missing_live_relation_when_reading_state_then_semantic_drift_is_u
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     drift: dict = response.json()["models"]["orders_clean"]["semanticDrift"]
 
     assert response.status_code == 200
@@ -339,7 +341,7 @@ def test_given_changed_live_relation_when_reading_state_then_semantic_diffs_are_
             ),
         ),
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(catalog=changed_catalog),
@@ -348,7 +350,7 @@ def test_given_changed_live_relation_when_reading_state_then_semantic_diffs_are_
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     drift: dict = response.json()["models"]["orders_clean"]["semanticDrift"]
     physical_changes: list[dict] = drift["physicalConfiguration"]["changes"]
     physical_by_field: dict[str, dict] = {
@@ -389,7 +391,7 @@ def test_given_no_freshness_policy_when_reading_state_then_freshness_is_unconfig
         ),
         encoding="utf-8",
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(),
@@ -398,7 +400,7 @@ def test_given_no_freshness_policy_when_reading_state_then_freshness_is_unconfig
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     payload: dict = response.json()
 
     assert response.status_code == 200
@@ -428,7 +430,7 @@ def test_given_query_only_view_when_reading_state_then_physical_freshness_is_unm
         'SELECT order_id::String AS order_id FROM __ref("orders_clean")\n',
         encoding="utf-8",
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(),
@@ -437,7 +439,7 @@ def test_given_query_only_view_when_reading_state_then_physical_freshness_is_unm
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     assert response.status_code == 200, response.text
     view: dict = response.json()["models"]["orders_summary"]
     assert view["freshness"] == test_case.expected_freshness
@@ -517,7 +519,7 @@ def test_given_available_warehouse_health_when_reading_state_then_payload_is_tru
         capacity_warning_fraction=test_case.expected_capacity_warning_fraction,
         capacity_critical_fraction=0.05,
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(warehouse_health=health),
@@ -526,7 +528,7 @@ def test_given_available_warehouse_health_when_reading_state_then_payload_is_tru
         )
     )
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
     payload: dict = response.json()["warehouseHealth"]
 
     assert response.status_code == 200

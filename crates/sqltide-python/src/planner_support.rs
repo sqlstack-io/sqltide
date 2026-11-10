@@ -1189,7 +1189,7 @@ fn build_deployment_physical_name(logical_name: &str, deployment_id: &str) -> St
 
 /// The deployment identifier after the last separator of a physical object name.
 #[pyfunction]
-fn deployment_id_from_physical_name(physical_name: &str) -> PyResult<String> {
+pub(crate) fn deployment_id_from_physical_name(physical_name: &str) -> PyResult<String> {
     physical_name
         .rsplit_once(DEPLOYMENT_SEPARATOR)
         .map(|(_, deployment_id)| deployment_id.to_owned())
@@ -1198,7 +1198,7 @@ fn deployment_id_from_physical_name(physical_name: &str) -> PyResult<String> {
 
 /// The logical object name before the last separator of a physical object name.
 #[pyfunction]
-fn logical_name_from_physical_name(physical_name: &str) -> String {
+pub(crate) fn logical_name_from_physical_name(physical_name: &str) -> String {
     physical_name
         .rsplit_once(DEPLOYMENT_SEPARATOR)
         .map_or(physical_name, |(logical_name, _)| logical_name)

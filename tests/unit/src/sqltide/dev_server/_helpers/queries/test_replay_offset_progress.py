@@ -1,13 +1,13 @@
 import pytest
 
+from sqltide._native import (
+    calculate_replay_offset_progress,
+    decode_replay_offset_progress_request,
+)
 from sqltide.adapter.models import (
     AdapterReplayOffsetFrontier,
     AdapterReplayOffsetProgressRequest,
     AdapterReplayOffsetRange,
-)
-from sqltide.dev_server._helpers.queries.replay_offset_progress import (
-    calculate_replay_offset_progress,
-    decode_replay_offset_progress_request,
 )
 from sqltide.dev_server.models import ReplayOffsetProgress
 from tests.unit.src.sqltide.dev_server._helpers.queries._test_types import (

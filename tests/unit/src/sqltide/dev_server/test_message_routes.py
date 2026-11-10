@@ -1,16 +1,18 @@
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
-from sqltide.adapter.models import AdapterQueryResult
-from sqltide.dev_server._helpers.queries.message_query import (
+from sqltide._native import (
     build_facets_sql,
     build_record_sql,
     parse_messages_document,
 )
+from sqltide.adapter.models import AdapterQueryResult
 from sqltide.dev_server.models import MessagesQueryRequest
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     MessageFacetsRouteTestCase,
     MessageListRouteTestCase,
@@ -96,7 +98,7 @@ def test_given_landed_messages_when_listing_then_returns_rows_and_next_cursor(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT,
@@ -138,7 +140,7 @@ def test_given_sparse_landing_when_listing_newest_then_widens_to_unbounded_windo
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
     empty: AdapterQueryResult = AdapterQueryResult(rows=(), column_names=MESSAGE_LIST_COLUMN_NAMES)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT,
@@ -178,7 +180,7 @@ def test_given_stored_record_when_fetching_then_returns_full_value(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT,
@@ -219,7 +221,7 @@ def test_given_missing_record_when_fetching_then_responds_not_found(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT,
@@ -232,7 +234,7 @@ def test_given_missing_record_when_fetching_then_responds_not_found(
         },
     )
 
-    response: Response = client.post(
+    response: NativeResponse = client.post(
         "/api/sources/orders/messages/record",
         json={"partition": test_case.partition, "offset": test_case.offset},
     )
@@ -267,7 +269,7 @@ def test_given_filtered_corpus_when_faceting_then_returns_counts_and_other_bucke
         document=parse_messages_document(MessagesQueryRequest()),
         facet_path=("message_type",),
     )
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT,
@@ -319,12 +321,12 @@ def test_given_bad_message_request_when_posting_then_responds_with_named_error(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={MESSAGE_HEADER_SCHEMA_QUERY: _HEADER_SCHEMA_PRESENT},
     )
 
-    response: Response = client.post(test_case.path, json=test_case.body)
+    response: NativeResponse = client.post(test_case.path, json=test_case.body)
 
     assert response.status_code == test_case.expected_status_code
     assert test_case.expected_fragment in response.json()["detail"]
@@ -348,14 +350,14 @@ def test_given_pre_header_raw_table_when_listing_then_responds_with_reset_confli
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             MESSAGE_HEADER_SCHEMA_QUERY: AdapterQueryResult(rows=((0,),), column_names=("present",))
         },
     )
 
-    response: Response = client.post(test_case.path, json=test_case.body)
+    response: NativeResponse = client.post(test_case.path, json=test_case.body)
 
     assert response.status_code == test_case.expected_status_code
     assert test_case.expected_fragment in response.json()["detail"]
@@ -379,9 +381,9 @@ def test_given_no_warehouse_connection_when_listing_then_responds_service_unavai
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.post(test_case.path, json=test_case.body)
+    response: NativeResponse = client.post(test_case.path, json=test_case.body)
 
     assert response.status_code == test_case.expected_status_code
     assert test_case.expected_fragment in response.json()["detail"]

@@ -3,11 +3,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
+from sqltide._native import OverlayReader, StateSnapshot
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.overlay_reader import OverlayReader
-from sqltide.dev_server.classes.state_snapshot import StateSnapshot
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 from tests.unit.src.sqltide.dev_server._test_types import (
     OverlayReaderTestCase,
     StateSnapshotTestCase,
@@ -235,7 +234,7 @@ def test_given_explicit_warehouse_refresh_when_reading_state_then_overlay_is_reb
     tmp_path: Path,
 ) -> None:
     calls: list[str] = []
-    client: TestClient = build_snapshot_counting_client(project_dir=tmp_path, calls=calls)
+    client: NativeTestClient = build_snapshot_counting_client(project_dir=tmp_path, calls=calls)
     _ = client.get("/api/state")
 
     _ = [client.post("/api/warehouse/refresh") for _ in range(test_case.refresh_count)]

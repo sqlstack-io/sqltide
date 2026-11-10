@@ -1,6 +1,6 @@
 import pytest
 
-from sqltide.dev_server._helpers.queries.message_query import (
+from sqltide._native import (
     build_facets_sql,
     build_messages_sql,
     build_record_sql,

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sqltide._native import WarehouseRuntime
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     WarehouseRuntimeRecoveryTestCase,
 )

@@ -22,6 +22,9 @@ publish = false
 rust-version = "1.88"
 
 [workspace.dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
+flate2 = "1"
+md-5 = "0.10"
 fensu-policy = "=0.22.0"
 # Published SQLClean 0.4.2; its Polyglot revision matches the compiler below.
 sqlclean = { git = "https://github.com/sqlstack-io/sqlclean.git", rev = "571e40a746b3d8d20d6118620f05428eca45243c" }
@@ -53,6 +56,7 @@ sqltide-sqlanalysis = { path = "crates/sqltide-sqlanalysis" }
 sqltide-sqltext = { path = "crates/sqltide-sqltext" }
 toml_edit = { version = "0.25", default-features = false, features = ["parse"] }
 toml_parser = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "signal"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

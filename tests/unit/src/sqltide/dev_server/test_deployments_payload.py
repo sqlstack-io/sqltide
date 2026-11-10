@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.dev_server._helpers.payloads.deployments_payload import (
+from sqltide._native import (
     build_deployment_detail_payload,
     build_deployments_payload,
 )

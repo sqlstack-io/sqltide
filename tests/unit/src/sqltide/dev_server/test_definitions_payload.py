@@ -1,9 +1,11 @@
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     ConnectionSettingsPayloadTestCase,
     DefinitionsFieldTestCase,
@@ -43,7 +45,7 @@ def test_given_compiled_project_when_reading_definitions_then_serializes_expecte
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
     payload: dict = client.get("/api/definitions").json()
 
@@ -95,7 +97,7 @@ def test_given_dependency_scope_when_reading_definitions_then_all_payloads_agree
         project_config_path.read_text(encoding="utf-8") + test_case.project_config_suffix,
         encoding="utf-8",
     )
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
     definitions: dict = client.get("/api/definitions").json()
     bootstrap: dict = client.get("/api/bootstrap").json()
@@ -145,7 +147,7 @@ confirmation = "DEPLOY_ORDER_EVENTS"
 """.strip(),
         encoding="utf-8",
     )
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
     payload: dict = client.get("/api/definitions").json()
 
@@ -169,9 +171,9 @@ def test_given_nested_connection_settings_when_reading_definitions_then_payload_
     tmp_path: Path,
 ) -> None:
     write_connection_settings_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/definitions")
+    response: NativeResponse = client.get("/api/definitions")
 
     assert response.status_code == 200
     assert response.json()["project"]["connection"]["settings"] == test_case.expected_settings
@@ -191,10 +193,10 @@ def test_given_matching_definitions_etag_when_reading_then_payload_is_not_retran
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
-    first: Response = client.get("/api/definitions")
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
+    first: NativeResponse = client.get("/api/definitions")
 
-    cached: Response = client.get(
+    cached: NativeResponse = client.get(
         "/api/definitions", headers={"If-None-Match": first.headers["etag"]}
     )
 

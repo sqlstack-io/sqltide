@@ -6,17 +6,19 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import cast
 
+from sqltide._native import WarehouseRuntime
 from sqltide.adapter.models import (
     AdapterQueryCancellation,
     AdapterQueryResult,
     AdapterRunEventRecord,
 )
-from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
+from sqltide.dev_server.types import KafkaLagOffsets
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 
 
 class CancellingProcess:
     def __init__(self) -> None:
+        self.stdout: None = None
         self.signal_received: int | None = None
         self.terminated: bool = False
         self.killed: bool = False
@@ -188,3 +190,27 @@ class CancellationWarehouseRuntime:
 
     def as_runtime(self) -> WarehouseRuntime:
         return cast(WarehouseRuntime, self)
+
+
+class ScriptedLagCollector:
+    """Answers every broker offset read from one scripted response and records the reads."""
+
+    def __init__(self, *, respond: Callable[[], KafkaLagOffsets]) -> None:
+        self._respond = respond
+        self.calls: tuple[tuple[str, str], ...] = ()
+
+    def __call__(
+        self,
+        *,
+        key: tuple[str, tuple[tuple[str, str], ...]],
+        config: dict[str, object],
+        topic: str,
+        consumer_group: str,
+    ) -> KafkaLagOffsets:
+        del key, config
+        self.calls = (*self.calls, (consumer_group, topic))
+        return self._respond()
+
+
+def broker_unavailable() -> KafkaLagOffsets:
+    raise ConnectionError("broker unavailable")

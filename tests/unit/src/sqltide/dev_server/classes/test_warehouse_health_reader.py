@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from sqltide._native import WarehouseHealthReader
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterIdentity, AdapterWarehouseDisk, AdapterWarehouseHealth
-from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     WarehouseHealthCacheTestCase,
     WarehouseHealthRetentionTestCase,
