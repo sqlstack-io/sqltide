@@ -26,7 +26,7 @@ use sqltide_planner::diff::Column;
 use sqltide_planner::naming::{is_deployment_id, is_deployment_physical_name};
 
 /// `(database, publishes, logical name, physical name, logical model name)`.
-type MappingArgument = (Option<String>, bool, String, String, String);
+pub(crate) type MappingArgument = (Option<String>, bool, String, String, String);
 
 /// `(deployment ID, created at, incomplete, mappings)`.
 type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);

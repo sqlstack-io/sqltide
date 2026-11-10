@@ -12,7 +12,7 @@ use pyo3::types::{PyDict, PyList, PySet, PyString, PyTuple};
 use sqltide_planner::naming::is_deployment_physical_name;
 
 use crate::executor::{
-    audit_readiness, binding_replacement_preview, inspected_publish_candidates,
+    MappingArgument, audit_readiness, binding_replacement_preview, inspected_publish_candidates,
     obsolete_binding_removals, publish_stable_bindings, select_rollback_publications,
 };
 use crate::model_sql::chained;
@@ -823,9 +823,7 @@ fn stable_bindings<'py>(
 }
 
 /// `(database or None, publishes, logical name, physical name, logical model name)` mappings.
-fn native_mappings(
-    mappings: &Value<'_>,
-) -> PyResult<Vec<(Option<String>, bool, String, String, String)>> {
+fn native_mappings(mappings: &Value<'_>) -> PyResult<Vec<MappingArgument>> {
     items(mappings)?
         .iter()
         .map(|mapping| {

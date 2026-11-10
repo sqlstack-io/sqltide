@@ -29,6 +29,15 @@ const PRODUCTION_TARGET_NAMES: [&str; 2] = ["prod", "production"];
 const DUPLICATE_RELATION_ORDERING_ERROR: &str = "duplicate";
 
 type Value<'py> = Bound<'py, PyAny>;
+/// `(name, is a source, owning pipeline name, (resource name, resource kind))` of one graph key.
+type GraphKey = (String, bool, Option<String>, Vec<(String, String)>);
+/// `(model names, source names, owned relations, relation evidence)` of one planned scope.
+type ScopedEvidence = (
+    Vec<String>,
+    Vec<String>,
+    Vec<OwnedTuple>,
+    Vec<EvidenceTuple>,
+);
 
 fn exception<'py>(
     py: Python<'py>,
@@ -300,7 +309,7 @@ fn native_project(analysis: &Value<'_>) -> PyResult<ProjectArgument> {
             .map(|edge| position(edge?.getattr(side)?))
             .collect()
     };
-    let mut keys: Vec<(String, bool, Option<String>, Vec<(String, String)>)> = Vec::new();
+    let mut keys: Vec<GraphKey> = Vec::new();
     let mut upstream: Vec<Vec<usize>> = Vec::new();
     let mut downstream: Vec<Vec<usize>> = Vec::new();
     for key in index_by_key.keys() {
@@ -779,12 +788,7 @@ fn plan_destruction<'py>(
         "load_deployment_inventory",
         (request.getattr("metadata_database")?,),
     )?;
-    let scoped: PyResult<(
-        Vec<String>,
-        Vec<String>,
-        Vec<OwnedTuple>,
-        Vec<EvidenceTuple>,
-    )> = (|| {
+    let scoped: PyResult<ScopedEvidence> = (|| {
         let (models, sources, owned) = plan_destruction_scope(
             py,
             project,
