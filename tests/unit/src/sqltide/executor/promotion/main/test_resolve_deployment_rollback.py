@@ -1,10 +1,8 @@
 import pytest
 
+from sqltide._native import resolve_deployment_rollback
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.executor.promotion.exceptions import PublishExecutionError
-from sqltide.executor.promotion.main.resolve_deployment_rollback import (
-    resolve_deployment_rollback,
-)
 from sqltide.executor.promotion.models import RollbackPlan, RollbackRequest
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.promotion.main._test_types import (

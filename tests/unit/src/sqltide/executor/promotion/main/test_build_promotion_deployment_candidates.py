@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import build_publish_binding_request, build_publish_deployment_candidates
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterDeploymentRecord,
@@ -9,13 +10,7 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
     InspectedPhysicalTableCandidate,
 )
-from sqltide.executor.promotion._helpers.views import (
-    build_publish_binding_request,
-)
 from sqltide.executor.promotion.exceptions import PublishExecutionError
-from sqltide.executor.promotion.main.build_promotion_deployment_candidates import (
-    build_publish_deployment_candidates,
-)
 from sqltide.executor.readiness.models import AuditDeploymentCandidate
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.promotion.main._test_types import (

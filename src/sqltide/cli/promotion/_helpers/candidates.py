@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from sqltide._native import load_audit_deployment
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.compiler.compile.constants import (
     DESIRED_OBJECT_TYPE_TABLE,
     DESIRED_OBJECT_TYPE_VIEW,
 )
-from sqltide.executor.readiness.main.load_audit_deployment import load_audit_deployment
 from sqltide.executor.readiness.models import (
     AuditDeploymentCandidate,
     LoadedAuditDeployment,

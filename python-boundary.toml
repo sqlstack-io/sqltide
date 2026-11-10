@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 44325
+remaining_lines = 43280
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -193,6 +193,10 @@ note = "Command error reporting: a SQL contract failure is rendered with its dia
 [[handled_native_errors]]
 location = "cli/plan/main/_run_plan.py::run_plan"
 note = "Command error reporting: a compile, planning or adapter failure is printed and the command exits 1 without planning."
+
+[[handled_native_errors]]
+location = "cli/promotion/main/_run_deployment_promotion.py::run_deployment_promotion"
+note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."
 
 [[handled_native_errors]]
 location = "cli/readiness/main/_run_deployment_audit.py::run_deployment_audit"

@@ -20,6 +20,7 @@ mod compilation;
 mod compile;
 mod compile_artifacts;
 mod config;
+mod deployment_resolution;
 mod destruction;
 mod destruction_planning;
 mod direct_plan;
@@ -121,6 +122,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;
+    deployment_resolution::register(module)?;
     destruction::register(module)?;
     destruction_planning::register(module)?;
     direct_plan::register(module)?;

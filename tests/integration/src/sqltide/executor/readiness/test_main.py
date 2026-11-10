@@ -1,13 +1,11 @@
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_deployment_audit as execute_audit_backfill
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import CompiledPipeline
-from sqltide.executor.readiness.main.execute_deployment_audit import (
-    execute_deployment_audit as execute_audit_backfill,
-)
 from sqltide.executor.readiness.models import (
     DeploymentAuditRequest as AuditBackfillRequest,
 )

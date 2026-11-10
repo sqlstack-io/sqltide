@@ -46,6 +46,7 @@ from sqltide.adapter.models import (
     AdapterWarehouseHealth,
     CatalogRelation,
     CatalogSnapshot,
+    InspectedActiveTableBinding,
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
@@ -156,6 +157,19 @@ from sqltide.executor.population.models import (
     PopulationSourcePreparation,
     PopulationSourceRecreation,
     PopulationWatermark,
+)
+from sqltide.executor.promotion.models import (
+    DeploymentPromotionPreview,
+    RollbackPlan,
+    RollbackRequest,
+)
+from sqltide.executor.readiness.models import (
+    AuditDeploymentCandidate,
+    DeploymentAuditRequest,
+    DeploymentAuditResult,
+    DeploymentReadinessThresholds,
+    LoadedAuditDeployment,
+    RootAuditResult,
 )
 from sqltide.executor.workflow.models import WorkflowExecutionResult
 from sqltide.executor.workflow.types import NativeStatement
@@ -538,6 +552,58 @@ def build_virtual_execution_result(
 def build_root_backfill_reports(
     *, catalog: CatalogSnapshot, desired_state: DesiredState
 ) -> tuple[RootBackfillReport, ...]: ...
+def build_audit_deployment_candidates(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> tuple[AuditDeploymentCandidate, ...]: ...
+def build_publish_deployment_candidates(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> tuple[AuditDeploymentCandidate, ...]: ...
+def resolve_publish_deployment_id(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str | None,
+) -> str: ...
+def load_audit_deployment(
+    *, client: AdapterConnection, metadata_database: str, deployment_id: str
+) -> LoadedAuditDeployment: ...
+def build_root_audit_results(
+    *,
+    client: AdapterConnection,
+    default_database: str,
+    inspected_state: InspectedManagedTableState,
+    root_keys: tuple[ObjectKey, ...],
+    prepared_object_mappings: tuple[tuple[ObjectKey, str], ...],
+    thresholds: DeploymentReadinessThresholds,
+) -> tuple[RootAuditResult, ...]: ...
+def execute_deployment_audit(
+    *, request: DeploymentAuditRequest, client: AdapterConnection
+) -> DeploymentAuditResult: ...
+def build_publish_binding_request(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str,
+    inspected_state: InspectedManagedTableState | None = None,
+) -> AdapterBindingReplacementRequest: ...
+def build_binding_replacement_preview(
+    *,
+    binding_request: AdapterBindingReplacementRequest,
+    active_bindings: tuple[InspectedActiveTableBinding, ...],
+) -> DeploymentPromotionPreview: ...
+def build_deployment_promotion_preview(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str,
+    inspected_state: InspectedManagedTableState,
+) -> DeploymentPromotionPreview: ...
+def resolve_deployment_rollback(
+    *, request: RollbackRequest, client: AdapterConnection
+) -> RollbackPlan: ...
 def bounded_replay_outcome(
     mode: str | None,
     forced_start_time: bool,
@@ -705,26 +771,6 @@ def infer_pipeline_sources(
     inputs_by_transform: dict[str, str],
     sources: set[str],
 ) -> tuple[list[str | None], str | None]: ...
-def audit_readiness(
-    observation: tuple[
-        str,
-        bool,
-        bool,
-        int | None,
-        int | None,
-        bool,
-        tuple[int, int, int, int, bool, float | None] | None,
-        float | None,
-        str | None,
-        int | None,
-    ],
-    thresholds: tuple[float, float],
-) -> tuple[str, int | None, float | None, list[str]]: ...
-def select_rollback_publications(
-    publications: list[tuple[str, tuple[int, str] | None, list[tuple[str, str, str]]]],
-    active: list[tuple[str, str, str]],
-    deployment_id: str | None,
-) -> tuple[int, int]: ...
 
 type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
 type _RetainedPublication = tuple[str, tuple[int, str], int, list[str], list[tuple[str, str, str]]]
@@ -741,29 +787,6 @@ def janitor_preview(
     physical_relations: set[tuple[str, str]],
     retention: tuple[str, int, int, int],
 ) -> list[tuple[int, bool, str]]: ...
-def inspected_publish_candidates(
-    candidates: list[tuple[str, str]], deployment_id: str
-) -> list[int]: ...
-def publish_stable_bindings(
-    relations: list[tuple[str | None, str, str, str]],
-    existing: set[str],
-    default_database: str,
-    deployment_id: str,
-) -> list[tuple[str, str, str]]: ...
-def obsolete_binding_removals(
-    current: list[tuple[str | None, bool, str, str, str]],
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[tuple[str, list[str]]],
-    active: list[tuple[str, str, str]],
-    default_database: str,
-) -> list[tuple[str, str]]: ...
-def binding_replacement_preview(
-    bindings: list[tuple[str, str, str]],
-    removals: list[tuple[str, str]],
-    active: list[tuple[str, str, str]],
-) -> tuple[
-    bool, list[int], list[tuple[int, str]], list[tuple[int, str]], list[tuple[str, str]]
-]: ...
 
 type _ReconcileKey = tuple[str | None, str, str]
 type _ReconcileObject = tuple[

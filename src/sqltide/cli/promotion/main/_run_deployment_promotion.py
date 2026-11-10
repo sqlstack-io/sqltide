@@ -2,6 +2,7 @@
 
 import sys
 
+from sqltide._native import build_publish_deployment_candidates
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import InspectedManagedTableState
@@ -16,9 +17,6 @@ from sqltide.cli.readiness.main._render_no_deployment_candidates_message import 
 )
 from sqltide.cli.readiness.main.render_ambiguous_deployment_message import (
     render_ambiguous_deployment_message,
-)
-from sqltide.executor.promotion.main.build_promotion_deployment_candidates import (
-    build_publish_deployment_candidates,
 )
 from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishRequest, PublishResult
