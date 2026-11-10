@@ -25,6 +25,7 @@ from sqltide.compiler.compile.models import (
 )
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
+    DiscoveredPipelineDirectory,
     DiscoveredProjectFile,
     EffectiveProjectConfiguration,
     ExecutionSettings,
@@ -35,15 +36,17 @@ from sqltide.compiler.discovery.models import (
     LoadedProject,
     LoadedProjectConfiguration,
     ModelRetentionPolicy,
+    Pipeline,
     PipelineNaming,
     PipelineProtection,
     PostgresRefreshSourceStep,
+    ProjectNaming,
     ReplayOnChangePolicy,
     SourceFreshnessPolicy,
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import BoundedReplayFallback
+from sqltide.compiler.discovery.types import BoundedReplayFallback, PipelineMode
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.pipeline.models import RealizedProject
@@ -940,6 +943,19 @@ def parse_model_sql(
     macro_registry: MacroRegistry | None = None,
     macro_context: MacroContext | None = None,
 ) -> tuple[dict[str, Any], str]: ...
+def load_pipeline_directories(
+    *,
+    pipeline_directories: tuple[DiscoveredPipelineDirectory, ...],
+    sources_by_name: Mapping[
+        str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
+    ],
+    model_contents_by_path: Mapping[Path, str] | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+    project_naming: ProjectNaming | None = None,
+    default_mode: PipelineMode | str | None = None,
+) -> tuple[Pipeline, ...]: ...
+def load_pipeline_directory(pipeline_dir: Path) -> LoadedPipeline: ...
 def load_transform_from_sql_file(
     *,
     file_path: Path,

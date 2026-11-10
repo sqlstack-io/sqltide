@@ -4,6 +4,7 @@ from typing import cast
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -26,7 +27,6 @@ from sqltide.compiler.compile.models import (
     DesiredState,
     DesiredTable,
 )
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.models import (
     DiscoveredProjectFile,
     DiscoveredProjectInputs,
@@ -159,7 +159,7 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
 def test_given_example_pipeline_when_compiling_then_resolves_inline_refs(
     test_case: CompilePipelineInlineRefsTestCase,
 ) -> None:
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(Path(test_case.pipeline_dir))
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(Path(test_case.pipeline_dir))
     compiled_pipeline: CompiledPipeline
     realized_project: RealizedProject
     compiled_pipeline, realized_project = compile_and_realize_pipeline(loaded_pipeline)
@@ -268,7 +268,7 @@ def test_given_adopted_source_when_compiling_then_it_uses_existing_table_relatio
         model_contents=test_case.sql_contents,
     )
 
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     compiled_pipeline: CompiledPipeline
     realized_project: RealizedProject
@@ -1158,7 +1158,7 @@ def test_given_sql_model_without_replay_timestamp_when_compiling_then_it_raises_
         """,
         model_contents=test_case.sql_contents,
     )
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     with pytest.raises(test_case.expected_error_type) as error_info:
         compile_test_pipeline(loaded_pipeline)

@@ -732,7 +732,7 @@ fn parse_freshness_policy<'py>(
 
 /// Check `pipeline.toml`'s keys and return its mode, `default_mode` when unset.
 #[pyfunction]
-fn parse_pipeline_mode(
+pub(crate) fn parse_pipeline_mode(
     py: Python<'_>,
     payload: &Bound<'_, PyAny>,
     file_path: &str,
@@ -747,7 +747,7 @@ fn parse_pipeline_mode(
 /// `pipeline.toml`'s other settings: `(replay_on_change, bounded_replay_fallback, naming,
 /// protection, audit_defaults, execution_settings, model_retention, model_on_row_error)`.
 #[pyfunction]
-fn parse_pipeline_settings<'py>(
+pub(crate) fn parse_pipeline_settings<'py>(
     py: Python<'py>,
     payload: &Bound<'py, PyAny>,
     file_path: &str,

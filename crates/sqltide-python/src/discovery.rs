@@ -169,7 +169,7 @@ fn interpolate_config_value<'py>(
 /// The source name of each `(directory, [(transform, driving input)])` pipeline, up to the
 /// first failing one, and that pipeline's error message.
 #[pyfunction]
-fn infer_pipeline_sources(
+pub(crate) fn infer_pipeline_sources(
     pipelines: Vec<(String, Vec<(String, String)>)>,
     inputs_by_transform: HashMap<String, String>,
     sources: HashSet<String>,

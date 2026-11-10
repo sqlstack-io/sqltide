@@ -3,6 +3,7 @@ from pathlib import Path
 from textwrap import dedent, indent
 from typing import cast
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -20,7 +21,6 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
 from sqltide.compiler.discovery.main.load_project_input_for_path import (
     load_project_input_for_path,
@@ -321,7 +321,7 @@ def build_row_error_model(
         source_contents=source_contents,
         model_contents=model_contents,
     )
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
     assert loaded.project is not None
     project: Project = replace(loaded.project, model_on_row_error=project_policy)
     pipeline: Pipeline = replace(

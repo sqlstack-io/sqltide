@@ -3,7 +3,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
@@ -48,7 +48,7 @@ from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
 def test_given_registry_project_when_loading_pipeline_then_it_resolves_source(
     test_case: LoadRegistryPipelineTestCase,
 ) -> None:
-    loaded: LoadedPipeline = load_pipeline_directory(
+    loaded: LoadedPipeline = _native.load_pipeline_directory(
         Path("tests/fixtures/basic_project/pipelines/pl__orders")
     )
 
@@ -82,7 +82,7 @@ def test_given_pipeline_mode_override_when_loading_then_it_overrides_project_def
         model_contents='MODEL (); SELECT order_id::UInt64 AS order_id FROM __source("orders")',
     )
 
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     assert loaded.pipeline.mode == test_case.expected_mode
 
@@ -112,7 +112,7 @@ def test_given_pipeline_replay_settings_when_loading_then_retains_phase_defaults
         model_contents='MODEL (); SELECT order_id::UInt64 AS order_id FROM __source("orders")',
     )
 
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     assert (
         dict(loaded.pipeline.execution_settings.replay or {}) == test_case.expected_replay_settings
@@ -141,7 +141,7 @@ def test_given_invalid_pipeline_mode_when_loading_then_it_reports_supported_valu
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        load_pipeline_directory(pipeline_dir)
+        _native.load_pipeline_directory(pipeline_dir)
 
 
 @pytest.mark.parametrize(
@@ -181,7 +181,7 @@ def test_given_replay_policies_when_loading_then_it_uses_renamed_values(
         """,
     )
 
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
     pipeline_policy: ReplayOnChangePolicy | None = loaded.pipeline.replay_on_change
     transform: TransformStep = cast(TransformStep, loaded.pipeline.transforms[0])
     model_policy: ReplayOnChangePolicy | None = transform.replay_on_change
@@ -250,7 +250,7 @@ def test_given_pipeline_protection_when_loading_then_resolves_operator_gate(
         """,
     )
 
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     assert loaded.pipeline.protection is not None
     assert loaded.pipeline.protection.warning == test_case.expected_warning
@@ -289,7 +289,7 @@ def test_given_unsafe_protection_confirmation_when_loading_then_rejects_it(
     )
 
     with pytest.raises(PipelineDiscoveryError) as error_info:
-        load_pipeline_directory(pipeline_dir)
+        _native.load_pipeline_directory(pipeline_dir)
 
     assert test_case.expected_error_fragment in str(error_info.value)
 
@@ -344,7 +344,7 @@ def test_given_removed_pipeline_surface_when_loading_then_it_fails_with_source_d
     )
 
     with pytest.raises(PipelineDiscoveryError) as error_info:
-        load_pipeline_directory(pipeline_dir)
+        _native.load_pipeline_directory(pipeline_dir)
 
     assert test_case.expected_error_fragment in str(error_info.value)
     assert str(pipeline_dir / "pipeline.toml") in str(error_info.value)
@@ -375,7 +375,7 @@ def test_given_wrong_model_source_when_loading_then_it_fails(
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        load_pipeline_directory(pipeline_dir)
+        _native.load_pipeline_directory(pipeline_dir)
 
 
 @pytest.mark.parametrize(
@@ -402,6 +402,6 @@ def test_given_project_macros_when_loading_one_pipeline_then_compile_phase_retai
     macro_file_path.parent.mkdir(parents=True, exist_ok=True)
     macro_file_path.write_text(test_case.macro_contents, encoding="utf-8")
 
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     assert loaded_pipeline.pipeline.transforms[0].query == test_case.expected_query

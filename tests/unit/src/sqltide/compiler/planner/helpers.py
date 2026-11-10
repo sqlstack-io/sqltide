@@ -5,6 +5,7 @@ from itertools import chain
 from pathlib import Path
 from typing import cast
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
@@ -69,7 +70,6 @@ from sqltide.compiler.compile.models import (
     KafkaSettings as CompiledKafkaSettings,
 )
 from sqltide.compiler.compile.types import DesiredObjectType
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.main.load_project_input_for_path import (
     load_project_input_for_path,
 )
@@ -376,7 +376,7 @@ def build_metadata_records() -> tuple[
 
 
 def build_example_desired_state() -> DesiredState:
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)
     return realize_compiled_pipelines((compile_pipeline(loaded_pipeline),)).desired_state
 
 
@@ -879,7 +879,7 @@ def build_example_desired_state_with_replay_on_change(
 ) -> DesiredState:
     """Build the example desired state with replay-on-change on every transform."""
 
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)
     pipeline_with_policy: Pipeline = replace(
         loaded_pipeline.pipeline,
         transforms=[
