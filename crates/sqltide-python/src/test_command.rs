@@ -39,18 +39,18 @@ const ANSI_CODES: [&str; 7] = [
     "\x1b[0m", "\x1b[1m", "\x1b[2m", "\x1b[31m", "\x1b[32m", "\x1b[33m", "\x1b[34m",
 ];
 
-fn user_error(py: Python<'_>, message: String) -> PyResult<PyErr> {
+pub(crate) fn user_error(py: Python<'_>, message: String) -> PyResult<PyErr> {
     Ok(PyErr::from_value(
         class(py, CLI_EXCEPTIONS, "CliUserError")?.call1((message,))?,
     ))
 }
 
-fn is_none_attribute(value: &Value<'_>, name: &str) -> PyResult<bool> {
+pub(crate) fn is_none_attribute(value: &Value<'_>, name: &str) -> PyResult<bool> {
     Ok(value.getattr(name)?.is_none())
 }
 
 /// The next pair of `zip(first, second, strict=True)`, or `None` once both are exhausted.
-fn strict_pair<'py>(
+pub(crate) fn strict_pair<'py>(
     first: &mut Bound<'py, pyo3::types::PyIterator>,
     second: &mut Bound<'py, pyo3::types::PyIterator>,
 ) -> PyResult<Option<(Value<'py>, Value<'py>)>> {
@@ -132,16 +132,16 @@ fn selected_paths<'py>(
 }
 
 /// Model names grouped by name: `(upstream, downstream)` neighbours of every compiled model.
-type ModelGraph = (HashMap<String, Vec<String>>, HashMap<String, Vec<String>>);
+pub(crate) type ModelGraph = (HashMap<String, Vec<String>>, HashMap<String, Vec<String>>);
 
-fn model_names(pipeline: &Value<'_>) -> PyResult<Vec<String>> {
+pub(crate) fn model_names(pipeline: &Value<'_>) -> PyResult<Vec<String>> {
     items(&pipeline.getattr("models")?)?
         .iter()
         .map(|model| model.getattr("key")?.getattr("name")?.extract())
         .collect()
 }
 
-fn model_graph(compiled_pipelines: &[Value<'_>]) -> PyResult<ModelGraph> {
+pub(crate) fn model_graph(compiled_pipelines: &[Value<'_>]) -> PyResult<ModelGraph> {
     let mut known: HashSet<String> = HashSet::new();
     for pipeline in compiled_pipelines {
         known.extend(model_names(pipeline)?);
@@ -205,7 +205,7 @@ fn selected_target_names(
             )?);
         }
         let base_names: Vec<String> =
-            selector_target_names(py, selector, &pipeline_model_names, &downstream)?;
+            selector_target_names(py, "test", selector, &pipeline_model_names, &downstream)?;
         selected.extend(base_names.iter().cloned());
         if include_upstream {
             for name in &base_names {
@@ -221,8 +221,11 @@ fn selected_target_names(
     Ok(selected)
 }
 
-fn selector_target_names(
+/// The models one `pipeline:<name>` or bare model selector names, with errors naming the
+/// selector's `noun` ("test" or "audit").
+pub(crate) fn selector_target_names(
     py: Python<'_>,
+    noun: &str,
     selector: &str,
     pipeline_model_names: &HashMap<String, Vec<String>>,
     known_models: &HashMap<String, Vec<String>>,
@@ -231,7 +234,7 @@ fn selector_target_names(
         if !known_models.contains_key(selector) {
             return Err(user_error(
                 py,
-                format!("Unknown SQL test selector model '{selector}'"),
+                format!("Unknown SQL {noun} selector model '{selector}'"),
             )?);
         }
         return Ok(vec![selector.to_owned()]);
@@ -239,19 +242,19 @@ fn selector_target_names(
     if kind != PIPELINE_SELECTOR_NAMESPACE {
         return Err(user_error(
             py,
-            format!("Unsupported test selector namespace '{kind}' in '{selector}'"),
+            format!("Unsupported {noun} selector namespace '{kind}' in '{selector}'"),
         )?);
     }
     let Some(targets) = pipeline_model_names.get(value) else {
         return Err(user_error(
             py,
-            format!("Unknown SQL test selector pipeline '{value}'"),
+            format!("Unknown SQL {noun} selector pipeline '{value}'"),
         )?);
     };
     if targets.is_empty() {
         return Err(user_error(
             py,
-            format!("SQL test selector pipeline '{value}' does not define any models"),
+            format!("SQL {noun} selector pipeline '{value}' does not define any models"),
         )?);
     }
     Ok(targets.clone())
@@ -259,7 +262,7 @@ fn selector_target_names(
 
 /// Every model reachable from `start` along `neighbours`, excluding `start` unless a cycle
 /// returns to it.
-fn neighbours(start: &str, by_name: &HashMap<String, Vec<String>>) -> HashSet<String> {
+pub(crate) fn neighbours(start: &str, by_name: &HashMap<String, Vec<String>>) -> HashSet<String> {
     let mut visited: HashSet<String> = HashSet::new();
     let mut stack: Vec<&str> = vec![start];
     while let Some(current) = stack.pop() {
@@ -295,7 +298,7 @@ fn targets_selected(
 // Rendering
 
 /// `cli_style().<name>(text)`, resolving colour support for every styled value.
-fn styled(py: Python<'_>, name: &str, value: &str) -> PyResult<String> {
+pub(crate) fn styled(py: Python<'_>, name: &str, value: &str) -> PyResult<String> {
     py.import(CLI_STYLE)?
         .getattr("cli_style")?
         .call0()?
@@ -324,7 +327,7 @@ fn visible_width(value: &str) -> usize {
 }
 
 /// `", ".join(values)` with Python's own type checks.
-fn joined(py: Python<'_>, values: &Value<'_>) -> PyResult<String> {
+pub(crate) fn joined(py: Python<'_>, values: &Value<'_>) -> PyResult<String> {
     PyString::new(py, ", ")
         .call_method1("join", (values,))?
         .extract()
@@ -900,10 +903,65 @@ fn publish_runtime_tests(
 // ---------------------------------------------------------------------------------------------
 // Command
 
-fn summary<'py>(py: Python<'py>, key: &str, value: Value<'py>) -> PyResult<Value<'py>> {
+pub(crate) fn summary<'py>(py: Python<'py>, key: &str, value: Value<'py>) -> PyResult<Value<'py>> {
     let summary: Bound<'py, PyDict> = PyDict::new(py);
     summary.set_item(key, value)?;
     Ok(summary.into_any())
+}
+
+/// `persist_terminal_observations(...)`, ignoring the returned warning as the commands always have.
+pub(crate) fn persist_observations<'py>(
+    client: &Value<'py>,
+    database: &Value<'py>,
+    invocation: Value<'py>,
+    node_results: Vec<Value<'py>>,
+) -> PyResult<()> {
+    let py: Python<'py> = client.py();
+    call(
+        py,
+        TERMINAL_OBSERVATIONS,
+        "persist_terminal_observations",
+        &[
+            ("client", client.clone()),
+            ("database", database.clone()),
+            ("invocation", invocation),
+            ("node_results", tuple(py, node_results)?),
+        ],
+    )?;
+    Ok(())
+}
+
+/// The quality-result context of a manual run, with the node's cadence and warmup when given.
+pub(crate) fn manual_context<'py>(
+    py: Python<'py>,
+    timing: &[(&str, Value<'py>)],
+) -> PyResult<Value<'py>> {
+    let trigger: Value<'py> =
+        class(py, OBSERVABILITY_TYPES, "QualityResultTrigger")?.getattr("MANUAL")?;
+    let mut arguments: Vec<(&str, Value<'py>)> = vec![("trigger", trigger)];
+    arguments.extend(timing.iter().cloned());
+    build(py, OBSERVABILITY_MODELS, "QualityResultContext", &arguments)
+}
+
+/// `_native.require_quality_identity(node.quality_identity)`.
+pub(crate) fn quality_identity<'py>(node: &Value<'py>) -> PyResult<Value<'py>> {
+    node.py()
+        .import(NATIVE)?
+        .getattr("require_quality_identity")?
+        .call1((node.getattr("quality_identity")?,))
+}
+
+/// `build_node_result_record(...)` for one quality node.
+pub(crate) fn node_result_record<'py>(
+    py: Python<'py>,
+    arguments: &[(&str, Value<'py>)],
+) -> PyResult<Value<'py>> {
+    call(
+        py,
+        NODE_RESULT_RECORD,
+        "build_node_result_record",
+        arguments,
+    )
 }
 
 /// Executed tests, or `None` when nothing was selected and the invocation is already recorded.
@@ -956,18 +1014,7 @@ impl<'py> TestCommand<'_, 'py> {
     }
 
     fn persist(&self, invocation: Value<'py>, node_results: Vec<Value<'py>>) -> PyResult<()> {
-        call(
-            self.py,
-            TERMINAL_OBSERVATIONS,
-            "persist_terminal_observations",
-            &[
-                ("client", self.client.clone()),
-                ("database", self.database.clone()),
-                ("invocation", invocation),
-                ("node_results", tuple(self.py, node_results)?),
-            ],
-        )?;
-        Ok(())
+        persist_observations(self.client, &self.database, invocation, node_results)
     }
 
     /// The command's `try` body: executed tests, or `None` when nothing was selected and the
@@ -1109,27 +1156,15 @@ fn test_node_result<'py>(
     } else {
         "failed"
     };
-    let identity: Value<'py> = py
-        .import(NATIVE)?
-        .getattr("require_quality_identity")?
-        .call1((test_case.getattr("quality_identity")?,))?;
-    let trigger: Value<'py> =
-        class(py, OBSERVABILITY_TYPES, "QualityResultTrigger")?.getattr("MANUAL")?;
-    let context: Value<'py> = build(
-        py,
-        OBSERVABILITY_MODELS,
-        "QualityResultContext",
-        &[("trigger", trigger)],
-    )?;
+    let identity: Value<'py> = quality_identity(test_case)?;
+    let context: Value<'py> = manual_context(py, &[])?;
     let failure_count: i64 = (missing_count + unexpected_count + usize::from(has_error)) as i64;
     let payload: Bound<'py, PyDict> = PyDict::new(py);
     payload.set_item("missing_count", missing_count)?;
     payload.set_item("unexpected_count", unexpected_count)?;
     payload.set_item("targets", target_payloads(py, result)?)?;
-    call(
+    node_result_record(
         py,
-        NODE_RESULT_RECORD,
-        "build_node_result_record",
         &[
             ("invocation", invocation.clone()),
             ("identity", identity),

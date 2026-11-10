@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import run_audit
 from sqltide.adapter.models import AdapterInvocationRecord
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
