@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.6](https://github.com/sqlstack-io/sqltide/compare/v0.65.5...v0.65.6) (2026-11-10)
+
+
+### Refactoring
+
+* run SQL model analysis natively ([#349](https://github.com/sqlstack-io/sqltide/issues/349)) ([d97df5e](https://github.com/sqlstack-io/sqltide/commit/d97df5e52fb21721043793a3743db9bf59913529))
+
 ## [0.65.5](https://github.com/sqlstack-io/sqltide/compare/v0.65.4...v0.65.5) (2026-11-09)
 
 
