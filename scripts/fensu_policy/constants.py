@@ -97,11 +97,9 @@ WORKFLOW_ASSEMBLER_PATHS: tuple[tuple[str, ...], ...] = (
     ("src", "sqltide", "executor", "population", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "promotion", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "repair", "_helpers", "workflow.py"),
-    ("src", "sqltide", "executor", "janitor", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "reconcile", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "destruction", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "workflow", "main", "target_mutation_lock.py"),
-    ("src", "sqltide", "executor", "observability", "_helpers", "workflow.py"),
     ("src", "sqltide", "executor", "auditing", "_helpers", "schedule_claim_workflow.py"),
 )
 RETIRED_ADAPTER_MUTATION_METHODS: tuple[str, ...] = (

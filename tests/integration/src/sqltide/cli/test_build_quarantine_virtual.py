@@ -6,9 +6,9 @@ from unittest.mock import Mock
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_janitor
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDeploymentRecord
-from sqltide.executor.janitor.main.execute_janitor import execute_janitor
 from sqltide.executor.janitor.models import JanitorRequest
 from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishRequest

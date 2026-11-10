@@ -143,22 +143,12 @@ fn load_materialized_model_names<'py>(
 }
 
 fn start_invocation(py: Python<'_>) -> PyResult<Any<'_>> {
-    attr(
-        py,
-        "sqltide.executor.observability.main.start_invocation",
-        "start_invocation",
-    )?
-    .call0()
+    attr(py, "sqltide._native", "start_invocation")?.call0()
 }
 
 fn node_result_record<'py>(fields: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
     let py: Python<'py> = fields.py();
-    call(
-        py,
-        "sqltide.executor.observability.main.build_node_result_record",
-        "build_node_result_record",
-        fields,
-    )
+    call(py, "sqltide._native", "build_node_result_record", fields)
 }
 
 /// The UI status word of one manual audit result.

@@ -22,7 +22,7 @@ use crate::test_command::{
 
 const NATIVE: &str = "sqltide._native";
 const CLI_STYLE: &str = "sqltide._native";
-const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
+const START_INVOCATION: &str = "sqltide._native";
 const AUDIT_MODELS: &str = "sqltide.executor.auditing.models";
 const AUDIT_TYPES: &str = "sqltide.executor.auditing.types";
 const LOAD_MODEL_ANCHORS: &str = "sqltide.executor.auditing.main._load_model_anchors";

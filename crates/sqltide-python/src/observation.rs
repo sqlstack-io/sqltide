@@ -3,47 +3,14 @@
 
 use pyo3::prelude::*;
 
-use crate::direct_build::{Value, build, call, class, text, tuple};
-
-const WORKFLOW_MODELS: &str = "sqltide.executor.workflow.models";
-const WORKFLOW_TYPES: &str = "sqltide.executor.workflow.types";
-const OBSERVATION_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_observation_workflow";
+use crate::direct_build::Value;
 
 /// Run adapter-rendered observation SQL as numbered finalization mutations.
 fn execute_rendered<'py>(connection: &Value<'py>, rendered: Value<'py>) -> PyResult<()> {
-    let py: Python<'py> = connection.py();
-    let finalization: Value<'py> =
-        class(py, WORKFLOW_TYPES, "WorkflowPhase")?.getattr("FINALIZATION")?;
-    let mutation: Value<'py> = class(py, WORKFLOW_TYPES, "StatementIntent")?.getattr("MUTATION")?;
-    let mut statements: Vec<Value<'py>> = Vec::new();
-    for (index, sql) in rendered.try_iter()?.enumerate() {
-        let sequence: usize = index + 1;
-        statements.push(build(
-            py,
-            WORKFLOW_MODELS,
-            "WarehouseStatement",
-            &[
-                ("sequence", sequence.into_pyobject(py)?.into_any()),
-                (
-                    "step_id",
-                    text(py, &format!("record_terminal_observation_{sequence}")),
-                ),
-                ("phase", finalization.clone()),
-                ("intent", mutation.clone()),
-                ("sql", sql?),
-            ],
-        )?);
-    }
-    call(
-        py,
-        OBSERVATION_WORKFLOW,
-        "execute_observation_workflow",
-        &[
-            ("statements", tuple(py, statements)?),
-            ("connection", connection.clone()),
-        ],
-    )?;
-    Ok(())
+    crate::run_events::execute_observations(
+        connection,
+        &crate::run_events::observation_statements(&rendered)?,
+    )
 }
 
 /// Require the current observability schema before warehouse planning.

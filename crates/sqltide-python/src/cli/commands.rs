@@ -291,7 +291,7 @@ fn run_janitor(
     )?;
     let result: Any<'_> = run(
         py,
-        "sqltide.executor.janitor.main.execute_janitor",
+        "sqltide._native",
         "execute_janitor",
         &[("request", request), ("client", client)],
     )?;

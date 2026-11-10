@@ -2,6 +2,7 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import execute_janitor
 from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
@@ -17,7 +18,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
     InspectedPhysicalTableCandidate,
 )
-from sqltide.executor.janitor.main.execute_janitor import execute_janitor
 from sqltide.executor.janitor.models import (
     JanitorApplyResult,
     JanitorPreviewResult,

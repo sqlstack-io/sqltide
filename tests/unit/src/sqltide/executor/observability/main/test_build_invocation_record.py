@@ -4,10 +4,10 @@ from time import monotonic_ns
 
 import pytest
 
-from sqltide.adapter.models import AdapterInvocationRecord
-from sqltide.executor.observability.main.build_invocation_record import (
+from sqltide._native import (
     build_invocation_record,
 )
+from sqltide.adapter.models import AdapterInvocationRecord
 from sqltide.executor.observability.models import TerminalInvocation
 from tests.unit.src.sqltide.executor.observability.main._test_types import (
     CompleteDestructionSummaryTestCase,

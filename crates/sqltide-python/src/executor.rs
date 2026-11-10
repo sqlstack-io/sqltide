@@ -29,11 +29,12 @@ use sqltide_planner::naming::{is_deployment_id, is_deployment_physical_name};
 pub(crate) type MappingArgument = (Option<String>, bool, String, String, String);
 
 /// `(deployment ID, created at, incomplete, mappings)`.
-type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);
+pub(crate) type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);
 
 /// `(deployment ID, (rank microseconds, rank ID), published at microseconds, logical view
 /// names, bindings)`.
-type RetainedPublicationArgument = (String, (i64, String), i64, Vec<String>, Vec<Binding>);
+pub(crate) type RetainedPublicationArgument =
+    (String, (i64, String), i64, Vec<String>, Vec<Binding>);
 
 /// `(deployment ID, (rank microseconds, rank ID) | None, bindings)`.
 type PublicationArgument = (String, Option<(i64, String)>, Vec<Binding>);
@@ -200,8 +201,7 @@ fn retained_publications(arguments: Vec<RetainedPublicationArgument>) -> Vec<Ret
 
 /// The physical names active bindings protect, and the superseded `(database, logical name)`
 /// bindings to remove.
-#[pyfunction]
-fn janitor_binding_activity(
+pub(crate) fn janitor_binding_activity(
     deployments_argument: Vec<DeploymentArgument>,
     publications: Vec<RetainedPublicationArgument>,
     active: Vec<Binding>,
@@ -214,8 +214,7 @@ fn janitor_binding_activity(
 }
 
 /// `(deployment position, deletable, reason)` for every deployment, newest created first.
-#[pyfunction]
-fn janitor_preview(
+pub(crate) fn janitor_preview(
     deployments_argument: Vec<DeploymentArgument>,
     publications: Vec<RetainedPublicationArgument>,
     active: Vec<Binding>,
@@ -554,8 +553,6 @@ fn deployment_inventory_summaries(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(janitor_binding_activity, module)?)?;
-    module.add_function(wrap_pyfunction!(janitor_preview, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
     module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;

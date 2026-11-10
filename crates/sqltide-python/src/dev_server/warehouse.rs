@@ -668,12 +668,7 @@ impl BuildCancellationCoordinator {
                     payload_json = dumps(&terminal_payload)?,
                 )?),
             )?;
-            attr(
-                py,
-                "sqltide.executor.observability.main._persist_run_events",
-                "persist_run_events",
-            )?
-            .call(
+            attr(py, "sqltide._native", "persist_run_events")?.call(
                 (),
                 Some(&py_kwargs!(py;
                     connection = connection,

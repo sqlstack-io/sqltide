@@ -93,7 +93,7 @@ def test_given_multiple_audits_when_running_batch_then_project_work_occurs_once(
             return_value=SqlAuditRunResult(audit_results=results),
         ) as execute_audits,
         patch(
-            "sqltide.executor.observability.main.persist_terminal_observations.persist_terminal_observations",
+            "sqltide._native.persist_terminal_observations",
             return_value=None,
         ) as persist_observations,
     ):

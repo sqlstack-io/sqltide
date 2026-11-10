@@ -24,13 +24,12 @@ const WORKFLOW_TYPES: &str = "sqltide.executor.workflow.types";
 const WORKFLOW_EXCEPTIONS: &str = "sqltide.executor.workflow.exceptions";
 const WAREHOUSE_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_warehouse_workflow";
 const OBSERVABILITY_MODELS: &str = "sqltide.executor.observability.models";
-const RUN_EVENT_SINK: &str = "sqltide.executor.observability.classes.run_event_sink";
-const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
+const RUN_EVENT_SINK: &str = "sqltide._native";
+const START_INVOCATION: &str = "sqltide._native";
 const INITIALIZE_OBSERVABILITY: &str = "sqltide._native";
-const PROJECT_IDENTITY: &str = "sqltide.executor.observability.main.logical_project_identity";
-const INVOCATION_RECORD: &str = "sqltide.executor.observability.main.build_invocation_record";
-const TERMINAL_OBSERVATIONS: &str =
-    "sqltide.executor.observability.main.persist_terminal_observations";
+const PROJECT_IDENTITY: &str = "sqltide._native";
+const INVOCATION_RECORD: &str = "sqltide._native";
+const TERMINAL_OBSERVATIONS: &str = "sqltide._native";
 const RESIDUAL_CATALOG_STATUS_OBSERVED: &str = "observed";
 const DESTROY_STEP_PREFIX: &str = "destroy_relation_";
 

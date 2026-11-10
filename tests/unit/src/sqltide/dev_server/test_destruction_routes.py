@@ -8,7 +8,11 @@ from unittest.mock import PropertyMock, patch
 
 import pytest
 
-from sqltide._native import ControlStore, WarehouseRuntime
+from sqltide._native import (
+    ControlStore,
+    WarehouseRuntime,
+    logical_project_identity,
+)
 from sqltide.authorization.models import AuthorizationDecision
 from sqltide.authorization.types import AuthorizationReason
 from sqltide.compiler.access.types import Permission
@@ -20,9 +24,6 @@ from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRequest,
     InactivePipeline,
-)
-from sqltide.executor.observability.main.logical_project_identity import (
-    logical_project_identity,
 )
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
     NativeResponse,

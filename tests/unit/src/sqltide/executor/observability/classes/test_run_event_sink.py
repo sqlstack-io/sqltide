@@ -7,9 +7,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import RunEventSink
 from sqltide.adapter.models import AdapterRunStatementRecord
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
-from sqltide.executor.observability.classes.run_event_sink import RunEventSink
 from sqltide.executor.observability.constants import RUN_DISPLAY_COMMAND_ENV_VAR
 from sqltide.executor.observability.models import RunStartupTimings
 from sqltide.executor.workflow.models import WarehouseStatement
@@ -424,7 +424,7 @@ def test_given_long_statement_when_sink_is_active_then_timer_emits_heartbeats(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "sqltide.executor.observability.classes.run_event_sink.HEARTBEAT_INTERVAL_SECONDS",
+        "sqltide.executor.observability.constants.HEARTBEAT_INTERVAL_SECONDS",
         0.01,
     )
     connection: RunEventRecordingConnection = RunEventRecordingConnection()

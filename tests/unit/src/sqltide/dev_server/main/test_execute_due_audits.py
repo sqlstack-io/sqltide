@@ -58,7 +58,7 @@ def test_given_selected_due_audit_when_batch_fails_then_error_result_keeps_origi
             side_effect=RuntimeError(test_case.error_message),
         ),
         patch(
-            "sqltide.executor.observability.main.persist_terminal_observations.persist_terminal_observations",
+            "sqltide._native.persist_terminal_observations",
             return_value=None,
         ) as persist_observations,
     ):

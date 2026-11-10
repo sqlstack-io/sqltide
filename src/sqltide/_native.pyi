@@ -4,7 +4,7 @@ import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Protocol, Self, final
+from typing import Any, Literal, Protocol, Self, TextIO, final
 from uuid import UUID
 
 from sqltide.adapter.classes.adapter import Adapter
@@ -19,6 +19,7 @@ from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
     AdapterIdentity,
+    AdapterInvocationRecord,
     AdapterManagedSource,
     AdapterManagedSourceRealizationRequest,
     AdapterManifest,
@@ -27,6 +28,7 @@ from sqltide.adapter.models import (
     AdapterMetadataState,
     AdapterModelRealization,
     AdapterModelRealizationRequest,
+    AdapterNodeResultRecord,
     AdapterPhysicalRelationMapping,
     AdapterQueryCancellation,
     AdapterReadinessRequest,
@@ -227,7 +229,16 @@ from sqltide.executor.direct.models import (
     DirectRuntimeExecution,
     DriftedManagedSource,
 )
-from sqltide.executor.observability.models import RunStartupTimings
+from sqltide.executor.janitor.models import (
+    JanitorApplyResult,
+    JanitorPreviewResult,
+    JanitorRequest,
+)
+from sqltide.executor.observability.models import (
+    QualityResultContext,
+    RunStartupTimings,
+    TerminalInvocation,
+)
 from sqltide.executor.population.models import (
     PopulationPlan,
     PopulationRealization,
@@ -356,6 +367,81 @@ def polling_sensor(
 def effective_sensor_status(
     *, sensor: LoadedSensor, overrides: Mapping[str, SensorOverrideStatus]
 ) -> SensorOverrideStatus: ...
+def start_invocation(*, invocation_id: str | None = None) -> tuple[str, str, int]: ...
+def logical_project_identity(*, project_dir: Path) -> str: ...
+def build_invocation_record(
+    *, started: tuple[str, str, int], terminal: TerminalInvocation
+) -> AdapterInvocationRecord: ...
+def build_node_result_record(
+    *,
+    invocation: AdapterInvocationRecord,
+    identity: QualityNodeIdentity,
+    context: QualityResultContext,
+    status: str,
+    severity: str | None,
+    failure_count: int,
+    payload: dict[str, object],
+    error_message: str | None,
+) -> AdapterNodeResultRecord: ...
+def persist_terminal_observations(
+    *,
+    client: AdapterConnection,
+    database: str,
+    invocation: AdapterInvocationRecord,
+    node_results: tuple[AdapterNodeResultRecord, ...],
+) -> str | None: ...
+def persist_run_events(
+    *, connection: AdapterConnection, database: str, events: tuple[AdapterRunEventRecord, ...]
+) -> None: ...
+
+@final
+class RunEventSink:
+    """Best-effort run narration: JSONL for pipes plus durable rows for readers."""
+
+    def __init__(
+        self,
+        *,
+        connection: AdapterConnection,
+        database: str,
+        invocation_id: str,
+        project_identity: str | None = None,
+        jsonl_stream: TextIO | None = None,
+        strict_persistence: bool = False,
+    ) -> None: ...
+    def set_operation_evidence(self, evidence: dict[str, object] | None) -> None: ...
+    def run_started(
+        self,
+        *,
+        command: str,
+        mode: str,
+        total_statements: int,
+        selected_node_count: int,
+        display_command: str | None = None,
+        selectors: tuple[str, ...] = (),
+        start_time: str | None = None,
+        executed_logical_ids: tuple[str, ...] = (),
+        context_logical_ids: tuple[str, ...] = (),
+        startup_timings: RunStartupTimings | None = None,
+    ) -> None: ...
+    def run_completed(self, *, outcome: str, exit_code: int, error_message: str | None) -> None: ...
+    def stop(self) -> None: ...
+    def statement_started(self, statement: WarehouseStatement) -> str: ...
+    def workflow_prepared(
+        self, *, statements: tuple[WarehouseStatement, ...], workflow_sha256: str
+    ) -> None: ...
+    def audit_started(self, *, name: str) -> None: ...
+    def audit_completed(
+        self, *, name: str, status: str, failure_count: int, error_message: str | None
+    ) -> None: ...
+    def statement_completed(
+        self,
+        *,
+        statement: WarehouseStatement,
+        error_message: str | None,
+        written_rows: int | None,
+        elapsed_ms: int,
+    ) -> None: ...
+
 def canonical_username(value: str) -> str: ...
 def default_control_store_url(*, project_dir: Path) -> str: ...
 def rename_streambuild_tables(*, url: str, sqlite_timeout_seconds: float | None = None) -> None: ...
@@ -1136,20 +1222,10 @@ def infer_pipeline_sources(
 ) -> tuple[list[str | None], str | None]: ...
 
 type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
-type _RetainedPublication = tuple[str, tuple[int, str], int, list[str], list[tuple[str, str, str]]]
 
-def janitor_binding_activity(
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[_RetainedPublication],
-    active: list[tuple[str, str, str]],
-) -> tuple[set[str], list[tuple[str, str]]]: ...
-def janitor_preview(
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[_RetainedPublication],
-    active: list[tuple[str, str, str]],
-    physical_relations: set[tuple[str, str]],
-    retention: tuple[str, int, int, int],
-) -> list[tuple[int, bool, str]]: ...
+def execute_janitor(
+    *, request: JanitorRequest, client: AdapterConnection
+) -> JanitorPreviewResult | JanitorApplyResult: ...
 
 type _ReconcileKey = tuple[str | None, str, str]
 type _ReconcileObject = tuple[

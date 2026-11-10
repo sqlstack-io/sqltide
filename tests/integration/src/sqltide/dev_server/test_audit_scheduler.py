@@ -97,7 +97,7 @@ def test_given_real_clickhouse_when_scheduler_ticks_then_slot_executes_once_with
         statements=execution_connection.render_migrate_metadata_state(clickhouse_database),
     )
     monkeypatch.setattr(
-        "sqltide.executor.observability.classes.run_event_sink.HEARTBEAT_INTERVAL_SECONDS",
+        "sqltide.executor.observability.constants.HEARTBEAT_INTERVAL_SECONDS",
         0.01,
     )
     state: DevServerState = DevServerState(run_compile=lambda: analysis)
