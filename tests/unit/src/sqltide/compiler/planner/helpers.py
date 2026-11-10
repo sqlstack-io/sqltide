@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer
+from sqltide._native import SqlModelAnalyzer, analyze_project, realize_project
+from sqltide._native import compile_pipeline as compile_pipeline_impl
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
@@ -44,9 +45,6 @@ from sqltide.compiler.compile.constants import (
     REPLAY_OFFSET_COLUMN_NAME,
     REPLAY_PARTITION_COLUMN_NAME,
     REPLAY_TIMESTAMP_COLUMN_NAME,
-)
-from sqltide.compiler.compile.main._compile_pipeline import (
-    compile_pipeline as compile_pipeline_impl,
 )
 from sqltide.compiler.compile.models import (
     Column,
@@ -88,8 +86,6 @@ from sqltide.compiler.discovery.types import (
     ReplayLineageMode,
     SourceKind,
 )
-from sqltide.compiler.pipeline.main._realize_project import realize_project
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.compiler.planner.main.plan_deployment import plan_deployment

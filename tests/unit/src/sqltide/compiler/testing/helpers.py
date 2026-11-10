@@ -1,9 +1,8 @@
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter, compile_pipeline
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,

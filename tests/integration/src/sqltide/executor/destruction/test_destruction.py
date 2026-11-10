@@ -8,6 +8,7 @@ import pytest
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -21,7 +22,6 @@ from sqltide.cli.entry._helpers.compiler_profile import (
 )
 from sqltide.compiler.compile.models import CompilerAdapterProfile, LogicalResourceKey
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction.classes.in_memory_destruction_plan_store import (
     InMemoryDestructionPlanStore,

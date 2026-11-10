@@ -4,13 +4,17 @@ from textwrap import dedent, indent
 from typing import cast
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
+from sqltide._native import (
+    SqlModelAnalyzer,
+    SqlReferenceRewriter,
+    assemble_project,
+    build_compile_inputs,
+    compile_pipeline,
+    realize_project,
+)
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.compile.main._assemble_project import assemble_project
-from sqltide.compiler.compile.main._build_compile_inputs import build_compile_inputs
-from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,
@@ -32,7 +36,6 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
 )
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
-from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
 

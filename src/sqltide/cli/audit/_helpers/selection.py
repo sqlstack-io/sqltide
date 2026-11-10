@@ -6,7 +6,6 @@ from collections import defaultdict
 
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile.main.compiled_models import compiled_models
 from sqltide.compiler.compile.models import CompiledModel, CompiledPipeline, ParsedRef
 from sqltide.compiler.graph.constants import (
     PIPELINE_SELECTOR_NAMESPACE,
@@ -107,11 +106,10 @@ def _build_upstream_model_graph(
     compiled_pipelines: tuple[CompiledPipeline, ...],
 ) -> dict[str, tuple[str, ...]]:
     upstream_names_by_model: dict[str, set[str]] = defaultdict(set)
-    known_model_names: set[str] = {
-        compiled_model.key.name
-        for compiled_model in compiled_models(compiled_pipelines=compiled_pipelines)
-    }
+    known_model_names: set[str] = set()
     compiled_pipeline: CompiledPipeline
+    for compiled_pipeline in compiled_pipelines:
+        known_model_names.update(model.key.name for model in compiled_pipeline.models)
     for compiled_pipeline in compiled_pipelines:
         compiled_model: CompiledModel
         for compiled_model in compiled_pipeline.models:

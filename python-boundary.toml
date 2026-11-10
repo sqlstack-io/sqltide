@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 52514
+remaining_lines = 51327
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -185,5 +185,17 @@ location = "executor/destruction/_helpers/planning.py::build_destruction_challen
 note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
 
 [[handled_native_errors]]
-location = "compiler/rules/main/format_project_sql.py::format_project_sql"
-note = "A formatter refusal for one file becomes that file's reported error and leaves its source unchanged; `sqt format` exits non-zero for it. Other files still format."
+location = "cli/build/main/_run_build.py::run_build"
+note = "Command error reporting: a build failure is recorded as a failed invocation and printed, and the command exits 1; an interrupt is recorded as cancelled and exits 130."
+
+[[handled_native_errors]]
+location = "cli/compile/main/_run_compile.py::run_compile"
+note = "Command error reporting: a SQL contract failure is rendered with its diagnostic and the command exits 1 without writing artifacts."
+
+[[handled_native_errors]]
+location = "cli/plan/main/_run_plan.py::run_plan"
+note = "Command error reporting: a compile, planning or adapter failure is printed and the command exits 1 without planning."
+
+[[handled_native_errors]]
+location = "cli/readiness/main/_run_deployment_audit.py::run_deployment_audit"
+note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."

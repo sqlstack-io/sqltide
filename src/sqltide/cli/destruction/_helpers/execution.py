@@ -5,6 +5,7 @@ from typing import cast
 from uuid import UUID
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.constants import SQLITE_MEMORY_URLS
@@ -23,7 +24,6 @@ from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction.classes.relational_destruction_plan_store import (
     RelationalDestructionPlanStore,

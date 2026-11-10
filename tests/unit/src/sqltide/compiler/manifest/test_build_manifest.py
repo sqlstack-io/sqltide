@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapter.models import AdapterManifest, AdapterManifestResource
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.manifest.main.build_manifest import build_manifest
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from tests.unit.src.sqltide.compiler.manifest._test_types import (
     ManifestBuildTestCase,

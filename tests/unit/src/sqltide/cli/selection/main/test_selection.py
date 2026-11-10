@@ -4,14 +4,12 @@ from dataclasses import replace
 
 import pytest
 
+from sqltide._native import build_project_graph_from_compiled_project
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.graph.main._build_project_graph import (
-    build_project_graph_from_compiled_project,
-)
 from sqltide.compiler.pipeline.models import RealizedProject
 from tests.unit.src.sqltide.cli.selection.main._test_types import (
     CliExecutionClosureLineageMismatchTestCase,

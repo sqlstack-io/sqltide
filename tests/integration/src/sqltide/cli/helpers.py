@@ -12,7 +12,7 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
 import sqltide._native as _native
-from sqltide._native import render_direct_plan_json
+from sqltide._native import analyze_project, render_direct_plan_json
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterWarehouseError
@@ -64,7 +64,6 @@ from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
 from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (

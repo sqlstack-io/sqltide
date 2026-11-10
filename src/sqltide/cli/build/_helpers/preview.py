@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqltide._native as _native
+from sqltide._native import collect_reachable_keys
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
 from sqltide.adapter.types import AdapterOptionalStateStatus
@@ -16,7 +17,6 @@ from sqltide.compiler.compile.models import CompiledTableModel, LogicalResourceK
 from sqltide.compiler.discovery.models import PostgresRefreshSourceStep
 from sqltide.compiler.discovery.types import PipelineMode
 from sqltide.compiler.graph.constants import ALL_DEPENDENCY_EDGE_TYPES
-from sqltide.compiler.graph.main.collect_reachable_keys import collect_reachable_keys
 from sqltide.compiler.graph.types import GraphTraversalDirection
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint

@@ -51,8 +51,9 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback, PipelineMode
 from sqltide.compiler.graph.models import ProjectGraph
+from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.pipeline.models import RealizedProject
+from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
@@ -66,6 +67,7 @@ from sqltide.compiler.planner.models import (
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.quality.models import QualityNodeIdentity
+from sqltide.compiler.rules.models import FormattedSource
 from sqltide.compiler.sql_analysis.models import (
     SqlCatalogAnalysis,
     SqlModelAnalysis,
@@ -333,13 +335,17 @@ def artifact_model_resource_path(pipeline: str, model: str, resource_kind: str) 
 def artifact_source_resource_path(source: str, resource: str) -> str: ...
 def artifact_audit_path(relative_file: str, name: str | None = None) -> str: ...
 def artifact_test_path(name: str, target_names: list[str]) -> str: ...
-def build_project_graph(
-    sources: list[str],
-    models: list[tuple[str, str, str, str | None, list[tuple[str, str | None]]]],
-    pipeline_modes: list[tuple[str, str]],
-    pipeline_reference_scope: bool,
-    allowed_cross_pipeline_references: list[tuple[str, str]],
-) -> tuple[list[int], list[list[tuple[int, str]]], list[list[tuple[int, int]]], list[int]]: ...
+def build_project_graph_from_compiled_project(*, project: CompiledProject) -> ProjectGraph: ...
+def collect_reachable_keys(
+    *,
+    graph: ProjectGraph,
+    root_keys: frozenset[LogicalResourceKey],
+    direction: GraphTraversalDirection,
+    edge_types: frozenset[DependencyEdgeType],
+) -> tuple[LogicalResourceKey, ...]: ...
+def resolve_named_model_keys(
+    *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
+) -> frozenset[LogicalResourceKey]: ...
 def destruction_available_pipelines(
     current: list[str], snapshot: AdapterManifestSnapshot | None
 ) -> list[str]: ...
@@ -1086,6 +1092,27 @@ def realize_project(
     adapter_profile: CompilerAdapterProfile,
     sql_analyzer: SqlModelAnalyzer,
 ) -> RealizedProject: ...
+def build_compile_inputs(
+    *, discovered_inputs: DiscoveredProjectInputs, adapter_profile: CompilerAdapterProfile
+) -> CompileProjectInputs: ...
+def analyze_project(
+    *,
+    pipelines_root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    enforce_rules: bool = True,
+    source_overrides: Mapping[Path, str] | None = None,
+    rule_selection: tuple[str, ...] | None = None,
+) -> CompileAnalysis: ...
+def format_project_sql(
+    *,
+    root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    selection: tuple[str, ...] | None,
+    paths: tuple[Path, ...],
+    fix: bool,
+) -> tuple[FormattedSource, ...]: ...
 def build_direct_reconcile_actual_state(
     *, desired_state: DesiredState, catalog: CatalogSnapshot
 ) -> ActualState: ...
