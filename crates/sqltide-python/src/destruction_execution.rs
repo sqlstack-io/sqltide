@@ -26,8 +26,7 @@ const WAREHOUSE_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_wareho
 const OBSERVABILITY_MODELS: &str = "sqltide.executor.observability.models";
 const RUN_EVENT_SINK: &str = "sqltide.executor.observability.classes.run_event_sink";
 const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
-const INITIALIZE_OBSERVABILITY: &str =
-    "sqltide.executor.observability.main.initialize_observability";
+const INITIALIZE_OBSERVABILITY: &str = "sqltide._native";
 const PROJECT_IDENTITY: &str = "sqltide.executor.observability.main.logical_project_identity";
 const INVOCATION_RECORD: &str = "sqltide.executor.observability.main.build_invocation_record";
 const TERMINAL_OBSERVATIONS: &str =
