@@ -12,6 +12,7 @@ from sqltide._native import (
     analyze_project,
     build_activity_capabilities_query,
     build_extents_query,
+    build_messages_sql,
     build_partitions_query,
     build_parts_activity_query,
     build_parts_query,
@@ -19,6 +20,7 @@ from sqltide._native import (
     build_replay_count_query,
     build_throughputs_query,
     create_dev_app,
+    parse_messages_document,
     render_clickhouse_replay_coverage_query,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -69,10 +71,6 @@ from sqltide.compiler.planner.models import (
     DirectSourceDriftSelection,
     PlannerWarning,
     PreparedShadowObject,
-)
-from sqltide.dev_server._helpers.queries.message_query import (
-    build_messages_sql,
-    parse_messages_document,
 )
 from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader

@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.adapter.models import AdapterQueryResult
-from sqltide.dev_server._helpers.queries.message_query import (
+from sqltide._native import (
     build_facets_sql,
     build_record_sql,
     parse_messages_document,
 )
+from sqltide.adapter.models import AdapterQueryResult
 from sqltide.dev_server.models import MessagesQueryRequest
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
     NativeResponse,

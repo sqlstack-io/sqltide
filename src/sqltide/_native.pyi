@@ -2,7 +2,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, final
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -157,7 +157,12 @@ from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
 from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
 from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
-from sqltide.dev_server.models import DevExecutionContext, ReplayOffsetProgress
+from sqltide.dev_server.models import (
+    DevExecutionContext,
+    MessageFacetsRequest,
+    MessagesQueryRequest,
+    ReplayOffsetProgress,
+)
 from sqltide.dev_server.types import DevServerReporter, RunPresentationStatus
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
@@ -1783,3 +1788,49 @@ def calculate_replay_offset_progress(
     elapsed_seconds: float,
     completed: bool = False,
 ) -> ReplayOffsetProgress | None: ...
+
+@final
+class MessagesQueryDocument:
+    """One validated message browsing request compiled to SQL fragments."""
+
+def parse_messages_document(request: MessagesQueryRequest) -> MessagesQueryDocument: ...
+def build_messages_sql(
+    *,
+    database: str,
+    relation_name: str,
+    document: MessagesQueryDocument,
+    window_seconds: int | None,
+) -> str: ...
+def read_source_messages(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    request: MessagesQueryRequest,
+) -> dict[str, object]: ...
+def build_record_sql(*, database: str, relation_name: str, partition: int, offset: int) -> str: ...
+def read_source_message_record(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    partition: int,
+    offset: int,
+) -> dict[str, object] | None: ...
+def build_facets_sql(
+    *,
+    database: str,
+    relation_name: str,
+    document: MessagesQueryDocument,
+    facet_path: tuple[str | int, ...],
+) -> tuple[str, str]: ...
+def read_source_message_facets(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_name: str,
+    request: MessageFacetsRequest,
+) -> dict[str, object]: ...
+def ensure_header_columns(
+    *, connection: AdapterConnection, database: str, relation_name: str
+) -> None: ...

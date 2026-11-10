@@ -3,13 +3,13 @@ from typing import cast
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.dev_server._helpers.queries.message_query import (
+from sqltide._native import (
     ensure_header_columns,
     read_source_message_facets,
     read_source_message_record,
     read_source_messages,
 )
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.dev_server.exceptions import MessageSchemaError
 from sqltide.dev_server.models import (
     MessageFacetsRequest,

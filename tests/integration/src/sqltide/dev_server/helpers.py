@@ -5,10 +5,10 @@ from typing import cast
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
+from sqltide._native import read_source_messages
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.dev_server._helpers.queries.message_query import read_source_messages
 from sqltide.dev_server.models import MessageQueryCursor, MessagesQueryRequest
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     build_compiled_example_pipeline,
