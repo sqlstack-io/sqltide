@@ -12,7 +12,7 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
 import sqltide._native as _native
-from sqltide._native import analyze_project, render_direct_plan_json
+from sqltide._native import analyze_project, load_clickhouse_catalog, render_direct_plan_json
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterWarehouseError
@@ -46,7 +46,6 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
     InspectedManagedTableState,
 )
-from sqltide.adapters.clickhouse._helpers.inspection import load_clickhouse_catalog
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.build._helpers.execution_artifacts import render_direct_execution_json
 from sqltide.cli.build._helpers.virtual_preview import build_virtual_build_preview

@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from time import perf_counter
 from typing import cast
 
+from sqltide._native import quote_clickhouse_sql_string
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEAD_LETTERS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterError
@@ -20,7 +21,6 @@ from sqltide.adapter.models import (
     AdapterWarehouseTable,
 )
 from sqltide.adapter.types import AdapterWarehouseHealthStatus
-from sqltide.adapters.clickhouse._helpers.inspection import quote_clickhouse_sql_string
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_CAPACITY_CRITICAL_AVAILABLE_FRACTION,
     CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,

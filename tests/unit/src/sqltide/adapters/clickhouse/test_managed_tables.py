@@ -3,11 +3,11 @@ from typing import cast
 
 import pytest
 
-from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.models import InspectedManagedTableState
-from sqltide.adapters.clickhouse._helpers.managed_tables import (
+from sqltide._native import (
     build_inspected_managed_table_state,
 )
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.models import InspectedManagedTableState
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     BuildInspectedManagedTableStateTestCase,
 )

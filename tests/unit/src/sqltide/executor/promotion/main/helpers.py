@@ -1,5 +1,8 @@
 from dataclasses import replace
 
+from sqltide._native import (
+    render_clickhouse_stable_binding_replacement,
+)
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
     AdapterDeploymentInventory,
@@ -12,9 +15,6 @@ from sqltide.adapter.models import (
     CatalogRelation,
     InspectedActiveTableBinding,
     InspectedManagedTableState,
-)
-from sqltide.adapters.clickhouse._helpers.lifecycle import (
-    render_clickhouse_stable_binding_replacement,
 )
 from sqltide.adapters.clickhouse._helpers.metadata import render_clickhouse_metadata_state
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection

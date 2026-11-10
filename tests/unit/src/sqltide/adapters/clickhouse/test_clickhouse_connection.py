@@ -1,3 +1,4 @@
+import time
 from typing import cast
 from unittest.mock import MagicMock
 
@@ -24,7 +25,6 @@ from sqltide.adapter.models import (
     CatalogRelation,
     CatalogSnapshot,
 )
-from sqltide.adapters.clickhouse._helpers import inspection
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
     ClickHouseWarehouseHealthReader,
@@ -523,7 +523,7 @@ def test_given_transient_empty_ddl_when_loading_catalog_then_retries_complete_sn
     test_case: CatalogRetryTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),
@@ -570,7 +570,7 @@ def test_given_persistent_empty_ddl_when_loading_catalog_then_fails_after_bounde
     test_case: CatalogFailureTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),
@@ -607,7 +607,7 @@ def test_given_nonempty_invalid_ddl_when_loading_catalog_then_fails_without_retr
     test_case: CatalogFailureTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),
