@@ -122,6 +122,21 @@ pub(crate) fn json_dumps(
     })
 }
 
+/// The text `json.dumps(value, sort_keys=True, separators=(",", ":"))` returns.
+pub(crate) fn json_dumps_compact(value: &Bound<'_, PyAny>) -> PyResult<String> {
+    let value: JsonValue = json_value(value)?;
+    let dialect: JsonDialect = JsonDialect::Stdlib(StdlibJsonOptions {
+        sort_keys: true,
+        ..StdlibJsonOptions::new(None).with_separators(",", ":")
+    });
+    dumps(&value, &dialect).map_err(|error| match error {
+        JsonEmitError::NestingTooDeep => PyRecursionError::new_err(
+            "maximum recursion depth exceeded while encoding a JSON object",
+        ),
+        other => PyValueError::new_err(format!("Value is not JSON serializable: {other:?}")),
+    })
+}
+
 /// Write `(relative path, contents)` files under a fresh staging root. An escaping path raises
 /// `ValueError` with the compiler's message before anything is written.
 #[pyfunction]

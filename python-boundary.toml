@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 46427
+remaining_lines = 43280
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -175,12 +175,12 @@ location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_au
 note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."
 
 [[handled_native_errors]]
-location = "executor/destruction/_helpers/planning.py::plan_destruction"
-note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
+location = "dev_server/_helpers/server/destruction_routes.py::create_plan"
+note = "Plan request handling: a dependency block re-plans with the required pipelines and returns a blocked plan; other planning, selection and adapter failures become HTTP 400, 409 or 502 responses."
 
 [[handled_native_errors]]
-location = "executor/destruction/_helpers/planning.py::build_destruction_challenges"
-note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
+location = "cli/build/_helpers/virtual_command.py::execute_virtual_build_command"
+note = "Command cancellation: an interrupt while decoding the virtual result is recorded as a cancelled build; every other failure propagates."
 
 [[handled_native_errors]]
 location = "cli/build/main/_run_build.py::run_build"
@@ -193,6 +193,10 @@ note = "Command error reporting: a SQL contract failure is rendered with its dia
 [[handled_native_errors]]
 location = "cli/plan/main/_run_plan.py::run_plan"
 note = "Command error reporting: a compile, planning or adapter failure is printed and the command exits 1 without planning."
+
+[[handled_native_errors]]
+location = "cli/promotion/main/_run_deployment_promotion.py::run_deployment_promotion"
+note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."
 
 [[handled_native_errors]]
 location = "cli/readiness/main/_run_deployment_audit.py::run_deployment_audit"

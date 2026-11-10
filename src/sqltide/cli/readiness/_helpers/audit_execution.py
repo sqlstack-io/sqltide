@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from sqltide._native import build_audit_deployment_candidates, load_audit_deployment
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.cli.readiness._helpers.audit_selection import (
@@ -23,10 +24,6 @@ from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.executor.auditing.main.execute_sql_audits import execute_sql_audits
 from sqltide.executor.auditing.models import SqlAuditRunResult
-from sqltide.executor.readiness.main.build_audit_deployment_candidates import (
-    build_audit_deployment_candidates,
-)
-from sqltide.executor.readiness.main.load_audit_deployment import load_audit_deployment
 from sqltide.executor.readiness.models import (
     AuditDeploymentCandidate,
     DeploymentAuditResult,

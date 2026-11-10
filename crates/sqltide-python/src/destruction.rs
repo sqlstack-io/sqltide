@@ -21,7 +21,7 @@ use sqltide_executor::destruction_plan_payload::{
 
 /// `(keys as (name, is source, model pipeline, [(resource name, kind)]), upstream, downstream,
 /// [(pipeline, declared source)], sources, models)`.
-type ProjectArgument = (
+pub(crate) type ProjectArgument = (
     Vec<(String, bool, Option<String>, Vec<(String, String)>)>,
     Vec<Vec<usize>>,
     Vec<Vec<usize>>,
@@ -30,12 +30,12 @@ type ProjectArgument = (
     Vec<usize>,
 );
 /// `(operation, database, pipeline names, included dependent pipeline names, include orphans)`.
-type RequestArgument = (String, String, Vec<String>, Vec<String>, bool);
+pub(crate) type RequestArgument = (String, String, Vec<String>, Vec<String>, bool);
 /// `(name, kind, logical names, pipeline names, ownership)`.
-type OwnedTuple = (String, String, Vec<String>, Vec<String>, Vec<String>);
+pub(crate) type OwnedTuple = (String, String, Vec<String>, Vec<String>, Vec<String>);
 /// `(database, name, kind, exists, total bytes, active parts, catalog fingerprint, logical names,
 /// pipeline names, ownership, dependency relation names)`.
-type EvidenceTuple = (
+pub(crate) type EvidenceTuple = (
     String,
     String,
     String,
@@ -339,7 +339,7 @@ fn evidence(tuple: EvidenceTuple) -> PyResult<Evidence> {
 /// The current pipelines plus those only manifest history still owns.
 #[pyfunction]
 #[pyo3(signature = (current, snapshot))]
-fn destruction_available_pipelines(
+pub(crate) fn destruction_available_pipelines(
     current: Vec<String>,
     snapshot: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Vec<String>> {
@@ -351,7 +351,7 @@ fn destruction_available_pipelines(
 
 /// `(requested, included dependents, affected)` pipeline names.
 #[pyfunction]
-fn resolve_destruction_selection(
+pub(crate) fn resolve_destruction_selection(
     py: Python<'_>,
     project_argument: ProjectArgument,
     request_argument: RequestArgument,
@@ -369,7 +369,7 @@ fn resolve_destruction_selection(
 #[pyfunction]
 #[pyo3(signature = (project_argument, request_argument, affected, current, snapshot, catalog_snapshot, deployment_inventory))]
 #[allow(clippy::too_many_arguments)]
-fn plan_destruction_scope(
+pub(crate) fn plan_destruction_scope(
     py: Python<'_>,
     project_argument: ProjectArgument,
     request_argument: RequestArgument,
@@ -398,7 +398,7 @@ fn plan_destruction_scope(
 
 /// Warehouse evidence for owned relations, given `{name: (total bytes, active parts)}`.
 #[pyfunction]
-fn build_destruction_evidence(
+pub(crate) fn build_destruction_evidence(
     py: Python<'_>,
     database: &str,
     owned: Vec<OwnedTuple>,
@@ -418,7 +418,7 @@ fn build_destruction_evidence(
 /// Ordered challenge values for the affected pipelines.
 #[pyfunction]
 #[pyo3(name = "build_destruction_challenges")]
-fn py_build_destruction_challenges(
+pub(crate) fn py_build_destruction_challenges(
     py: Python<'_>,
     pipeline_names: Vec<String>,
     production_reset: bool,
@@ -450,7 +450,7 @@ fn py_build_destruction_challenges(
     include_orphans,
 ))]
 #[allow(clippy::too_many_arguments)]
-fn destruction_plan_fingerprint(
+pub(crate) fn destruction_plan_fingerprint(
     operation: &str,
     target: &str,
     database: &str,
@@ -496,7 +496,7 @@ fn destruction_plan_fingerprint(
 
 /// `(name, model count, resource count, last published at)` per inactive pipeline.
 #[pyfunction]
-fn list_destruction_inactive_pipelines(
+pub(crate) fn list_destruction_inactive_pipelines(
     current: Vec<String>,
     snapshot_object: &Bound<'_, PyAny>,
 ) -> PyResult<Vec<(String, usize, usize, String)>> {
@@ -753,15 +753,5 @@ fn deserialize_destruction_plan<'py>(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(serialize_destruction_plan, module)?)?;
     module.add_function(wrap_pyfunction!(deserialize_destruction_plan, module)?)?;
-    module.add_function(wrap_pyfunction!(destruction_drop_statements, module)?)?;
-    module.add_function(wrap_pyfunction!(destruction_available_pipelines, module)?)?;
-    module.add_function(wrap_pyfunction!(resolve_destruction_selection, module)?)?;
-    module.add_function(wrap_pyfunction!(plan_destruction_scope, module)?)?;
-    module.add_function(wrap_pyfunction!(build_destruction_evidence, module)?)?;
-    module.add_function(wrap_pyfunction!(py_build_destruction_challenges, module)?)?;
-    module.add_function(wrap_pyfunction!(destruction_plan_fingerprint, module)?)?;
-    module.add_function(wrap_pyfunction!(
-        list_destruction_inactive_pipelines,
-        module
-    )?)
+    module.add_function(wrap_pyfunction!(destruction_drop_statements, module)?)
 }

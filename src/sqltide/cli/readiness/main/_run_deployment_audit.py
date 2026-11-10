@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-from sqltide._native import analyze_project
+from sqltide._native import analyze_project, execute_deployment_audit
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.cli.entry.main._errors import render_expected_warehouse_error
@@ -18,7 +18,6 @@ from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import CompiledPipeline, CompilerAdapterProfile
 from sqltide.compiler.discovery.models import DeploymentReadinessDefaults, LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.executor.readiness.main.execute_deployment_audit import execute_deployment_audit
 from sqltide.executor.readiness.models import (
     DeploymentAuditRequest,
     DeploymentAuditResult,

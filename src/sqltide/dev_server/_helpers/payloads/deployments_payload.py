@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from sqltide._native import (
+    build_deployment_promotion_preview,
     deployment_id_from_physical_name,
     is_deployment_physical_name,
     logical_name_from_physical_name,
@@ -17,9 +18,6 @@ from sqltide.dev_server.models import RelationStorage
 from sqltide.executor.deployment.main.load_deployments import load_deployments
 from sqltide.executor.deployment.models import DeploymentInventory, DeploymentSummary
 from sqltide.executor.deployment.types import DeploymentLifecycleState
-from sqltide.executor.promotion.main.build_deployment_promotion_preview import (
-    build_deployment_promotion_preview,
-)
 from sqltide.executor.promotion.models import DeploymentPromotionPreview
 
 

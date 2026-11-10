@@ -1,5 +1,6 @@
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,6 +46,7 @@ from sqltide.adapter.models import (
     AdapterWarehouseHealth,
     CatalogRelation,
     CatalogSnapshot,
+    InspectedActiveTableBinding,
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
@@ -133,8 +135,44 @@ from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
-from sqltide.executor.destruction.models import DestructionPlan
-from sqltide.executor.population.models import PopulationSourceRecreation
+from sqltide.executor.backfill.models import (
+    BackfillBootstrapRequest,
+    BackfillExecutionResult,
+    RootBackfillReport,
+)
+from sqltide.executor.destruction.models import (
+    DestructionPlan,
+    DestructionRequest,
+    InactivePipeline,
+)
+from sqltide.executor.destruction.types import DestructionPlanningConnection
+from sqltide.executor.direct.models import (
+    DirectBuildExecutionResult,
+    DirectBuildRequest,
+    DirectReplayCapture,
+)
+from sqltide.executor.population.models import (
+    PopulationPlan,
+    PopulationRealization,
+    PopulationSourcePreparation,
+    PopulationSourceRecreation,
+    PopulationWatermark,
+)
+from sqltide.executor.promotion.models import (
+    DeploymentPromotionPreview,
+    RollbackPlan,
+    RollbackRequest,
+)
+from sqltide.executor.readiness.models import (
+    AuditDeploymentCandidate,
+    DeploymentAuditRequest,
+    DeploymentAuditResult,
+    DeploymentReadinessThresholds,
+    LoadedAuditDeployment,
+    RootAuditResult,
+)
+from sqltide.executor.workflow.models import WorkflowExecutionResult
+from sqltide.executor.workflow.types import NativeStatement
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -409,95 +447,24 @@ def collect_reachable_keys(
 def resolve_named_model_keys(
     *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
 ) -> frozenset[LogicalResourceKey]: ...
-def destruction_available_pipelines(
-    current: list[str], snapshot: AdapterManifestSnapshot | None
-) -> list[str]: ...
-def resolve_destruction_selection(
-    project_argument: tuple[
-        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
-        list[list[int]],
-        list[list[int]],
-        list[tuple[str, int | None]],
-        list[int],
-        list[int],
-    ],
-    request_argument: tuple[str, str, list[str], list[str], bool],
-    available: list[str],
-) -> tuple[list[str], list[str], list[str]]: ...
-def plan_destruction_scope(
-    project_argument: tuple[
-        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
-        list[list[int]],
-        list[list[int]],
-        list[tuple[str, int | None]],
-        list[int],
-        list[int],
-    ],
-    request_argument: tuple[str, str, list[str], list[str], bool],
-    affected: list[str],
-    current: list[str],
-    snapshot: AdapterManifestSnapshot | None,
-    catalog_snapshot: CatalogSnapshot,
-    deployment_inventory: AdapterDeploymentInventory,
-) -> tuple[list[str], list[str], list[tuple[str, str, list[str], list[str], list[str]]]]: ...
-def build_destruction_evidence(
-    database: str,
-    owned: list[tuple[str, str, list[str], list[str], list[str]]],
-    catalog_snapshot: CatalogSnapshot,
-    stats: dict[str, tuple[int, int]],
-    limit: int | None,
-) -> list[
-    tuple[
-        str,
-        str,
-        str,
-        bool,
-        int | None,
-        int | None,
-        str | None,
-        list[str],
-        list[str],
-        list[str],
-        list[str],
-    ]
-]: ...
 def build_destruction_challenges(
-    pipeline_names: list[str], production_reset: bool
-) -> list[str]: ...
-def destruction_plan_fingerprint(
+    *, pipeline_names: tuple[str, ...], production_reset: bool = False
+) -> tuple[str, ...]: ...
+def plan_destruction(
     *,
-    operation: str,
-    target: str,
-    database: str,
-    metadata_database: str,
-    requested_pipeline_names: list[str],
-    included_dependent_pipeline_names: list[str],
-    affected_pipeline_names: list[str],
-    affected_model_names: list[str],
-    affected_source_names: list[str],
-    relations: list[
-        tuple[
-            str,
-            str,
-            str,
-            bool,
-            int | None,
-            int | None,
-            str | None,
-            list[str],
-            list[str],
-            list[str],
-            list[str],
-        ]
-    ],
-    challenges: list[str],
-    manifest_fingerprint: str,
-    relation_drop_size_limit: int | None,
-    relation_drop_size_server_limit: int | None,
-    relation_drop_size_override: int | None,
-    relation_drop_size_policy_observed: bool,
-    include_orphans: bool,
-) -> str: ...
+    request: DestructionRequest,
+    analysis: CompileAnalysis,
+    connection: DestructionPlanningConnection,
+    now: datetime | None = None,
+    ttl: timedelta | None = None,
+    plan_id: str | None = None,
+) -> DestructionPlan: ...
+def list_inactive_pipelines(
+    *,
+    request: DestructionRequest,
+    analysis: CompileAnalysis,
+    connection: DestructionPlanningConnection,
+) -> tuple[InactivePipeline, ...]: ...
 def normalize_cli_start_time(raw_value: str) -> str: ...
 def validate_declared_external_sources(
     *,
@@ -522,42 +489,121 @@ def audit_schedule_entry(
 ) -> dict[str, object]: ...
 def serialize_destruction_plan(plan: DestructionPlan) -> str: ...
 def deserialize_destruction_plan(payload_json: str) -> DestructionPlan: ...
-def list_destruction_inactive_pipelines(
-    current: list[str], snapshot_object: AdapterManifestSnapshot
-) -> list[tuple[str, int, int, str]]: ...
-def plan_population_replays(
+def expand_population_plan(
+    *, plan: PopulationPlan, desired_state: DesiredState
+) -> PopulationPlan: ...
+def plan_population_objects(
+    *, plan: PopulationPlan, desired_state: DesiredState, default_database: str
+) -> tuple[PopulationRealization, ...]: ...
+def build_population_replay_templates(
+    *, plan: PopulationPlan, desired_state: DesiredState, default_database: str
+) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]: ...
+def build_population_replay_requests(
     *,
-    roots: list[tuple[int, int, str, str, str | None, int | None]],
-    tables: list[tuple[int, str, str | None, list[str], list[tuple[str, str]]]],
-    views: list[tuple[str, str]],
-    key_names: list[str],
-    physical_names: list[tuple[int, str]],
-    external_columns: list[
-        tuple[int, tuple[str | None, str | None, str | None, str | None, str | None]]
-    ],
-    replay_anchor_keys: set[int],
+    plan: PopulationPlan,
+    desired_state: DesiredState,
     default_database: str,
+    watermarks: tuple[PopulationWatermark, ...],
     boundary_time: str,
-    watermarks: list[tuple[int, str, str]] | None,
-) -> tuple[
-    list[tuple[str, str]],
-    list[
-        tuple[
-            int,
-            str,
-            str,
-            tuple[str, str, str, str],
-            int,
-            list[tuple[str, str, str | None]],
-            list[str],
-            tuple[str, str, str | None, int | None],
-            bool,
-            list[str],
-            list[tuple[str, str]],
-            bool,
-        ]
-    ],
-]: ...
+) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]: ...
+def plan_population_sources(
+    *,
+    desired_state: DesiredState,
+    default_database: str,
+    existing_relation_names: frozenset[str],
+) -> tuple[PopulationSourcePreparation, tuple[PopulationRealization, ...]]: ...
+def row_error_policy_view_steps(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    database: str,
+    render_view: Callable[[str], str | None],
+) -> tuple[list[tuple[str, bool]], list[tuple[str, str]]]: ...
+def row_error_policy_restore_statements(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    render_restore: Callable[[str], str],
+    database: str,
+) -> list[NativeStatement]: ...
+def row_error_policy_failure_message(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    failed_step_id: str,
+    cause: BaseException,
+) -> str | None: ...
+def with_metadata_dead_letter_target[ResourceT](
+    *, resource: ResourceT, database: str, metadata_database: str
+) -> ResourceT | AdapterMaterializedView: ...
+def build_direct_population_plan(
+    *, plan: DirectPlan, realized_project: RealizedProject
+) -> PopulationPlan: ...
+def build_direct_execution_result(
+    *,
+    request: DirectBuildRequest,
+    execution: WorkflowExecutionResult,
+    captures: tuple[DirectReplayCapture, ...],
+) -> DirectBuildExecutionResult: ...
+def build_virtual_execution_result(
+    *,
+    request: BackfillBootstrapRequest,
+    root_reports: tuple[RootBackfillReport, ...],
+    existing_relation_names: frozenset[str],
+    execution: WorkflowExecutionResult,
+) -> BackfillExecutionResult: ...
+def build_root_backfill_reports(
+    *, catalog: CatalogSnapshot, desired_state: DesiredState
+) -> tuple[RootBackfillReport, ...]: ...
+def build_audit_deployment_candidates(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> tuple[AuditDeploymentCandidate, ...]: ...
+def build_publish_deployment_candidates(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> tuple[AuditDeploymentCandidate, ...]: ...
+def resolve_publish_deployment_id(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str | None,
+) -> str: ...
+def load_audit_deployment(
+    *, client: AdapterConnection, metadata_database: str, deployment_id: str
+) -> LoadedAuditDeployment: ...
+def build_root_audit_results(
+    *,
+    client: AdapterConnection,
+    default_database: str,
+    inspected_state: InspectedManagedTableState,
+    root_keys: tuple[ObjectKey, ...],
+    prepared_object_mappings: tuple[tuple[ObjectKey, str], ...],
+    thresholds: DeploymentReadinessThresholds,
+) -> tuple[RootAuditResult, ...]: ...
+def execute_deployment_audit(
+    *, request: DeploymentAuditRequest, client: AdapterConnection
+) -> DeploymentAuditResult: ...
+def build_publish_binding_request(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str,
+    inspected_state: InspectedManagedTableState | None = None,
+) -> AdapterBindingReplacementRequest: ...
+def build_binding_replacement_preview(
+    *,
+    binding_request: AdapterBindingReplacementRequest,
+    active_bindings: tuple[InspectedActiveTableBinding, ...],
+) -> DeploymentPromotionPreview: ...
+def build_deployment_promotion_preview(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    default_database: str,
+    deployment_id: str,
+    inspected_state: InspectedManagedTableState,
+) -> DeploymentPromotionPreview: ...
+def resolve_deployment_rollback(
+    *, request: RollbackRequest, client: AdapterConnection
+) -> RollbackPlan: ...
 def bounded_replay_outcome(
     mode: str | None,
     forced_start_time: bool,
@@ -725,26 +771,6 @@ def infer_pipeline_sources(
     inputs_by_transform: dict[str, str],
     sources: set[str],
 ) -> tuple[list[str | None], str | None]: ...
-def audit_readiness(
-    observation: tuple[
-        str,
-        bool,
-        bool,
-        int | None,
-        int | None,
-        bool,
-        tuple[int, int, int, int, bool, float | None] | None,
-        float | None,
-        str | None,
-        int | None,
-    ],
-    thresholds: tuple[float, float],
-) -> tuple[str, int | None, float | None, list[str]]: ...
-def select_rollback_publications(
-    publications: list[tuple[str, tuple[int, str] | None, list[tuple[str, str, str]]]],
-    active: list[tuple[str, str, str]],
-    deployment_id: str | None,
-) -> tuple[int, int]: ...
 
 type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
 type _RetainedPublication = tuple[str, tuple[int, str], int, list[str], list[tuple[str, str, str]]]
@@ -761,29 +787,6 @@ def janitor_preview(
     physical_relations: set[tuple[str, str]],
     retention: tuple[str, int, int, int],
 ) -> list[tuple[int, bool, str]]: ...
-def inspected_publish_candidates(
-    candidates: list[tuple[str, str]], deployment_id: str
-) -> list[int]: ...
-def publish_stable_bindings(
-    relations: list[tuple[str | None, str, str, str]],
-    existing: set[str],
-    default_database: str,
-    deployment_id: str,
-) -> list[tuple[str, str, str]]: ...
-def obsolete_binding_removals(
-    current: list[tuple[str | None, bool, str, str, str]],
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[tuple[str, list[str]]],
-    active: list[tuple[str, str, str]],
-    default_database: str,
-) -> list[tuple[str, str]]: ...
-def binding_replacement_preview(
-    bindings: list[tuple[str, str, str]],
-    removals: list[tuple[str, str]],
-    active: list[tuple[str, str, str]],
-) -> tuple[
-    bool, list[int], list[tuple[int, str]], list[tuple[int, str]], list[tuple[str, str]]
-]: ...
 
 type _ReconcileKey = tuple[str | None, str, str]
 type _ReconcileObject = tuple[
@@ -908,27 +911,6 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
-def population_creation_order(
-    objects: list[tuple[int, list[int]]], planned: set[int]
-) -> list[int]: ...
-def population_fan_in_roots(
-    planned: set[int],
-    roots: list[tuple[int, list[int]]],
-    tables: list[tuple[str, int]],
-    views: list[tuple[int, str, str, list[int]]],
-) -> list[tuple[int, int, tuple[int, int], int]]: ...
-def population_source_actions(
-    objects: list[tuple[str, str, str | None]],
-    raw_prefix: str,
-    existing_names: set[str],
-) -> list[str]: ...
-def direct_population_scope(
-    desired: list[tuple[str, int]],
-    resources: list[list[tuple[str, str]]],
-    execution_scope: list[int],
-    roots: list[tuple[int, list[int], str]],
-    external_tables: list[tuple[str, int]],
-) -> tuple[list[int], list[tuple[int, list[int], int]]]: ...
 def destruction_drop_statements(
     relations: list[tuple[str, str, str]], size_override: int | None
 ) -> list[tuple[str, str, str]]: ...

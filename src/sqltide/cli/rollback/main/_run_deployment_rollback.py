@@ -1,5 +1,6 @@
 """CLI command for whole-deployment rollback."""
 
+from sqltide._native import resolve_deployment_rollback
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.rollback._helpers.rendering import (
@@ -8,9 +9,6 @@ from sqltide.cli.rollback._helpers.rendering import (
     render_rollback_result,
 )
 from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
-from sqltide.executor.promotion.main.resolve_deployment_rollback import (
-    resolve_deployment_rollback,
-)
 from sqltide.executor.promotion.models import (
     PublishRequest,
     PublishResult,

@@ -1,8 +1,8 @@
+from sqltide._native import build_population_replay_requests
 from sqltide.adapter.models import AdapterReplayRequest, CatalogColumn, CatalogRelation
 from sqltide.compiler.compile.models import DesiredState, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.planner.models import DeploymentPlan, DeploymentWatermarkRecord
-from sqltide.executor.population._helpers.replay import build_population_replay_requests
 from sqltide.executor.population.models import (
     PopulationObject,
     PopulationPlan,

@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import build_root_audit_results
 from sqltide.adapter.models import (
     AdapterReadinessRequest,
     AdapterReadinessRootObservation,
@@ -12,7 +13,6 @@ from sqltide.adapter.models import (
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.compiler.compile.models import ObjectKey
 from sqltide.compiler.compile.types import DesiredObjectType
-from sqltide.executor.readiness._helpers.comparisons import build_root_audit_results
 from sqltide.executor.readiness.models import (
     DeploymentReadinessThresholds,
     RootAuditResult,

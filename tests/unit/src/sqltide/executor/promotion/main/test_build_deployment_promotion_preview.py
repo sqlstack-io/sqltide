@@ -1,12 +1,12 @@
 import pytest
 
+from sqltide._native import build_binding_replacement_preview
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
     AdapterStableBinding,
     AdapterStableBindingRemoval,
     InspectedActiveTableBinding,
 )
-from sqltide.executor.promotion._helpers.views import build_binding_replacement_preview
 from sqltide.executor.promotion.models import (
     DeploymentPromotionPreview,
     PromotionBindingAddition,

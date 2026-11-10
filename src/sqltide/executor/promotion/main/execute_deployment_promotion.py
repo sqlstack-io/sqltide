@@ -1,11 +1,10 @@
 """Publish execution entrypoint."""
 
+from sqltide._native import build_publish_binding_request, resolve_publish_deployment_id
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterCapabilityError
 from sqltide.adapter.models import AdapterBindingReplacementRequest, AdapterMetadataState
 from sqltide.executor.promotion._helpers.metadata import build_publish_metadata_state
-from sqltide.executor.promotion._helpers.resolution import resolve_publish_deployment_id
-from sqltide.executor.promotion._helpers.views import build_publish_binding_request
 from sqltide.executor.promotion._helpers.workflow import assemble_publish_workflow
 from sqltide.executor.promotion.models import PublishedView, PublishRequest, PublishResult
 from sqltide.executor.workflow.main._execute_warehouse_workflow import (

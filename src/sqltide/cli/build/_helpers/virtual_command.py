@@ -3,6 +3,11 @@
 import sys
 from contextlib import AbstractContextManager, nullcontext
 
+from sqltide._native import (
+    build_virtual_execution_result,
+    plan_population_sources,
+    row_error_policy_failure_message,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord
@@ -11,9 +16,6 @@ from sqltide.cli.build._helpers.rendering import render_interrupted_build_messag
 from sqltide.cli.build.main.render_virtual_build_result import render_virtual_build_result
 from sqltide.cli.build.models import BuildCommandOptions, VirtualWorkflowPreparation
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.executor.backfill.main.build_virtual_execution_result import (
-    build_virtual_execution_result,
-)
 from sqltide.executor.backfill.models import BackfillExecutionResult
 from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
     reset_fresh_landing_offsets,
@@ -32,12 +34,6 @@ from sqltide.executor.observability.main.persist_terminal_observations import (
     persist_terminal_observations,
 )
 from sqltide.executor.observability.models import RunStartupTimings, TerminalInvocation
-from sqltide.executor.population.main.plan_population_sources import (
-    plan_population_sources,
-)
-from sqltide.executor.population.main.row_error_policy_failure_message import (
-    row_error_policy_failure_message,
-)
 from sqltide.executor.workflow.exceptions import WorkflowExecutionError
 from sqltide.executor.workflow.main.execute_build_workflow import execute_build_workflow
 from sqltide.executor.workflow.main.execute_recovery_statements import (

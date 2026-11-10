@@ -26,7 +26,7 @@ use sqltide_planner::diff::Column;
 use sqltide_planner::naming::{is_deployment_id, is_deployment_physical_name};
 
 /// `(database, publishes, logical name, physical name, logical model name)`.
-type MappingArgument = (Option<String>, bool, String, String, String);
+pub(crate) type MappingArgument = (Option<String>, bool, String, String, String);
 
 /// `(deployment ID, created at, incomplete, mappings)`.
 type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);
@@ -62,8 +62,7 @@ type ObservationArgument = (
 
 /// Audit one staged root under `(maximum lag seconds, minimum staged row ratio)`, returning
 /// `(assessment, row delta, row ratio, warnings)`.
-#[pyfunction]
-fn audit_readiness(
+pub(crate) fn audit_readiness(
     observation: ObservationArgument,
     thresholds: (f64, f64),
 ) -> (&'static str, Option<i64>, Option<f64>, Vec<String>) {
@@ -124,7 +123,9 @@ fn audit_readiness(
 /// Positions of `(name, dependency names)` relations with dependants first. Raises
 /// `ValueError(("duplicate", position))` or `ValueError(("cycle", names))`.
 #[pyfunction]
-fn order_relations_for_drop(relations: Vec<(String, Vec<String>)>) -> PyResult<Vec<usize>> {
+pub(crate) fn order_relations_for_drop(
+    relations: Vec<(String, Vec<String>)>,
+) -> PyResult<Vec<usize>> {
     reverse_topological_order(&relations).map_err(|error| match error {
         OrderingError::Duplicate(position) => PyValueError::new_err(("duplicate", position)),
         OrderingError::Cycle(names) => PyValueError::new_err(("cycle", names)),
@@ -134,9 +135,7 @@ fn order_relations_for_drop(relations: Vec<(String, Vec<String>)>) -> PyResult<V
 /// `(current, target)` positions of the active publication and the one a rollback restores:
 /// the previous publication, or the latest of `deployment_id`. Raises
 /// `ValueError(("refused", message))` or `ValueError(("unranked", position))`.
-#[pyfunction]
-#[pyo3(signature = (publications, active, deployment_id))]
-fn select_rollback_publications(
+pub(crate) fn select_rollback_publications(
     publications: Vec<PublicationArgument>,
     active: Vec<Binding>,
     deployment_id: Option<String>,
@@ -262,8 +261,7 @@ fn py_is_deployment_physical_name(physical_name: &str) -> bool {
 
 /// Positions of the inspected `(physical name, object type)` candidates staged by
 /// `deployment_id` that a publish binds. Raises `ValueError(message)` when there are none.
-#[pyfunction]
-fn inspected_publish_candidates(
+pub(crate) fn inspected_publish_candidates(
     candidates: Vec<(String, String)>,
     deployment_id: &str,
 ) -> PyResult<Vec<usize>> {
@@ -273,8 +271,7 @@ fn inspected_publish_candidates(
 /// The bindings publishing `deployment_id` writes from staged `(database, object type, logical
 /// name, physical name)` relations. Raises `ValueError(message)` when a relation is missing or
 /// nothing can be bound.
-#[pyfunction]
-fn publish_stable_bindings(
+pub(crate) fn publish_stable_bindings(
     relations: Vec<(Option<String>, String, String, String)>,
     existing: HashSet<String>,
     default_database: &str,
@@ -296,8 +293,7 @@ fn publish_stable_bindings(
 }
 
 /// The sorted `(database, logical name)` stale bindings a publish of `current` removes.
-#[pyfunction]
-fn obsolete_binding_removals(
+pub(crate) fn obsolete_binding_removals(
     current: Vec<MappingArgument>,
     deployments_argument: Vec<DeploymentArgument>,
     publications: Vec<(String, Vec<String>)>,
@@ -325,8 +321,7 @@ type PreviewResult = (
 );
 
 /// The live effects of replacing `active` bindings with `bindings` and `removals`.
-#[pyfunction]
-fn binding_replacement_preview(
+pub(crate) fn binding_replacement_preview(
     bindings: Vec<Binding>,
     removals: Vec<(String, String)>,
     active: Vec<Binding>,
@@ -560,16 +555,10 @@ fn deployment_inventory_summaries(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(audit_readiness, module)?)?;
-    module.add_function(wrap_pyfunction!(select_rollback_publications, module)?)?;
     module.add_function(wrap_pyfunction!(janitor_binding_activity, module)?)?;
     module.add_function(wrap_pyfunction!(janitor_preview, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
-    module.add_function(wrap_pyfunction!(inspected_publish_candidates, module)?)?;
-    module.add_function(wrap_pyfunction!(publish_stable_bindings, module)?)?;
-    module.add_function(wrap_pyfunction!(obsolete_binding_removals, module)?)?;
-    module.add_function(wrap_pyfunction!(binding_replacement_preview, module)?)?;
     module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
     module.add_function(wrap_pyfunction!(parse_deployment_diff, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;

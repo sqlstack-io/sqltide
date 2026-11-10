@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import build_destruction_challenges, list_inactive_pipelines, plan_destruction
 from sqltide.adapter.models import (
     AdapterDeploymentRecord,
     AdapterManifest,
@@ -23,13 +24,6 @@ from sqltide.executor.destruction.exceptions import (
     DestructionResourceError,
     DestructionSelectionError,
 )
-from sqltide.executor.destruction.main.build_destruction_challenges import (
-    build_destruction_challenges,
-)
-from sqltide.executor.destruction.main.list_inactive_pipelines import (
-    list_inactive_pipelines,
-)
-from sqltide.executor.destruction.main.plan_destruction import plan_destruction
 from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRelationEvidence,

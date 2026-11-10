@@ -94,22 +94,8 @@ fn plan_result(plan: ReplayPlan) -> PlanResult {
 
 /// `(physical table mappings, replay plans)` for population roots. Without `watermarks`, each
 /// root gets one full-replay template boundary.
-#[pyfunction]
-#[pyo3(signature = (
-    *,
-    roots,
-    tables,
-    views,
-    key_names,
-    physical_names,
-    external_columns,
-    replay_anchor_keys,
-    default_database,
-    boundary_time,
-    watermarks,
-))]
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-fn plan_population_replays(
+pub(crate) fn plan_population_replays(
     roots: Vec<RootArgument>,
     tables: Vec<TableArgument>,
     views: Vec<(String, String)>,
@@ -231,8 +217,7 @@ fn scope_error(error: population_scope::ScopeError) -> PyErr {
 
 /// Planned keys in creation order, from `(key, dependency keys)` in desired-state order.
 /// Raises `ValueError(("key", key))` for a planned dependency without a desired object.
-#[pyfunction]
-fn population_creation_order(
+pub(crate) fn population_creation_order(
     objects: Vec<(usize, Vec<usize>)>,
     planned: HashSet<usize>,
 ) -> PyResult<Vec<usize>> {
@@ -245,8 +230,7 @@ type FanInResult = (usize, usize, (usize, usize), usize);
 /// The [`FanInResult`] of each
 /// fan-in catch-up root, from `(root key, affected keys)` roots, `(name, key)` desired tables,
 /// and `(key, source name, target name, dependency keys)` materialized views.
-#[pyfunction]
-fn population_fan_in_roots(
+pub(crate) fn population_fan_in_roots(
     planned: HashSet<usize>,
     roots: Vec<(usize, Vec<usize>)>,
     tables: Vec<(String, usize)>,
@@ -280,8 +264,7 @@ fn population_fan_in_roots(
 
 /// `skip`, `preserve`, `create`, or `land` for each `(kind, name, landing target)` object,
 /// where kind is `kafka`, `table`, `materialized_view`, or `view`.
-#[pyfunction]
-fn population_source_actions(
+pub(crate) fn population_source_actions(
     objects: Vec<(String, String, Option<String>)>,
     raw_prefix: &str,
     existing_names: HashSet<String>,
@@ -327,8 +310,7 @@ type DirectPopulationResult = (Vec<usize>, Vec<(usize, Vec<usize>, usize)>);
 
 /// A direct closure's planned keys and roots. Resources are `(kind, name)` with kind
 /// `table`, `materialized_view`, `view`, or anything else to ignore.
-#[pyfunction]
-fn direct_population_scope(
+pub(crate) fn direct_population_scope(
     desired: Vec<(String, usize)>,
     resources: Vec<Vec<(String, String)>>,
     execution_scope: Vec<usize>,
@@ -374,10 +356,5 @@ fn direct_population_scope(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(population_creation_order, module)?)?;
-    module.add_function(wrap_pyfunction!(population_fan_in_roots, module)?)?;
-    module.add_function(wrap_pyfunction!(population_source_actions, module)?)?;
-    module.add_function(wrap_pyfunction!(direct_population_scope, module)?)?;
-    module.add_function(wrap_pyfunction!(plan_population_replays, module)?)?;
     module.add_function(wrap_pyfunction!(bounded_replay_outcome, module)?)
 }
