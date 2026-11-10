@@ -3,9 +3,6 @@ from clickhouse_connect.driver.client import Client
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterWarehouseDeadLetterModel, AdapterWarehouseHealth
-from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
-    ClickHouseWarehouseHealthReader,
-)
 from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     WarehouseHealthDeadLettersTestCase,
     WarehouseHealthMissingDeadLettersTestCase,
@@ -29,9 +26,9 @@ def test_given_no_dead_letter_table_when_reading_then_dead_letters_are_unavailab
     managed_clickhouse_client: AdapterConnection,
     clickhouse_database: str,
 ) -> None:
-    health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
-        connection=managed_clickhouse_client
-    ).read(database=clickhouse_database, include_dead_letters=True)
+    health: AdapterWarehouseHealth = managed_clickhouse_client.load_warehouse_health(
+        database=clickhouse_database, include_dead_letters=True
+    )
 
     assert health.dead_letters is test_case.expected_dead_letters
 
@@ -73,9 +70,9 @@ def test_given_dead_letters_when_reading_then_recent_counts_and_latest_row_are_r
         """
     )
 
-    health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
-        connection=managed_clickhouse_client
-    ).read(database=clickhouse_database, include_dead_letters=True)
+    health: AdapterWarehouseHealth = managed_clickhouse_client.load_warehouse_health(
+        database=clickhouse_database, include_dead_letters=True
+    )
 
     assert health.dead_letters is not None
     assert len(health.dead_letters) == 1
@@ -102,9 +99,9 @@ def test_given_no_quarantine_models_when_reading_then_dead_letters_are_not_queri
     managed_clickhouse_client: AdapterConnection,
     clickhouse_database: str,
 ) -> None:
-    health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
-        connection=managed_clickhouse_client
-    ).read(database=clickhouse_database)
+    health: AdapterWarehouseHealth = managed_clickhouse_client.load_warehouse_health(
+        database=clickhouse_database
+    )
 
     assert health.dead_letters == test_case.expected_dead_letters
 

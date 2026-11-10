@@ -10,6 +10,7 @@ mod artifacts;
 mod audit_discovery;
 mod clickhouse;
 mod clickhouse_catalog;
+mod clickhouse_health;
 mod clickhouse_lifecycle;
 mod clickhouse_metadata;
 mod clickhouse_readiness;
@@ -99,6 +100,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     audit_discovery::register(module)?;
     clickhouse::register(module)?;
     clickhouse_catalog::register(module)?;
+    clickhouse_health::register(module)?;
     clickhouse_lifecycle::register(module)?;
     clickhouse_metadata::register(module)?;
     clickhouse_readiness::register(module)?;
