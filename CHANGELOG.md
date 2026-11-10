@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.12](https://github.com/sqlstack-io/sqltide/compare/v0.65.11...v0.65.12) (2026-11-10)
+
+
+### Refactoring
+
+* move the build, plan, compile, test, audit and destroy commands to Rust ([#363](https://github.com/sqlstack-io/sqltide/issues/363)) ([7358a2d](https://github.com/sqlstack-io/sqltide/commit/7358a2df447fd499dad6b26148923d49eedc491d))
+
 ## [0.65.11](https://github.com/sqlstack-io/sqltide/compare/v0.65.10...v0.65.11) (2026-11-10)
 
 
