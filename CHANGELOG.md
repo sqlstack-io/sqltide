@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.13](https://github.com/sqlstack-io/sqltide/compare/v0.65.12...v0.65.13) (2026-11-10)
+
+
+### Refactoring
+
+* move the dev server and sqt dev to Rust ([#365](https://github.com/sqlstack-io/sqltide/issues/365)) ([aa62c8c](https://github.com/sqlstack-io/sqltide/commit/aa62c8c56a0313a42fd0b49286d9568169f730ad))
+
 ## [0.65.12](https://github.com/sqlstack-io/sqltide/compare/v0.65.11...v0.65.12) (2026-11-10)
 
 
