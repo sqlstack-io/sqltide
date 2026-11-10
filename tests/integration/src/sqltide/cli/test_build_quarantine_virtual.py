@@ -1001,7 +1001,7 @@ def test_given_cancelled_switch_when_restore_fails_then_note_names_the_command(
             connection, "render_restore_materialized_view", lambda _: "SELECT throwIf(1)"
         )
         monkeypatch.setattr(
-            "sqltide.cli.build._helpers.virtual_command.execute_build_workflow",
+            "sqltide.executor.workflow.main.execute_build_workflow.execute_build_workflow",
             Mock(side_effect=KeyboardInterrupt),
         )
         capsys.readouterr()

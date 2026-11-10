@@ -2,7 +2,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from sqltide.cli.build._helpers.confirmation import confirm_build
+from sqltide._native import confirm_build
 from sqltide.cli.build.models import BuildProtectionRequirement
 from tests.unit.src.sqltide.cli.build._helpers._test_types import (
     BuildConfirmationTestCase,

@@ -2,11 +2,11 @@ import json
 
 import pytest
 
-from sqltide.cli.build._helpers.rendering import (
+from sqltide._native import (
     render_direct_build_json,
     render_direct_build_text,
+    render_virtual_build_result,
 )
-from sqltide.cli.build.main.render_virtual_build_result import render_virtual_build_result
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.promotion.main.render_promotion_result import render_promotion_result
 from sqltide.cli.readiness.main.render_ambiguous_deployment_message import (

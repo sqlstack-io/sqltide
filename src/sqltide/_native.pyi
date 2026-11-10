@@ -50,6 +50,17 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.cli.build.models import (
+    BuildCommandOptions,
+    BuildProtectionRequirement,
+    DirectBuildPreviewContext,
+    DirectWorkflowPreparation,
+    MixedWorkflowPreparation,
+    VirtualBuildPreviewContext,
+    VirtualWorkflowPreparation,
+    WorkflowPreparationOptions,
+)
+from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
@@ -138,7 +149,7 @@ from sqltide.compiler.sql_analysis.models import (
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
-from sqltide.executor.auditing.models import AuditWarmupState
+from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
     BackfillDeploymentIdentity,
@@ -154,13 +165,16 @@ from sqltide.executor.destruction.models import (
 )
 from sqltide.executor.destruction.types import DestructionPlanningConnection, DestructionPlanStore
 from sqltide.executor.direct.models import (
+    DirectBuildAudit,
     DirectBuildExecutionResult,
     DirectBuildRequest,
+    DirectBuildResult,
     DirectBuildWorkflow,
     DirectReplayCapture,
     DirectRuntimeExecution,
     DriftedManagedSource,
 )
+from sqltide.executor.observability.models import RunStartupTimings
 from sqltide.executor.population.models import (
     PopulationPlan,
     PopulationRealization,
@@ -1257,6 +1271,138 @@ def plan_preserved_managed_sources(
 def drifted_managed_sources(
     *, realized_project: RealizedProject, catalog: CatalogSnapshot
 ) -> tuple[DriftedManagedSource, ...]: ...
+def build_direct_build_preview(
+    *,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    analysis: CompileAnalysis,
+    effective_start_time: str | None = None,
+) -> DirectBuildPreviewContext: ...
+def build_virtual_build_preview(
+    *,
+    options: WorkflowPreparationOptions,
+    start_time_utc: str | None,
+    client: AdapterConnection,
+    analysis: CompileAnalysis,
+) -> VirtualBuildPreviewContext: ...
+def render_direct_build_json(
+    *, result: DirectBuildResult, adapter_name: str, audit_result: SqlAuditRunResult
+) -> str: ...
+def render_direct_build_text(
+    *, result: DirectBuildResult, adapter_name: str, audit_result: SqlAuditRunResult
+) -> str: ...
+def render_interrupted_build_message() -> str: ...
+def render_direct_execution_json(
+    *,
+    request: DirectBuildRequest,
+    status: str,
+    captures: tuple[DirectReplayCapture, ...],
+    execution: WorkflowExecutionResult,
+    failed_step_id: str | None,
+    error_message: str | None,
+    audit_result: SqlAuditRunResult | None = None,
+) -> str: ...
+def select_direct_build_audits(
+    *,
+    audits: tuple[LoadedSqlAudit, ...],
+    execution_model_names: frozenset[str],
+    full_build: bool,
+) -> tuple[LoadedSqlAudit, ...]: ...
+def prepare_direct_build_audits(
+    *, preview: DirectBuildPreviewContext, adapter_profile: CompilerAdapterProfile
+) -> tuple[DirectBuildAudit, ...]: ...
+def build_protection_requirements(
+    *, compiled_project: CompiledProject, execution_model_keys: frozenset[LogicalResourceKey]
+) -> tuple[BuildProtectionRequirement, ...]: ...
+def confirm_build(
+    *,
+    options: BuildCommandOptions,
+    plan_text: str,
+    protection_requirements: tuple[BuildProtectionRequirement, ...] = (),
+) -> bool: ...
+def validate_build_pipeline_limit(
+    *,
+    analysis: CompileAnalysis,
+    selectors: tuple[str, ...] = (),
+    preparation: (
+        DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation | None
+    ) = None,
+) -> None: ...
+def render_virtual_build_result(
+    *, result: BackfillExecutionResult, database: str, json_output: bool
+) -> str: ...
+def prepare_build_workflow(
+    *,
+    analysis: CompileAnalysis,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    adapter_profile: CompilerAdapterProfile,
+) -> DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation: ...
+def prepare_validated_build(
+    *,
+    analysis: CompileAnalysis,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    adapter_profile: CompilerAdapterProfile,
+) -> DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation: ...
+def resolve_prepared_build_scope(
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+) -> tuple[frozenset[str], frozenset[str]]: ...
+def prepared_pipeline_scope(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+) -> frozenset[str]: ...
+def validate_expected_build_scope(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+) -> None: ...
+def execute_direct_build_command(
+    *,
+    preparation: DirectWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    confirmation_required: bool = True,
+    startup_timings: RunStartupTimings | None = None,
+    _acquire_target_mutation_lock: bool = True,
+) -> int: ...
+def execute_virtual_build_command(
+    *,
+    preparation: VirtualWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    confirmation_required: bool = True,
+    startup_timings: RunStartupTimings | None = None,
+    _acquire_target_mutation_lock: bool = True,
+) -> int: ...
+def execute_mixed_build_command(
+    *,
+    preparation: MixedWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    startup_timings: RunStartupTimings,
+) -> int: ...
+def add_empty_replay_source_warnings(
+    *,
+    client: AdapterConnection,
+    catalog: CatalogSnapshot,
+    database: str,
+    desired_state: DesiredState,
+    plan: DeploymentPlan,
+) -> DeploymentPlan: ...
+def resolve_selected_logical_model_keys(
+    *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
+) -> frozenset[LogicalResourceKey]: ...
+def resolve_selection(
+    *, realized_project: RealizedProject, graph: ProjectGraph, selectors: tuple[str, ...]
+) -> SelectionResolution: ...
 def build_backfill_deployment_identity(
     *, deployment_id: str | None
 ) -> BackfillDeploymentIdentity: ...

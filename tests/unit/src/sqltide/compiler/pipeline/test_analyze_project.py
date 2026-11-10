@@ -862,7 +862,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     test_command_source: str = Path("src/sqltide/cli/test/main/_run_test.py").read_text(
         encoding="utf-8"
     )
-    selection_source: str = Path("src/sqltide/cli/selection/main/_selection.py").read_text(
+    selection_source: str = Path("crates/sqltide-python/src/selection.rs").read_text(
         encoding="utf-8"
     )
 

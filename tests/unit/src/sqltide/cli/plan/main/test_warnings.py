@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import add_empty_replay_source_warnings
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterIdentity,
@@ -13,7 +14,6 @@ from sqltide.adapter.models import (
     CatalogRelation,
     CatalogSnapshot,
 )
-from sqltide.cli.plan.main._warnings import add_empty_replay_source_warnings
 from sqltide.compiler.compile.models import (
     Column,
     DesiredState,

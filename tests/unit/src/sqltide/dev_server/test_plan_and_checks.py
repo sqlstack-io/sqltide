@@ -9,11 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
+from sqltide._native import validate_expected_build_scope
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
 )
-from sqltide.cli.build.classes.prepared_build_scope import PreparedBuildScope
 from sqltide.cli.build.constants import (
     EXPECTED_BUILD_PIPELINE_SCOPE_ENV_VAR,
     EXPECTED_BUILD_READ_SCOPE_ENV_VAR,
@@ -548,7 +548,7 @@ def test_given_authorized_scope_when_child_plan_changes_then_validation_is_rejec
     )
 
     with pytest.raises(CliUserError) as rejection:
-        PreparedBuildScope.validate_expected(
+        validate_expected_build_scope(
             preparation=build_direct_plan_preparation(),
             analysis=analysis,
         )

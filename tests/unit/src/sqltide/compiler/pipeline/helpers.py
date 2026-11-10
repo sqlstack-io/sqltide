@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from pathlib import Path
 from textwrap import dedent
@@ -275,7 +276,13 @@ def write_policy_validation_project(
 
 
 def has_compilation_service_import(file_path: Path) -> bool:
-    return "from sqltide._native import analyze_project" in file_path.read_text(encoding="utf-8")
+    return (
+        re.search(
+            r"from sqltide\._native import (?:\([^)]*|[^\n]*)\banalyze_project\b",
+            file_path.read_text(encoding="utf-8"),
+        )
+        is not None
+    )
 
 
 def _write_pipeline(
