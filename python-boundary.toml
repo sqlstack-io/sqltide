@@ -58,12 +58,12 @@ note = "Rule 2: Data-only alias for the live user macro functions the loader hol
 [[stays]]
 path = "dev_server/classes/kafka_lag_collector.py"
 rule = 4
-note = "Rule 4 (D885): glue around kafka-python-ng. Opens, reuses and closes the KafkaAdminClient and KafkaConsumer pair per broker key, calls list_consumer_group_offsets, partitions_for_topic and end_offsets, and returns plain tuples. Client config, keys, consumer-group scoping, offset math, snapshots and caching are native."
+note = "Rule 4: glue around kafka-python-ng; no Rust Kafka client is used yet. Opens, reuses and closes the KafkaAdminClient and KafkaConsumer pair per broker key, calls list_consumer_group_offsets, partitions_for_topic and end_offsets, and returns plain tuples. Client config, keys, consumer-group scoping, offset math, snapshots and caching are native."
 
 [[stays]]
 path = "dev_server/classes/kafka_topic_collector.py"
 rule = 4
-note = "Rule 4 (D885): glue around kafka-python-ng. Opens, reuses and closes one KafkaAdminClient per broker key and returns raw describe_topics metadata. Client config, keys, snapshots and caching are native."
+note = "Rule 4: glue around kafka-python-ng; no Rust Kafka client is used yet. Opens, reuses and closes one KafkaAdminClient per broker key and returns raw describe_topics metadata. Client config, keys, snapshots and caching are native."
 
 [[stays]]
 path = "events/__init__.py"
