@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.test._helpers.runtime_artifacts import write_test_runtime_target
+from sqltide._native import write_test_runtime_target
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from tests.unit.src.sqltide.cli.test._helpers._test_types import (

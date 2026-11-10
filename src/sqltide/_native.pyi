@@ -196,6 +196,7 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
+from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
     WarehouseStatement,
@@ -1401,6 +1402,36 @@ def run_compile(
     adapter_profile: CompilerAdapterProfile,
     target_dir: Path | None = None,
 ) -> int: ...
+def run_test(
+    *,
+    pipelines_root: Path,
+    project_dir: Path | None,
+    selectors: tuple[str, ...],
+    paths: tuple[Path, ...],
+    verbose: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    target_dir: Path | None = None,
+    database: str = "",
+) -> int: ...
+def select_loaded_sql_tests(
+    *,
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    selectors: tuple[str, ...],
+    paths: tuple[Path, ...],
+    project_dir: Path,
+) -> tuple[LoadedSqlTest, ...]: ...
+def render_sql_test_results(
+    *, results: tuple[SqlTestExecutionResult, ...], project_dir: Path, verbose: bool
+) -> str: ...
+def write_test_runtime_target(
+    *,
+    target_dir: Path,
+    test_cases: tuple[SqlTestCase, ...],
+    results: tuple[SqlTestExecutionResult, ...],
+) -> None: ...
 def static_audit_path(*, audit: LoadedSqlAudit, project_dir: Path) -> str: ...
 def static_source_resource_path(*, source_name: str, resource_name: str) -> str: ...
 def static_test_path(*, test_case: SqlTestCase) -> str: ...

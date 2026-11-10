@@ -815,7 +815,7 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
     "test_case",
     [
         CompilationEntrypointsTestCase(
-            description="routes exactly eight Python command paths through one compilation service",
+            description="routes exactly seven Python command paths through one compilation service",
             expected_entrypoint_paths=(
                 "src/sqltide/cli/audit/main/_run_audit.py",
                 "src/sqltide/cli/destruction/_helpers/execution.py",
@@ -824,9 +824,8 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
                 "src/sqltide/cli/readiness/main/_run_deployment_audit.py",
                 "src/sqltide/cli/reconcile/main/_run_reconcile.py",
                 "src/sqltide/cli/sql/main/_run_sql.py",
-                "src/sqltide/cli/test/main/_run_test.py",
             ),
-            expected_entrypoint_count=8,
+            expected_entrypoint_count=7,
             expected_assembly_call_count=1,
             expected_realization_call_count=1,
             expected_consumer_rebuild_count=0,
@@ -856,7 +855,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     analysis_source: str = Path("crates/sqltide-python/src/project_analysis.rs").read_text(
         encoding="utf-8"
     )
-    test_command_source: str = Path("src/sqltide/cli/test/main/_run_test.py").read_text(
+    test_command_source: str = Path("crates/sqltide-python/src/test_command.rs").read_text(
         encoding="utf-8"
     )
     selection_source: str = Path("crates/sqltide-python/src/selection.rs").read_text(
