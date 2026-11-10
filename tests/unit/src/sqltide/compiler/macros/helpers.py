@@ -3,8 +3,8 @@ from pathlib import Path
 from textwrap import dedent
 
 import sqltide._native as _native
+from sqltide._native import load_macro_registry
 from sqltide.compiler.discovery.models import DiscoveredProjectFile
-from sqltide.compiler.macros.main._load_macro_registry import load_macro_registry
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 
 

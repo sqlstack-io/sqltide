@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import DirectModelFingerprint
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
@@ -19,7 +20,6 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.compile.types import DesiredObjectType
 from sqltide.compiler.discovery.types import ReplayBoundaryMode, SourceKind
 from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.compiler.planner.exceptions import DirectPlanError
 from sqltide.compiler.planner.models import (
     DirectPlan,

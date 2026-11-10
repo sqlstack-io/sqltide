@@ -117,6 +117,11 @@ reason = "Native bindings own project analysis and its phases; this package only
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/compiler/planner/__init__.py"
+reason = "Native bindings own deployment and direct planning, adapter resource requests, replay queries, metadata state, warehouse snapshot loading and fingerprints; this package only declares the planner models, types, constants and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/compiler/rules/__init__.py"
 reason = "Native bindings own SQL Rule evaluation, ignore resolution, verified fixes and formatting; this package only declares the formatting result model and Rule errors they build and raise."
 

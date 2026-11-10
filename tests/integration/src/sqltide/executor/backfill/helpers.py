@@ -11,7 +11,12 @@ from typing import cast
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, realize_project
+from sqltide._native import (
+    SqlModelAnalyzer,
+    load_planning_warehouse_snapshot,
+    plan_deployment,
+    realize_project,
+)
 from sqltide._native import compile_pipeline as compile_pipeline_impl
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
@@ -54,10 +59,6 @@ from sqltide.compiler.discovery.types import (
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.pipeline.types import AdapterResource
 from sqltide.compiler.planner.constants import REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED
-from sqltide.compiler.planner.main.load_planning_warehouse_snapshot import (
-    load_planning_warehouse_snapshot,
-)
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,

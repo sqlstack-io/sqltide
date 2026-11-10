@@ -1,11 +1,11 @@
 """Repair execution entrypoint."""
 
+from sqltide._native import (
+    build_deployment_physical_name,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterCapabilityError
 from sqltide.adapter.models import AdapterStableBinding
-from sqltide.compiler.planner.main.build_deployment_physical_name import (
-    build_deployment_physical_name,
-)
 from sqltide.executor.repair._helpers.workflow import assemble_repair_workflow
 from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from sqltide.executor.workflow.main._execute_warehouse_workflow import (

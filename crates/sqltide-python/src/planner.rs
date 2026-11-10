@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{IntoPyDict, PyDict, PyTuple};
+use pyo3::types::{IntoPyDict, PyDict, PyFrozenSet, PyTuple};
 use sqltide_planner::deployment::{
     MUTABLE_REF_WARNING_CODE, MUTABLE_REF_WARNING_MESSAGE, PlanKey, PlanSubtree,
     stage_deployment as stage,
@@ -578,7 +578,6 @@ impl PyDesiredGraph {
 }
 
 const PLANNER_EXCEPTIONS: &str = "sqltide.compiler.planner.exceptions";
-const BUILD_ADAPTER_RESOURCE: &str = "sqltide.compiler.planner.main.build_adapter_resource";
 
 /// `class(message)` from `module`, raised `from None`.
 fn raised_from_none(py: Python<'_>, module: &str, class: &str, message: String) -> PyErr {
@@ -799,10 +798,10 @@ fn display_object_type(
     actual_state,
     default_database,
     render_resource,
-    deployment_id,
-    full_refresh_keys,
-    start_time_keys,
-    start_time,
+    deployment_id = None,
+    full_refresh_keys = None,
+    start_time_keys = None,
+    start_time = None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn plan_deployment<'py>(
@@ -812,10 +811,18 @@ fn plan_deployment<'py>(
     default_database: &Bound<'py, PyAny>,
     render_resource: &Bound<'py, PyAny>,
     deployment_id: Option<String>,
-    full_refresh_keys: &Bound<'py, PyAny>,
-    start_time_keys: &Bound<'py, PyAny>,
+    full_refresh_keys: Option<Bound<'py, PyAny>>,
+    start_time_keys: Option<Bound<'py, PyAny>>,
     start_time: Option<String>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let full_refresh_keys: Bound<'py, PyAny> = match full_refresh_keys {
+        Some(keys) => keys,
+        None => PyFrozenSet::empty(py)?.into_any(),
+    };
+    let start_time_keys: Bound<'py, PyAny> = match start_time_keys {
+        Some(keys) => keys,
+        None => PyFrozenSet::empty(py)?.into_any(),
+    };
     let compile_models: Bound<'py, PyModule> = py.import(COMPILE_MODELS)?;
     let planner_models: Bound<'py, PyModule> = py.import(PLANNER_MODELS)?;
     let materialized_view_class = compile_models.getattr("DesiredMaterializedView")?;
@@ -1049,9 +1056,7 @@ fn plan_deployment<'py>(
     for object in &desired_objects {
         desired_by_key.set_item(object.getattr("key")?, object)?;
     }
-    let build_resource = py
-        .import(BUILD_ADAPTER_RESOURCE)?
-        .getattr("build_adapter_resource")?;
+    let build_resource = wrap_pyfunction!(crate::planner_support::build_adapter_resource, py)?;
     let diff_class = planner_models.getattr("PlannedSqlDiff")?;
     let mut sql_diffs: Vec<Bound<'py, PyAny>> = Vec::new();
     for ((key, _, _), classification) in forcing.iter().zip(&classifications) {

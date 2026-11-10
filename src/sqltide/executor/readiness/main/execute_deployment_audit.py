@@ -1,12 +1,12 @@
 """Audit backfill execution entrypoint."""
 
+from sqltide._native import (
+    deployment_id_from_physical_name,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_TABLE
 from sqltide.compiler.compile.models import ObjectKey
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
-    deployment_id_from_physical_name,
-)
 from sqltide.executor.readiness._helpers.comparisons import build_root_audit_results
 from sqltide.executor.readiness._helpers.resolution import resolve_audit_deployment_id
 from sqltide.executor.readiness.main.load_audit_deployment import load_audit_deployment

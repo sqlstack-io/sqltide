@@ -3,6 +3,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import (
+    build_adapter_metadata_state,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterInvocationRecord,
@@ -17,9 +20,6 @@ from sqltide.adapters.clickhouse._helpers.metadata import (
     render_clickhouse_metadata_migration_statements,
     render_clickhouse_metadata_migration_workflow,
     render_clickhouse_metadata_state,
-)
-from sqltide.compiler.planner.main.build_adapter_metadata_state import (
-    build_adapter_metadata_state,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     ManifestLoadingTestCase,

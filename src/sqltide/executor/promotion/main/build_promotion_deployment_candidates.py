@@ -1,17 +1,15 @@
 """Build the selectable publish deployment candidates for a target."""
 
+from sqltide._native import (
+    deployment_id_from_physical_name,
+    is_deployment_physical_name,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterDeploymentRecord,
     InspectedManagedTableState,
-)
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
-    deployment_id_from_physical_name,
-)
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
-    is_deployment_physical_name,
 )
 from sqltide.executor.readiness.models import AuditDeploymentCandidate
 

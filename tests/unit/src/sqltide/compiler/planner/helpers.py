@@ -6,7 +6,14 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, analyze_project, realize_project
+from sqltide._native import (
+    DirectModelFingerprint,
+    SqlModelAnalyzer,
+    analyze_project,
+    plan_deployment,
+    plan_direct_build,
+    realize_project,
+)
 from sqltide._native import compile_pipeline as compile_pipeline_impl
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
@@ -87,9 +94,6 @@ from sqltide.compiler.discovery.types import (
     SourceKind,
 )
 from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
-from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
 from sqltide.compiler.planner.models import (
     ActualKafkaTable,
     ActualMaterializedView,

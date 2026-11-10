@@ -8,15 +8,15 @@ from _pytest.capture import CaptureResult
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
+from sqltide._native import (
+    build_deployment_physical_name,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audit
 from sqltide.compiler.compile.models import CompiledPipeline
-from sqltide.compiler.planner.main.build_deployment_physical_name import (
-    build_deployment_physical_name,
-)
 from sqltide.executor.backfill.models import BackfillExecutionResult
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     render_create_kafka_table_ddl,

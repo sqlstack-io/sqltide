@@ -1,15 +1,15 @@
 import pytest
 
+from sqltide._native import (
+    build_adapter_resource,
+    build_shadow_adapter_resource,
+)
 from sqltide.adapter.models import AdapterMaterializedView
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW
 from sqltide.compiler.compile.models import (
     DesiredMaterializedView,
     MaterializedViewSpec,
     ObjectKey,
-)
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
-from sqltide.compiler.planner.main.build_shadow_adapter_resource import (
-    build_shadow_adapter_resource,
 )
 from tests.unit.src.sqltide.compiler.planner.main._test_types import (
     MaterializedViewSchedulingTestCase,

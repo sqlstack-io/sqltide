@@ -1,12 +1,12 @@
 import pytest
 
+from sqltide._native import plan_deployment
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import (
     DesiredState,
     ObjectKey,
 )
 from sqltide.compiler.planner.constants import REBUILD_EXECUTION_MODE_FULL
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import ActualState, DeploymentPlan
 from sqltide.compiler.planner.types import DeploymentAction
 from tests.unit.src.sqltide.compiler.planner._test_types import (

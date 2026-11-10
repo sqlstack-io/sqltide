@@ -2,13 +2,13 @@ from dataclasses import replace
 
 import pytest
 
+from sqltide._native import plan_deployment
 from sqltide.adapter.models import AdapterReplayRequest
 from sqltide.adapter.types import AdapterReplayLowerBoundMode, AdapterReplaySeedMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_TABLE
 from sqltide.compiler.compile.models import CompiledPipeline, DesiredState, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,

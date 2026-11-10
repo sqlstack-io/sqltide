@@ -1,13 +1,11 @@
 import pytest
 
-from sqltide.adapter.exceptions import AdapterCapabilityError
-from sqltide.adapter.models import AdapterQueryResult, CatalogRelation, CatalogSnapshot
-from sqltide.compiler.planner.main.load_direct_warehouse_snapshot import (
+from sqltide._native import (
     load_direct_warehouse_snapshot,
-)
-from sqltide.compiler.planner.main.load_planning_warehouse_snapshot import (
     load_planning_warehouse_snapshot,
 )
+from sqltide.adapter.exceptions import AdapterCapabilityError
+from sqltide.adapter.models import AdapterQueryResult, CatalogRelation, CatalogSnapshot
 from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
     PlanningWarehouseSnapshot,

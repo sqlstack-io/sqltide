@@ -1,6 +1,7 @@
 """Create passive managed sources and activate landing after downstream realization."""
 
 import sqltide._native as _native
+from sqltide._native import build_adapter_resource
 from sqltide.adapter.models import AdapterManagedSource
 from sqltide.compiler.compile.constants import RAW_TABLE_NAME_PREFIX
 from sqltide.compiler.compile.models import (
@@ -10,7 +11,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     DesiredView,
 )
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.executor.population.constants import (
     SOURCE_ACTION_LAND,
     SOURCE_ACTION_PRESERVE,

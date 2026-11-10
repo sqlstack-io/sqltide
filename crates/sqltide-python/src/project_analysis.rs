@@ -18,7 +18,6 @@ const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
 const DISCOVERY_MODELS: &str = "sqltide.compiler.discovery.models";
 const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const MACRO_MODELS: &str = "sqltide.compiler.macros.models";
-const MACRO_LOADER: &str = "sqltide.compiler.macros.main._load_macro_registry";
 const PIPELINE_MODELS: &str = "sqltide.compiler.pipeline.models";
 const RULES_MODELS: &str = "sqltide.compiler.rules.models";
 const RULES_EXCEPTIONS: &str = "sqltide.compiler.rules.exceptions";
@@ -174,7 +173,7 @@ fn build_compile_inputs<'py>(
     let authored_registry: Bound<'py, PyAny> = optional(&loaded_project, "macro_registry")?;
     let base_registry: Bound<'py, PyAny> = if authored_registry.is_none() {
         call(
-            &py.import(MACRO_LOADER)?.getattr("load_macro_registry")?,
+            &wrap_pyfunction!(crate::macros::load_macro_registry, py)?.into_any(),
             &[("macro_files", discovered_inputs.getattr("macro_files")?)],
         )?
     } else {
