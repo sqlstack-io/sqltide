@@ -56,7 +56,9 @@ from sqltide.cli.build.models import (
     DirectBuildPreviewContext,
     DirectWorkflowPreparation,
     MixedWorkflowPreparation,
+    VirtualBuildPreviewContext,
     VirtualWorkflowPreparation,
+    WorkflowPreparationOptions,
 )
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
@@ -1268,6 +1270,20 @@ def plan_preserved_managed_sources(
 def drifted_managed_sources(
     *, realized_project: RealizedProject, catalog: CatalogSnapshot
 ) -> tuple[DriftedManagedSource, ...]: ...
+def build_direct_build_preview(
+    *,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    analysis: CompileAnalysis,
+    effective_start_time: str | None = None,
+) -> DirectBuildPreviewContext: ...
+def build_virtual_build_preview(
+    *,
+    options: WorkflowPreparationOptions,
+    start_time_utc: str | None,
+    client: AdapterConnection,
+    analysis: CompileAnalysis,
+) -> VirtualBuildPreviewContext: ...
 def render_direct_build_json(
     *, result: DirectBuildResult, adapter_name: str, audit_result: SqlAuditRunResult
 ) -> str: ...

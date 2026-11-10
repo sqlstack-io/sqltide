@@ -16,7 +16,9 @@ from sqltide._native import (
     analyze_project,
     assemble_direct_build_workflow,
     assemble_virtual_build_workflow,
+    build_direct_build_preview,
     build_direct_execution_result,
+    build_virtual_build_preview,
     execute_direct_build_workflow,
     load_clickhouse_catalog,
     persist_direct_fingerprints,
@@ -58,10 +60,8 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.build._helpers.virtual_preview import build_virtual_build_preview
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
 from sqltide.cli.build.main._run_build import run_build
-from sqltide.cli.build.main.build_direct_build_preview import build_direct_build_preview
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     DirectBuildPreviewContext,

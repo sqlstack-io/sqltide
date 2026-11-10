@@ -488,7 +488,7 @@ fn prepare_direct_build_audits<'py>(
 /// Protected pipelines containing at least one executing model.
 #[pyfunction]
 #[pyo3(signature = (*, compiled_project, execution_model_keys))]
-fn build_protection_requirements<'py>(
+pub(crate) fn build_protection_requirements<'py>(
     py: Python<'py>,
     compiled_project: &Value<'py>,
     execution_model_keys: &Value<'py>,
