@@ -6,8 +6,10 @@ from typing import Any, Literal
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
+    AdapterCurrentQualityNode,
     AdapterDeploymentInventory,
     AdapterDirectFingerprintRecord,
+    AdapterDirectFingerprintSnapshot,
     AdapterIdentity,
     AdapterManagedSource,
     AdapterManifest,
@@ -19,6 +21,9 @@ from sqltide.adapter.models import (
     AdapterRelationCleanupRequest,
     AdapterReplayQuery,
     AdapterReplayRequest,
+    AdapterRunEventRecord,
+    AdapterRunStatementRecord,
+    AdapterSensorState,
     AdapterStableView,
     AdapterTable,
     AdapterView,
@@ -138,9 +143,11 @@ def render_clickhouse_replay_coverage_query(request: object) -> str: ...
 def render_clickhouse_replay_from_capture(request: object) -> str: ...
 def render_clickhouse_replay_from_deployment(request: object) -> list[str]: ...
 def database_scoped_consumer_group(consumer_group: str, database: str) -> str: ...
-def render_clickhouse_metadata_migration_statements(database: str) -> list[str]: ...
-def render_clickhouse_metadata_migration_workflow(database: str) -> list[str]: ...
-def render_clickhouse_metadata_state(database: str, state: object) -> list[str]: ...
+def render_clickhouse_metadata_migration_statements(database: str) -> tuple[str, ...]: ...
+def render_clickhouse_metadata_migration_workflow(database: str) -> tuple[str, ...]: ...
+def render_clickhouse_metadata_state(
+    *, database: str, state: AdapterMetadataState
+) -> tuple[str, ...]: ...
 def render_clickhouse_latest_fingerprints_query(
     database: str, logical_model_identities: list[str]
 ) -> str: ...
@@ -154,24 +161,35 @@ def redact_clickhouse_workflow_statements(
     sqls: list[str], workflow_sha256: str
 ) -> tuple[list[str], str]: ...
 def render_clickhouse_direct_fingerprint_observations(
-    database: str, fingerprints: tuple[object, ...]
-) -> list[str]: ...
+    *, database: str, fingerprints: tuple[AdapterDirectFingerprintRecord, ...]
+) -> tuple[str, ...]: ...
 def render_clickhouse_manifest_history_query(
     database: str, project_identity: str, target_name: str, target_database: str
 ) -> str: ...
-def render_clickhouse_manifest_publication(database: str, manifest: object) -> str: ...
+def render_clickhouse_manifest_publication(
+    *, database: str, manifest: AdapterManifest
+) -> tuple[str, ...]: ...
 def render_clickhouse_sensor_state_inserts(
-    database: str, state: object, include_migration: bool
-) -> list[str]: ...
-def render_clickhouse_sensor_retention_cleanup(database: str, retention_days: int) -> list[str]: ...
+    *, database: str, state: AdapterSensorState, include_migration: bool = False
+) -> tuple[str, ...]: ...
+def render_clickhouse_sensor_retention_cleanup(
+    *, database: str, retention_days: int
+) -> tuple[str, ...]: ...
 def render_clickhouse_run_event_inserts(
-    database: str, events: tuple[object, ...], include_migration: bool
-) -> list[str]: ...
+    *, database: str, events: tuple[AdapterRunEventRecord, ...], include_migration: bool = False
+) -> tuple[str, ...]: ...
 def render_clickhouse_run_statement_inserts(
-    database: str, statements: tuple[object, ...], include_migration: bool
-) -> list[str]: ...
+    *,
+    database: str,
+    statements: tuple[AdapterRunStatementRecord, ...],
+    include_migration: bool = False,
+) -> tuple[str, ...]: ...
 def render_clickhouse_latest_node_status_query(
-    database: str, project_identity: str, target_identity: str, nodes: tuple[object, ...]
+    *,
+    database: str,
+    project_identity: str,
+    target_identity: str,
+    nodes: tuple[AdapterCurrentQualityNode, ...],
 ) -> str: ...
 def extract_references(sql: str) -> tuple[SqlReference, ...]: ...
 def expand_sql_macros(
@@ -960,6 +978,17 @@ def render_clickhouse_relation_cleanup(
 def render_clickhouse_stable_binding_replacement(
     *, connection: AdapterConnection, request: AdapterBindingReplacementRequest
 ) -> tuple[str, ...]: ...
+def load_clickhouse_direct_fingerprints(
+    *, connection: AdapterConnection, database: str, logical_model_identities: tuple[str, ...]
+) -> AdapterDirectFingerprintSnapshot: ...
+def load_clickhouse_manifests(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    project_identity: str,
+    target_name: str,
+    target_database: str,
+) -> AdapterManifestSnapshot: ...
 def build_adapter_resource(
     desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
 ) -> (

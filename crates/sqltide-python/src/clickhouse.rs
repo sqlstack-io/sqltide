@@ -3,7 +3,7 @@
 
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyFloat, PyInt, PyString};
+use pyo3::types::{PyBool, PyFloat, PyInt, PyString, PyTuple};
 use sqltide_clickhouse::CapabilityError;
 use sqltide_clickhouse::audit::{audit_count_query, audit_sample_query};
 use sqltide_clickhouse::comparison::{SetDifferenceTarget, render_set_difference_comparison};
@@ -500,24 +500,31 @@ fn metadata_records(py: Python<'_>, state: &Bound<'_, PyAny>) -> PyResult<Metada
 
 /// The current additive metadata migration, unterminated.
 #[pyfunction]
-fn render_clickhouse_metadata_migration_statements(database: &str) -> Vec<String> {
-    migration_statements(database)
+fn render_clickhouse_metadata_migration_statements<'py>(
+    py: Python<'py>,
+    database: &str,
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(py, migration_statements(database))
 }
 
 /// The complete idempotent metadata migration as executable SQL.
 #[pyfunction]
-fn render_clickhouse_metadata_migration_workflow(database: &str) -> Vec<String> {
-    migration_workflow(database)
+fn render_clickhouse_metadata_migration_workflow<'py>(
+    py: Python<'py>,
+    database: &str,
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(py, migration_workflow(database))
 }
 
 /// Exact inserts for every non-empty table of one `AdapterMetadataState`.
 #[pyfunction]
-fn render_clickhouse_metadata_state(
-    py: Python<'_>,
+#[pyo3(signature = (*, database, state))]
+fn render_clickhouse_metadata_state<'py>(
+    py: Python<'py>,
     database: &str,
-    state: &Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    Ok(metadata_state(database, &metadata_records(py, state)?))
+    state: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(py, metadata_state(database, &metadata_records(py, state)?))
 }
 
 /// The latest direct SQL baseline per logical model identity.
@@ -567,10 +574,12 @@ fn redact_clickhouse_workflow_statements(
 
 /// Schema initialization and inserts for `AdapterDirectFingerprintRecord`s.
 #[pyfunction]
-fn render_clickhouse_direct_fingerprint_observations(
+#[pyo3(signature = (*, database, fingerprints))]
+fn render_clickhouse_direct_fingerprint_observations<'py>(
+    py: Python<'py>,
     database: &str,
-    fingerprints: &Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
+    fingerprints: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyTuple>> {
     let fingerprints = records(fingerprints, |record| {
         Ok(DirectFingerprint {
             fingerprint_id: field(record, "fingerprint_id")?,
@@ -583,7 +592,7 @@ fn render_clickhouse_direct_fingerprint_observations(
             applied_at: field(record, "applied_at")?,
         })
     })?;
-    Ok(direct_fingerprint_observations(database, &fingerprints))
+    PyTuple::new(py, direct_fingerprint_observations(database, &fingerprints))
 }
 
 /// Complete manifest history for one project target, newest first.
@@ -599,10 +608,12 @@ fn render_clickhouse_manifest_history_query(
 
 /// One append containing a complete immutable `AdapterManifest`.
 #[pyfunction]
-fn render_clickhouse_manifest_publication(
+#[pyo3(signature = (*, database, manifest))]
+fn render_clickhouse_manifest_publication<'py>(
+    py: Python<'py>,
     database: &str,
-    manifest: &Bound<'_, PyAny>,
-) -> PyResult<String> {
+    manifest: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyTuple>> {
     let resources = records(&manifest.getattr("resources")?, |resource| {
         let mut values: [String; 7] = Default::default();
         for (value, name) in values.iter_mut().zip(MANIFEST_RESOURCE_FIELDS) {
@@ -610,7 +621,7 @@ fn render_clickhouse_manifest_publication(
         }
         Ok(values)
     })?;
-    Ok(manifest_publication(
+    let statement: String = manifest_publication(
         database,
         &Manifest {
             manifest_id: field(manifest, "manifest_id")?,
@@ -627,17 +638,19 @@ fn render_clickhouse_manifest_publication(
             tool_version: field(manifest, "tool_version")?,
             published_at: field(manifest, "published_at")?,
         },
-    ))
+    );
+    PyTuple::new(py, [statement])
 }
 
 /// Incremental inserts for one `AdapterSensorState`, optionally preceded by the migration.
 #[pyfunction]
-fn render_clickhouse_sensor_state_inserts(
-    py: Python<'_>,
+#[pyo3(signature = (*, database, state, include_migration = false))]
+fn render_clickhouse_sensor_state_inserts<'py>(
+    py: Python<'py>,
     database: &str,
-    state: &Bound<'_, PyAny>,
+    state: &Bound<'py, PyAny>,
     include_migration: bool,
-) -> PyResult<Vec<String>> {
+) -> PyResult<Bound<'py, PyTuple>> {
     let state = SensorState {
         checkpoints: rows(
             py,
@@ -649,47 +662,64 @@ fn render_clickhouse_sensor_state_inserts(
         overrides: rows(py, &state.getattr("overrides")?, &SENSOR_OVERRIDE_COLUMNS)?,
         leases: rows(py, &state.getattr("leases")?, &SENSOR_LEASE_COLUMNS)?,
     };
-    Ok(sensor_state_inserts(database, &state, include_migration))
+    PyTuple::new(
+        py,
+        sensor_state_inserts(database, &state, include_migration),
+    )
 }
 
 /// Bounded deletes for aged sensor ticks and steps.
 #[pyfunction]
-fn render_clickhouse_sensor_retention_cleanup(database: &str, retention_days: i64) -> Vec<String> {
-    sensor_retention_cleanup(database, retention_days)
+#[pyo3(signature = (*, database, retention_days))]
+fn render_clickhouse_sensor_retention_cleanup<'py>(
+    py: Python<'py>,
+    database: &str,
+    retention_days: i64,
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(py, sensor_retention_cleanup(database, retention_days))
 }
 
 /// Inserts for `AdapterRunEventRecord`s, optionally preceded by the migration.
 #[pyfunction]
-fn render_clickhouse_run_event_inserts(
-    py: Python<'_>,
+#[pyo3(signature = (*, database, events, include_migration = false))]
+fn render_clickhouse_run_event_inserts<'py>(
+    py: Python<'py>,
     database: &str,
-    events: &Bound<'_, PyAny>,
+    events: &Bound<'py, PyAny>,
     include_migration: bool,
-) -> PyResult<Vec<String>> {
-    Ok(run_event_inserts(
-        database,
-        rows(py, events, &RUN_EVENT_COLUMNS)?,
-        include_migration,
-    ))
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(
+        py,
+        run_event_inserts(
+            database,
+            rows(py, events, &RUN_EVENT_COLUMNS)?,
+            include_migration,
+        ),
+    )
 }
 
 /// Inserts for `AdapterRunStatementRecord`s, optionally preceded by the migration.
 #[pyfunction]
-fn render_clickhouse_run_statement_inserts(
-    py: Python<'_>,
+#[pyo3(signature = (*, database, statements, include_migration = false))]
+fn render_clickhouse_run_statement_inserts<'py>(
+    py: Python<'py>,
     database: &str,
-    statements: &Bound<'_, PyAny>,
+    statements: &Bound<'py, PyAny>,
     include_migration: bool,
-) -> PyResult<Vec<String>> {
-    Ok(run_statement_inserts(
-        database,
-        rows(py, statements, &RUN_STATEMENT_COLUMNS)?,
-        include_migration,
-    ))
+) -> PyResult<Bound<'py, PyTuple>> {
+    PyTuple::new(
+        py,
+        run_statement_inserts(
+            database,
+            rows(py, statements, &RUN_STATEMENT_COLUMNS)?,
+            include_migration,
+        ),
+    )
 }
 
 /// Current manifest fingerprints joined to the latest terminal results.
 #[pyfunction]
+#[pyo3(signature = (*, database, project_identity, target_identity, nodes))]
 fn render_clickhouse_latest_node_status_query(
     database: &str,
     project_identity: &str,

@@ -5,6 +5,11 @@ import pytest
 
 from sqltide._native import (
     build_adapter_metadata_state,
+    load_clickhouse_manifests,
+    render_clickhouse_manifest_publication,
+    render_clickhouse_metadata_migration_statements,
+    render_clickhouse_metadata_migration_workflow,
+    render_clickhouse_metadata_state,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
@@ -13,13 +18,6 @@ from sqltide.adapter.models import (
     AdapterMetadataState,
     AdapterNodeResultRecord,
     AdapterQueryResult,
-)
-from sqltide.adapters.clickhouse._helpers.metadata import (
-    load_clickhouse_manifests,
-    render_clickhouse_manifest_publication,
-    render_clickhouse_metadata_migration_statements,
-    render_clickhouse_metadata_migration_workflow,
-    render_clickhouse_metadata_state,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     ManifestLoadingTestCase,

@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from sqltide._native import render_clickhouse_metadata_state
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterMetadataState,
@@ -8,7 +9,6 @@ from sqltide.adapter.models import (
     CatalogRelation,
     CatalogSnapshot,
 )
-from sqltide.adapters.clickhouse._helpers.metadata import render_clickhouse_metadata_state
 from sqltide.compiler.compile.models import (
     Column,
     DesiredMaterializedView,
