@@ -50,6 +50,26 @@ SUPPRESSED: str = (
     "            return native_project_graph(project)\n"
     "        return None\n"
 )
+REEXPORT: str = (
+    '"""Compile models, defined natively."""\n'
+    "\n"
+    "from sqltide._native import Column as Column\n"
+    "from sqltide._native import ObjectKey as ObjectKey\n"
+    "\n"
+    '__all__ = ["Column", "ObjectKey"]\n'
+)
+EXTRA_ASSIGNMENT: str = REEXPORT + 'DEFAULT_NAME: str = "orders"\n'
+EXTRA_FUNCTION: str = REEXPORT + "\n\ndef build():\n    return Column\n"
+NATIVE_COLUMN: str = "from sqltide._native import Column as Column\n"
+FOREIGN_IMPORT: str = REEXPORT.replace(
+    NATIVE_COLUMN, "from sqltide.compiler.columns import Column\n"
+)
+CONDITIONAL_IMPORT: str = REEXPORT.replace(NATIVE_COLUMN, "if True:\n    " + NATIVE_COLUMN)
+GUARDED_IMPORT: str = REEXPORT.replace(
+    NATIVE_COLUMN, "try:\n    " + NATIVE_COLUMN + "except ImportError:\n    Column = None\n"
+)
+RENAMED_IMPORT: str = REEXPORT.replace("Column as Column", "Column as ColumnSpec")
+EXTRA_EXPORT: str = REEXPORT.replace('"Column", "ObjectKey"', '"Column", "ObjectKey", "Table"')
 STAYS: str = '[[stays]]\npath = "executor"\nrule = 1\nnote = "Rule 1: runs plans."\n'
 REVIEWED: str = (
     '[[handled_native_errors]]\nlocation = "compiler/keys.py::digest"\nnote = "No key."\n'
@@ -59,6 +79,14 @@ REVIEWED: str = (
 @pytest.mark.parametrize(
     "test_case",
     [
+        PythonBoundaryTestCase(
+            description="pure native re-export modules are reported but not counted",
+            source_files={"compiler/models.py": REEXPORT, "compiler/plan.py": "a = 1\n"},
+            policy="remaining_lines = 1\n",
+            expected_messages=(
+                "1 movable Python lines remain; 1 pure native re-export files (6 lines)",
+            ),
+        ),
         PythonBoundaryTestCase(
             description="staying modules are not counted",
             source_files={"compiler/plan.py": "a = 1\nb = 2\n", "executor/run.py": "c = 3\n"},
@@ -110,6 +138,48 @@ def test_given_policy_matching_source_when_checking_then_passes(
 @pytest.mark.parametrize(
     "test_case",
     [
+        PythonBoundaryTestCase(
+            description="a re-export module with one extra assignment counts",
+            source_files={"compiler/models.py": EXTRA_ASSIGNMENT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 7 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module with a function counts",
+            source_files={"compiler/models.py": EXTRA_FUNCTION},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 10 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module importing from another module counts",
+            source_files={"compiler/models.py": FOREIGN_IMPORT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 6 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module with a conditional import counts",
+            source_files={"compiler/models.py": CONDITIONAL_IMPORT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 7 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module guarding an import with try counts",
+            source_files={"compiler/models.py": GUARDED_IMPORT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 9 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module that renames a native name counts",
+            source_files={"compiler/models.py": RENAMED_IMPORT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 6 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module whose __all__ lists another name counts",
+            source_files={"compiler/models.py": EXTRA_EXPORT},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 6 lines (policy: 0)",),
+        ),
         PythonBoundaryTestCase(
             description="movable Python grew",
             source_files={"compiler/plan.py": "a = 1\nb = 2\nc = 3\n"},
