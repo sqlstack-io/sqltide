@@ -11,6 +11,7 @@ mod audit_discovery;
 mod clickhouse;
 mod clickhouse_catalog;
 mod clickhouse_lifecycle;
+mod clickhouse_metadata;
 mod compilation;
 mod compile;
 mod compile_artifacts;
@@ -98,6 +99,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     clickhouse::register(module)?;
     clickhouse_catalog::register(module)?;
     clickhouse_lifecycle::register(module)?;
+    clickhouse_metadata::register(module)?;
     compilation::register(module)?;
     compile::register(module)?;
     compile_artifacts::register(module)?;
