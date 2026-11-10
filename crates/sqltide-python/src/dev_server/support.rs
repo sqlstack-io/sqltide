@@ -34,6 +34,18 @@ pub(crate) fn attr<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<B
     py.import(module)?.getattr(name)
 }
 
+/// `pydantic.TypeAdapter(annotation)` as module-level code builds it. The adapter reads its
+/// caller's frame two levels up, and request handlers run on threads with no Python frames, so
+/// it is built inside an evaluated frame whose namespace holds only the annotation.
+pub(crate) fn type_adapter<'py>(annotation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py: Python<'py> = annotation.py();
+    let namespace: Bound<'py, PyDict> = PyDict::new(py);
+    namespace.set_item("__name__", "sqltide._native")?;
+    namespace.set_item("TypeAdapter", attr(py, "pydantic", "TypeAdapter")?)?;
+    namespace.set_item("annotation", annotation)?;
+    py.eval(c"TypeAdapter(annotation)", Some(&namespace), None)
+}
+
 /// Whether `error` is an instance of `module.name`.
 pub(crate) fn is_instance(py: Python<'_>, error: &PyErr, module: &str, name: &str) -> PyResult<bool> {
     let class: Bound<'_, PyAny> = attr(py, module, name)?;
@@ -207,7 +219,7 @@ fn parse_plain(scalar: Scalar, raw: &str, loc: Vec<JsonValue>) -> Result<Value, 
 fn parse_uuid(py: Python<'_>, raw: &str, loc: Vec<JsonValue>) -> PyResult<Result<Value, JsonValue>> {
     static ADAPTER: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let adapter: &Py<PyAny> = ADAPTER.get_or_try_init(py, || {
-        Ok::<_, PyErr>(attr(py, "pydantic", "TypeAdapter")?.call1((attr(py, "uuid", "UUID")?,))?.unbind())
+        Ok::<_, PyErr>(type_adapter(&attr(py, "uuid", "UUID")?)?.unbind())
     })?;
     match adapter.bind(py).call_method("validate_python", (raw,), Some(&py_kwargs!(py; from_attributes = true)?)) {
         Ok(parsed) => Ok(Ok(Value::Uuid(parsed.str()?.to_string()))),
@@ -333,7 +345,7 @@ pub(crate) fn validate_body<'py>(
         return Ok(None);
     };
     let class: Bound<'py, PyAny> = attr(py, module, model)?;
-    let adapter = attr(py, "pydantic", "TypeAdapter")?.call1((class,))?;
+    let adapter = type_adapter(&class)?;
     match adapter.call_method("validate_python", (value,), Some(&py_kwargs!(py; from_attributes = true)?)) {
         Ok(validated) => Ok(Some(validated)),
         Err(error) => {
@@ -397,7 +409,7 @@ pub(crate) fn validate_string_mapping<'py>(
         return Ok(None);
     };
     let annotation = py.eval(c"dict[str, str]", None, None)?;
-    let adapter = attr(py, "pydantic", "TypeAdapter")?.call1((annotation,))?;
+    let adapter = type_adapter(&annotation)?;
     match adapter.call_method("validate_python", (value,), Some(&py_kwargs!(py; from_attributes = true)?)) {
         Ok(validated) => Ok(Some(validated)),
         Err(error) => {
