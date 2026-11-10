@@ -14,8 +14,12 @@ from clickhouse_connect.driver.exceptions import DatabaseError
 import sqltide._native as _native
 from sqltide._native import (
     analyze_project,
+    assemble_direct_build_workflow,
+    assemble_virtual_build_workflow,
     build_direct_execution_result,
+    execute_direct_build_workflow,
     load_clickhouse_catalog,
+    persist_direct_fingerprints,
     render_direct_plan_json,
     row_error_policy_view_steps,
 )
@@ -71,19 +75,7 @@ from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
-from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
-    assemble_virtual_build_workflow,
-)
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
-from sqltide.executor.direct.main.assemble_direct_build_workflow import (
-    assemble_direct_build_workflow,
-)
-from sqltide.executor.direct.main.execute_direct_build_workflow import (
-    execute_direct_build_workflow,
-)
-from sqltide.executor.direct.main.persist_direct_fingerprints import (
-    persist_direct_fingerprints,
-)
 from sqltide.executor.direct.models import (
     DirectBuildRequest,
     DirectBuildResult,

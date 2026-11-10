@@ -562,7 +562,7 @@ fn normalized_deployment<'py>(deployment: &Bound<'py, PyAny>) -> PyResult<Bound<
 /// Deterministically ordered metadata state records.
 #[pyfunction]
 #[pyo3(signature = (*, object_states, deployments, deployment_watermarks, publish_events))]
-fn build_metadata_state<'py>(
+pub(crate) fn build_metadata_state<'py>(
     py: Python<'py>,
     object_states: &Bound<'py, PyAny>,
     deployments: &Bound<'py, PyAny>,
@@ -739,7 +739,7 @@ fn adapter_publish_event<'py>(event: &Bound<'py, PyAny>) -> PyResult<Bound<'py, 
 
 /// Logical metadata records converted into the neutral persistence contract.
 #[pyfunction]
-fn build_adapter_metadata_state<'py>(
+pub(crate) fn build_adapter_metadata_state<'py>(
     py: Python<'py>,
     state: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -1261,7 +1261,7 @@ fn fingerprint_payload<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, Py
 /// A deterministic comparable fingerprint payload string: sorted-key JSON of `value`, with
 /// dataclasses as their fields and mappings as dictionaries.
 #[pyfunction]
-fn build_normalized_fingerprint(value: &Bound<'_, PyAny>) -> PyResult<String> {
+pub(crate) fn build_normalized_fingerprint(value: &Bound<'_, PyAny>) -> PyResult<String> {
     json_dumps(&fingerprint_payload(value)?, None, true)
 }
 
@@ -1310,7 +1310,7 @@ fn native_identity<'py>(model: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>
 
 /// Canonical semantic direct model fingerprints and their comparison.
 #[pyclass(module = "sqltide._native", frozen)]
-struct DirectModelFingerprint;
+pub(crate) struct DirectModelFingerprint;
 
 #[pymethods]
 impl DirectModelFingerprint {
@@ -1332,7 +1332,7 @@ impl DirectModelFingerprint {
     /// The fingerprint record a direct build writes for one applied model.
     #[staticmethod]
     #[pyo3(signature = (*, model, database, workflow_id, tool_version))]
-    fn record<'py>(
+    pub(crate) fn record<'py>(
         py: Python<'py>,
         model: &Bound<'py, PyAny>,
         database: &Bound<'py, PyAny>,

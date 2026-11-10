@@ -67,6 +67,21 @@ reason = "The runnable orders-demo producer lives outside the installable packag
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/executor/destruction/__init__.py"
+reason = "Native bindings own destruction workflow assembly, the fresh-plan drift check, recorded execution and the in-memory plan store; this package declares the destruction models, types and errors they build and raise, plus the SQLAlchemy plan store."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/backfill/__init__.py"
+reason = "Native bindings own the virtual deployment identity, bounded-replay fallback resolution and virtual workflow assembly; this package only declares the backfill models and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/direct/__init__.py"
+reason = "Native bindings own direct workflow assembly, replay capture realization, runtime execution, managed source preparation and SQL baselines; this package only declares the direct build models and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/compiler/discovery/__init__.py"
 reason = "Native bindings own project discovery, configuration, source registries and pipeline loading; this package only declares the discovery models, types, constants and errors they build and raise."
 

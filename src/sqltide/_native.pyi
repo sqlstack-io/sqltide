@@ -94,7 +94,11 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import BoundedReplayFallback, PipelineMode
+from sqltide.compiler.discovery.types import (
+    BoundedReplayFallback,
+    PipelineMode,
+    ReplayLineageMode,
+)
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
@@ -137,19 +141,25 @@ from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
+    BackfillDeploymentIdentity,
     BackfillExecutionResult,
     RootBackfillReport,
 )
 from sqltide.executor.destruction.models import (
+    DestructionActor,
+    DestructionExecutionResult,
     DestructionPlan,
     DestructionRequest,
     InactivePipeline,
 )
-from sqltide.executor.destruction.types import DestructionPlanningConnection
+from sqltide.executor.destruction.types import DestructionPlanningConnection, DestructionPlanStore
 from sqltide.executor.direct.models import (
     DirectBuildExecutionResult,
     DirectBuildRequest,
+    DirectBuildWorkflow,
     DirectReplayCapture,
+    DirectRuntimeExecution,
+    DriftedManagedSource,
 )
 from sqltide.executor.population.models import (
     PopulationPlan,
@@ -171,8 +181,12 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
-from sqltide.executor.workflow.models import WorkflowExecutionResult
-from sqltide.executor.workflow.types import NativeStatement
+from sqltide.executor.workflow.models import (
+    BuildWorkflow,
+    WarehouseStatement,
+    WorkflowExecutionResult,
+)
+from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -604,12 +618,6 @@ def build_deployment_promotion_preview(
 def resolve_deployment_rollback(
     *, request: RollbackRequest, client: AdapterConnection
 ) -> RollbackPlan: ...
-def bounded_replay_outcome(
-    mode: str | None,
-    forced_start_time: bool,
-    live_columns: set[str] | None,
-    fallback_without_history: bool,
-) -> str: ...
 def render_plan_text(
     *,
     plan: DeploymentPlan,
@@ -815,70 +823,6 @@ def deployment_diff_count_sql(database: str, relation: str) -> str: ...
 type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
 
 def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
-
-type _SourceResource = tuple[str, str, list[str], list[tuple[str, str]]]
-type _SourceProject = tuple[
-    list[str],
-    list[tuple[str, str, bool, int | None, list[int], list[str]]],
-    list[int],
-    list[list[_SourceResource]],
-]
-type _SourceRelation = tuple[str, list[tuple[str, str]], list[tuple[str, str]], str | None]
-
-def plan_preserved_managed_sources(
-    plan: tuple[list[int], list[int], list[tuple[str, int]]],
-    project_argument: _SourceProject,
-    relations_argument: list[_SourceRelation],
-    database: str,
-) -> tuple[
-    list[str],
-    list[str],
-    list[str],
-    list[tuple[int, int]],
-    list[tuple[tuple[int, int], tuple[int, int], str, list[str]]],
-    list[tuple[int, int]],
-]: ...
-def drifted_managed_sources(
-    project_argument: _SourceProject, relations_argument: list[_SourceRelation]
-) -> list[tuple[int, list[str], list[str]]]: ...
-
-type _WorkflowStatement = tuple[str, str, str, str, bool]
-
-def virtual_workflow_statements(
-    context: tuple[str, str, str, tuple[str, str, str, str, str], str | None, bool, bool],
-    rendered: tuple[
-        list[tuple[str, str | None]],
-        str,
-        list[str],
-        list[tuple[str, str]],
-        list[str],
-        list[tuple[str, str]],
-        list[tuple[str, str]],
-        float,
-    ],
-    roots: list[
-        tuple[str, AdapterReplayRequest, bool, tuple[str | None, str, str], bool, list[str]]
-    ],
-) -> list[_WorkflowStatement]: ...
-def direct_workflow_statements(
-    preparation: tuple[
-        str,
-        str,
-        list[tuple[str, str]],
-        list[tuple[str, str, str, str, str]],
-        list[str],
-        list[tuple[str, str]],
-        list[tuple[str, str]],
-    ],
-    execution: tuple[
-        float,
-        list[tuple[str, bool]],
-        list[tuple[str, str]],
-        list[tuple[str, str, str, str]],
-        list[tuple[str, str]],
-        int,
-    ],
-) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
 def direct_fingerprint_record(
     identity: tuple[
         str,
@@ -911,9 +855,6 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
-def destruction_drop_statements(
-    relations: list[tuple[str, str, str]], size_override: int | None
-) -> list[tuple[str, str, str]]: ...
 def translate_clickhouse_driver_error(error: Exception) -> AdapterWarehouseError: ...
 def render_clickhouse_resource(
     *,
@@ -938,23 +879,6 @@ def clickhouse_external_source_relation_sql(table_name: str, columns: list[str |
 def clickhouse_postgres_source_relation_sql(
     host: str, port: str, database: str, table: str, user: str, password_env: str | None
 ) -> str: ...
-def workflow_step_segment(value: str) -> str: ...
-def workflow_terminate_sql(sql: str) -> str: ...
-def resolve_direct_replays(
-    entries: list[tuple[str, list[str]]],
-    replays: list[tuple[str, str, str, str, str, str]],
-    forced_start_time: bool,
-    desired_tables: list[tuple[str, list[tuple[str, str]]]],
-    catalog: list[tuple[str, list[tuple[str, str]]]],
-) -> list[tuple[str, str, str, str | None]]: ...
-def realize_direct_replay_capture(
-    mode: str,
-    ranges: list[tuple[str | None, str, str, bool]],
-) -> tuple[
-    list[tuple[str, str, bool, str | None]],
-    list[tuple[str, str | None]],
-    list[tuple[int, int, int]],
-]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
 def quote_clickhouse_sql_string(value: str) -> str: ...
@@ -1114,7 +1038,6 @@ def deployment_inventory_summaries(
         str | None,
     ]
 ]: ...
-def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
     def __init__(self, desired_state: DesiredState) -> None: ...
@@ -1324,3 +1247,86 @@ def format_project_sql(
 def build_direct_reconcile_actual_state(
     *, desired_state: DesiredState, catalog: CatalogSnapshot
 ) -> ActualState: ...
+def plan_preserved_managed_sources(
+    *,
+    plan: DirectPlan,
+    realized_project: RealizedProject,
+    catalog: CatalogSnapshot,
+    database: str,
+) -> tuple[PopulationSourcePreparation, tuple[PopulationRealization, ...]]: ...
+def drifted_managed_sources(
+    *, realized_project: RealizedProject, catalog: CatalogSnapshot
+) -> tuple[DriftedManagedSource, ...]: ...
+def build_backfill_deployment_identity(
+    *, deployment_id: str | None
+) -> BackfillDeploymentIdentity: ...
+def resolve_unsupported_bounded_replay_behavior(
+    *,
+    catalog: CatalogSnapshot,
+    deployment_plan: DeploymentPlan,
+    desired_state: DesiredState,
+    default_database: str,
+    replay_lineage_mode: ReplayLineageMode,
+) -> DeploymentPlan: ...
+def assemble_virtual_build_workflow(
+    *, request: BackfillBootstrapRequest, client: AdapterConnection, plan_json: str
+) -> BuildWorkflow: ...
+def build_virtual_bootstrap_workflow(*, workflow: BuildWorkflow) -> BuildWorkflow: ...
+def assemble_direct_build_workflow(
+    *,
+    request: DirectBuildRequest,
+    client: AdapterConnection,
+    snapshot: DirectWarehouseSnapshot,
+    plan_json: str,
+) -> DirectBuildWorkflow: ...
+def execute_direct_build_workflow(
+    *,
+    workflow: DirectBuildWorkflow,
+    connection: AdapterConnection,
+    emitter: WorkflowEventEmitter | None = None,
+) -> DirectRuntimeExecution: ...
+def persist_direct_fingerprints(
+    *,
+    request: DirectBuildRequest,
+    connection: AdapterConnection,
+    applied_model_names: frozenset[str] | None = None,
+) -> str | None: ...
+def persist_reconciled_direct_fingerprints(
+    *,
+    models: tuple[CompiledModel, ...],
+    target_database: str,
+    metadata_database: str,
+    workflow_id: str,
+    tool_version: str,
+    connection: AdapterConnection,
+) -> None: ...
+def assemble_destruction_workflow(
+    *, plan: DestructionPlan, connection: AdapterConnection | None = None
+) -> tuple[WarehouseStatement, ...]: ...
+def verify_destruction_drift(
+    *, frozen_plan: DestructionPlan, replan: Callable[[], DestructionPlan]
+) -> DestructionPlan: ...
+def execute_destruction(
+    *,
+    frozen_plan: DestructionPlan,
+    actor: DestructionActor,
+    challenge_responses: tuple[str, ...],
+    reviewed_at: datetime,
+    store: DestructionPlanStore,
+    connection: AdapterConnection,
+    observation_connection: AdapterConnection,
+    project_dir: Path,
+    replan: Callable[[], DestructionPlan],
+    invocation_id: str | None = None,
+) -> DestructionExecutionResult: ...
+
+class InMemoryDestructionPlanStore:
+    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None: ...
+    def close(self) -> None: ...
+    def save(self, *, plan: DestructionPlan, actor: str) -> None: ...
+    def get(self, *, plan_id: str, actor: str) -> DestructionPlan: ...
+    def mark_reviewed(self, *, plan_id: str, actor: str) -> datetime: ...
+    def reviewed_at(self, *, plan_id: str, actor: str) -> datetime: ...
+    def consume(
+        self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
+    ) -> DestructionPlan: ...

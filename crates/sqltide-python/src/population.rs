@@ -184,9 +184,7 @@ pub(crate) fn plan_population_replays(
 }
 
 /// `"keep"`, `"without_history"`, or `"full"` for a seeded bounded rebuild.
-#[pyfunction]
-#[pyo3(signature = (mode, forced_start_time, live_columns, fallback_without_history))]
-fn bounded_replay_outcome(
+pub(crate) fn bounded_replay_outcome(
     mode: Option<&str>,
     forced_start_time: bool,
     live_columns: Option<HashSet<String>>,
@@ -353,8 +351,4 @@ pub(crate) fn direct_population_scope(
     )
     .map_err(scope_error)?;
     Ok((population.planned_keys, population.roots))
-}
-
-pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(bounded_replay_outcome, module)?)
 }

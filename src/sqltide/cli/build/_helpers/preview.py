@@ -6,6 +6,7 @@ import sqltide._native as _native
 from sqltide._native import (
     DirectModelFingerprint,
     collect_reachable_keys,
+    drifted_managed_sources,
     load_direct_warehouse_snapshot,
     plan_direct_build,
     plan_row_error_policy_changes,
@@ -33,7 +34,6 @@ from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.executor.direct.main.drifted_managed_sources import drifted_managed_sources
 from sqltide.executor.direct.models import DriftedManagedSource
 
 

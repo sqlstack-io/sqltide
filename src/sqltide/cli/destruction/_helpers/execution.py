@@ -5,7 +5,7 @@ from typing import cast
 from uuid import UUID
 
 import sqltide._native as _native
-from sqltide._native import analyze_project, plan_destruction
+from sqltide._native import analyze_project, execute_destruction, plan_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.constants import SQLITE_MEMORY_URLS
@@ -29,7 +29,6 @@ from sqltide.executor.destruction.classes.relational_destruction_plan_store impo
     RelationalDestructionPlanStore,
 )
 from sqltide.executor.destruction.exceptions import DestructionDriftError
-from sqltide.executor.destruction.main.execute_destruction import execute_destruction
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,

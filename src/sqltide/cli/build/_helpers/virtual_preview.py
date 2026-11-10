@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import sqltide._native as _native
 from sqltide._native import (
+    build_backfill_deployment_identity,
     build_root_backfill_reports,
     load_planning_warehouse_snapshot,
     plan_deployment,
     plan_virtual_row_error_policy_changes,
+    resolve_unsupported_bounded_replay_behavior,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
@@ -30,12 +32,6 @@ from sqltide.compiler.planner.models import (
     PlanningWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import RootDeploymentStateKind
-from sqltide.executor.backfill.main.build_backfill_deployment_identity import (
-    build_backfill_deployment_identity,
-)
-from sqltide.executor.backfill.main.resolve_unsupported_bounded_replay_behavior import (
-    resolve_unsupported_bounded_replay_behavior,
-)
 from sqltide.executor.backfill.models import BackfillDeploymentIdentity, RootBackfillReport
 
 

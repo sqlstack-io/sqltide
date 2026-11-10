@@ -198,7 +198,7 @@ fn replay_views<'py>(objects: &[Value<'py>]) -> PyResult<Vec<Value<'py>>> {
 /// Add direct catch-up roots for in-scope side-reference fan-in targets.
 #[pyfunction]
 #[pyo3(signature = (*, plan, desired_state))]
-fn expand_population_plan<'py>(
+pub(crate) fn expand_population_plan<'py>(
     py: Python<'py>,
     plan: &Value<'py>,
     desired_state: &Value<'py>,
@@ -281,7 +281,7 @@ fn expand_population_plan<'py>(
 /// Population resources in the shared realization order, without mutation.
 #[pyfunction]
 #[pyo3(signature = (*, plan, desired_state, default_database))]
-fn plan_population_objects<'py>(
+pub(crate) fn plan_population_objects<'py>(
     py: Python<'py>,
     plan: &Value<'py>,
     desired_state: &Value<'py>,
@@ -678,7 +678,7 @@ fn population_replay_requests<'py>(
 /// One boundary-independent full-replay template per population root.
 #[pyfunction]
 #[pyo3(signature = (*, plan, desired_state, default_database))]
-fn build_population_replay_templates<'py>(
+pub(crate) fn build_population_replay_templates<'py>(
     py: Python<'py>,
     plan: &Value<'py>,
     desired_state: &Value<'py>,
@@ -736,7 +736,7 @@ fn source_object(object: &Value<'_>) -> PyResult<(String, String, Option<String>
 /// Passive managed sources and deferred landing attachment, without mutation.
 #[pyfunction]
 #[pyo3(signature = (*, desired_state, default_database, existing_relation_names))]
-fn plan_population_sources<'py>(
+pub(crate) fn plan_population_sources<'py>(
     py: Python<'py>,
     desired_state: &Value<'py>,
     default_database: &Value<'py>,
@@ -883,7 +883,7 @@ fn trim_statement_end(text: &str) -> &str {
 /// the dead-letter views a policy switch created.
 #[pyfunction]
 #[pyo3(signature = (*, changes, render_restore, database))]
-fn row_error_policy_restore_statements<'py>(
+pub(crate) fn row_error_policy_restore_statements<'py>(
     py: Python<'py>,
     changes: &Value<'py>,
     render_restore: &Value<'py>,
@@ -1016,7 +1016,7 @@ fn row_error_policy_failure_message<'py>(
 /// A dead-letter view targeting the metadata database when it differs from the run database.
 #[pyfunction]
 #[pyo3(signature = (*, resource, database, metadata_database))]
-fn with_metadata_dead_letter_target<'py>(
+pub(crate) fn with_metadata_dead_letter_target<'py>(
     resource: &Value<'py>,
     database: &Value<'py>,
     metadata_database: &Value<'py>,
@@ -1055,7 +1055,7 @@ fn direct_resource(resource: &Value<'_>) -> PyResult<(String, String)> {
 /// The direct closure's logical scope mapped to identity-named physical population.
 #[pyfunction]
 #[pyo3(signature = (*, plan, realized_project))]
-fn build_direct_population_plan<'py>(
+pub(crate) fn build_direct_population_plan<'py>(
     py: Python<'py>,
     plan: &Value<'py>,
     realized_project: &Value<'py>,

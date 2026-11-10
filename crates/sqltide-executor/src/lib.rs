@@ -3,6 +3,7 @@
 pub mod adopted_sources;
 pub mod audit_schedule;
 pub mod deployment_diff;
+pub mod deployment_identity;
 pub mod destruction;
 pub mod destruction_plan_payload;
 pub mod direct_replay;

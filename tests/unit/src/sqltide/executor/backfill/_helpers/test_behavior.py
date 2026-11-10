@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import resolve_unsupported_bounded_replay_behavior
 from sqltide.adapter.models import (
     AdapterIdentity,
     CatalogIdentity,
@@ -21,9 +22,6 @@ from sqltide.compiler.planner.constants import (
     REBUILD_STRATEGY_SHADOW,
 )
 from sqltide.compiler.planner.models import DeploymentPlan, RebuildSubtree
-from sqltide.executor.backfill.main.resolve_unsupported_bounded_replay_behavior import (
-    resolve_unsupported_bounded_replay_behavior,
-)
 from tests.unit.src.sqltide.executor.backfill._helpers._test_types import (
     ResolveUnsupportedBoundedReplayBehaviorTestCase,
 )
