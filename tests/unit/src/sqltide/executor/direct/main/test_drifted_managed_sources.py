@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import drifted_managed_sources
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
-from sqltide.executor.direct.main.drifted_managed_sources import drifted_managed_sources
 from sqltide.executor.direct.models import DirectBuildRequest, DriftedManagedSource
 from tests.unit.src.sqltide.executor.direct.main._test_types import (
     DirectDriftedSourceOwnerTestCase,

@@ -1,1 +1,0 @@
-"""Internal direct-build behavior."""

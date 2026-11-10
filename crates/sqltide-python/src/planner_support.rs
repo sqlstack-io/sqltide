@@ -1310,7 +1310,7 @@ fn native_identity<'py>(model: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>
 
 /// Canonical semantic direct model fingerprints and their comparison.
 #[pyclass(module = "sqltide._native", frozen)]
-struct DirectModelFingerprint;
+pub(crate) struct DirectModelFingerprint;
 
 #[pymethods]
 impl DirectModelFingerprint {
@@ -1332,7 +1332,7 @@ impl DirectModelFingerprint {
     /// The fingerprint record a direct build writes for one applied model.
     #[staticmethod]
     #[pyo3(signature = (*, model, database, workflow_id, tool_version))]
-    fn record<'py>(
+    pub(crate) fn record<'py>(
         py: Python<'py>,
         model: &Bound<'py, PyAny>,
         database: &Bound<'py, PyAny>,

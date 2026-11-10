@@ -3,18 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from sqltide._native import render_direct_plan_json, render_direct_plan_text
+from sqltide._native import (
+    assemble_direct_build_workflow,
+    execute_direct_build_workflow,
+    plan_preserved_managed_sources,
+    render_direct_plan_json,
+    render_direct_plan_text,
+)
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
-from sqltide.executor.direct.main.assemble_direct_build_workflow import (
-    assemble_direct_build_workflow,
-)
-from sqltide.executor.direct.main.execute_direct_build_workflow import (
-    execute_direct_build_workflow,
-)
-from sqltide.executor.direct.main.plan_preserved_managed_sources import (
-    plan_preserved_managed_sources,
-)
 from sqltide.executor.direct.models import DirectBuildRequest, DirectBuildWorkflow
 from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
     reset_fresh_landing_offsets,

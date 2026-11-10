@@ -4,7 +4,7 @@ import json
 from dataclasses import replace
 
 import sqltide._native as _native
-from sqltide._native import normalize_cli_start_time
+from sqltide._native import assemble_direct_build_workflow, normalize_cli_start_time
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build._helpers.audits import prepare_direct_build_audits
 from sqltide.cli.build._helpers.confirmation import build_protection_requirements
@@ -35,9 +35,6 @@ from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
     assemble_virtual_build_workflow,
 )
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
-from sqltide.executor.direct.main.assemble_direct_build_workflow import (
-    assemble_direct_build_workflow,
-)
 from sqltide.executor.direct.models import (
     DirectBuildAudit,
     DirectBuildRequest,

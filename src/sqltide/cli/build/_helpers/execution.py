@@ -7,7 +7,13 @@ from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide._native import build_direct_execution_result, row_error_policy_failure_message
+from sqltide._native import (
+    build_direct_execution_result,
+    execute_direct_build_workflow,
+    persist_direct_fingerprints,
+    plan_preserved_managed_sources,
+    row_error_policy_failure_message,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build._helpers.confirmation import confirm_build
@@ -15,15 +21,6 @@ from sqltide.cli.build._helpers.execution_artifacts import render_direct_executi
 from sqltide.cli.build.models import BuildCommandOptions, DirectWorkflowPreparation
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
-from sqltide.executor.direct.main.execute_direct_build_workflow import (
-    execute_direct_build_workflow,
-)
-from sqltide.executor.direct.main.persist_direct_fingerprints import (
-    persist_direct_fingerprints,
-)
-from sqltide.executor.direct.main.plan_preserved_managed_sources import (
-    plan_preserved_managed_sources,
-)
 from sqltide.executor.direct.models import (
     DirectBuildExecutionResult,
     DirectBuildRequest,
