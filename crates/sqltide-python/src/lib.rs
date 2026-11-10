@@ -11,6 +11,7 @@ mod audit_discovery;
 mod backfill;
 mod build_cli;
 mod build_preview;
+mod build_workflow;
 mod clickhouse;
 mod clickhouse_adapter;
 mod clickhouse_catalog;
@@ -115,6 +116,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     backfill::register(module)?;
     build_cli::register(module)?;
     build_preview::register(module)?;
+    build_workflow::register(module)?;
     clickhouse::register(module)?;
     clickhouse_adapter::register(module)?;
     clickhouse_catalog::register(module)?;

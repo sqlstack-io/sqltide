@@ -13,12 +13,15 @@ from typing import Annotated
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
-from sqltide._native import validate_build_pipeline_limit
+from sqltide._native import (
+    prepare_build_workflow,
+    prepared_pipeline_scope,
+    resolve_prepared_build_scope,
+    validate_build_pipeline_limit,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.auth.classes.control_store import ControlStore
-from sqltide.cli.build.classes.prepared_build_scope import PreparedBuildScope
-from sqltide.cli.build.main.prepare_build_workflow import prepare_build_workflow
 from sqltide.cli.build.models import (
     DirectWorkflowPreparation,
     MixedWorkflowPreparation,
@@ -1022,10 +1025,10 @@ def _register_build_routes(
                 expected_read_scope: frozenset[str] | None = None
                 expected_pipeline_scope: frozenset[str] | None = None
                 if preparation is not None:
-                    expected_write_scope, expected_read_scope = PreparedBuildScope.resolve(
+                    expected_write_scope, expected_read_scope = resolve_prepared_build_scope(
                         preparation
                     )
-                    expected_pipeline_scope = PreparedBuildScope.pipeline_scope(
+                    expected_pipeline_scope = prepared_pipeline_scope(
                         preparation=preparation,
                         analysis=analysis,
                     )
@@ -1151,7 +1154,7 @@ def _resolved_deployment_id(
 def _preparation_logical_scopes(
     preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
 ) -> tuple[frozenset[str], frozenset[str]]:
-    return PreparedBuildScope.resolve(preparation)
+    return resolve_prepared_build_scope(preparation)
 
 
 def _run_overlaps_requested_scope(

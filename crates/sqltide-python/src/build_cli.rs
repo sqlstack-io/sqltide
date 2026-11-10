@@ -20,6 +20,7 @@ const DIRECT_MODELS: &str = "sqltide.executor.direct.models";
 const PLANNER_TYPES: &str = "sqltide.compiler.planner.types";
 const DIRECT_MODE_LABEL: &str = "direct";
 const NO_LINES: &str = "  - none";
+const NO_REPLAYS: &str = "- none";
 
 fn style<'py>(py: Python<'py>) -> PyResult<Value<'py>> {
     py.import(CLI_STYLE)?.getattr("cli_style")?.call0()
@@ -710,6 +711,125 @@ fn validate_build_pipeline_limit<'py>(
     ))
 }
 
+/// A virtual-environment build result for CLI output.
+#[pyfunction]
+#[pyo3(signature = (*, result, database, json_output))]
+fn render_virtual_build_result<'py>(
+    py: Python<'py>,
+    result: &Value<'py>,
+    database: &Value<'py>,
+    json_output: bool,
+) -> PyResult<String> {
+    let bootstrap: Value<'py> = result.getattr("bootstrap")?;
+    let deployment_id: Value<'py> = bootstrap.getattr("deployment_id")?;
+    let replay_results: Value<'py> = result.getattr("replay_results")?;
+    let root_reports: Value<'py> = bootstrap.getattr("root_reports")?;
+    if json_output {
+        let mut replays: Vec<Value<'py>> = Vec::new();
+        for replay in items(&replay_results)? {
+            replays.push(dict(
+                py,
+                vec![
+                    ("root", replay.getattr("root_key")?.getattr("name")?),
+                    ("warehouse_written_rows", replay.getattr("written_rows")?),
+                ],
+            )?);
+        }
+        let mut reports: Vec<Value<'py>> = Vec::new();
+        for report in items(&root_reports)? {
+            reports.push(dict(
+                py,
+                vec![
+                    ("name", report.getattr("root_key")?.getattr("name")?),
+                    ("state_kind", report.getattr("state_kind")?),
+                    ("replay_strategy", report.getattr("replay_strategy")?),
+                    (
+                        "active_deployment_id",
+                        report.getattr("active_deployment_id")?,
+                    ),
+                ],
+            )?);
+        }
+        let payload: Value<'py> = dict(
+            py,
+            vec![
+                ("deployment_id", deployment_id),
+                ("boundary_time", result.getattr("boundary_time")?),
+                ("replays", list(py, replays)?),
+                ("root_reports", list(py, reports)?),
+            ],
+        )?;
+        return json_dumps(&payload, Some(2), false);
+    }
+    let style: Value<'py> = style(py)?;
+    let object_name = |name: Value<'py>| -> PyResult<String> {
+        method(&style, "object_name", &[("text", name)])?.extract()
+    };
+    let deployment: String = formatted(&deployment_id)?;
+    let mut lines: Vec<String> = vec![
+        styled(&style, "title", "Virtual Build Ready")?,
+        label_value(&style, "Database", database)?,
+        label_value(&style, "Deployment", &deployment_id)?,
+        label_value(&style, "Boundary time", &result.getattr("boundary_time")?)?,
+        String::new(),
+        styled(&style, "section", "Roots")?,
+    ];
+    for report in items(&root_reports)? {
+        lines.push(format!(
+            "- {}",
+            object_name(report.getattr("root_key")?.getattr("name")?)?
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            styled(&style, "label", "state")?,
+            formatted(&report.getattr("state_kind")?)?
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            styled(&style, "label", "strategy")?,
+            formatted(&report.getattr("replay_strategy")?)?
+        ));
+        let active: Value<'py> = report.getattr("active_deployment_id")?;
+        if !active.is_none() {
+            lines.push(format!(
+                "  {}: {}",
+                styled(&style, "label", "active deployment")?,
+                formatted(&active)?
+            ));
+        }
+    }
+    lines.push(String::new());
+    lines.push(styled(&style, "section", "Replay execution")?);
+    let replays: Vec<Value<'py>> = items(&replay_results)?;
+    for replay in &replays {
+        let written_rows: Value<'py> = replay.getattr("written_rows")?;
+        let written_rows: String = if written_rows.is_none() {
+            "unavailable".to_owned()
+        } else {
+            written_rows.str()?.extract()?
+        };
+        lines.push(format!(
+            "- {}  warehouse-written rows: {written_rows}",
+            object_name(replay.getattr("root_key")?.getattr("name")?)?
+        ));
+    }
+    if !replay_results.is_truthy()? {
+        lines.push(NO_REPLAYS.to_owned());
+    }
+    lines.extend([
+        String::new(),
+        styled(&style, "section", "Next")?,
+        format!("- sqt deployment audit {deployment}"),
+        format!("- sqt deployment promote {deployment}"),
+    ]);
+    Ok(lines.join("\n"))
+}
+
+/// `f"{value}"`.
+pub(crate) fn formatted(value: &Value<'_>) -> PyResult<String> {
+    value.call_method1("__format__", ("",))?.extract()
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_direct_build_json, module)?)?;
     module.add_function(wrap_pyfunction!(render_direct_build_text, module)?)?;
@@ -719,5 +839,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(prepare_direct_build_audits, module)?)?;
     module.add_function(wrap_pyfunction!(build_protection_requirements, module)?)?;
     module.add_function(wrap_pyfunction!(confirm_build, module)?)?;
+    module.add_function(wrap_pyfunction!(render_virtual_build_result, module)?)?;
     module.add_function(wrap_pyfunction!(validate_build_pipeline_limit, module)?)
 }

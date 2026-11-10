@@ -4,7 +4,11 @@ import os
 import sys
 from time import monotonic_ns
 
-from sqltide._native import analyze_project, render_interrupted_build_message
+from sqltide._native import (
+    analyze_project,
+    prepare_validated_build,
+    render_interrupted_build_message,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord
@@ -15,7 +19,6 @@ from sqltide.cli.build.main._execute_mixed_build import execute_mixed_build_comm
 from sqltide.cli.build.main._initialize_build_metadata import (
     initialize_build_metadata,
 )
-from sqltide.cli.build.main._prepare_validated_build import prepare_validated_build
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     DirectWorkflowPreparation,

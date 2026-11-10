@@ -8,12 +8,12 @@ from sqltide._native import (
     confirm_build,
     plan_population_sources,
     render_interrupted_build_message,
+    render_virtual_build_result,
     row_error_policy_failure_message,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord
-from sqltide.cli.build.main.render_virtual_build_result import render_virtual_build_result
 from sqltide.cli.build.models import BuildCommandOptions, VirtualWorkflowPreparation
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.executor.backfill.models import BackfillExecutionResult

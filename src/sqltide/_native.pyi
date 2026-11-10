@@ -1327,6 +1327,36 @@ def validate_build_pipeline_limit(
         DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation | None
     ) = None,
 ) -> None: ...
+def render_virtual_build_result(
+    *, result: BackfillExecutionResult, database: str, json_output: bool
+) -> str: ...
+def prepare_build_workflow(
+    *,
+    analysis: CompileAnalysis,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    adapter_profile: CompilerAdapterProfile,
+) -> DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation: ...
+def prepare_validated_build(
+    *,
+    analysis: CompileAnalysis,
+    options: WorkflowPreparationOptions,
+    client: AdapterConnection,
+    adapter_profile: CompilerAdapterProfile,
+) -> DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation: ...
+def resolve_prepared_build_scope(
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+) -> tuple[frozenset[str], frozenset[str]]: ...
+def prepared_pipeline_scope(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+) -> frozenset[str]: ...
+def validate_expected_build_scope(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+) -> None: ...
 def add_empty_replay_source_warnings(
     *,
     client: AdapterConnection,

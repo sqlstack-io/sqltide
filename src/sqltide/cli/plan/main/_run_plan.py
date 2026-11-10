@@ -2,10 +2,9 @@
 
 import sys
 
-from sqltide._native import analyze_project
+from sqltide._native import analyze_project, prepare_build_workflow
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
-from sqltide.cli.build.main.prepare_build_workflow import prepare_build_workflow
 from sqltide.cli.build.models import (
     DirectWorkflowPreparation,
     MixedWorkflowPreparation,
