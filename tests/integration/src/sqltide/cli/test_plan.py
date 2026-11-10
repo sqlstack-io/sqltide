@@ -5,6 +5,7 @@ from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
 from sqltide._native import (
+    add_empty_replay_source_warnings,
     analyze_project,
     load_planning_warehouse_snapshot,
     resolve_unsupported_bounded_replay_behavior,
@@ -14,7 +15,6 @@ from sqltide.adapter.models import CatalogSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.main._run_plan import run_plan
-from sqltide.cli.plan.main._warnings import add_empty_replay_source_warnings
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.compiler.compile.models import (
     Column,
