@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 from _pytest.capture import CaptureResult
 
+from sqltide._native import run_cli
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.destruction.models import DestructionCommandOptions
-from sqltide.cli.entry.main.main import _main_with_dependencies
 from tests.unit.src.sqltide.cli.entry.main._test_types import (
     DestructionDispatchTestCase,
     DestructionTtyTestCase,
@@ -43,10 +43,10 @@ def test_given_non_tty_when_starting_destruction_then_rejects_before_project_wor
     # Given: Destruction input from a non-interactive stream.
     resolution_mock: MagicMock = MagicMock()
     monkeypatch.setattr(sys.stdin, "isatty", MagicMock(return_value=False))
-    monkeypatch.setattr("sqltide.cli.entry.main.main.resolve_cli_invocation", resolution_mock)
+    monkeypatch.setattr("sqltide._native.load_project_input_for_path", resolution_mock)
 
     # When: Parsing succeeds and the entrypoint applies its immediate terminal gate.
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_destruction(run_destruction=MagicMock()),
     )
@@ -121,7 +121,7 @@ def test_given_tty_destroy_when_dispatching_then_forwards_scope_and_both_connect
     monkeypatch.setattr(sys.stdin, "isatty", MagicMock(return_value=True))
 
     # When: The parsed command is resolved and dispatched.
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_destruction(run_destruction=runner),
         environment={

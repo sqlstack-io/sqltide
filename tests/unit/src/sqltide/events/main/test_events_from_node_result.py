@@ -2,7 +2,7 @@
 
 import pytest
 
-from sqltide.events.main.events_from_node_result import events_from_node_result
+from sqltide._native import events_from_node_result
 from sqltide.events.models import AuditCompleted, NodeResultObservation
 from sqltide.events.types import AuditTransition
 from sqltide.executor.auditing.types import QualityResultStatus

@@ -4,7 +4,7 @@ from pathlib import Path
 from shutil import copytree
 
 import sqltide._native as _native
-from sqltide._native import run_compile
+from sqltide._native import build_compiler_adapter_profile, run_compile
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -12,7 +12,6 @@ from sqltide.adapter.models import (
     AdapterView,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
 

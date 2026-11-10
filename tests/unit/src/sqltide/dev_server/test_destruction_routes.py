@@ -8,8 +8,7 @@ from unittest.mock import PropertyMock, patch
 
 import pytest
 
-from sqltide._native import WarehouseRuntime
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, WarehouseRuntime
 from sqltide.authorization.models import AuthorizationDecision
 from sqltide.authorization.types import AuthorizationReason
 from sqltide.compiler.access.types import Permission
@@ -227,7 +226,7 @@ def test_given_unauthorized_dependant_when_planning_then_suggested_closure_is_hi
             ),
         ) as planner,
         patch(
-            "sqltide.authorization.main.authorize_operation.authorize_operation",
+            "sqltide._native.authorize_operation",
             side_effect=(
                 AuthorizationDecision(
                     allowed=True,

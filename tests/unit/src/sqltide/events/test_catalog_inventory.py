@@ -6,8 +6,8 @@ the event catalog and enumerated here with its explicit event-or-no-event decisi
 
 import pytest
 
+from sqltide._native import events_from_node_result
 from sqltide.compiler.quality.types import QualityNodeKind
-from sqltide.events.main.events_from_node_result import events_from_node_result
 from sqltide.events.models import AuditCompleted, NodeResultObservation
 from sqltide.events.types import AuditTransition, ObservedCommand
 from sqltide.executor.auditing.types import QualityResultStatus

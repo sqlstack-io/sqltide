@@ -16,7 +16,7 @@ use crate::direct_build::{Value, boolean, build, call, class, items, method, non
 use crate::handling::while_handling;
 
 const NATIVE: &str = "sqltide._native";
-const CLI_STYLE: &str = "sqltide.cli.presentation.main._cli_style";
+const CLI_STYLE: &str = "sqltide._native";
 const CLI_EXCEPTIONS: &str = "sqltide.cli.entry.exceptions";
 const OBSERVABILITY_MODELS: &str = "sqltide.executor.observability.models";
 const OBSERVABILITY_TYPES: &str = "sqltide.executor.observability.types";

@@ -23,9 +23,12 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine, RowMapping
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from sqltide._native import deserialize_destruction_plan, serialize_destruction_plan
+from sqltide._native import (
+    deserialize_destruction_plan,
+    rename_streambuild_tables,
+    serialize_destruction_plan,
+)
 from sqltide.auth.constants import SQLITE_MEMORY_PATH
-from sqltide.auth.main.rename_streambuild_tables import rename_streambuild_tables
 from sqltide.executor.destruction.constants import DESTRUCTION_PLAN_PAYLOAD_VERSION
 from sqltide.executor.destruction.exceptions import (
     DestructionChallengeError,
@@ -76,6 +79,7 @@ class RelationalDestructionPlanStore:
 
     def __init__(self, *, url: str, clock: DestructionClock | None = None) -> None:
         self._clock: DestructionClock = clock or (lambda: datetime.now(tz=UTC))
+        self._url: str = url
         if url.startswith("sqlite:///"):
             path_value: str = url.removeprefix("sqlite:///")
             if path_value != SQLITE_MEMORY_PATH:
@@ -97,7 +101,7 @@ class RelationalDestructionPlanStore:
     def bootstrap(self) -> None:
         """Create the additive schema component and reject incompatible versions."""
 
-        rename_streambuild_tables(self._engine)
+        rename_streambuild_tables(url=self._url, sqlite_timeout_seconds=30)
         _METADATA.create_all(self._engine)
         try:
             with self._engine.begin() as connection:

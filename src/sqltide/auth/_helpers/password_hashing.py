@@ -1,21 +1,14 @@
-"""Password hashing behind one domain boundary."""
+"""Argon2id hashing and verification through argon2-cffi."""
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-
-from sqltide.auth.constants import PASSWORD_MIN_LENGTH
-from sqltide.auth.exceptions import PasswordValidationError
 
 _HASHER: PasswordHasher = PasswordHasher()
 
 
 def hash_password(password: str) -> str:
-    """Hash one validated password with Argon2id."""
+    """Hash one password with argon2-cffi's default Argon2id parameters."""
 
-    if len(password) < PASSWORD_MIN_LENGTH:
-        raise PasswordValidationError(
-            f"Password must contain at least {PASSWORD_MIN_LENGTH} characters"
-        )
     return _HASHER.hash(password)
 
 

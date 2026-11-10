@@ -17,8 +17,7 @@ from urllib.request import Request, urlopen
 from clickhouse_connect.driver.client import Client
 from playwright.sync_api import Page
 
-from sqltide._native import DevApplication, DevServerState, create_dev_app
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, DevApplication, DevServerState, create_dev_app
 from sqltide.auth.models import UserAccount
 from sqltide.auth.types import AuthenticationSource
 from sqltide.compiler.pipeline.models import CompileAnalysis

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore
 from sqltide.authorization.models import AuthorizationRequest
 from sqltide.authorization.types import AuthorizationReason
 

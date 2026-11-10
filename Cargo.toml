@@ -10,6 +10,7 @@ members = [
     "crates/sqltide-discovery",
     "crates/sqltide-config",
     "crates/sqltide-rules",
+    "crates/sqltide-cli",
     "crates/sqltide-python",
 ]
 resolver = "2"
@@ -24,6 +25,7 @@ rust-version = "1.88"
 [workspace.dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
 flate2 = "1"
+getrandom = "0.3"
 md-5 = "0.10"
 fensu-policy = "=0.22.0"
 # Published SQLClean 0.4.2; its Polyglot revision matches the compiler below.
@@ -44,6 +46,7 @@ serde_json = "1"
 serde_path_to_error = "0.1.20"
 speedate = "0.18.0"
 strum = "0.28.0"
+sqltide-cli = { path = "crates/sqltide-cli" }
 sqltide-clickhouse = { path = "crates/sqltide-clickhouse" }
 sqltide-compile = { path = "crates/sqltide-compile" }
 sqltide-config = { path = "crates/sqltide-config" }

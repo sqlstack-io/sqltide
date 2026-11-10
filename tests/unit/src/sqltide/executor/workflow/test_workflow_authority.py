@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
+from sqltide._native import publish_build_workflow
 from sqltide.executor.workflow.main.execute_build_workflow import execute_build_workflow
 from sqltide.executor.workflow.models import (
     BuildWorkflow,

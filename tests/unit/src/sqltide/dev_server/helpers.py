@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import sqltide._native as _native
 from sqltide._native import (
+    ControlStore,
     DevApplication,
     DevServerState,
     KafkaLagReader,
@@ -15,6 +16,7 @@ from sqltide._native import (
     StateSnapshot,
     analyze_project,
     build_activity_capabilities_query,
+    build_compiler_adapter_profile,
     build_extents_query,
     build_messages_sql,
     build_partitions_query,
@@ -54,7 +56,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import AuthSettings, UserAccount
 from sqltide.auth.types import AuthenticationMode, AuthenticationSource, UnknownUserPolicy
 from sqltide.cli.build.models import (
@@ -62,7 +63,6 @@ from sqltide.cli.build.models import (
     MixedWorkflowPreparation,
     VirtualWorkflowPreparation,
 )
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import LogicalResourceKey, ObjectKey
 from sqltide.compiler.discovery.models import KafkaSettings
 from sqltide.compiler.pipeline.models import CompileAnalysis

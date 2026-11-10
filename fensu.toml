@@ -24,24 +24,18 @@ exclude = ["tests/e2e/fixtures/**"]
 [[targets.python.rule_exceptions]]
 rule = "FFR402"
 path = "src/sqltide/sensors/__init__.py"
-reason = "Authored project sensors import the public sensor API from sqltide.sensors, so this package initializer re-exports the closed authored surface exactly as the CHI-18 specification defines it."
+reason = "Authored project sensors import the public sensor API from sqltide.sensors, so this package initializer re-exports the closed authored surface exactly as the documented sensor API defines it."
 
 [[targets.python.rule_exceptions]]
 rule = "FFR402"
 path = "src/sqltide/events/__init__.py"
-reason = "Authored project sensors import derived event types from sqltide.events, so this package initializer re-exports the closed authored surface exactly as the CHI-18 specification defines it."
+reason = "Authored project sensors import derived event types from sqltide.events, so this package initializer re-exports the closed authored surface exactly as the documented sensor API defines it."
 
 [[targets.python.rule_exceptions]]
 rule = "FFS120"
 path = "src/sqltide/sensors/classes/event_sensor_context.py"
 symbols = ["EventSensorContext.step"]
-reason = "The authored durable-step API is ctx.step(key, fn, policy=...) with positional key and callable per the CHI-18 specification; keyword-only parameters would break the documented authored ergonomics."
-
-[[targets.python.rule_exceptions]]
-rule = "FFS120"
-path = "src/sqltide/sensors/classes/durable_step_runner.py"
-symbols = ["DurableStepRunner.run"]
-reason = "DurableStepRunner.run backs the authored ctx.step(key, fn, policy=...) signature, so its parameters mirror that positional authored contract."
+reason = "The authored durable-step API is ctx.step(key, fn, policy=...) with positional key and callable per the documented sensor API; keyword-only parameters would break the documented authored ergonomics."
 
 [[targets.python.rule_exceptions]]
 rule = "FFT104"
@@ -74,6 +68,46 @@ reason = "Native bindings own the dev server: HTTP serving, routes, authorizatio
 rule = "FFR309"
 path = "src/sqltide/cli/dev/__init__.py"
 reason = "Native bindings own the dev command handler, its startup banner and its activity lines; this package only declares the command option shape the CLI dispatcher builds."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/cli/entry/__init__.py"
+reason = "Native bindings own the sqt entry point: argument parsing, invocation and connection resolution, mode validation, command dispatch and error rendering; this package only declares the handler table, command types, constants and the user error they consume and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/cli/admin/__init__.py"
+reason = "Native bindings own the sqt admin commands and their password prompts; this package only declares the admin command types and constants they consume."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/sensors/__init__.py"
+reason = "Native bindings own sensor loading, dispatch, durable steps and state persistence; this package keeps the public authored sensor API, the contexts handed to user handlers, the shim that runs a user handler, and the sensor shapes."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/events/__init__.py"
+reason = "Native bindings derive sensor events from persisted observations; this package only declares the observation and event shapes and the event catalog types."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/auth/__init__.py"
+reason = "Native bindings own the account control store: statements and schema, row mapping, sessions, tokens, auditing, role rules and the default store URL; this package declares the account models, types, constants and errors, plus the SQLAlchemy and argon2-cffi glue the store calls."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/authorization/__init__.py"
+reason = "Native bindings evaluate operational authorization and effective capabilities; this package only declares the request, decision and capability shapes and the decision reasons."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/diagnostics/__init__.py"
+reason = "Native bindings own diagnostic rendering and attachment; this package only declares the diagnostic models and phase and severity types they consume."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/cli/plan/__init__.py"
+reason = "Native bindings own the plan command, its previews, rendering and workflow artifact publication; this package only declares the command option shape the CLI dispatcher builds."
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"

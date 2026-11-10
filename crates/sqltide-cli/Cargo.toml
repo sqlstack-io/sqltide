@@ -1,0 +1,14 @@
+[package]
+name = "sqltide-cli"
+version.workspace = true
+description = "The `sqt` command line: an argparse-compatible parser over the embedded command table."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

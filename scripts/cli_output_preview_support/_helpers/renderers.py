@@ -17,17 +17,15 @@ from scripts.cli_output_preview_support._helpers.result_fixtures import (
     build_publish_preview,
 )
 from scripts.cli_output_preview_support.models import PreviewRequest
-from sqltide._native import render_virtual_build_result
-from sqltide.adapters.clickhouse.constants import CLICKHOUSE_ADAPTER_NAME
-from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
-from sqltide.cli.plan.main.render_plan_result import render_plan_result
-from sqltide.cli.promotion.main.render_promotion_result import render_promotion_result
-from sqltide.cli.readiness.main.render_ambiguous_deployment_message import (
+from sqltide._native import (
     render_ambiguous_deployment_message,
-)
-from sqltide.cli.readiness.main.render_deployment_audit_result import (
     render_deployment_audit_result,
+    render_direct_plan_text,
+    render_plan_result,
+    render_promotion_result,
+    render_virtual_build_result,
 )
+from sqltide.adapters.clickhouse.constants import CLICKHOUSE_ADAPTER_NAME
 
 
 def render_plan_preview(request: PreviewRequest) -> str:

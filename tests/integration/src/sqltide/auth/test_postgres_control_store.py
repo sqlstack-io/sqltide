@@ -1,7 +1,7 @@
 import pytest
 from testcontainers.postgres import PostgresContainer
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore
 from sqltide.auth.models import ProjectRoleAssignment, SessionCredentials, UserAccount
 from sqltide.auth.types import AuthenticationSource
 from tests.integration.src.sqltide.auth._test_types import PostgresControlStoreTestCase

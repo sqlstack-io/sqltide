@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.entry.main.main import main
+from sqltide._native import run_cli
 from tests.unit.src.sqltide.cli.playground.main._test_types import PlaygroundTestCase
 
 
@@ -29,7 +29,7 @@ def test_given_no_project_when_creating_playground_then_it_compiles_offline(
     (tmp_path / "sqltide_project.toml").write_text("invalid TOML [", encoding="utf-8")
     monkeypatch.setenv("SQLTIDE_CLICKHOUSE_PORT", "not-a-port")
 
-    assert main(("sqt", "playground", *test_case.arguments)) == test_case.expected_exit_code
+    assert run_cli(("sqt", "playground", *test_case.arguments)) == test_case.expected_exit_code
     output: str = capsys.readouterr().out
     project: Path = tmp_path / test_case.directory_name
     assert "require a running ClickHouse server" in output
@@ -39,7 +39,7 @@ def test_given_no_project_when_creating_playground_then_it_compiles_offline(
     assert (project / ".gitignore").read_text(encoding="utf-8") == "target/\n"
 
     monkeypatch.delenv("SQLTIDE_CLICKHOUSE_PORT")
-    assert main(("sqt", "compile", "--project-dir", str(project))) == 0
+    assert run_cli(("sqt", "compile", "--project-dir", str(project))) == 0
     assert (project / "target").is_dir()
 
 
@@ -60,7 +60,7 @@ def test_given_existing_directory_when_creating_playground_then_files_are_unchan
     existing_file: Path = project / "README.md"
     existing_file.write_text("Keep my work", encoding="utf-8")
 
-    assert main(("sqt", "playground")) == test_case.expected_exit_code
+    assert run_cli(("sqt", "playground")) == test_case.expected_exit_code
     assert "already exists" in capsys.readouterr().err
     assert existing_file.read_text(encoding="utf-8") == "Keep my work"
     assert tuple(project.iterdir()) == (existing_file,)
@@ -82,7 +82,7 @@ def test_given_dangling_symlink_when_creating_playground_then_target_is_not_crea
     destination: Path = tmp_path / test_case.directory_name
     destination.symlink_to(target, target_is_directory=True)
 
-    assert main(("sqt", "playground")) == test_case.expected_exit_code
+    assert run_cli(("sqt", "playground")) == test_case.expected_exit_code
     assert "already exists" in capsys.readouterr().err
     assert destination.is_symlink()
     assert not target.exists()

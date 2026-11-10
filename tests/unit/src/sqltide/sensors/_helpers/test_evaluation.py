@@ -2,7 +2,7 @@
 
 import pytest
 
-from sqltide.events.main.events_from_node_result import events_from_node_result
+from sqltide._native import events_from_node_result
 from sqltide.events.models import AuditCompleted
 from sqltide.sensors import EventSensorContext
 from sqltide.sensors._helpers.evaluation import evaluate_sensor_handler

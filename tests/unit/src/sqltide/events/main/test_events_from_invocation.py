@@ -2,7 +2,7 @@
 
 import pytest
 
-from sqltide.events.main.events_from_invocation import events_from_invocation
+from sqltide._native import events_from_invocation
 from sqltide.events.models import InvocationObservation, RunCompleted
 from tests.unit.src.sqltide.events.helpers import build_invocation_observation
 from tests.unit.src.sqltide.events.main._test_types import InvocationEventTestCase

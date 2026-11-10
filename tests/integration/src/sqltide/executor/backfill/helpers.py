@@ -14,11 +14,13 @@ import sqltide._native as _native
 from sqltide._native import (
     SqlModelAnalyzer,
     assemble_virtual_build_workflow,
+    build_compiler_adapter_profile,
     build_root_backfill_reports,
     build_virtual_bootstrap_workflow,
     build_virtual_execution_result,
     load_planning_warehouse_snapshot,
     plan_deployment,
+    publish_build_workflow,
     realize_project,
     resolve_unsupported_bounded_replay_behavior,
 )
@@ -31,8 +33,6 @@ from sqltide.adapter.models import (
     AdapterTable,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.compiler.compile.models import (
     CompiledPipeline,
     CompiledProject,

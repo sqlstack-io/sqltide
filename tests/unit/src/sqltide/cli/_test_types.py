@@ -163,13 +163,6 @@ class CliPlanPreservationMatrixTestCase:
 
 
 @dataclass(frozen=True)
-class CliCredentialRedactionTestCase:
-    description: str
-    password: str
-    expected_absent_fragment: str
-
-
-@dataclass(frozen=True)
 class CliLazyConnectionTestCase:
     description: str
     project_vars_contents: str

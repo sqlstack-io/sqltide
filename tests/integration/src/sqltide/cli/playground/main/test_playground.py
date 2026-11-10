@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide.cli.entry.main.main import main
+from sqltide._native import run_cli
 from tests.integration.src.sqltide.cli.playground.main._test_types import (
     PlaygroundLifecycleTestCase,
 )
@@ -47,7 +47,7 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
     clickhouse_database: str,
 ) -> None:
     project: Path = tmp_path / "playground"
-    assert main(("sqt", "playground", str(project))) == 0
+    assert run_cli(("sqt", "playground", str(project))) == 0
     arguments: tuple[str, ...] = (
         "--project-dir",
         str(project),
@@ -93,10 +93,10 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
         "20260101T100000Z_a",
         *arguments,
     )
-    assert main(("sqt", "plan", *initial_options)) == 0
-    assert main(("sqt", "build", "--auto-approve", *initial_options)) == 0
+    assert run_cli(("sqt", "plan", *initial_options)) == 0
+    assert run_cli(("sqt", "build", "--auto-approve", *initial_options)) == 0
     assert clickhouse_client.command(f"EXISTS TABLE {clickhouse_database}.tbl__order_report") == 0
-    assert main(("sqt", "deployment", "promote", "20260101T100000Z_a", *arguments)) == 0
+    assert run_cli(("sqt", "deployment", "promote", "20260101T100000Z_a", *arguments)) == 0
     assert (
         tuple(clickhouse_client.query(consumer_query).result_rows)
         == test_case.expected_initial_rows
@@ -122,11 +122,11 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
         "20260101T110000Z_b",
         *arguments,
     )
-    assert main(("sqt", "plan", *candidate_options)) == 0
+    assert run_cli(("sqt", "plan", *candidate_options)) == 0
     assert tuple(clickhouse_client.query(catalog_query).result_rows) == catalog_before
-    assert main(("sqt", "build", "--auto-approve", *candidate_options)) == 0
-    assert main(("sqt", "deployment", "show", "20260101T110000Z_b", *arguments)) == 0
-    assert main(("sqt", "deployment", "diff", "20260101T110000Z_b", *arguments)) == 0
+    assert run_cli(("sqt", "build", "--auto-approve", *candidate_options)) == 0
+    assert run_cli(("sqt", "deployment", "show", "20260101T110000Z_b", *arguments)) == 0
+    assert run_cli(("sqt", "deployment", "diff", "20260101T110000Z_b", *arguments)) == 0
     assert (
         tuple(clickhouse_client.query(consumer_query).result_rows)
         == test_case.expected_initial_rows
@@ -148,7 +148,7 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
         tuple(clickhouse_client.query(candidate_query).result_rows)
         == test_case.expected_promoted_rows
     )
-    assert main(("sqt", "deployment", "promote", "20260101T110000Z_b", *arguments)) == 0
+    assert run_cli(("sqt", "deployment", "promote", "20260101T110000Z_b", *arguments)) == 0
     assert (
         tuple(clickhouse_client.query(consumer_query).result_rows)
         == test_case.expected_promoted_rows

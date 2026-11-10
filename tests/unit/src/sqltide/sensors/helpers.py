@@ -1,11 +1,13 @@
 from bisect import bisect_right
 from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 
+from sqltide._native import SensorStateRepository
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterSensorStepRecord, AdapterSensorTickRecord
 from sqltide.events.models import InvocationObservation, NodeResultObservation
 from sqltide.executor.auditing.types import QualityResultStatus
-from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
 from sqltide.sensors.models import (
     EventSensorDeclaration,
     LoadedSensor,
@@ -41,6 +43,9 @@ def build_loaded_sensor(*, declaration: SensorDeclaration, name: str | None = No
 
 class FakeSensorStateRepository(SensorStateRepository):
     """Scripted in-memory repository recording every write."""
+
+    def __new__(cls, **_: object) -> "FakeSensorStateRepository":
+        return super().__new__(cls, connection=cast("AdapterConnection", None), database="")
 
     def __init__(
         self,

@@ -10,10 +10,10 @@ from sqltide._native import (
     DevServerState,
     SilentDevServerReporter,
     analyze_project,
+    build_compiler_adapter_profile,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.models import DevExecutionContext

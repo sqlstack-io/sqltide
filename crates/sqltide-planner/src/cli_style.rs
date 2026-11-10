@@ -63,6 +63,41 @@ impl CliStyle {
         self.apply(YELLOW, text)
     }
 
+    /// De-emphasised heading text.
+    pub fn muted_strong(self, text: &str) -> String {
+        self.apply(&format!("{DIM}{BOLD}"), text)
+    }
+
+    /// Text representing a passing result.
+    pub fn passed(self, text: &str) -> String {
+        self.apply(GREEN, text)
+    }
+
+    /// Text representing a failing result.
+    pub fn failed(self, text: &str) -> String {
+        self.apply(RED, text)
+    }
+
+    /// An outcome word, strong green when it passed and strong red when it did not.
+    pub fn outcome(self, text: &str, passed: bool) -> String {
+        if passed {
+            self.apply(&format!("{GREEN}{BOLD}"), text)
+        } else {
+            self.apply(&format!("{RED}{BOLD}"), text)
+        }
+    }
+
+    /// Text coloured by an audit assessment (`ready`, `not_ready`, else caution), optionally bold.
+    pub fn assessment_value(self, text: &str, assessment: &str, bold: bool) -> String {
+        let colour: &str = match assessment {
+            "ready" => GREEN,
+            "not_ready" => RED,
+            _ => YELLOW,
+        };
+        let weight: &str = if bold { BOLD } else { "" };
+        self.apply(&format!("{weight}{colour}"), text)
+    }
+
     /// One unified-diff line, styled by its leading marker.
     pub fn diff_line(self, line: &str) -> String {
         if ["+++", "---", "@@"]

@@ -28,7 +28,6 @@ const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
 const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
 const DISCOVERY_MODELS: &str = "sqltide.compiler.discovery.models";
-const RENDER_ERROR: &str = "sqltide.diagnostics.main.render_error";
 const ARTIFACTS_FIELD: &str = "artifacts";
 const STATIC_OWNERS: [&str; 3] = ["compiled", "manifest.json", "sqltide_dag.json"];
 const RESERVED_OWNERS: [&str; 4] = ["compiled", "run", "manifest.json", "sqltide_dag.json"];
@@ -1097,9 +1096,9 @@ fn run_compile<'py>(
             ) =>
         {
             let report = || -> PyResult<()> {
-                let rendered: Value<'py> =
-                    class(py, RENDER_ERROR, "render_error")?.call1((error.value(py),))?;
-                print(py, &rendered, true)
+                let rendered: String =
+                    crate::cli::render::render_error(py, error.value(py).as_any())?;
+                print(py, pyo3::types::PyString::new(py, &rendered).as_any(), true)
             };
             report().map_err(|failure| while_handling(py, failure, &error))?;
             return Ok(1);

@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 
 from sqltide._native import (
+    CliStyle,
     activity_line,
     reload_summary,
     startup_lines,
 )
-from sqltide.cli.presentation.classes.cli_style import CliStyle
 from sqltide.dev_server.models import CompileErrorInfo, CompileOutcome
 from sqltide.dev_server.types import ActivityTone, CompileStateKind
 from tests.unit.src.sqltide.cli.dev._helpers._test_types import (

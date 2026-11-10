@@ -2,7 +2,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Barrier
 from uuid import UUID
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore
 from sqltide.auth.exceptions import AccountConflictError
 from sqltide.auth.models import UserAccount
 

@@ -3,7 +3,7 @@ import hashlib
 import pytest
 from _pytest.capture import CaptureFixture
 
-from sqltide.cli.entry._helpers.parser import build_cli_parser
+from sqltide._native import parse_cli_arguments
 from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
 
 
@@ -143,7 +143,7 @@ def test_given_slice_zero_command_when_rendering_help_then_matches_baseline(
     capsys: CaptureFixture[str],
 ) -> None:
     with pytest.raises(SystemExit):
-        build_cli_parser().parse_args(list(test_case.argv))
+        parse_cli_arguments(list(test_case.argv))
     captured_output: str = capsys.readouterr().out
     actual_sha256: str = hashlib.sha256(captured_output.encode("utf-8")).hexdigest()
 

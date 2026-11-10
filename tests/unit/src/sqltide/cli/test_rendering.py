@@ -3,17 +3,13 @@ import json
 import pytest
 
 from sqltide._native import (
+    render_ambiguous_deployment_message,
+    render_deployment_audit_result,
     render_direct_build_json,
     render_direct_build_text,
+    render_plan_result,
+    render_promotion_result,
     render_virtual_build_result,
-)
-from sqltide.cli.plan.main.render_plan_result import render_plan_result
-from sqltide.cli.promotion.main.render_promotion_result import render_promotion_result
-from sqltide.cli.readiness.main.render_ambiguous_deployment_message import (
-    render_ambiguous_deployment_message,
-)
-from sqltide.cli.readiness.main.render_deployment_audit_result import (
-    render_deployment_audit_result,
 )
 from sqltide.compiler.compile.models import (
     Column,

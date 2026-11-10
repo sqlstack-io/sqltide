@@ -9,20 +9,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sqltide._native import run_dev
+from sqltide._native import parse_cli_arguments, run_cli, run_dev
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterTimeoutError
 from sqltide.adapter.models import AdapterConnectionConfig
+from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.build.models import BuildCommandOptions
 from sqltide.cli.dev.models import DevCommandOptions
-from sqltide.cli.entry._helpers.entrypoint import (
-    resolve_adapter_connection_config,
-)
-from sqltide.cli.entry._helpers.invocation import _resolved_cli_variables
-from sqltide.cli.entry._helpers.parser import build_cli_parser
 from sqltide.cli.entry.constants import DEV_CLI_VARIABLES_ENV_VAR
-from sqltide.cli.entry.main.main import _main_with_dependencies, main
-from sqltide.cli.entry.models import CliEntrypointHandlers, ResolvedInvocationConnection
+from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
@@ -387,7 +382,7 @@ def test_given_cli_args_when_running_main_then_it_prints_expected_json(
     )
     handlers: CliEntrypointHandlers = handlers_with_overrides(**overrides)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -424,7 +419,7 @@ def test_given_missing_project_when_running_dev_then_error_and_hint_are_styled(
 ) -> None:
     monkeypatch.setenv("FORCE_COLOR", "1")
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=("sqt", "dev"),
         handlers=handlers_with_overrides(),
         environment={},
@@ -450,9 +445,7 @@ def test_given_missing_project_when_running_dev_then_error_and_hint_are_styled(
 def test_given_dev_compilation_overrides_when_parsing_then_they_are_retained(
     test_case: CliDevRefactorTestCase,
 ) -> None:
-    parser: argparse.ArgumentParser = build_cli_parser()
-
-    args: argparse.Namespace = parser.parse_args(
+    args: argparse.Namespace = parse_cli_arguments(
         ["dev", "--target", "local", "--vars", '{"region":"eu","batch_size":50}']
     )
 
@@ -471,15 +464,27 @@ def test_given_dev_compilation_overrides_when_parsing_then_they_are_retained(
 )
 def test_given_internal_dev_variables_when_resolving_child_then_cli_values_override_them(
     test_case: CliDevRefactorTestCase,
+    tmp_path: Path,
 ) -> None:
-    args: argparse.Namespace = argparse.Namespace(vars={"batch_size": 100})
+    project_dir: Path = tmp_path / "project"
+    write_cli_target_project(project_root=project_dir, local_contents="")
+    captured: dict[str, object] = {}
 
-    variables: dict[str, object] = _resolved_cli_variables(
-        args=args,
+    def capture_compile(*, loaded_project: LoadedProject, **_kwargs: object) -> int:
+        assert loaded_project.effective_configuration is not None
+        captured.update(loaded_project.effective_configuration.variables)
+        return 0
+
+    exit_code: int = run_cli(
+        argv=("sqt", "compile", "--vars", '{"batch_size": 100}'),
+        handlers=handlers_with_overrides(run_compile=capture_compile),
         environment={DEV_CLI_VARIABLES_ENV_VAR: '{"warehouse_password":"secret","batch_size":50}'},
+        working_directory=project_dir,
     )
 
-    assert variables == test_case.expected_value
+    assert exit_code == 0
+    expected: dict[str, object] = cast(dict[str, object], test_case.expected_value)
+    assert {name: captured[name] for name in expected} == expected
 
 
 @pytest.mark.parametrize(
@@ -504,7 +509,7 @@ def test_given_project_default_target_when_starting_dev_then_effective_target_is
         captured["options"] = options
         return 0
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=("sqt", "dev", "--project-dir", str(project_dir)),
         handlers=handlers_with_overrides(run_dev=capture_dev_options),
         adapter_connection=cast(AdapterConnection, FakeCliClickHouseClient()),
@@ -537,7 +542,7 @@ def test_given_unopened_warehouse_when_starting_dev_then_connection_factories_ar
         captured.update(kwargs)
         return 0
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=(
             "sqt",
             "dev",
@@ -670,7 +675,7 @@ def test_given_audit_backfill_cli_args_when_running_main_then_it_forwards_projec
 ) -> None:
     command_runner: RecordingAuditBackfillCommandRunner = RecordingAuditBackfillCommandRunner()
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_overrides(run_deployment_audit=command_runner),
         adapter_connection=cast(AdapterConnection, FakeCliClickHouseClient()),
@@ -724,7 +729,7 @@ def test_given_invalid_transform_sql_when_running_compile_then_it_prints_a_clear
     argv_paths: dict[str, str] = {"BROKEN_PIPELINES_ROOT": str(pipeline_root)}
     argv: list[str] = [argv_paths.get(part, part) for part in test_case.argv]
 
-    exit_code: int = main(argv)
+    exit_code: int = run_cli(argv)
     captured_error: str = capsys.readouterr().err
 
     assert exit_code == test_case.expected_exit_code
@@ -798,7 +803,7 @@ def test_given_cli_args_when_running_plan_then_it_prints_expected_output(
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_plan=PlanCommandRunner())
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -844,7 +849,7 @@ def test_given_clickhouse_env_vars_when_running_plan_then_it_uses_env_defaults(
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_plan=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         environment=test_case.env_vars,
         handlers=handlers,
@@ -900,7 +905,7 @@ def test_given_project_yaml_when_running_plan_then_it_uses_project_database_defa
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
     monkeypatch.chdir(project_root)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=("sqt", "plan"),
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -967,7 +972,7 @@ def test_given_project_yaml_when_running_runtime_command_then_it_uses_project_de
 
     argv: tuple[str, ...] = CLI_COMMAND_ARGV[test_case.command_name]
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1030,7 +1035,7 @@ def test_given_project_dir_when_running_runtime_command_then_it_uses_project_def
         str(project_root),
     )
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1053,27 +1058,36 @@ def test_given_project_dir_when_running_runtime_command_then_it_uses_project_def
 )
 def test_given_project_clickhouse_defaults_when_resolving_connection_then_it_uses_them(
     test_case: CliProjectConnectionResolutionTestCase,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    project_connection: AdapterConnectionConfig = AdapterConnectionConfig(
-        host=test_case.expected_project_connection[0],
-        port=test_case.expected_project_connection[1],
-        username=test_case.expected_project_connection[2],
-        password=test_case.expected_project_connection[3],
+    host, port, username, password = test_case.expected_project_connection
+    project_dir: Path = tmp_path / "project"
+    copytree(Path("tests/fixtures/selector_project"), project_dir)
+    (project_dir / "sqltide_project.toml").write_text(
+        'name = "selector_project"\ndefault_target = "test"\n\n'
+        '[targets.test]\ndatabase = "analytics"\n\n'
+        f'[targets.test.connection]\nhost = "{host}"\nport = {port}\n'
+        f'username = "{username}"\npassword = "{password}"\n',
+        encoding="utf-8",
+    )
+    connect: MagicMock = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
+
+    exit_code: int = run_cli(
+        argv=("sqt", "plan"),
+        handlers=handlers_with_overrides(run_plan=RecordingCommandRunner()),
+        environment={},
+        working_directory=project_dir,
     )
 
-    resolved_connection: AdapterConnectionConfig = resolve_adapter_connection_config(
-        host=None,
-        port=None,
-        username=None,
-        password=None,
-        project_connection=project_connection,
-    )
-
-    assert resolved_connection == AdapterConnectionConfig(
-        host=test_case.expected_project_connection[0],
-        port=test_case.expected_project_connection[1],
-        username=test_case.expected_project_connection[2],
-        password=test_case.expected_project_connection[3],
+    assert exit_code == 0
+    assert connect.call_args.args[-1] == AdapterConnectionConfig(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        database="analytics",
     )
 
 
@@ -1112,7 +1126,7 @@ def test_given_json_flag_when_running_plan_then_it_passes_json_output_to_command
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_plan=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1156,7 +1170,7 @@ def test_given_selectors_when_running_plan_then_it_passes_selection_kwargs_to_co
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_plan=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1204,7 +1218,7 @@ def test_given_apply_flag_when_running_janitor_then_it_passes_apply_to_command(
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_janitor=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1286,7 +1300,7 @@ def test_given_expected_command_errors_when_running_entrypoint_then_it_prints_cl
     )
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1334,7 +1348,7 @@ def test_given_json_flag_when_running_build_then_it_passes_json_output_to_comman
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_build=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1379,22 +1393,10 @@ def test_given_build_connection_when_dispatching_then_observations_use_second_co
     runner: RecordingCommandRunner = RecordingCommandRunner()
     execution_connection: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
     observation_connection: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
-    connection_resolver: MagicMock = MagicMock(
-        side_effect=(
-            ResolvedInvocationConnection(
-                connection=execution_connection, close_after_command=False
-            ),
-            ResolvedInvocationConnection(
-                connection=observation_connection, close_after_command=False
-            ),
-        )
-    )
-    monkeypatch.setattr(
-        "sqltide.cli.entry.main.main.resolve_invocation_connection",
-        connection_resolver,
-    )
+    connect: MagicMock = MagicMock(side_effect=(execution_connection, observation_connection))
+    monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_overrides(run_build=runner),
     )
@@ -1439,20 +1441,12 @@ def test_given_observation_connection_failure_when_building_then_dispatch_is_ref
 ) -> None:
     runner: RecordingCommandRunner = RecordingCommandRunner()
     execution_connection: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
-    connection_resolver: MagicMock = MagicMock(
-        side_effect=(
-            ResolvedInvocationConnection(
-                connection=execution_connection, close_after_command=False
-            ),
-            AdapterTimeoutError(test_case.connection_error),
-        )
+    connect: MagicMock = MagicMock(
+        side_effect=(execution_connection, AdapterTimeoutError(test_case.connection_error))
     )
-    monkeypatch.setattr(
-        "sqltide.cli.entry.main.main.resolve_invocation_connection",
-        connection_resolver,
-    )
+    monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_overrides(run_build=runner),
     )
@@ -1492,7 +1486,7 @@ def test_given_selectors_when_running_build_then_it_passes_selection_kwargs_to_c
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_build=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1535,7 +1529,7 @@ def test_given_reconcile_flags_when_running_reconcile_then_it_passes_kwargs_to_c
     handlers: CliEntrypointHandlers = handlers_with_overrides(run_reconcile=runner)
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         adapter_connection=clickhouse_client,
@@ -1605,7 +1599,7 @@ def test_given_compile_when_running_then_it_writes_target_artifacts(
         ".": project_dir,
         "target_out": project_dir / "target_out",
     }
-    exit_code: int = main(tuple(str(argv_paths.get(arg, arg)) for arg in test_case.argv))
+    exit_code: int = run_cli(tuple(str(argv_paths.get(arg, arg)) for arg in test_case.argv))
     captured_out: str = capsys.readouterr().out
 
     assert exit_code == test_case.expected_exit_code
@@ -1665,7 +1659,7 @@ def test_given_compile_when_running_then_it_writes_target_artifacts(
 def test_given_deployment_audit_options_when_parsing_then_values_are_preserved(
     test_case: CliNestedAuditOptionsTestCase,
 ) -> None:
-    args: argparse.Namespace = build_cli_parser().parse_args(list(test_case.argv))
+    args: argparse.Namespace = parse_cli_arguments(list(test_case.argv))
 
     assert str(args.project_dir) == test_case.expected_project_dir
     assert args.host == test_case.expected_host
@@ -1713,6 +1707,6 @@ def test_given_deployment_command_without_id_when_parsing_then_it_is_rejected(
     test_case: CliRequiredDeploymentIdTestCase,
 ) -> None:
     with pytest.raises(SystemExit) as raised:
-        build_cli_parser().parse_args(list(test_case.argv))
+        parse_cli_arguments(list(test_case.argv))
 
     assert raised.value.code == test_case.expected_exit_code

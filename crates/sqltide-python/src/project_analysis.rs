@@ -23,8 +23,6 @@ const RULES_MODELS: &str = "sqltide.compiler.rules.models";
 const RULES_EXCEPTIONS: &str = "sqltide.compiler.rules.exceptions";
 const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
 const DIAGNOSTICS_TYPES: &str = "sqltide.diagnostics.types";
-const ATTACH_DIAGNOSTIC: &str = "sqltide.diagnostics.main.attach_error_diagnostic";
-const SENSORS: &str = "sqltide.sensors.main.compile_sensors";
 const RELAXED_GC_THRESHOLDS: [i64; 3] = [2000, 100, 100];
 const MAX_FIX_PASSES: usize = 128;
 
@@ -389,23 +387,15 @@ fn phase<'py, T>(
     let py: Python<'py> = pipelines_root.py();
     run().or_else(|failure| {
         if failure.is_instance_of::<PyException>(py) {
-            let _ = call(
-                &py.import(ATTACH_DIAGNOSTIC)?
-                    .getattr("attach_error_diagnostic")?,
-                &[
-                    ("error", failure.value(py).clone().into_any()),
-                    (
-                        "phase",
-                        py.import(DIAGNOSTICS_TYPES)?
-                            .getattr("DiagnosticPhase")?
-                            .getattr(diagnostic_phase)?,
-                    ),
-                    ("code", object(py, code)?),
-                    (
-                        "location",
-                        project_location(pipelines_root, loaded_project)?,
-                    ),
-                ],
+            crate::cli::render::attach_error_diagnostic(
+                py,
+                failure.value(py).as_any(),
+                py.import(DIAGNOSTICS_TYPES)?
+                    .getattr("DiagnosticPhase")?
+                    .getattr(diagnostic_phase)?,
+                code,
+                py.None().into_bound(py),
+                project_location(pipelines_root, loaded_project)?,
             )?;
         }
         Err(failure)
@@ -549,7 +539,7 @@ pub(crate) fn analyze_project<'py>(
                 ))?
             };
             let sensors: Bound<'py, PyAny> = call(
-                &py.import(SENSORS)?.getattr("compile_sensors")?,
+                &native(py, "compile_sensors")?,
                 &[
                     ("project_dir", pipelines_root.getattr("parent")?),
                     ("reserved_names", reserved_sensor_names(&compile_inputs)?),

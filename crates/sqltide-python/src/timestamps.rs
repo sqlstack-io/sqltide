@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pyo3::exceptions::{PyOverflowError, PyValueError};
+use pyo3::exceptions::{PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use sqltide_executor::audit_schedule::{LastRun, ScheduledAudit, Warmup, resolve_warmup, schedule};
@@ -16,10 +16,11 @@ const DEV_SERVER_TYPES: &str = "sqltide.dev_server.types";
 const START_TIME_ERROR: &str =
     "--start-time must be YYYY-MM-DD or a UTC timestamp like YYYY-MM-DDTHH:MM:SS[.sss][Z]";
 
-fn timestamp_error(error: TimestampError) -> PyErr {
+pub(crate) fn timestamp_error(error: TimestampError) -> PyErr {
     match error {
         TimestampError::Value(message) => PyValueError::new_err(message),
         TimestampError::Overflow(message) => PyOverflowError::new_err(message),
+        TimestampError::Type(message) => PyTypeError::new_err(message),
     }
 }
 

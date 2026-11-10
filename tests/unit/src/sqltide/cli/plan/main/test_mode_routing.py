@@ -3,9 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import publish_plan_workflow
 from sqltide.adapter.models import AdapterDirectFingerprintSnapshot
-from sqltide.cli.plan.constants import DIRECT_MODE_LABEL
-from sqltide.cli.workflow_artifacts.main._publish_plan_workflow import publish_plan_workflow
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.workflow.models import BuildWorkflow
 from sqltide.executor.workflow.types import WorkflowMode
@@ -37,13 +36,13 @@ _TOPIC_DRIFT: tuple[tuple[str, str], ...] = (("kafka_topic_list", "source.orders
         CliPlanModeRoutingTestCase(
             description="an omitted virtual_environments setting plans in direct mode",
             virtual_environments=None,
-            expected_mode=DIRECT_MODE_LABEL,
+            expected_mode="direct",
             expected_title="Direct plan",
         ),
         CliPlanModeRoutingTestCase(
             description="a disabled virtual_environments setting plans in direct mode",
             virtual_environments=False,
-            expected_mode=DIRECT_MODE_LABEL,
+            expected_mode="direct",
             expected_title="Direct plan",
         ),
         CliPlanModeRoutingTestCase(
@@ -99,7 +98,7 @@ def test_given_effective_project_mode_when_planning_then_that_mode_is_used(
         CliPlanModeRoutingTestCase(
             description="direct mode reports the complete closure and its single replay root",
             virtual_environments=None,
-            expected_mode=DIRECT_MODE_LABEL,
+            expected_mode="direct",
             expected_title="Direct Plan",
             expected_execution_scope=("alpha", "beta", "gamma", "delta"),
             expected_replay_root_models=("alpha",),

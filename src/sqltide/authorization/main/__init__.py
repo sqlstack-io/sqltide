@@ -1,1 +1,0 @@
-"""Public authorization operations."""

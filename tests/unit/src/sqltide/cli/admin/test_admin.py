@@ -2,9 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.auth.classes.control_store import ControlStore
+from sqltide._native import ControlStore, run_cli
 from sqltide.auth.models import UserAccount
-from sqltide.cli.entry.main.main import main
 from tests.unit.src.sqltide.cli.admin._test_types import AdminCliTestCase
 
 
@@ -18,7 +17,7 @@ def test_given_empty_control_store_when_creating_proxy_admin_then_cli_bootstraps
 ) -> None:
     url: str = f"sqlite:///{tmp_path / 'control.db'}"
 
-    exit_code: int = main(
+    exit_code: int = run_cli(
         [
             "sqt",
             "admin",
@@ -56,7 +55,7 @@ def test_given_viewer_when_granting_admin_then_cli_updates_existing_account(
     store.create_user(username="alice", roles=("viewer",))
     store.close()
 
-    exit_code: int = main(
+    exit_code: int = run_cli(
         [
             "sqt",
             "admin",

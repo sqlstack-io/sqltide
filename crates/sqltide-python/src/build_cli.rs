@@ -12,7 +12,7 @@ use crate::artifacts::json_dumps;
 use crate::direct_build::{Value, build, class, is_a, items, method, none, string, text, tuple};
 
 const NATIVE: &str = "sqltide._native";
-const CLI_STYLE: &str = "sqltide.cli.presentation.main._cli_style";
+const CLI_STYLE: &str = "sqltide._native";
 const BUILD_MODELS: &str = "sqltide.cli.build.models";
 const BUILD_EXCEPTIONS: &str = "sqltide.cli.build.exceptions";
 const ENTRY_CONSTANTS: &str = "sqltide.cli.entry.constants";

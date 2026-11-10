@@ -12,6 +12,7 @@ from sqltide._native import (
     InMemoryDestructionPlanStore,
     analyze_project,
     assemble_destruction_workflow,
+    build_compiler_adapter_profile,
     execute_destruction,
     plan_destruction,
     verify_destruction_drift,
@@ -24,9 +25,6 @@ from sqltide.adapter.models import (
     AdapterMutationResult,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import (
-    build_compiler_adapter_profile,
-)
 from sqltide.compiler.compile.models import CompilerAdapterProfile, LogicalResourceKey
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis

@@ -14,7 +14,7 @@ use crate::direct_build::{Value, boolean, build, call, class, is_a, items, none,
 use crate::model_sql::chained;
 
 const NATIVE: &str = "sqltide._native";
-const CLI_STYLE: &str = "sqltide.cli.presentation.main._cli_style";
+const CLI_STYLE: &str = "sqltide._native";
 const CLI_EXCEPTIONS: &str = "sqltide.cli.entry.exceptions";
 const BUILD_CONSTANTS: &str = "sqltide.cli.build.constants";
 const BUILD_MODELS: &str = "sqltide.cli.build.models";

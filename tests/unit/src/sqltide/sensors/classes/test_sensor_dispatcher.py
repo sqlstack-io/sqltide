@@ -2,8 +2,8 @@
 
 import pytest
 
+from sqltide._native import SensorDispatcher
 from sqltide.events.models import NodeResultObservation
-from sqltide.sensors.classes.sensor_dispatcher import SensorDispatcher
 from sqltide.sensors.models import (
     PollingTickState,
     SensorDispatchSummary,

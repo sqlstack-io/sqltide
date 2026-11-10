@@ -5,10 +5,9 @@ from typing import cast
 import pytest
 
 import sqltide._native as _native
-from sqltide._native import build_compile_inputs
+from sqltide._native import build_compile_inputs, build_compiler_adapter_profile
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.exceptions import (
     PipelineCompileError,
     TransformOrderByUnknownColumnError,

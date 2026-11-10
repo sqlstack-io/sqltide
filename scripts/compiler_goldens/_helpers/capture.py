@@ -30,8 +30,7 @@ def capture_compile(*, name: str, project_dir: Path) -> CompilerCapture:
             [
                 sys.executable,
                 "-c",
-                "import sys; from sqltide.cli.entry.main.main import main; "
-                "sys.exit(main(sys.argv))",
+                "import sys; from sqltide._native import run_cli; sys.exit(run_cli(sys.argv))",
                 "compile",
                 "--project-dir",
                 str(work_dir),

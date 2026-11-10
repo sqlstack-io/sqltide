@@ -5,7 +5,7 @@ from unittest.mock import DEFAULT, Mock
 
 import pytest
 
-from sqltide.cli.entry.main.main import main
+from sqltide._native import run_cli
 from tests.unit.src.sqltide.cli.compile._test_types import (
     AdoptedCompileTargetTestCase,
     CompileArtifactIdentityTestCase,
@@ -449,7 +449,7 @@ def test_given_invalid_model_when_compiling_then_cli_renders_structured_source_d
     copy_basic_project(project_dir=project_dir)
     write_invalid_model(project_dir=project_dir)
 
-    exit_code: int = main(("sqt", "compile", "--project-dir", str(project_dir)))
+    exit_code: int = run_cli(("sqt", "compile", "--project-dir", str(project_dir)))
     stderr: str = capsys.readouterr().err
 
     assert exit_code == test_case.expected_exit_code
@@ -486,7 +486,7 @@ def test_given_invalid_model_header_when_compiling_then_cli_renders_discovery_di
     copy_basic_project(project_dir=project_dir)
     write_invalid_model_header(project_dir=project_dir)
 
-    exit_code: int = main(("sqt", "compile", "--project-dir", str(project_dir)))
+    exit_code: int = run_cli(("sqt", "compile", "--project-dir", str(project_dir)))
     stderr: str = capsys.readouterr().err
 
     assert exit_code == test_case.expected_exit_code
@@ -523,7 +523,7 @@ def test_given_malformed_reference_when_compiling_then_cli_renders_authored_sour
     copy_basic_project(project_dir=project_dir)
     write_invalid_reference_model(project_dir=project_dir)
 
-    exit_code: int = main(("sqt", "compile", "--project-dir", str(project_dir)))
+    exit_code: int = run_cli(("sqt", "compile", "--project-dir", str(project_dir)))
     stderr: str = capsys.readouterr().err
 
     assert exit_code == test_case.expected_exit_code
@@ -560,7 +560,7 @@ def test_given_cross_pipeline_model_ref_when_compiling_then_cli_renders_graph_di
     copy_basic_project(project_dir=project_dir)
     write_cross_pipeline_model_reference(project_dir=project_dir)
 
-    exit_code: int = main(("sqt", "compile", "--project-dir", str(project_dir)))
+    exit_code: int = run_cli(("sqt", "compile", "--project-dir", str(project_dir)))
     stderr: str = capsys.readouterr().err
 
     assert exit_code == test_case.expected_exit_code

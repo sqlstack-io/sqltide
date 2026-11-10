@@ -474,20 +474,15 @@ pub(crate) fn run_dev<'py>(
             .unbind())
     };
     let run_compile: Any<'py> = PyCFunction::new_closure(py, None, None, run_compile)?.into_any();
-    let style: Any<'py> =
-        attr(py, "sqltide.cli.presentation.main._cli_style", "cli_style")?.call0()?;
+    let style: Any<'py> = attr(py, NATIVE, "cli_style")?.call0()?;
     let reporter: Any<'py> =
         attr(py, NATIVE, "DevTerminalReporter")?.call((), Some(&py_kwargs!(py; style = style)?))?;
     let configured: Any<'py> = options.getattr("auth_settings")?;
     let auth_settings: Any<'py> = if configured.is_truthy()? {
         configured
     } else {
-        let control_store_url: Any<'py> = attr(
-            py,
-            "sqltide.auth.main.default_control_store_url",
-            "default_control_store_url",
-        )?
-        .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
+        let control_store_url: Any<'py> = attr(py, "sqltide._native", "default_control_store_url")?
+            .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
         attr(py, "sqltide.auth.models", "AuthSettings")?.call(
             (),
             Some(&py_kwargs!(py;

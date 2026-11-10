@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from sqltide.cli.entry.main.main import main
+from sqltide._native import run_cli
 from tests.unit.src.sqltide.cli.sql.main._test_types import FormatTestCase, RulesTestCase
 from tests.unit.src.sqltide.cli.sql.main.helpers import (
     write_selector_rules_project,
@@ -66,10 +66,8 @@ def test_given_unordered_query_when_compiling_then_configured_rules_are_enforced
         header=test_case.header,
     )
     original: str = model.read_text()
-    assert (
-        main(["sqt", "compile", "--project-dir", str(tmp_path), *test_case.flags])
-        == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "compile", "--project-dir", str(tmp_path), *test_case.flags])
+    assert exit_code == test_case.expected_exit
     assert model.read_text() == original
     output: str = capsys.readouterr().err
     assert ("SQLCLEAN004" in output) == bool(test_case.expected_codes)
@@ -108,9 +106,8 @@ def test_given_reviewed_exception_when_linting_then_only_matching_file_is_exempt
     )
     other: Path = model.with_name("other_orders.sql")
     other.write_text(model.read_text())
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
     assert [item["location"]["path"] for item in payload["diagnostics"]] == [str(other)]
     assert tuple(item["code"] for item in payload["diagnostics"]) == test_case.expected_codes
@@ -148,9 +145,10 @@ def test_given_templates_when_formatting_then_templates_are_preserved_and_check_
     model.chmod(0o640)
     original: bytes = model.read_bytes()
     mode: int = stat.S_IMODE(model.stat().st_mode)
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--check"]) == 1
+    exit_code: int = run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--check"])
+    assert exit_code == 1
     assert model.read_bytes() == original
-    assert main(["sqt", "format", "--project-dir", str(tmp_path)]) == 0
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path)]) == 0
     formatted: str = model.read_bytes().decode()
     assert all(
         fragment.replace("\n", test_case.newline) in formatted
@@ -159,7 +157,7 @@ def test_given_templates_when_formatting_then_templates_are_preserved_and_check_
     assert formatted.startswith(f"MODEL (kind view);{test_case.newline}{test_case.newline}SELECT")
     assert "\n" not in formatted.replace(test_case.newline, "")
     assert stat.S_IMODE(model.stat().st_mode) == mode
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--check"]) == 0
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--check"]) == 0
     assert capsys.readouterr().err == ""
 
 
@@ -183,16 +181,17 @@ def test_given_safe_count_fix_when_explicitly_fixing_then_verified_output_is_wri
         root=tmp_path, sql=test_case.sql, config='\n[rules]\nselect = ["SQLCLEAN017"]\n'
     )
     original: str = model.read_text()
-    assert main(["sqt", "format", "--project-dir", str(tmp_path)]) == 0
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path)]) == 0
     assert "COUNT(1)" in model.read_text()
     original = model.read_text()
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--check"]) == 1
+    exit_code: int = run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--check"])
+    assert exit_code == 1
     assert model.read_text() == original
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--diff"]) == 0
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--diff"]) == 0
     assert model.read_text() == original
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--fix"]) == 0
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--fix"]) == 0
     assert all(fragment in model.read_text() for fragment in test_case.expected_fragments)
-    assert main(["sqt", "compile", "--project-dir", str(tmp_path)]) == 0
+    assert run_cli(["sqt", "compile", "--project-dir", str(tmp_path)]) == 0
     assert capsys.readouterr().err == ""
 
 
@@ -219,10 +218,10 @@ def test_given_analysis_opt_out_when_sql_is_invalid_then_mandatory_compiler_chec
     _ = write_sql_project(
         root=tmp_path, sql='SELECT unknown_column FROM __source("orders")', config=test_case.config
     )
-    assert (
-        main(["sqt", "compile", "--project-dir", str(tmp_path), "--no-sql-analysis"])
-        == test_case.expected_exit
+    exit_code: int = run_cli(
+        ["sqt", "compile", "--project-dir", str(tmp_path), "--no-sql-analysis"]
     )
+    assert exit_code == test_case.expected_exit
     assert not (tmp_path / "target").exists()
     assert capsys.readouterr().err
 
@@ -279,7 +278,7 @@ def test_given_invalid_configuration_when_formatting_then_source_is_not_changed(
         config=test_case.config,
     )
     original: str = model.read_text()
-    assert main(["sqt", "format", "--project-dir", str(tmp_path)]) == test_case.expected_exit
+    assert run_cli(["sqt", "format", "--project-dir", str(tmp_path)]) == test_case.expected_exit
     assert model.read_text() == original
     assert capsys.readouterr().err
 
@@ -308,13 +307,15 @@ def test_given_macro_generated_fix_when_formatting_then_generated_text_is_not_ow
     macro: Path = macros / "counts.py"
     macro.write_text('def total(label):\n    return "COUNT(1)"\n')
     macro_contents: str = macro.read_text()
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 1
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == 1
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
     diagnostic: dict[str, Any] = payload["diagnostics"][0]
     assert diagnostic["code"] == "SQLCLEAN017"
     assert diagnostic["location"]["line"] == 3
     assert diagnostic["location"]["column"] == 13
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--fix"]) == 1
+    exit_code: int = run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--fix"])
+    assert exit_code == 1
     assert all(fragment in model.read_text() for fragment in test_case.expected_fragments)
     assert "COUNT(*)" not in model.read_text()
     assert macro.read_text() == macro_contents
@@ -353,10 +354,10 @@ def test_given_target_sensitive_macro_when_linting_then_effective_compile_contex
         "    return 'LIMIT 1' if ctx.target_name == 'preview' and "
         "ctx.variables.get('preview') else ''\n"
     )
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 0
+    assert run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["diagnostics"] == []
     assert (
-        main(
+        run_cli(
             [
                 "sqt",
                 "lint",
@@ -400,9 +401,8 @@ def test_given_unicode_multi_audit_file_when_linting_then_locations_and_suppress
         "AUDIT (name second);\n-- sqt: ignore SQLCLEAN004\n"
         "SELECT order_id, 'é' AS note FROM __ref(\"orders_view\") LIMIT 1;\n"
     )
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
     assert [(item["code"], item["location"]["line"]) for item in payload["diagnostics"]] == [
         ("SQTSUPPRESSION000", 5),
@@ -437,7 +437,10 @@ def test_given_audit_rule_fix_when_formatting_then_only_model_bodies_are_fix_eli
     audit: Path = audits / "totals.sql"
     audit.write_text(f"AUDIT ();\n\n{test_case.sql}\n")
     model_contents: str = model.read_text()
-    assert main(["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--json", "audits"]) == 1
+    exit_code: int = run_cli(
+        ["sqt", "format", "--project-dir", str(tmp_path), "--fix", "--json", "audits"]
+    )
+    assert exit_code == 1
     assert all(fragment in audit.read_text() for fragment in test_case.expected_fragments)
     assert model.read_text() == model_contents
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
@@ -464,12 +467,13 @@ def test_given_scoped_exception_when_selecting_opt_in_rule_then_only_named_join_
         'path = "pipelines/pl__orders/orders_view.sql"\nreason = "Reviewed grid"\n'
         'relation = "Orders"\ncte = "PAIRED"\n',
     )
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     assert json.loads(capsys.readouterr().out)["diagnostics"] == []
     assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json", "--select", "SQLCLEAN038"])
+        run_cli(
+            ["sqt", "lint", "--project-dir", str(tmp_path), "--json", "--select", "SQLCLEAN038"]
+        )
         == 1
     )
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
@@ -507,16 +511,14 @@ def test_given_identical_audit_bodies_when_linting_then_each_actual_expansion_is
         'AUDIT (name first);\nSELECT @total() AS total FROM __ref("orders_view");\n\n'
         'AUDIT (name second);\nSELECT @total() AS total FROM __ref("orders_view");\n'
     )
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     first: dict[str, Any] = json.loads(capsys.readouterr().out)
     assert [(item["code"], item["location"]["line"]) for item in first["diagnostics"]] == [
         ("SQLCLEAN017", 2)
     ]
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     assert json.loads(capsys.readouterr().out) == first
 
 
@@ -551,9 +553,9 @@ def test_given_failed_staging_write_when_formatting_then_original_bytes_and_perm
             sys.executable,
             "-B",
             "-c",
-            "import resource, signal, sys; from sqltide.cli.entry.main.main import main; "
+            "import resource, signal, sys; from sqltide._native import run_cli; "
             "signal.signal(signal.SIGXFSZ, signal.SIG_IGN); "
-            "resource.setrlimit(resource.RLIMIT_FSIZE, (16, 16)); sys.exit(main(sys.argv[1:]))",
+            "resource.setrlimit(resource.RLIMIT_FSIZE, (16, 16)); sys.exit(run_cli(sys.argv[1:]))",
             "sqt",
             "format",
             "--project-dir",
@@ -603,9 +605,8 @@ def test_given_clean_query_when_linting_then_only_evaluated_exact_exceptions_are
         sql='SELECT CAST(order_id AS UInt64) AS order_id FROM __source("orders")',
         config=test_case.config,
     )
-    assert (
-        main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == test_case.expected_exit
     assert test_case.expected_error in capsys.readouterr().err
 
 
@@ -662,7 +663,8 @@ def test_given_selector_scoped_ignore_when_linting_then_only_explicit_resources_
         config='\n[[rules.rule_ignores]]\nrules = ["SQLCLEAN004"]\n'
         'reason = "Explicitly reviewed previews"\n' + test_case.config + "\n",
     )
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 1
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == 1
     payload: dict[str, Any] = json.loads(capsys.readouterr().out)
     assert (
         tuple(
@@ -725,11 +727,16 @@ def test_given_invalid_ignore_scope_when_running_sql_commands_then_no_source_or_
         'reason = "Reviewed previews"\nselectors = ' + test_case.config + "\n",
     )
     original: bytes = model.read_bytes()
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path)]) == 1
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path)])
+    assert exit_code == 1
     assert test_case.expected_error in capsys.readouterr().err
-    assert main(["sqt", "format", "--project-dir", str(tmp_path)]) == 1
+    exit_code: int = run_cli(["sqt", "format", "--project-dir", str(tmp_path)])
+    assert exit_code == 1
     assert test_case.expected_error in capsys.readouterr().err
-    assert main(["sqt", "compile", "--project-dir", str(tmp_path), "--no-sql-analysis"]) == 1
+    exit_code: int = run_cli(
+        ["sqt", "compile", "--project-dir", str(tmp_path), "--no-sql-analysis"]
+    )
+    assert exit_code == 1
     assert test_case.expected_error in capsys.readouterr().err
     assert model.read_bytes() == original
     assert not (tmp_path / "target").exists()
@@ -754,10 +761,11 @@ def test_given_removed_model_when_linting_again_then_selector_ignore_is_not_sile
         config='\n[[rules.rule_ignores]]\nrules = ["SQLCLEAN004"]\n'
         'reason = "Reviewed preview"\nselectors = ["model:orders_view"]\n',
     )
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 0
+    assert run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["diagnostics"] == []
     model.unlink()
-    assert main(["sqt", "lint", "--project-dir", str(tmp_path), "--json"]) == 1
+    exit_code: int = run_cli(["sqt", "lint", "--project-dir", str(tmp_path), "--json"])
+    assert exit_code == 1
     assert test_case.expected_error in capsys.readouterr().err
 
 
@@ -790,9 +798,8 @@ def test_given_ignored_count_when_fixing_then_only_layout_can_change(
         "MODEL (kind view);\n\n"
         'SELECT CAST(COUNT(1) AS UInt64) AS total FROM __ref("landing_orders")\n'
     )
-    assert (
-        main(["sqt", "format", "--project-dir", str(tmp_path), "--fix"]) == test_case.expected_exit
-    )
+    exit_code: int = run_cli(["sqt", "format", "--project-dir", str(tmp_path), "--fix"])
+    assert exit_code == test_case.expected_exit
     assert "COUNT(1)" in model.read_text()
     assert "COUNT(*)" not in model.read_text()
     assert "SELECT" in model.read_text()

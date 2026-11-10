@@ -184,24 +184,19 @@ impl AuthService {
                 &format!("Trusted proxy did not provide required header '{header_name}'"),
             ));
         };
-        let username: String = match attr(
-            py,
-            "sqltide.auth._helpers.usernames",
-            "canonical_username",
-        )?
-        .call1((raw,))
-        {
-            Ok(username) => username.extract()?,
-            Err(error) => {
-                if error
-                    .value(py)
-                    .is_instance_of::<pyo3::exceptions::PyValueError>()
-                {
-                    return Err(raise(py, "AuthenticationError", &message(py, &error)?));
+        let username: String =
+            match attr(py, "sqltide._native", "canonical_username")?.call1((raw,)) {
+                Ok(username) => username.extract()?,
+                Err(error) => {
+                    if error
+                        .value(py)
+                        .is_instance_of::<pyo3::exceptions::PyValueError>()
+                    {
+                        return Err(raise(py, "AuthenticationError", &message(py, &error)?));
+                    }
+                    return Err(error);
                 }
-                return Err(error);
-            }
-        };
+            };
         let cache_key: String = format!("proxy:{username}");
         if let Some(cached) = self.cached(py, &cache_key)? {
             return Ok(cached);
@@ -599,9 +594,7 @@ pub(crate) fn login(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         .clone()
         .unwrap_or_else(|| "unknown".to_owned());
     let limiter_username: String =
-        match attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?
-            .call1((username.as_str(),))
-        {
+        match attr(py, "sqltide._native", "canonical_username")?.call1((username.as_str(),)) {
             Ok(canonical) => canonical.extract()?,
             Err(error) if is_instance(py, &error, EXCEPTIONS_MODULE, "AccountValidationError")? => {
                 "<invalid>".to_owned()
@@ -812,10 +805,7 @@ pub(crate) fn create_user(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result: PyResult<Bound<'_, PyAny>> = (|| {
         let proxy: bool = source_text == "trusted_proxy";
         let external_subject: Option<Bound<'_, PyAny>> = if proxy {
-            Some(
-                attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?
-                    .call1((&username,))?,
-            )
+            Some(attr(py, "sqltide._native", "canonical_username")?.call1((&username,))?)
         } else {
             None
         };

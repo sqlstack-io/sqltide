@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import build_compiler_adapter_profile
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.access.exceptions import AccessPolicyError
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.access.types import GrantScope, Permission

@@ -28,7 +28,7 @@ Issues = "https://github.com/sqlstack-io/sqltide/issues"
 Repository = "https://github.com/sqlstack-io/sqltide"
 
 [project.scripts]
-sqt = "sqltide.cli.entry.main.main:main"
+sqt = "sqltide._native:run_cli"
 
 [dependency-groups]
 dev = [

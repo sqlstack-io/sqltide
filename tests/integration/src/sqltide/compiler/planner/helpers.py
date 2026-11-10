@@ -5,11 +5,10 @@ from typing import cast
 
 from clickhouse_connect.driver.client import Client
 
-from sqltide._native import SqlModelAnalyzer, realize_project
+from sqltide._native import SqlModelAnalyzer, build_compiler_adapter_profile, realize_project
 from sqltide._native import compile_pipeline as compile_pipeline_impl
 from sqltide.adapter.models import AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import (
     Column,
     CompiledPipeline,

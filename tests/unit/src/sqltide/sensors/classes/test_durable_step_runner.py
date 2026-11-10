@@ -2,8 +2,7 @@
 
 import pytest
 
-from sqltide.sensors.classes.durable_step_runner import DurableStepRunner
-from sqltide.sensors.classes.in_memory_step_store import InMemoryStepStore
+from sqltide._native import DurableStepRunner, InMemoryStepStore
 from sqltide.sensors.exceptions import SensorStepError
 from sqltide.sensors.types import StepPolicy
 from tests.unit.src.sqltide.sensors.classes._test_types import StepRunnerTestCase
