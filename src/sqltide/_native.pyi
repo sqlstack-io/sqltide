@@ -210,7 +210,12 @@ from sqltide.executor.backfill.models import (
     BackfillExecutionResult,
     RootBackfillReport,
 )
-from sqltide.executor.deployment.models import DeploymentDiffResult
+from sqltide.executor.deployment.models import (
+    DeploymentDiffRequest,
+    DeploymentDiffResult,
+    DeploymentInventory,
+    DeploymentSummary,
+)
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,
@@ -1220,9 +1225,6 @@ def infer_pipeline_sources(
     inputs_by_transform: dict[str, str],
     sources: set[str],
 ) -> tuple[list[str | None], str | None]: ...
-
-type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
-
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
@@ -1240,20 +1242,19 @@ def classify_reconcile_targets(
     actual: list[_ReconcileObject],
     selected: list[_ReconcileKey],
 ) -> list[tuple[_ReconcileKey, str, tuple[int, int | None] | None, list[str]]]: ...
-def parse_deployment_diff(comparison: str, identifiers: list[str]) -> tuple[str, str]: ...
-def deployment_diff_relations(
-    from_: str,
-    to: str,
-    deployments_argument: list[_RetainedDeployment],
-    active: list[tuple[str, str, str]],
+def execute_deployment_diff(
+    *, request: DeploymentDiffRequest, client: AdapterConnection
+) -> DeploymentDiffResult: ...
+def load_deployments(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> DeploymentInventory: ...
+def load_deployment(
+    *,
+    deployment_id: str,
+    client: AdapterConnection,
+    metadata_database: str,
     default_database: str,
-    /,
-) -> tuple[list[tuple[str, str, str | None, str | None]], list[str]]: ...
-def deployment_diff_count_sql(database: str, relation: str) -> str: ...
-
-type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
-
-def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
+) -> DeploymentSummary: ...
 def direct_fingerprint_record(
     identity: tuple[
         str,
@@ -1449,26 +1450,6 @@ class DirectModelFingerprint:
     def drift_reasons(
         *, model: CompiledModel, baseline: AdapterDirectFingerprintRecord | None
     ) -> tuple[str, ...]: ...
-
-def deployment_inventory_summaries(
-    records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
-    physical_candidate_names: list[str],
-    active_bindings: list[tuple[str, str]],
-    publications: list[tuple[str, str]],
-    existing_names: list[str],
-) -> list[
-    tuple[
-        str,
-        str,
-        str | None,
-        str | None,
-        list[str],
-        list[str],
-        list[str],
-        list[str],
-        str | None,
-    ]
-]: ...
 
 class DesiredGraph:
     def __init__(self, desired_state: DesiredState) -> None: ...

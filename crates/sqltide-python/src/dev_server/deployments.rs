@@ -340,7 +340,7 @@ pub(crate) fn build_deployment_diff_payload<'py>(
     )?;
     let result: Any<'py> = call(
         py,
-        "sqltide.executor.deployment.main.execute_deployment_diff",
+        "sqltide._native",
         "execute_deployment_diff",
         py_kwargs!(py; request = request, client = connection)?,
     )?;

@@ -308,7 +308,7 @@ fn load_deployments<'py>(
     database: &str,
     metadata_database: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
-    attr(py, "sqltide.executor.deployment.main.load_deployments", "load_deployments")?.call(
+    attr(py, "sqltide._native", "load_deployments")?.call(
         (),
         Some(&py_kwargs!(py; client = connection, metadata_database = metadata_database, default_database = database)?),
     )

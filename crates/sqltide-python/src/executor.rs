@@ -410,7 +410,10 @@ fn classify_reconcile_targets(
 /// `(from, to)` endpoints of a `DEPLOYMENT` or `FROM:TO` comparison, after checking the
 /// database identifiers. Raises `ValueError(message)`.
 #[pyfunction]
-fn parse_deployment_diff(comparison: &str, identifiers: Vec<String>) -> PyResult<(String, String)> {
+pub(crate) fn parse_deployment_diff(
+    comparison: &str,
+    identifiers: Vec<String>,
+) -> PyResult<(String, String)> {
     if let Some(error) = identifiers
         .iter()
         .find_map(|identifier| identifier_error(identifier))
@@ -429,7 +432,7 @@ type DiffPairsResult = (
 /// The relations a deployment diff compares, sorted, and the catalogs it reads. Raises
 /// `ValueError(message)` for an endpoint that cannot be resolved.
 #[pyfunction]
-fn deployment_diff_relations(
+pub(crate) fn deployment_diff_relations(
     from: &str,
     to: &str,
     deployments_argument: Vec<DeploymentArgument>,
@@ -463,7 +466,7 @@ fn deployment_diff_relations(
 /// The query counting the rows of `database.relation`. Raises `ValueError(message)` for an
 /// invalid identifier.
 #[pyfunction]
-fn deployment_diff_count_sql(database: &str, relation: &str) -> PyResult<String> {
+pub(crate) fn deployment_diff_count_sql(database: &str, relation: &str) -> PyResult<String> {
     count_sql(database, relation).map_err(PyValueError::new_err)
 }
 
@@ -475,7 +478,7 @@ type DiffSideArgument = (
 
 /// The status of one relation comparison.
 #[pyfunction]
-fn deployment_diff_status(from: DiffSideArgument, to: DiffSideArgument) -> &'static str {
+pub(crate) fn deployment_diff_status(from: DiffSideArgument, to: DiffSideArgument) -> &'static str {
     status(diff_side(&from), diff_side(&to)).as_str()
 }
 
@@ -491,7 +494,8 @@ fn diff_side(argument: &DiffSideArgument) -> Side<'_> {
 
 /// `(deployment ID, created at, status, selected root names, (logical name, physical name)
 /// mappings)`.
-type InventoryRecordArgument = (String, String, String, Vec<String>, Vec<(String, String)>);
+pub(crate) type InventoryRecordArgument =
+    (String, String, String, Vec<String>, Vec<(String, String)>);
 
 /// `(deployment ID, state, created at, persisted status, root names, physical relation names,
 /// missing physical relation names, active binding names, latest published at)`.
@@ -509,7 +513,7 @@ type DeploymentSummaryResult = (
 
 /// Every deployment's lifecycle summary, newest deployment ID first.
 #[pyfunction]
-fn deployment_inventory_summaries(
+pub(crate) fn deployment_inventory_summaries(
     records: Vec<InventoryRecordArgument>,
     physical_candidate_names: Vec<String>,
     active_bindings: Vec<(String, String)>,
@@ -556,9 +560,5 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
     module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_deployment_diff, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_count_sql, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_status, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_inventory_summaries, module)?)
+    Ok(())
 }

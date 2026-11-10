@@ -448,7 +448,7 @@ fn run_deployment_list(
 ) -> PyResult<i64> {
     let inventory: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main.load_deployments",
+        "sqltide._native",
         "load_deployments",
         &[
             ("client", client),
@@ -476,7 +476,7 @@ fn run_deployment_show(
 ) -> PyResult<i64> {
     let deployment: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main._load_deployment",
+        "sqltide._native",
         "load_deployment",
         &[
             ("deployment_id", deployment_id),
@@ -645,7 +645,7 @@ fn run_deployment_diff(
     )?;
     let result: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main.execute_deployment_diff",
+        "sqltide._native",
         "execute_deployment_diff",
         &[("request", request), ("client", client)],
     )?;
