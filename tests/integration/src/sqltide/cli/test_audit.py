@@ -12,10 +12,10 @@ from sqltide._native import (
     build_compiler_adapter_profile,
     build_deployment_physical_name,
     run_audit,
+    run_deployment_audit,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audit
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.executor.backfill.models import BackfillExecutionResult
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (

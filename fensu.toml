@@ -87,6 +87,11 @@ reason = "Native bindings own the sqt admin commands and their password prompts;
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/cli/plan/__init__.py"
+reason = "Native bindings own the plan command, its previews, rendering and workflow artifact publication; this package only declares the command option shape the CLI dispatcher builds."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/cli/selection/__init__.py"
 reason = "Native bindings own model selection, its downstream execution closure, the included sources and dependencies, and the replay lineage mode check; this package only declares the selection result they build."
 

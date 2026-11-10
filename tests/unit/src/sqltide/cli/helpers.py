@@ -11,9 +11,20 @@ from sqltide._native import (
     run_audit,
     run_build,
     run_compile,
+    run_deployment_audit,
+    run_deployment_diff,
+    run_deployment_list,
+    run_deployment_promotion,
+    run_deployment_rollback,
+    run_deployment_show,
     run_destruction,
     run_dev,
+    run_discover,
+    run_doctor,
+    run_janitor,
     run_plan,
+    run_reconcile,
+    run_repair_active_view,
     run_test,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -49,18 +60,7 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
-from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
-from sqltide.cli.deployment.main._run_deployment_show import run_deployment_show
-from sqltide.cli.discover.main._run_discover import run_discover
-from sqltide.cli.doctor.main._run_doctor import run_doctor
 from sqltide.cli.entry.models import CliEntrypointHandlers
-from sqltide.cli.janitor.main._run_janitor import run_janitor
-from sqltide.cli.promotion.main._run_deployment_promotion import run_deployment_promotion
-from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audit
-from sqltide.cli.reconcile.main._run_reconcile import run_reconcile
-from sqltide.cli.repair_active_view.main._run_repair_active_view import run_repair_active_view
-from sqltide.cli.rollback.main._run_deployment_rollback import run_deployment_rollback
 
 _RUN_STATEMENTS_TABLE_MARKER: str = "_sqltide_run_statements"
 _RUN_STATEMENTS_INSERT_MARKER: str = "INSERT_RUN_STATEMENTS "

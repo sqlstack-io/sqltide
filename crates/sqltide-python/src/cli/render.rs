@@ -242,7 +242,7 @@ pub(crate) fn attach_error_diagnostic(
 }
 
 /// Python's `str.title()` for the command names messages use.
-fn title(text: &str) -> String {
+pub(crate) fn title(text: &str) -> String {
     let mut titled: String = String::with_capacity(text.len());
     let mut previous_cased: bool = false;
     for character in text.chars() {

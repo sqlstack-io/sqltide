@@ -188,6 +188,25 @@ fn render_plan_json(plan: &Bound<'_, PyAny>, adapter_name: &str) -> PyResult<Str
     Ok(render_json(&self::plan(plan)?, adapter_name))
 }
 
+/// The `sqt plan` output: the JSON document, or the text in the terminal's colour mode.
+#[pyfunction]
+#[pyo3(signature = (*, plan, desired_state, database, adapter_name, json_output, verbose=false))]
+fn render_plan_result(
+    py: Python<'_>,
+    plan: &Bound<'_, PyAny>,
+    desired_state: &Bound<'_, PyAny>,
+    database: &str,
+    adapter_name: &str,
+    json_output: bool,
+    verbose: bool,
+) -> PyResult<String> {
+    if json_output {
+        return render_plan_json(plan, adapter_name);
+    }
+    let use_color: bool = crate::cli::style::color_enabled(py)?;
+    render_plan_text(py, plan, desired_state, database, verbose, use_color)
+}
+
 fn logical_key(value: &Bound<'_, PyAny>) -> PyResult<LogicalKey> {
     Ok(LogicalKey {
         resource_type: field(value, "resource_type")?,
@@ -332,16 +351,18 @@ fn each<T>(
     values.try_iter()?.map(|item| convert(&item?)).collect()
 }
 
-/// The operator-facing text of one direct plan, coloured when `use_color` is set.
+/// The operator-facing text of one direct plan, coloured when `use_color` is set, else in the
+/// terminal's colour mode.
 #[pyfunction]
 #[pyo3(signature = (
-    *, plan, adapter_name, use_color, verbose=false, source_recreations=None,
+    *, plan, adapter_name, use_color=None, verbose=false, source_recreations=None,
     row_error_policy_changes=None,
 ))]
 fn render_direct_plan_text(
+    py: Python<'_>,
     plan: &Bound<'_, PyAny>,
     adapter_name: &str,
-    use_color: bool,
+    use_color: Option<bool>,
     verbose: bool,
     source_recreations: Option<&Bound<'_, PyAny>>,
     row_error_policy_changes: Option<&Bound<'_, PyAny>>,
@@ -354,7 +375,12 @@ fn render_direct_plan_text(
         &row_error_policy_changes.map_or(Ok(Vec::new()), |values| {
             each(values, row_error_policy_change)
         })?,
-        CliStyle { use_color },
+        CliStyle {
+            use_color: match use_color {
+                Some(use_color) => use_color,
+                None => crate::cli::style::color_enabled(py)?,
+            },
+        },
     ))
 }
 
@@ -400,6 +426,7 @@ fn render_row_error_policy_line(change: &Bound<'_, PyAny>) -> PyResult<String> {
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_plan_text, module)?)?;
     module.add_function(wrap_pyfunction!(render_plan_json, module)?)?;
+    module.add_function(wrap_pyfunction!(render_plan_result, module)?)?;
     module.add_function(wrap_pyfunction!(render_direct_plan_text, module)?)?;
     module.add_function(wrap_pyfunction!(render_direct_plan_json, module)?)?;
     module.add_function(wrap_pyfunction!(render_source_recreation_notice, module)?)?;

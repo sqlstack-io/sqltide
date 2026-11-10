@@ -211,7 +211,7 @@ def fail_second_workflow_artifact_replace(
         next(replacements)(source, target)
 
     monkeypatch.setattr(
-        "sqltide.cli.workflow_artifacts._helpers.build_publication.os.replace",
+        "os.replace",
         staged_replace,
     )
 

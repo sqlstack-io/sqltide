@@ -24,7 +24,7 @@ const INITIALIZE_OBSERVABILITY: &str = "sqltide._native";
 const PUBLISH_MANIFEST: &str = "sqltide._native";
 const TERMINAL_OBSERVATIONS: &str =
     "sqltide.executor.observability.main.persist_terminal_observations";
-const PUBLISH_PLAN: &str = "sqltide.cli.workflow_artifacts.main._publish_plan_workflow";
+const PUBLISH_PLAN: &str = "sqltide._native";
 const SIGINT_EXIT_CODE: i64 = 130;
 
 /// The exceptions a build or plan reports as a failed command, as `(module, class)`.

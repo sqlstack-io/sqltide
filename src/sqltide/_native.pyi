@@ -70,7 +70,6 @@ from sqltide.cli.destruction.models import DestructionCommandOptions
 from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
-from sqltide.cli.presentation.classes.cli_style import CliStyle
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
@@ -214,6 +213,7 @@ from sqltide.executor.population.models import (
 )
 from sqltide.executor.promotion.models import (
     DeploymentPromotionPreview,
+    PublishResult,
     RollbackPlan,
     RollbackRequest,
 )
@@ -228,6 +228,7 @@ from sqltide.executor.readiness.models import (
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
+    PublishedBuildWorkflow,
     WarehouseStatement,
     WorkflowExecutionResult,
 )
@@ -696,11 +697,20 @@ def render_plan_text(
     use_color: bool,
 ) -> str: ...
 def render_plan_json(*, plan: DeploymentPlan, adapter_name: str) -> str: ...
+def render_plan_result(
+    *,
+    plan: DeploymentPlan,
+    desired_state: DesiredState,
+    database: str,
+    adapter_name: str,
+    json_output: bool,
+    verbose: bool = False,
+) -> str: ...
 def render_direct_plan_text(
     *,
     plan: DirectPlan,
     adapter_name: str,
-    use_color: bool,
+    use_color: bool | None = None,
     verbose: bool = False,
     source_recreations: tuple[PopulationSourceRecreation, ...] | None = None,
     row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] | None = None,
@@ -2264,3 +2274,128 @@ class SensorScheduler:
     def close(self) -> None: ...
     def tick(self) -> SensorDispatchSummary | None: ...
     def health(self) -> dict[str, object]: ...
+
+@final
+class CliStyle:
+    """Semantic CLI styling facade used by human-output formatters."""
+
+    use_color: bool
+    def __init__(self, *, use_color: bool) -> None: ...
+    def title(self, text: str) -> str: ...
+    def section(self, text: str) -> str: ...
+    def subsection(self, text: str) -> str: ...
+    def label(self, text: str) -> str: ...
+    def label_value(self, *, label: str, value: object) -> str: ...
+    def object_name(self, *, text: str, assessment: str | None = None) -> str: ...
+    def warning(self, text: str) -> str: ...
+    def assessment(self, text: str) -> str: ...
+    def assessment_value(self, *, text: str, assessment: str, bold: bool = False) -> str: ...
+    def diff_lines(self, diff_lines: Iterable[str]) -> list[str]: ...
+    def muted(self, text: str) -> str: ...
+    def muted_strong(self, text: str) -> str: ...
+    def passed(self, text: str) -> str: ...
+    def failed(self, text: str) -> str: ...
+    def outcome(self, *, text: str, passed: bool) -> str: ...
+
+def cli_style() -> CliStyle: ...
+def publish_build_workflow(
+    *, target_dir: Path, workflow: BuildWorkflow, execution_json: str | None = None
+) -> PublishedBuildWorkflow: ...
+def publish_plan_workflow(
+    *, target_dir: Path, workflow: BuildWorkflow, is_template: bool = False
+) -> None: ...
+def render_deployment_audit_result(
+    *,
+    result: DeploymentAuditResult,
+    database: str,
+    json_output: bool,
+    project_dir: Path | None = None,
+) -> str: ...
+def render_ambiguous_deployment_message(
+    *,
+    command_name: str,
+    database: str,
+    root_names: Sequence[str],
+    candidates: Iterable[AuditDeploymentCandidate],
+) -> str: ...
+def render_promotion_result(*, result: PublishResult, database: str, json_output: bool) -> str: ...
+def run_discover(
+    *,
+    pipelines_root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def run_doctor(*, database: str, client: AdapterConnection) -> int: ...
+def run_repair_active_view(
+    *, database: str, table: str, deployment_id: str, client: AdapterConnection
+) -> int: ...
+def run_janitor(
+    *,
+    database: str,
+    retention_days: int,
+    minimum_rollback_deployments: int,
+    apply: bool,
+    json_output: bool,
+    client: AdapterConnection,
+) -> int: ...
+def run_deployment_list(
+    *, database: str, metadata_database: str | None, json_output: bool, client: AdapterConnection
+) -> int: ...
+def run_deployment_show(
+    *,
+    deployment_id: str,
+    database: str,
+    metadata_database: str | None,
+    json_output: bool,
+    client: AdapterConnection,
+) -> int: ...
+def run_deployment_diff(
+    *,
+    database: str,
+    metadata_database: str | None,
+    comparison: str,
+    json_output: bool,
+    client: AdapterConnection,
+) -> int: ...
+def run_deployment_rollback(
+    *,
+    database: str,
+    metadata_database: str | None,
+    deployment_id: str | None,
+    previous: bool,
+    auto_approve: bool,
+    json_output: bool,
+    client: AdapterConnection,
+) -> int: ...
+def run_deployment_audit(
+    *,
+    pipelines_root: Path | None,
+    project_dir: Path | None,
+    database: str,
+    metadata_database: str | None,
+    deployment_id: str | None,
+    json_output: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def run_deployment_promotion(
+    *,
+    database: str,
+    metadata_database: str | None,
+    deployment_id: str | None,
+    json_output: bool,
+    client: AdapterConnection,
+) -> int: ...
+def run_reconcile(
+    *,
+    pipelines_root: Path,
+    database: str | None,
+    metadata_database: str | None,
+    selectors: tuple[str, ...],
+    json_output: bool,
+    apply: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...

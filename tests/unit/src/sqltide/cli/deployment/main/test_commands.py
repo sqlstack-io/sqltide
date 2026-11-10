@@ -1,8 +1,7 @@
 import pytest
 
+from sqltide._native import run_deployment_list, run_deployment_show
 from sqltide.adapter.models import AdapterDeploymentInventory, AdapterDeploymentRecord
-from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
-from sqltide.cli.deployment.main._run_deployment_show import run_deployment_show
 from tests.unit.src.sqltide.cli.deployment.main._test_types import (
     DeploymentReadCommandTestCase,
 )

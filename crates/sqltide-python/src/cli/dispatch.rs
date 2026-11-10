@@ -18,67 +18,23 @@ const DEFAULT_SESSION_TTL_SECONDS: i64 = 43200;
 const TRUE_ENV_VALUES: [&str; 3] = ["1", "true", "yes"];
 /// Each handler name and where its default implementation lives.
 const DEFAULT_HANDLERS: [(&str, &str, &str); 18] = [
-    (
-        "run_discover",
-        "sqltide.cli.discover.main._run_discover",
-        "run_discover",
-    ),
+    ("run_discover", NATIVE, "run_discover"),
     ("run_compile", NATIVE, "run_compile"),
     ("run_test", NATIVE, "run_test"),
     ("run_audit", NATIVE, "run_audit"),
     ("run_plan", NATIVE, "run_plan"),
     ("run_build", NATIVE, "run_build"),
     ("run_destruction", NATIVE, "run_destruction"),
-    (
-        "run_deployment_diff",
-        "sqltide.cli.deployment.main._run_deployment_diff",
-        "run_deployment_diff",
-    ),
-    (
-        "run_deployment_list",
-        "sqltide.cli.deployment.main._run_deployment_list",
-        "run_deployment_list",
-    ),
-    (
-        "run_deployment_show",
-        "sqltide.cli.deployment.main._run_deployment_show",
-        "run_deployment_show",
-    ),
-    (
-        "run_deployment_audit",
-        "sqltide.cli.readiness.main._run_deployment_audit",
-        "run_deployment_audit",
-    ),
-    (
-        "run_deployment_promote",
-        "sqltide.cli.promotion.main._run_deployment_promotion",
-        "run_deployment_promotion",
-    ),
-    (
-        "run_deployment_rollback",
-        "sqltide.cli.rollback.main._run_deployment_rollback",
-        "run_deployment_rollback",
-    ),
-    (
-        "run_reconcile",
-        "sqltide.cli.reconcile.main._run_reconcile",
-        "run_reconcile",
-    ),
-    (
-        "run_janitor",
-        "sqltide.cli.janitor.main._run_janitor",
-        "run_janitor",
-    ),
-    (
-        "run_doctor",
-        "sqltide.cli.doctor.main._run_doctor",
-        "run_doctor",
-    ),
-    (
-        "run_repair_active_view",
-        "sqltide.cli.repair_active_view.main._run_repair_active_view",
-        "run_repair_active_view",
-    ),
+    ("run_deployment_diff", NATIVE, "run_deployment_diff"),
+    ("run_deployment_list", NATIVE, "run_deployment_list"),
+    ("run_deployment_show", NATIVE, "run_deployment_show"),
+    ("run_deployment_audit", NATIVE, "run_deployment_audit"),
+    ("run_deployment_promote", NATIVE, "run_deployment_promotion"),
+    ("run_deployment_rollback", NATIVE, "run_deployment_rollback"),
+    ("run_reconcile", NATIVE, "run_reconcile"),
+    ("run_janitor", NATIVE, "run_janitor"),
+    ("run_doctor", NATIVE, "run_doctor"),
+    ("run_repair_active_view", NATIVE, "run_repair_active_view"),
     ("run_dev", NATIVE, "run_dev"),
 ];
 

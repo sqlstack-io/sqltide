@@ -474,8 +474,7 @@ pub(crate) fn run_dev<'py>(
             .unbind())
     };
     let run_compile: Any<'py> = PyCFunction::new_closure(py, None, None, run_compile)?.into_any();
-    let style: Any<'py> =
-        attr(py, "sqltide.cli.presentation.main._cli_style", "cli_style")?.call0()?;
+    let style: Any<'py> = attr(py, NATIVE, "cli_style")?.call0()?;
     let reporter: Any<'py> =
         attr(py, NATIVE, "DevTerminalReporter")?.call((), Some(&py_kwargs!(py; style = style)?))?;
     let configured: Any<'py> = options.getattr("auth_settings")?;

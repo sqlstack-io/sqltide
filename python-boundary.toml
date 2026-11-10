@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 18234
+remaining_lines = 15937
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -183,11 +183,3 @@ note = "Rule 3: PollingSensorContext that user polling sensors receive, re-expor
 [[handled_native_errors]]
 location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"
 note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."
-
-[[handled_native_errors]]
-location = "cli/promotion/main/_run_deployment_promotion.py::run_deployment_promotion"
-note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."
-
-[[handled_native_errors]]
-location = "cli/readiness/main/_run_deployment_audit.py::run_deployment_audit"
-note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."

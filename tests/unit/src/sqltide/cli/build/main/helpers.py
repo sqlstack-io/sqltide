@@ -9,6 +9,8 @@ from sqltide._native import (
     assemble_virtual_build_workflow,
     build_compiler_adapter_profile,
     build_virtual_build_preview,
+    publish_build_workflow,
+    render_plan_result,
     run_build,
 )
 from sqltide.adapter.models import (
@@ -22,8 +24,6 @@ from sqltide.cli.build.models import (
     VirtualBuildPreviewContext,
     WorkflowPreparationOptions,
 )
-from sqltide.cli.plan.main.render_plan_result import render_plan_result
-from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
