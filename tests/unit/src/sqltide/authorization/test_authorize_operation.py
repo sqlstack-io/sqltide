@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.authorization.main.authorize_operation import authorize_operation
+from sqltide._native import authorize_operation
 from sqltide.authorization.models import AuthorizationDecision
 from sqltide.authorization.types import AuthorizationReason
 from tests.unit.src.sqltide.authorization._test_types import (

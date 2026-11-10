@@ -56,6 +56,12 @@ from sqltide.adapter.models import (
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import AuthSettings
+from sqltide.authorization.models import (
+    AuthorizationDecision,
+    AuthorizationRequest,
+    CapabilityRequest,
+    EffectiveCapabilities,
+)
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     BuildProtectionRequirement,
@@ -270,6 +276,12 @@ def render_diagnostic(
 ) -> str: ...
 def render_diagnostic_json(*, diagnostic: CompilerDiagnostic) -> str: ...
 def render_error(error: BaseException) -> str: ...
+def authorize_operation(
+    *, store: ControlStore, request: AuthorizationRequest
+) -> AuthorizationDecision: ...
+def effective_capabilities(
+    *, store: ControlStore, request: CapabilityRequest
+) -> EffectiveCapabilities: ...
 def events_from_node_result(
     *, row: NodeResultObservation, previous_status: QualityResultStatus | None, target: str
 ) -> tuple[AuditCompleted, ...]: ...

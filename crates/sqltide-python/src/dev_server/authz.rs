@@ -97,12 +97,7 @@ pub(crate) fn require(
             policy = policy(py, analysis)?,
         )?),
     )?;
-    let decision = attr(
-        py,
-        "sqltide.authorization.main.authorize_operation",
-        "authorize_operation",
-    )?
-    .call(
+    let decision = attr(py, "sqltide._native", "authorize_operation")?.call(
         (),
         Some(&py_kwargs!(py; store = account_store(call), request = request)?),
     )?;
@@ -609,12 +604,7 @@ pub(crate) fn capabilities_payload(
             policy = policy(py, analysis)?,
         )?),
     )?;
-    let capabilities = attr(
-        py,
-        "sqltide.authorization.main._effective_capabilities",
-        "effective_capabilities",
-    )?
-    .call(
+    let capabilities = attr(py, "sqltide._native", "effective_capabilities")?.call(
         (),
         Some(&py_kwargs!(py; store = account_store(call), request = request)?),
     )?;

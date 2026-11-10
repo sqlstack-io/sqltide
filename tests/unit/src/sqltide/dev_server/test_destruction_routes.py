@@ -227,7 +227,7 @@ def test_given_unauthorized_dependant_when_planning_then_suggested_closure_is_hi
             ),
         ) as planner,
         patch(
-            "sqltide.authorization.main.authorize_operation.authorize_operation",
+            "sqltide._native.authorize_operation",
             side_effect=(
                 AuthorizationDecision(
                     allowed=True,

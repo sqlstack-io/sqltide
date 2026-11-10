@@ -92,6 +92,11 @@ reason = "Native bindings derive sensor events from persisted observations; this
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/authorization/__init__.py"
+reason = "Native bindings evaluate operational authorization and effective capabilities; this package only declares the request, decision and capability shapes and the decision reasons."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/diagnostics/__init__.py"
 reason = "Native bindings own diagnostic rendering and attachment; this package only declares the diagnostic models and phase and severity types they consume."
 

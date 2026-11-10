@@ -9,6 +9,7 @@ mod analysis;
 mod artifacts;
 mod audit_command;
 mod audit_discovery;
+mod authorization;
 mod backfill;
 mod build_cli;
 mod build_command;
@@ -157,6 +158,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     destruction::register(module)?;
     destruction_execution::register(module)?;
     destruction_planning::register(module)?;
+    authorization::register(module)?;
     dev_server::register(module)?;
     events::register(module)?;
     direct_build::register(module)?;
