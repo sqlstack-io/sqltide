@@ -8,7 +8,7 @@ import pytest
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
-from sqltide._native import analyze_project
+from sqltide._native import analyze_project, plan_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -34,7 +34,6 @@ from sqltide.executor.destruction.main.assemble_destruction_workflow import (
     assemble_destruction_workflow,
 )
 from sqltide.executor.destruction.main.execute_destruction import execute_destruction
-from sqltide.executor.destruction.main.plan_destruction import plan_destruction
 from sqltide.executor.destruction.main.verify_destruction_drift import (
     verify_destruction_drift,
 )

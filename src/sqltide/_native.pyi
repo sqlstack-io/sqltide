@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterable, Mapping
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -133,7 +134,12 @@ from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
-from sqltide.executor.destruction.models import DestructionPlan
+from sqltide.executor.destruction.models import (
+    DestructionPlan,
+    DestructionRequest,
+    InactivePipeline,
+)
+from sqltide.executor.destruction.types import DestructionPlanningConnection
 from sqltide.executor.population.models import PopulationSourceRecreation
 
 type _Span = tuple[int, int, int, int, int, int]
@@ -409,95 +415,24 @@ def collect_reachable_keys(
 def resolve_named_model_keys(
     *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
 ) -> frozenset[LogicalResourceKey]: ...
-def destruction_available_pipelines(
-    current: list[str], snapshot: AdapterManifestSnapshot | None
-) -> list[str]: ...
-def resolve_destruction_selection(
-    project_argument: tuple[
-        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
-        list[list[int]],
-        list[list[int]],
-        list[tuple[str, int | None]],
-        list[int],
-        list[int],
-    ],
-    request_argument: tuple[str, str, list[str], list[str], bool],
-    available: list[str],
-) -> tuple[list[str], list[str], list[str]]: ...
-def plan_destruction_scope(
-    project_argument: tuple[
-        list[tuple[str, bool, str | None, list[tuple[str, str]]]],
-        list[list[int]],
-        list[list[int]],
-        list[tuple[str, int | None]],
-        list[int],
-        list[int],
-    ],
-    request_argument: tuple[str, str, list[str], list[str], bool],
-    affected: list[str],
-    current: list[str],
-    snapshot: AdapterManifestSnapshot | None,
-    catalog_snapshot: CatalogSnapshot,
-    deployment_inventory: AdapterDeploymentInventory,
-) -> tuple[list[str], list[str], list[tuple[str, str, list[str], list[str], list[str]]]]: ...
-def build_destruction_evidence(
-    database: str,
-    owned: list[tuple[str, str, list[str], list[str], list[str]]],
-    catalog_snapshot: CatalogSnapshot,
-    stats: dict[str, tuple[int, int]],
-    limit: int | None,
-) -> list[
-    tuple[
-        str,
-        str,
-        str,
-        bool,
-        int | None,
-        int | None,
-        str | None,
-        list[str],
-        list[str],
-        list[str],
-        list[str],
-    ]
-]: ...
 def build_destruction_challenges(
-    pipeline_names: list[str], production_reset: bool
-) -> list[str]: ...
-def destruction_plan_fingerprint(
+    *, pipeline_names: tuple[str, ...], production_reset: bool = False
+) -> tuple[str, ...]: ...
+def plan_destruction(
     *,
-    operation: str,
-    target: str,
-    database: str,
-    metadata_database: str,
-    requested_pipeline_names: list[str],
-    included_dependent_pipeline_names: list[str],
-    affected_pipeline_names: list[str],
-    affected_model_names: list[str],
-    affected_source_names: list[str],
-    relations: list[
-        tuple[
-            str,
-            str,
-            str,
-            bool,
-            int | None,
-            int | None,
-            str | None,
-            list[str],
-            list[str],
-            list[str],
-            list[str],
-        ]
-    ],
-    challenges: list[str],
-    manifest_fingerprint: str,
-    relation_drop_size_limit: int | None,
-    relation_drop_size_server_limit: int | None,
-    relation_drop_size_override: int | None,
-    relation_drop_size_policy_observed: bool,
-    include_orphans: bool,
-) -> str: ...
+    request: DestructionRequest,
+    analysis: CompileAnalysis,
+    connection: DestructionPlanningConnection,
+    now: datetime | None = None,
+    ttl: timedelta | None = None,
+    plan_id: str | None = None,
+) -> DestructionPlan: ...
+def list_inactive_pipelines(
+    *,
+    request: DestructionRequest,
+    analysis: CompileAnalysis,
+    connection: DestructionPlanningConnection,
+) -> tuple[InactivePipeline, ...]: ...
 def normalize_cli_start_time(raw_value: str) -> str: ...
 def validate_declared_external_sources(
     *,
@@ -522,9 +457,6 @@ def audit_schedule_entry(
 ) -> dict[str, object]: ...
 def serialize_destruction_plan(plan: DestructionPlan) -> str: ...
 def deserialize_destruction_plan(payload_json: str) -> DestructionPlan: ...
-def list_destruction_inactive_pipelines(
-    current: list[str], snapshot_object: AdapterManifestSnapshot
-) -> list[tuple[str, int, int, str]]: ...
 def plan_population_replays(
     *,
     roots: list[tuple[int, int, str, str, str | None, int | None]],

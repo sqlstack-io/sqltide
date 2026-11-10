@@ -21,6 +21,7 @@ mod compile;
 mod compile_artifacts;
 mod config;
 mod destruction;
+mod destruction_planning;
 mod direct_plan;
 mod discovery;
 mod executor;
@@ -119,6 +120,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     discovery::register(module)?;
     config::register(module)?;
     destruction::register(module)?;
+    destruction_planning::register(module)?;
     direct_plan::register(module)?;
     executor::register(module)?;
     plan_render::register(module)?;

@@ -124,7 +124,9 @@ fn audit_readiness(
 /// Positions of `(name, dependency names)` relations with dependants first. Raises
 /// `ValueError(("duplicate", position))` or `ValueError(("cycle", names))`.
 #[pyfunction]
-fn order_relations_for_drop(relations: Vec<(String, Vec<String>)>) -> PyResult<Vec<usize>> {
+pub(crate) fn order_relations_for_drop(
+    relations: Vec<(String, Vec<String>)>,
+) -> PyResult<Vec<usize>> {
     reverse_topological_order(&relations).map_err(|error| match error {
         OrderingError::Duplicate(position) => PyValueError::new_err(("duplicate", position)),
         OrderingError::Cycle(names) => PyValueError::new_err(("cycle", names)),

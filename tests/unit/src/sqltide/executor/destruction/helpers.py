@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+from sqltide._native import plan_destruction
 from sqltide.adapter.models import (
     AdapterColumn,
     AdapterDeploymentInventory,
@@ -35,7 +36,6 @@ from sqltide.compiler.graph.models import DependencyEdge, ProjectGraph
 from sqltide.compiler.graph.types import DependencyEdgeType
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction.exceptions import DestructionPlanNotFoundError
-from sqltide.executor.destruction.main.plan_destruction import plan_destruction
 from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRelationEvidence,
