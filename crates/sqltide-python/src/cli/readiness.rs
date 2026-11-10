@@ -385,7 +385,7 @@ fn execute_audit_quality_checks<'py>(
         backfill_audit_resolver(py, &shown(database)?, compiled_pipelines, &mappings)?;
     let quality: Any<'py> = call(
         py,
-        "sqltide.executor.auditing.main.execute_sql_audits",
+        "sqltide._native",
         "execute_sql_audits",
         &[
             ("loaded_audits", PyTuple::new(py, audits)?.into_any()),

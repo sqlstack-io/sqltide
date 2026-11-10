@@ -9,6 +9,7 @@ mod analysis;
 mod artifacts;
 mod audit_command;
 mod audit_discovery;
+mod audit_execution;
 mod authorization;
 mod backfill;
 mod build_cli;
@@ -168,6 +169,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     reconcile_command::register(module)?;
     maintenance_command::register(module)?;
     sql_tests_command::register(module)?;
+    audit_execution::register(module)?;
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;

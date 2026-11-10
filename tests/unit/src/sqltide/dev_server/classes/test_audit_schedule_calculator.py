@@ -153,7 +153,7 @@ def test_given_compiled_audit_state_when_calculating_schedule_then_due_slot_is_d
     connection: AdapterConnection = cast(AdapterConnection, connection_mock)
     with (
         patch(
-            "sqltide.executor.auditing.main._load_model_anchors.load_model_anchors",
+            "sqltide._native.load_model_anchors",
             return_value=test_case.anchors_by_model,
         ),
         patch(

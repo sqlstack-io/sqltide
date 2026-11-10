@@ -116,7 +116,7 @@ fn load_model_anchors<'py>(
     let py: Python<'py> = analysis.py();
     call(
         py,
-        "sqltide.executor.auditing.main._load_model_anchors",
+        "sqltide._native",
         "load_model_anchors",
         py_kwargs!(py;
             client = connection,
@@ -136,7 +136,7 @@ fn load_materialized_model_names<'py>(
     let py: Python<'py> = connection.py();
     call(
         py,
-        "sqltide.executor.auditing.main._load_materialized_model_names",
+        "sqltide._native",
         "load_materialized_model_names",
         py_kwargs!(py; client = connection, database = database, relation_name_by_model = resolver)?,
     )
@@ -271,7 +271,7 @@ pub(crate) fn run_audit_batch<'py>(
     } else {
         call(
             py,
-            "sqltide.executor.auditing.main.execute_sql_audits",
+            "sqltide._native",
             "execute_sql_audits",
             py_kwargs!(py;
                 loaded_audits = &eligible_tuple,
@@ -297,7 +297,7 @@ pub(crate) fn run_audit_batch<'py>(
         } else {
             call(
                 py,
-                "sqltide.executor.auditing.main._deferred_audit_result",
+                "sqltide._native",
                 "deferred_audit_result",
                 py_kwargs!(py; audit = audit, state = warmup_state.get_item(&name)?)?,
             )?

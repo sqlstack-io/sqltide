@@ -140,7 +140,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
         }
     }
     let sorted_names: Any<'py> = attr(py, "builtins", "sorted")?.call1((model_names,))?;
-    let anchors: Any<'py> = attr(py, "sqltide.executor.auditing.main._load_model_anchors", "load_model_anchors")?.call(
+    let anchors: Any<'py> = attr(py, "sqltide._native", "load_model_anchors")?.call(
         (),
         Some(&py_kwargs!(py;
             client = connection,
@@ -164,7 +164,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     }
     let materialized: Any<'py> = attr(
         py,
-        "sqltide.executor.auditing.main._load_materialized_model_names",
+        "sqltide._native",
         "load_materialized_model_names",
     )?
     .call((), Some(&py_kwargs!(py; client = connection, database = database, relation_name_by_model = relation_name_by_model)?))?;
@@ -427,7 +427,7 @@ pub(crate) fn execute_due_audits<'py>(
             }
             let audit_result: Any<'py> = attr(
                 py,
-                "sqltide.executor.auditing.main.execute_sql_audits",
+                "sqltide._native",
                 "execute_sql_audits",
             )?
             .call(

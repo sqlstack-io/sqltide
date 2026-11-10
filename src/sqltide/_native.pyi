@@ -202,7 +202,7 @@ from sqltide.events.models import (
     NodeResultObservation,
     RunCompleted,
 )
-from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
+from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import QualityResultStatus
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
@@ -1238,6 +1238,25 @@ def infer_pipeline_sources(
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
+def execute_sql_audits(
+    *,
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+    resolver: Mapping[str, str],
+    client: AdapterConnection,
+    dialect: str,
+) -> SqlAuditRunResult: ...
+def load_model_anchors(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    target_database: str,
+    model_names: tuple[str, ...],
+    virtual_environments: bool,
+) -> dict[str, str]: ...
+def load_materialized_model_names(
+    *, client: AdapterConnection, database: str, relation_name_by_model: Mapping[str, str]
+) -> frozenset[str]: ...
+def deferred_audit_result(*, audit: LoadedSqlAudit, state: AuditWarmupState) -> SqlAuditResult: ...
 def execute_sql_tests(
     *, test_cases: tuple[SqlTestCase, ...], client: AdapterConnection
 ) -> tuple[SqlTestExecutionResult, ...]: ...

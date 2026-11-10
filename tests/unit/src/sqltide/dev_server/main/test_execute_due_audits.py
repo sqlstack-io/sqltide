@@ -54,7 +54,7 @@ def test_given_selected_due_audit_when_batch_fails_then_error_result_keeps_origi
     connection: AdapterConnection = cast(AdapterConnection, MagicMock())
     with (
         patch(
-            "sqltide.executor.auditing.main.execute_sql_audits.execute_sql_audits",
+            "sqltide._native.execute_sql_audits",
             side_effect=RuntimeError(test_case.error_message),
         ),
         patch(

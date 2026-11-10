@@ -77,11 +77,11 @@ def test_given_multiple_audits_when_running_batch_then_project_work_occurs_once(
     }
     with (
         patch(
-            "sqltide.executor.auditing.main._load_model_anchors.load_model_anchors",
+            "sqltide._native.load_model_anchors",
             return_value={},
         ) as load_anchors,
         patch(
-            "sqltide.executor.auditing.main._load_materialized_model_names.load_materialized_model_names",
+            "sqltide._native.load_materialized_model_names",
             return_value=frozenset({"orders", "customers"}),
         ) as load_materialized,
         patch(
@@ -89,7 +89,7 @@ def test_given_multiple_audits_when_running_batch_then_project_work_occurs_once(
             return_value=warmup_states,
         ) as resolve_warmup,
         patch(
-            "sqltide.executor.auditing.main.execute_sql_audits.execute_sql_audits",
+            "sqltide._native.execute_sql_audits",
             return_value=SqlAuditRunResult(audit_results=results),
         ) as execute_audits,
         patch(
