@@ -669,7 +669,7 @@ def test_given_existing_target_when_atomic_publication_fails_then_rolls_back_all
     )
     replace_mock: Mock = Mock(wraps=os.replace, side_effect=side_effects)
     monkeypatch.setattr(
-        "sqltide.cli.compile._helpers.publication.os.replace",
+        "os.replace",
         replace_mock,
     )
 
