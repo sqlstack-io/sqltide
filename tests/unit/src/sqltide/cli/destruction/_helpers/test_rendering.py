@@ -4,10 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sqltide.cli.destruction._helpers.rendering import (
-    read_destruction_challenges,
-    render_destruction_plan,
-)
+from sqltide._native import read_destruction_challenges, render_destruction_plan
 from sqltide.executor.destruction.models import DestructionPlan
 from tests.unit.src.sqltide.cli.destruction._helpers._test_types import (
     DestructionChallengeInputTestCase,

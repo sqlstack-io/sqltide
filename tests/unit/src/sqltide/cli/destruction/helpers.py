@@ -56,7 +56,7 @@ def destruction_options() -> DestructionCommandOptions:
 
 def use_process_local_plan_store_for_unit_tests(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.RelationalDestructionPlanStore",
+        "sqltide.executor.destruction.classes.relational_destruction_plan_store.RelationalDestructionPlanStore",
         MagicMock(return_value=InMemoryDestructionPlanStore()),
     )
 

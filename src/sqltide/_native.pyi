@@ -60,6 +60,7 @@ from sqltide.cli.build.models import (
     VirtualWorkflowPreparation,
     WorkflowPreparationOptions,
 )
+from sqltide.cli.destruction.models import DestructionCommandOptions
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
@@ -1402,6 +1403,16 @@ def run_compile(
     adapter_profile: CompilerAdapterProfile,
     target_dir: Path | None = None,
 ) -> int: ...
+def run_destruction(
+    *,
+    options: DestructionCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def render_destruction_plan(plan: DestructionPlan) -> str: ...
+def read_destruction_challenges(plan: DestructionPlan) -> tuple[str, ...]: ...
 def run_audit(
     *,
     pipelines_root: Path,

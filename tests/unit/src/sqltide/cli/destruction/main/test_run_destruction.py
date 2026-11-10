@@ -7,9 +7,9 @@ from uuid import UUID
 
 import pytest
 
+from sqltide._native import run_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.classes.control_store import ControlStore
-from sqltide.cli.destruction.main._run_destruction import run_destruction
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -81,13 +81,11 @@ def test_given_reviewed_plan_when_running_destruction_then_executes_frozen_actor
     )
     control_store_factory: MagicMock = MagicMock(return_value=control_store)
     project_loader: MagicMock = MagicMock(return_value=None)
-    monkeypatch.setattr("sqltide.cli.destruction._helpers.execution.analyze_project", analyze_mock)
-    monkeypatch.setattr("sqltide.cli.destruction._helpers.execution.plan_destruction", planner_mock)
+    monkeypatch.setattr("sqltide._native.analyze_project", analyze_mock)
+    monkeypatch.setattr("sqltide._native.plan_destruction", planner_mock)
+    monkeypatch.setattr("sqltide._native.execute_destruction", execute_mock)
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.execute_destruction", execute_mock
-    )
-    monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.ControlStore",
+        "sqltide.auth.classes.control_store.ControlStore",
         control_store_factory,
     )
     monkeypatch.setattr(
@@ -95,7 +93,7 @@ def test_given_reviewed_plan_when_running_destruction_then_executes_frozen_actor
         project_loader,
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.getpass.getuser",
+        "getpass.getuser",
         MagicMock(return_value="terminal-user"),
     )
     monkeypatch.setattr("builtins.input", input_mock)
@@ -178,21 +176,19 @@ def test_given_admin_changes_after_review_when_challenges_finish_then_refuses_be
     execute_mock: MagicMock = MagicMock()
     planner_mock: MagicMock = MagicMock(return_value=plan)
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.ControlStore",
+        "sqltide.auth.classes.control_store.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.getpass.getuser",
+        "getpass.getuser",
         MagicMock(return_value="terminal-user"),
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.analyze_project",
+        "sqltide._native.analyze_project",
         MagicMock(return_value=analysis),
     )
-    monkeypatch.setattr("sqltide.cli.destruction._helpers.execution.plan_destruction", planner_mock)
-    monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.execute_destruction", execute_mock
-    )
+    monkeypatch.setattr("sqltide._native.plan_destruction", planner_mock)
+    monkeypatch.setattr("sqltide._native.execute_destruction", execute_mock)
     monkeypatch.setattr("builtins.input", MagicMock(side_effect=("yes", "alpha")))
 
     # When: The challenge has been entered and the account is reloaded before execution.
@@ -240,22 +236,20 @@ def test_given_plan_without_review_when_running_destruction_then_execution_is_ca
     control_store: MagicMock = MagicMock(spec=ControlStore)
     control_store.get_user_by_username.return_value = destruction_account()
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.analyze_project",
+        "sqltide._native.analyze_project",
         MagicMock(return_value=analysis),
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.plan_destruction",
+        "sqltide._native.plan_destruction",
         MagicMock(return_value=plan),
     )
+    monkeypatch.setattr("sqltide._native.execute_destruction", execute_mock)
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.execute_destruction", execute_mock
-    )
-    monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.ControlStore",
+        "sqltide.auth.classes.control_store.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.getpass.getuser",
+        "getpass.getuser",
         MagicMock(return_value="terminal-user"),
     )
     monkeypatch.setattr("builtins.input", MagicMock(return_value="no"))
@@ -306,15 +300,15 @@ def test_given_unauthorized_os_account_when_running_destruction_then_refuses_bef
     planner: MagicMock = MagicMock()
     analyzer: MagicMock = MagicMock()
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.ControlStore",
+        "sqltide.auth.classes.control_store.ControlStore",
         MagicMock(return_value=control_store),
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction.main._run_destruction.getpass.getuser",
+        "getpass.getuser",
         MagicMock(return_value="terminal-user"),
     )
-    monkeypatch.setattr("sqltide.cli.destruction._helpers.execution.plan_destruction", planner)
-    monkeypatch.setattr("sqltide.cli.destruction._helpers.execution.analyze_project", analyzer)
+    monkeypatch.setattr("sqltide._native.plan_destruction", planner)
+    monkeypatch.setattr("sqltide._native.analyze_project", analyzer)
 
     # When: Standalone CLI authorization is checked before compilation or warehouse planning.
     with pytest.raises(CliUserError, match=test_case.expected_error_fragment):
