@@ -8,6 +8,7 @@ from sqltide._native import (
     render_clickhouse_replay_coverage_query,
     render_clickhouse_replay_from_capture,
     render_clickhouse_replay_from_deployment,
+    run_audit,
     run_build,
     run_compile,
     run_plan,
@@ -46,7 +47,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
 from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
 from sqltide.cli.deployment.main._run_deployment_show import run_deployment_show

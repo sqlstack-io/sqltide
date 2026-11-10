@@ -1402,6 +1402,24 @@ def run_compile(
     adapter_profile: CompilerAdapterProfile,
     target_dir: Path | None = None,
 ) -> int: ...
+def run_audit(
+    *,
+    pipelines_root: Path,
+    project_dir: Path,
+    database: str,
+    selectors: tuple[str, ...],
+    json_output: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    force: bool = False,
+) -> int: ...
+def select_loaded_sql_audits(
+    *,
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    selectors: tuple[str, ...],
+) -> tuple[LoadedSqlAudit, ...]: ...
 def run_test(
     *,
     pipelines_root: Path,

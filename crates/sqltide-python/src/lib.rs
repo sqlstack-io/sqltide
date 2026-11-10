@@ -7,6 +7,7 @@ mod actual_state;
 mod adopted_sources;
 mod analysis;
 mod artifacts;
+mod audit_command;
 mod audit_discovery;
 mod backfill;
 mod build_cli;
@@ -137,6 +138,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compile_artifacts::register(module)?;
     compile_command::register(module)?;
     test_command::register(module)?;
+    audit_command::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     model_analysis::register(module)?;
