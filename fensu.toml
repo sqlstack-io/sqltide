@@ -77,6 +77,16 @@ reason = "Native bindings own the dev command handler, its startup banner and it
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/cli/entry/__init__.py"
+reason = "Native bindings own the sqt entry point: argument parsing, invocation and connection resolution, mode validation, command dispatch and error rendering; this package only declares the handler table, command types, constants and the user error they consume and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/cli/admin/__init__.py"
+reason = "Native bindings own the sqt admin commands and their password prompts; this package only declares the admin command types and constants they consume."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/cli/selection/__init__.py"
 reason = "Native bindings own model selection, its downstream execution closure, the included sources and dependencies, and the replay lineage mode check; this package only declares the selection result they build."
 

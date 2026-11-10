@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import render_expected_warehouse_error
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import (
     AdapterAuthenticationError,
@@ -13,7 +14,6 @@ from sqltide.adapter.exceptions import (
     AdapterTimeoutError,
 )
 from sqltide.adapter.models import InspectedManagedTableState
-from sqltide.cli.entry.main._errors import render_expected_warehouse_error
 from sqltide.cli.promotion.main._run_deployment_promotion import run_deployment_promotion
 from tests.unit.src.sqltide.cli._test_types import (
     CliCommandErrorTestCase,

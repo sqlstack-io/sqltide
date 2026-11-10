@@ -16,6 +16,7 @@ from sqltide._native import (
     analyze_project,
     assemble_direct_build_workflow,
     assemble_virtual_build_workflow,
+    build_compiler_adapter_profile,
     build_direct_build_preview,
     build_direct_execution_result,
     build_virtual_build_preview,
@@ -69,7 +70,6 @@ from sqltide.cli.build.models import (
     VirtualBuildPreviewContext,
     WorkflowPreparationOptions,
 )
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow

@@ -3,9 +3,9 @@ from textwrap import dedent, indent
 
 import pytest
 
+from sqltide._native import run_cli
 from sqltide.adapter.models import CatalogColumn, CatalogRelation
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry.main.main import _main_with_dependencies
 from tests.unit.src.sqltide.cli._test_types import CliPlanPreservationMatrixTestCase
 from tests.unit.src.sqltide.cli.helpers import (
     AdapterConnectionProvider,
@@ -254,7 +254,7 @@ def test_given_preservation_source_mode_when_running_plan_then_snapshot_path_sta
     provider: AdapterConnectionProvider = AdapterConnectionProvider(connection)
     monkeypatch.setattr(ClickHouseAdapter, "connect", provider)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=("sqt", "plan"),
         handlers=handlers_with_overrides(),
         environment={},

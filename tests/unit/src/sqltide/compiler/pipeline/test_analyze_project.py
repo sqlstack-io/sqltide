@@ -13,12 +13,12 @@ import sqltide._native as _native
 from sqltide._native import (
     analyze_project,
     build_compile_inputs,
+    build_compiler_adapter_profile,
     build_project_graph_from_compiled_project,
     run_compile,
 )
 from sqltide.adapter.models import AdapterManagedSource, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import (
@@ -815,14 +815,13 @@ def test_given_direct_mode_policy_when_analyzing_then_it_rejects_vde_only_settin
     "test_case",
     [
         CompilationEntrypointsTestCase(
-            description="routes exactly four Python command paths through one compilation service",
+            description="routes exactly three Python command paths through one compilation service",
             expected_entrypoint_paths=(
                 "src/sqltide/cli/discover/main/_run_discover.py",
                 "src/sqltide/cli/readiness/main/_run_deployment_audit.py",
                 "src/sqltide/cli/reconcile/main/_run_reconcile.py",
-                "src/sqltide/cli/sql/main/_run_sql.py",
             ),
-            expected_entrypoint_count=4,
+            expected_entrypoint_count=3,
             expected_assembly_call_count=1,
             expected_realization_call_count=1,
             expected_consumer_rebuild_count=0,

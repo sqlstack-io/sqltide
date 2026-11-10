@@ -164,6 +164,9 @@ def write_cli_target_project(*, project_root: Path, local_contents: str) -> None
 
 
 class FakeCliClickHouseClient:
+    def rename_streambuild_metadata(self, database: str) -> None:
+        return None
+
     def close(self) -> None:
         return None
 

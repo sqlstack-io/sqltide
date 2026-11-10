@@ -131,6 +131,14 @@ fn parse_cli_arguments<'py>(
     py: Python<'py>,
     argv: Option<Vec<Bound<'py, PyString>>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    parse(py, argv)
+}
+
+/// [`parse_cli_arguments`] for callers in this crate; `None` parses `sys.argv[1:]`.
+pub(crate) fn parse<'py>(
+    py: Python<'py>,
+    argv: Option<Vec<Bound<'py, PyString>>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let sys: Bound<'py, PyModule> = py.import("sys")?;
     let argv: Vec<Bound<'py, PyString>> = match argv {
         Some(argv) => argv,

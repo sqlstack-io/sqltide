@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol, final
 
+from sqltide.adapter.classes.adapter import Adapter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -67,6 +68,7 @@ from sqltide.cli.build.models import (
 )
 from sqltide.cli.destruction.models import DestructionCommandOptions
 from sqltide.cli.dev.models import DevCommandOptions
+from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.presentation.classes.cli_style import CliStyle
 from sqltide.cli.selection.models import SelectionResolution
@@ -241,6 +243,26 @@ class SqlScanError(ValueError):
 
 def parse_model_header(header: str) -> dict[str, object]: ...
 def parse_cli_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace: ...
+def run_cli(
+    argv: Sequence[str] | None = None,
+    *,
+    handlers: CliEntrypointHandlers | None = None,
+    environment: Mapping[str, str] | None = None,
+    working_directory: Path | None = None,
+    adapter_connection: AdapterConnection | None = None,
+    observation_adapter_connection: AdapterConnection | None = None,
+) -> int: ...
+def build_compiler_adapter_profile(adapter: Adapter) -> CompilerAdapterProfile: ...
+def resolve_default_database(
+    *, loaded_pipelines: Iterable[LoadedPipeline], override: str | None
+) -> str: ...
+def render_diagnostic(
+    *, diagnostic: CompilerDiagnostic, source_by_path: Mapping[str, str] | None = None
+) -> str: ...
+def render_error(error: BaseException) -> str: ...
+def render_expected_warehouse_error(
+    *, command_name: str, database: str, error: AdapterWarehouseError
+) -> str | None: ...
 def load_toml(text: str) -> dict[str, Any]: ...
 def declares_virtual_pipeline(pipelines_root: Path) -> bool: ...
 def compile_access_policy(

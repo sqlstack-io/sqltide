@@ -9,10 +9,15 @@ from typing import cast
 import pytest
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, compile_pipeline, realize_project, run_plan
+from sqltide._native import (
+    SqlModelAnalyzer,
+    build_compiler_adapter_profile,
+    compile_pipeline,
+    realize_project,
+    run_plan,
+)
 from sqltide.adapter.models import AdapterDirectFingerprintSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.compiler.compile.models import (
     CompiledPipeline,

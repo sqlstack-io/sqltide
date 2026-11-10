@@ -10,6 +10,7 @@ from sqltide._native import (
     DirectModelFingerprint,
     SqlModelAnalyzer,
     analyze_project,
+    build_compiler_adapter_profile,
     plan_deployment,
     plan_direct_build,
     realize_project,
@@ -43,7 +44,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.constants import (
     DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW,
     DESIRED_OBJECT_TYPE_TABLE,

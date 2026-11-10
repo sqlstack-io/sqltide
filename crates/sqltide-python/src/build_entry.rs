@@ -24,7 +24,6 @@ const INITIALIZE_OBSERVABILITY: &str = "sqltide._native";
 const PUBLISH_MANIFEST: &str = "sqltide._native";
 const TERMINAL_OBSERVATIONS: &str =
     "sqltide.executor.observability.main.persist_terminal_observations";
-const DEFAULT_DATABASE: &str = "sqltide.cli.entry.main._resolve_default_database";
 const PUBLISH_PLAN: &str = "sqltide.cli.workflow_artifacts.main._publish_plan_workflow";
 const SIGINT_EXIT_CODE: i64 = 130;
 
@@ -228,14 +227,10 @@ fn run_build<'py>(
             items(&analysis.getattr("compile_inputs")?.getattr("pipelines")?)?,
         )?
         .into_any();
-        let database: Value<'py> = call(
+        let database: Value<'py> = crate::cli::invocation::resolve_default_database(
             py,
-            DEFAULT_DATABASE,
-            "resolve_default_database",
-            &[
-                ("loaded_pipelines", pipelines),
-                ("override", options.getattr("database")?),
-            ],
+            &pipelines,
+            options.getattr("database")?,
         )?;
         resolved_database = database.clone();
         let observability_started: Instant = Instant::now();

@@ -6,9 +6,13 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, compile_pipeline, realize_project
+from sqltide._native import (
+    SqlModelAnalyzer,
+    build_compiler_adapter_profile,
+    compile_pipeline,
+    realize_project,
+)
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,

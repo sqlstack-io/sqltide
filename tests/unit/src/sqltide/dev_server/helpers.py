@@ -15,6 +15,7 @@ from sqltide._native import (
     StateSnapshot,
     analyze_project,
     build_activity_capabilities_query,
+    build_compiler_adapter_profile,
     build_extents_query,
     build_messages_sql,
     build_partitions_query,
@@ -62,7 +63,6 @@ from sqltide.cli.build.models import (
     MixedWorkflowPreparation,
     VirtualWorkflowPreparation,
 )
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import LogicalResourceKey, ObjectKey
 from sqltide.compiler.discovery.models import KafkaSettings
 from sqltide.compiler.pipeline.models import CompileAnalysis

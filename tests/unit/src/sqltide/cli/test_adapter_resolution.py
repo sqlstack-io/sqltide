@@ -9,16 +9,14 @@ from unittest.mock import Mock
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import run_cli
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry.main.main import _main_with_dependencies
-from sqltide.cli.entry.models import CliConnectionOptions, CliEntrypointHandlers
+from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.compiler.discovery.models import LoadedProject
 from tests.unit.src.sqltide.cli._test_types import (
     CliAdapterPlanExecutionTestCase,
     CliAdapterRejectionTestCase,
-    CliCredentialRedactionTestCase,
     CliLazyConnectionTestCase,
     CliModeGateErrorTestCase,
     CliModeOverrideTestCase,
@@ -76,7 +74,7 @@ def test_given_unknown_project_adapter_when_running_plan_then_it_fails_before_co
     )
     handlers: CliEntrypointHandlers = handlers_with_overrides()
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         environment={},
@@ -184,7 +182,7 @@ def test_given_versioned_project_when_running_plan_then_adapter_preserves_exact_
     monkeypatch.setattr(ClickHouseAdapter, "connect", provider)
     handlers: CliEntrypointHandlers = handlers_with_overrides()
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         environment=test_case.environment,
@@ -206,36 +204,6 @@ def test_given_versioned_project_when_running_plan_then_adapter_preserves_exact_
     assert captured_stdout == test_case.expected_stdout
     assert test_case.expected_redacted_secret not in repr(provider.config)
     assert provider.config.settings == ()
-
-
-@pytest.mark.parametrize(
-    "test_case",
-    [
-        CliCredentialRedactionTestCase(
-            description="does not expose resolved CLI credentials through repr",
-            password="cli-secret",
-            expected_absent_fragment="cli-secret",
-        )
-    ],
-    ids=lambda case: case.description,
-)
-def test_given_cli_connection_options_when_rendering_then_credentials_are_not_exposed(
-    test_case: CliCredentialRedactionTestCase,
-) -> None:
-    options: CliConnectionOptions = CliConnectionOptions(
-        host="localhost",
-        port=8123,
-        username="sqltide",
-        password=test_case.password,
-        project_connection=AdapterConnectionConfig(
-            host="localhost",
-            port=8123,
-            username="sqltide",
-            password=test_case.password,
-        ),
-    )
-
-    assert test_case.expected_absent_fragment not in repr(options)
 
 
 @pytest.mark.parametrize(
@@ -309,7 +277,7 @@ def test_given_mode_specific_command_when_mode_conflicts_then_it_fails_before_co
     connect: Mock = Mock(side_effect=AssertionError("connection IO occurred"))
     monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers_with_overrides(),
         environment={},
@@ -365,7 +333,7 @@ def test_given_local_mode_override_when_running_specific_command_then_effective_
         **{test_case.expected_handler_name: runner}
     )
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=test_case.argv,
         handlers=handlers,
         environment={},
@@ -430,14 +398,14 @@ def test_given_lazy_connection_secret_when_compiling_then_only_connecting_comman
     monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
     handlers: CliEntrypointHandlers = handlers_with_overrides()
 
-    compile_exit_code: int = _main_with_dependencies(
+    compile_exit_code: int = run_cli(
         argv=("sqt", "compile", "--target-dir", str(target_dir)),
         handlers=handlers,
         environment={},
         working_directory=project_dir,
     )
     compile_output: str = capsys.readouterr().out
-    plan_exit_code: int = _main_with_dependencies(
+    plan_exit_code: int = run_cli(
         argv=("sqt", "plan"),
         handlers=handlers,
         environment={},
@@ -499,14 +467,14 @@ def test_given_resolved_project_secret_when_rendering_surfaces_then_it_is_never_
     monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
     handlers: CliEntrypointHandlers = handlers_with_overrides()
 
-    compile_exit_code: int = _main_with_dependencies(
+    compile_exit_code: int = run_cli(
         argv=("sqt", "compile", "--target-dir", str(target_dir)),
         handlers=handlers,
         environment={},
         working_directory=project_dir,
     )
     compile_output: str = capsys.readouterr().out
-    plan_exit_code: int = _main_with_dependencies(
+    plan_exit_code: int = run_cli(
         argv=("sqt", "plan"),
         handlers=handlers,
         environment={},
@@ -581,7 +549,7 @@ def test_given_target_inputs_when_nested_compile_then_precedence_applies(
         local_contents=test_case.local_contents,
     )
 
-    exit_code: int = _main_with_dependencies(
+    exit_code: int = run_cli(
         argv=("sqt", "compile", "--target-dir", str(target_dir), *test_case.argv_suffix),
         handlers=handlers_with_overrides(),
         environment={},

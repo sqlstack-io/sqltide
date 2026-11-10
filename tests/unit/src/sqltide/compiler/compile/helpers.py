@@ -9,12 +9,12 @@ from sqltide._native import (
     SqlReferenceRewriter,
     assemble_project,
     build_compile_inputs,
+    build_compiler_adapter_profile,
     compile_pipeline,
     realize_project,
 )
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,

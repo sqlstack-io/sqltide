@@ -7,6 +7,7 @@ import sqltide._native as _native
 from sqltide._native import (
     add_empty_replay_source_warnings,
     analyze_project,
+    build_compiler_adapter_profile,
     load_planning_warehouse_snapshot,
     resolve_unsupported_bounded_replay_behavior,
     run_plan,
@@ -14,7 +15,6 @@ from sqltide._native import (
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.compiler.compile.models import (
     Column,

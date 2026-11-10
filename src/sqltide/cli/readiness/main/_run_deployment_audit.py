@@ -3,10 +3,13 @@
 import sys
 from pathlib import Path
 
-from sqltide._native import analyze_project, execute_deployment_audit
+from sqltide._native import (
+    analyze_project,
+    execute_deployment_audit,
+    render_expected_warehouse_error,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
-from sqltide.cli.entry.main._errors import render_expected_warehouse_error
 from sqltide.cli.readiness._helpers.audit_execution import (
     execute_audit_quality_checks,
     resolve_deployment_candidate_error,

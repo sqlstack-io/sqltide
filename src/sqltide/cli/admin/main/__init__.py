@@ -1,1 +1,0 @@
-"""Account administration command handlers."""

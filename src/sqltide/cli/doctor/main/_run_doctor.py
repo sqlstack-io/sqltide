@@ -3,9 +3,9 @@
 import json
 import sys
 
+from sqltide._native import render_expected_warehouse_error
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
-from sqltide.cli.entry.main._errors import render_expected_warehouse_error
 from sqltide.executor.doctor.main.execute_doctor import execute_doctor
 from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
 

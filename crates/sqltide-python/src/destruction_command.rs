@@ -19,7 +19,6 @@ const AUTH_CONSTANTS: &str = "sqltide.auth.constants";
 const AUTH_EXCEPTIONS: &str = "sqltide.auth.exceptions";
 const DEFAULT_CONTROL_STORE_URL: &str = "sqltide.auth.main.default_control_store_url";
 const ENTRY_CONSTANTS: &str = "sqltide.cli.entry.constants";
-const DEFAULT_DATABASE: &str = "sqltide.cli.entry.main._resolve_default_database";
 const PLAN_STORE: &str = "sqltide.executor.destruction.classes.relational_destruction_plan_store";
 const DESTRUCTION_EXCEPTIONS: &str = "sqltide.executor.destruction.exceptions";
 const DESTRUCTION_MODELS: &str = "sqltide.executor.destruction.models";
@@ -372,15 +371,7 @@ fn default_database<'py>(options: &Value<'py>, analysis: &Value<'py>) -> PyResul
         items(&analysis.getattr("compile_inputs")?.getattr("pipelines")?)?,
     )?
     .into_any();
-    call(
-        py,
-        DEFAULT_DATABASE,
-        "resolve_default_database",
-        &[
-            ("loaded_pipelines", pipelines),
-            ("override", options.getattr("database")?),
-        ],
-    )
+    crate::cli::invocation::resolve_default_database(py, &pipelines, options.getattr("database")?)
 }
 
 fn plan_destruction<'py>(

@@ -10,7 +10,6 @@ use crate::build_cli::build_protection_requirements;
 use crate::direct_build::{Value, build, call, class, is_a, items, none, or, string, text, tuple};
 
 const NATIVE: &str = "sqltide._native";
-const DEFAULT_DATABASE: &str = "sqltide.cli.entry.main._resolve_default_database";
 const CLI_EXCEPTIONS: &str = "sqltide.cli.entry.exceptions";
 const BUILD_MODELS: &str = "sqltide.cli.build.models";
 const ADAPTER_TYPES: &str = "sqltide.adapter.types";
@@ -49,12 +48,7 @@ fn resolve_default_database<'py>(
         items(&analysis.getattr("compile_inputs")?.getattr("pipelines")?)?,
     )?
     .into_any();
-    call(
-        py,
-        DEFAULT_DATABASE,
-        "resolve_default_database",
-        &[("loaded_pipelines", pipelines), ("override", override_)],
-    )
+    crate::cli::invocation::resolve_default_database(py, &pipelines, override_)
 }
 
 fn validate_declared_external_sources<'py>(

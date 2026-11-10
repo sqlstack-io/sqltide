@@ -2,11 +2,10 @@
 
 import sys
 
-from sqltide._native import build_publish_deployment_candidates
+from sqltide._native import build_publish_deployment_candidates, render_expected_warehouse_error
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import InspectedManagedTableState
-from sqltide.cli.entry.main._errors import render_expected_warehouse_error
 from sqltide.cli.promotion._helpers.candidates import (
     candidate_root_names,
     enrich_candidates,
