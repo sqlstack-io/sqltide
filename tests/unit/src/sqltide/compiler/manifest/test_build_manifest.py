@@ -3,12 +3,10 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterManifest, AdapterManifestResource
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.manifest.main.build_manifest import build_manifest
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -40,7 +38,7 @@ def test_given_complete_project_when_building_manifest_then_records_every_pipeli
     write_compilation_project(tmp_path)
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=tmp_path / "pipelines",
-        loaded_project=load_project_input_for_path(path=tmp_path),
+        loaded_project=_native.load_project_input_for_path(path=tmp_path),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -87,7 +85,7 @@ def test_given_equivalent_project_when_building_manifest_twice_then_content_fing
     write_compilation_project(tmp_path)
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=tmp_path / "pipelines",
-        loaded_project=load_project_input_for_path(path=tmp_path),
+        loaded_project=_native.load_project_input_for_path(path=tmp_path),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 
@@ -129,7 +127,7 @@ def test_given_shared_project_source_when_building_manifest_then_attributes_ever
     write_shared_source_project(tmp_path)
     analysis: CompileAnalysis = analyze_project(
         pipelines_root=tmp_path / "pipelines",
-        loaded_project=load_project_input_for_path(path=tmp_path),
+        loaded_project=_native.load_project_input_for_path(path=tmp_path),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

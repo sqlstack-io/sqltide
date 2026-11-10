@@ -27,6 +27,8 @@ from sqltide.compiler.discovery.models import (
     AuditDefaults,
     DiscoveredPipelineDirectory,
     DiscoveredProjectFile,
+    DiscoveredProjectInputs,
+    DiscoveredSourceFile,
     EffectiveProjectConfiguration,
     ExecutionSettings,
     ExternalTableSourceStep,
@@ -40,6 +42,7 @@ from sqltide.compiler.discovery.models import (
     PipelineNaming,
     PipelineProtection,
     PostgresRefreshSourceStep,
+    Project,
     ProjectNaming,
     ReplayOnChangePolicy,
     SourceFreshnessPolicy,
@@ -75,6 +78,7 @@ from sqltide.compiler.sql_analysis.models import (
     SqlStorageExpression,
     SqlTopLevelCtes,
 )
+from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -496,13 +500,18 @@ def find_direct_out_of_scope_consumers(
     execution_scope: tuple[LogicalResourceKey, ...],
 ) -> tuple[str, ...]: ...
 def resolve_variable_values(
+    *,
     values: Mapping[str, object],
     environment: Mapping[str, str],
     field_path_prefix: str,
-    defer_missing_environment: bool,
+    defer_missing_environment: bool = False,
 ) -> dict[str, object]: ...
 def interpolate_config_value(
-    value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
+    *,
+    value: object,
+    variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    field_path: str,
 ) -> object: ...
 def model_header_block(contents: str) -> tuple[str, str, int, int] | None: ...
 def sql_test_blocks(contents: str) -> list[tuple[int, tuple[str, str, int] | None]]: ...
@@ -568,16 +577,6 @@ def parse_pipeline_settings(
     ModelRetentionPolicy | Literal[False] | None,
     str | None,
 ]: ...
-def parse_source_registry(
-    files: list[tuple[str, object, str | None]],
-    variables: Mapping[str, object],
-    environment: Mapping[str, str],
-    default_ttl: str | None,
-    default_retention: KafkaRetentionPolicy | Literal[False] | None,
-    default_broker_list: str | None,
-    default_freshness: SourceFreshnessPolicy | None,
-    derive_name: Callable[..., tuple[str, str, str]],
-) -> list[tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...]]: ...
 
 DEFAULT_ADAPTER_NAME: str
 DEFAULT_PIPELINE_PREFIX: str
@@ -874,18 +873,6 @@ class DesiredGraph:
         self, object_changes: Iterable[PlannedObjectChange]
     ) -> tuple[RebuildSubtree, ...]: ...
 
-def validate_replay_policies(
-    project_policy: tuple[str, bool, bool, bool] | None,
-    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
-) -> None: ...
-def validate_project_inputs(
-    sources: list[tuple[str, str]],
-    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
-    project_references: tuple[str, list[tuple[str, str]]] | None,
-    project_policy: tuple[str, bool, bool, bool] | None,
-    tests: list[tuple[str, str]],
-    audits: list[tuple[str, str]],
-) -> None: ...
 def quality_test_identity(
     node_name: str,
     mode: str,
@@ -943,6 +930,71 @@ def parse_model_sql(
     macro_registry: MacroRegistry | None = None,
     macro_context: MacroContext | None = None,
 ) -> tuple[dict[str, Any], str]: ...
+def read_discovered_files(
+    *, file_paths: Iterable[Path], project_dir: Path
+) -> tuple[DiscoveredProjectFile, ...]: ...
+def discover_macro_files(*, project_dir: Path) -> tuple[DiscoveredProjectFile, ...]: ...
+def discover_pipeline_directories(
+    *, pipelines_root: Path, project_dir: Path
+) -> tuple[DiscoveredPipelineDirectory, ...]: ...
+def load_discovered_pipelines(
+    *,
+    pipeline_directories: tuple[DiscoveredPipelineDirectory, ...],
+    model_files: tuple[DiscoveredProjectFile, ...],
+    macro_registry: MacroRegistry | None,
+    macro_context: MacroContext | None,
+    sources_by_name: Mapping[
+        str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
+    ],
+    project: Project | None,
+    project_naming: ProjectNaming,
+    default_mode: PipelineMode | str,
+) -> tuple[LoadedPipeline, ...]: ...
+def discover_project_inputs(
+    *, pipelines_root: Path, loaded_project: LoadedProject | None
+) -> DiscoveredProjectInputs: ...
+def discover_pipelines(root: Path) -> list[LoadedPipeline]: ...
+def discover_source_registry(
+    *,
+    project_dir: Path,
+    variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    default_managed_source_ttl: str | None = None,
+    default_managed_source_retention: KafkaRetentionPolicy | Literal[False] | None = None,
+    default_kafka_broker_list: str | None = None,
+    default_freshness: SourceFreshnessPolicy | None = None,
+    default_kafka_naming_macro: str | None = None,
+    macro_registry: MacroRegistry | None = None,
+) -> tuple[DiscoveredSourceFile, ...]: ...
+def source_registry_by_name(
+    source_files: Iterable[DiscoveredSourceFile],
+) -> dict[str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep]: ...
+def load_project_input_for_path(
+    *,
+    path: Path,
+    selected_target: str | None = None,
+    cli_variables: Mapping[str, object] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> LoadedProject | None: ...
+def validate_replay_policies_for_mode(
+    *,
+    default_pipeline_mode: PipelineMode,
+    project: Project | None,
+    project_file_path: Path | None,
+    loaded_pipelines: tuple[LoadedPipeline, ...],
+) -> None: ...
+def validate_attached_project_inputs(
+    *,
+    source_files: tuple[DiscoveredSourceFile, ...],
+    loaded_project: LoadedProject | None,
+    loaded_pipelines: tuple[LoadedPipeline, ...],
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+) -> None: ...
+def immutable_config_pairs(
+    values: tuple[tuple[str, object], ...],
+) -> tuple[tuple[str, object], ...]: ...
+def parse_sql_header(*, header: str) -> dict[str, object]: ...
 def load_pipeline_directories(
     *,
     pipeline_directories: tuple[DiscoveredPipelineDirectory, ...],

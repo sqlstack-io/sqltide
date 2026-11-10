@@ -9,14 +9,12 @@ import pytest
 from _pytest.capture import CaptureResult
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.build.main._run_build import run_build
 from sqltide.cli.build.models import BuildCommandOptions
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.executor.workflow.models import PublishedBuildWorkflow
 from tests.integration.src.sqltide.cli._test_types import (
     CliVirtualBuildIntegrationTestCase,
@@ -230,7 +228,7 @@ def test_given_virtual_build_command_when_running_then_it_behaves_as_expected(
             ),
             client=managed_client,
             observation_client=managed_client,
-            loaded_project=load_project_input_for_path(path=project_root),
+            loaded_project=_native.load_project_input_for_path(path=project_root),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
     finally:
@@ -439,7 +437,7 @@ def test_given_candidate_relation_created_during_confirmation_when_building_then
             ),
             client=connection,
             observation_client=connection,
-            loaded_project=load_project_input_for_path(path=project_root),
+            loaded_project=_native.load_project_input_for_path(path=project_root),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
         captured: CaptureResult[str] = capsys.readouterr()

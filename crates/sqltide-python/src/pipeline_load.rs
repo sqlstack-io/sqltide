@@ -12,17 +12,17 @@ use pyo3::types::{PyDict, PySet, PyString, PyTuple};
 use crate::config::{parse_pipeline_mode, parse_pipeline_settings};
 use crate::discovery::infer_pipeline_sources;
 use crate::model_sql::{call, chained, discovery_error, load_transform_from_sql_file, object};
+use crate::project_discovery::{
+    discover_macro_files, discover_source_registry, source_registry_by_name,
+    validate_replay_policies_for_mode,
+};
 use crate::toml::load_toml;
 
 const NATIVE: &str = "sqltide._native";
 const DISCOVERY_MODELS: &str = "sqltide.compiler.discovery.models";
 const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const MACRO_MODELS: &str = "sqltide.compiler.macros.models";
-const SOURCE_REGISTRY: &str = "sqltide.compiler.discovery._helpers.source_registry";
-const DISCOVER_MACRO_FILES: &str = "sqltide.compiler.macros.main._discover_macro_files";
 const LOAD_MACRO_REGISTRY: &str = "sqltide.compiler.macros.main._load_macro_registry";
-const REPLAY_POLICY_VALIDATION: &str =
-    "sqltide.compiler.discovery._helpers.replay_policy_validation";
 const PIPELINE_CONFIG_FILE_NAME: &str = "pipeline.toml";
 const PROJECT_CONFIG_FILE_NAME: &str = "sqltide_project.toml";
 const SQL_SUFFIX: &str = ".sql";
@@ -525,6 +525,34 @@ pub(crate) fn load_pipeline_directories<'py>(
     PyTuple::new(py, loaded)
 }
 
+/// The `Project` an effective project configuration describes.
+pub(crate) fn project_from_effective<'py>(
+    py: Python<'py>,
+    effective: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let defaults: Bound<'py, PyAny> = effective.getattr("defaults")?;
+    let models: Bound<'py, PyAny> = defaults.getattr("models")?;
+    call(
+        &py.import(DISCOVERY_MODELS)?.getattr("Project")?,
+        &[
+            ("replay_on_change", defaults.getattr("replay_on_change")?),
+            ("model_ttl", defaults.getattr("model_ttl")?),
+            ("model_retention", models.getattr("retention")?),
+            ("model_on_row_error", models.getattr("on_row_error")?),
+            ("default_database", effective.getattr("database")?),
+            ("adapter", effective.getattr("adapter")?),
+            (
+                "bounded_replay_fallback",
+                defaults.getattr("bounded_replay_fallback")?,
+            ),
+            ("naming", effective.getattr("naming")?),
+            ("audit_defaults", defaults.getattr("audits")?),
+            ("audit_scheduler", effective.getattr("audit_scheduler")?),
+            ("dependencies", effective.getattr("dependencies")?),
+        ],
+    )
+}
+
 /// Load one pipeline directory without the project compiler's macro expansion phase.
 #[pyfunction]
 fn load_pipeline_directory<'py>(
@@ -565,49 +593,29 @@ fn load_pipeline_directory<'py>(
     {
         py.import(MACRO_MODELS)?.getattr("MacroRegistry")?.call0()?
     } else {
-        let macro_files: Bound<'py, PyAny> = call(
-            &py.import(DISCOVER_MACRO_FILES)?
-                .getattr("discover_macro_files")?,
-            &[("project_dir", project_dir.clone())],
-        )?;
+        let macro_files: Bound<'py, PyAny> =
+            discover_macro_files(py, project_dir.clone())?.into_any();
         call(
             &py.import(LOAD_MACRO_REGISTRY)?
                 .getattr("load_macro_registry")?,
             &[("macro_files", macro_files)],
         )?
     };
-    let source_registry: Bound<'py, PyModule> = py.import(SOURCE_REGISTRY)?;
-    let source_files: Bound<'py, PyAny> = call(
-        &source_registry.getattr("discover_source_registry")?,
-        &[
-            ("project_dir", project_dir.clone()),
-            (
-                "variables",
-                py.import("builtins")?
-                    .getattr("dict")?
-                    .call1((effective.getattr("variables")?,))?,
-            ),
-            ("environment", PyDict::new(py).into_any()),
-            (
-                "default_managed_source_ttl",
-                defaults.getattr("managed_source_ttl")?,
-            ),
-            (
-                "default_managed_source_retention",
-                kafka.getattr("retention")?,
-            ),
-            (
-                "default_kafka_broker_list",
-                defaults.getattr("kafka_broker_list")?,
-            ),
-            ("default_freshness", defaults.getattr("freshness")?),
-            ("default_kafka_naming_macro", kafka.getattr("naming_macro")?),
-            ("macro_registry", macro_registry.clone()),
-        ],
+    let source_files: Bound<'py, PyTuple> = discover_source_registry(
+        py,
+        project_dir.clone(),
+        py.import("builtins")?
+            .getattr("dict")?
+            .call1((effective.getattr("variables")?,))?,
+        PyDict::new(py).into_any(),
+        defaults.getattr("managed_source_ttl")?.extract()?,
+        Some(kafka.getattr("retention")?),
+        defaults.getattr("kafka_broker_list")?.extract()?,
+        Some(defaults.getattr("freshness")?),
+        kafka.getattr("naming_macro")?.extract()?,
+        Some(macro_registry.clone()),
     )?;
-    let sources_by_name: Bound<'py, PyAny> = source_registry
-        .getattr("source_registry_by_name")?
-        .call1((source_files,))?;
+    let sources_by_name: Bound<'py, PyDict> = source_registry_by_name(py, source_files.into_any())?;
     let config_path: Bound<'py, PyAny> =
         pipeline_dir.call_method1("joinpath", (PIPELINE_CONFIG_FILE_NAME,))?;
     let config_file: Bound<'py, PyAny> = if config_path.call_method0("is_file")?.is_truthy()? {
@@ -644,7 +652,7 @@ fn load_pipeline_directory<'py>(
     let pipeline: Bound<'py, PyAny> = load_pipeline_directories(
         py,
         vec![directory],
-        sources_by_name,
+        sources_by_name.into_any(),
         None,
         Some(macro_registry),
         None,
@@ -653,31 +661,7 @@ fn load_pipeline_directory<'py>(
     )?
     .get_item(0)?;
     let models: Bound<'py, PyModule> = py.import(DISCOVERY_MODELS)?;
-    let project: Bound<'py, PyAny> = call(
-        &models.getattr("Project")?,
-        &[
-            ("replay_on_change", defaults.getattr("replay_on_change")?),
-            (
-                "bounded_replay_fallback",
-                defaults.getattr("bounded_replay_fallback")?,
-            ),
-            ("model_ttl", defaults.getattr("model_ttl")?),
-            (
-                "model_retention",
-                defaults.getattr("models")?.getattr("retention")?,
-            ),
-            (
-                "model_on_row_error",
-                defaults.getattr("models")?.getattr("on_row_error")?,
-            ),
-            ("default_database", effective.getattr("database")?),
-            ("adapter", effective.getattr("adapter")?),
-            ("naming", naming),
-            ("audit_defaults", defaults.getattr("audits")?),
-            ("audit_scheduler", effective.getattr("audit_scheduler")?),
-            ("dependencies", effective.getattr("dependencies")?),
-        ],
-    )?;
+    let project: Bound<'py, PyAny> = project_from_effective(py, &effective)?;
     let loaded_pipeline: Bound<'py, PyAny> = call(
         &models.getattr("LoadedPipeline")?,
         &[
@@ -686,24 +670,12 @@ fn load_pipeline_directory<'py>(
             ("project", project.clone()),
         ],
     )?;
-    call(
-        &py.import(REPLAY_POLICY_VALIDATION)?
-            .getattr("validate_replay_policies_for_mode")?,
-        &[
-            (
-                "default_pipeline_mode",
-                pipeline_mode.call1((defaults.getattr("pipeline_mode")?,))?,
-            ),
-            ("project", project),
-            (
-                "project_file_path",
-                project_dir.call_method1("joinpath", (PROJECT_CONFIG_FILE_NAME,))?,
-            ),
-            (
-                "loaded_pipelines",
-                PyTuple::new(py, [&loaded_pipeline])?.into_any(),
-            ),
-        ],
+    validate_replay_policies_for_mode(
+        py,
+        pipeline_mode.call1((defaults.getattr("pipeline_mode")?,))?,
+        project,
+        project_dir.call_method1("joinpath", (PROJECT_CONFIG_FILE_NAME,))?,
+        PyTuple::new(py, [&loaded_pipeline])?.into_any(),
     )?;
     Ok(loaded_pipeline)
 }

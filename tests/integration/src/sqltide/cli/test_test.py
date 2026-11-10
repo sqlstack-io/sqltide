@@ -5,13 +5,11 @@ import pytest
 from _pytest.capture import CaptureResult
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.test.main._run_test import run_test
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from tests.integration.src.sqltide.cli._test_types import (
     CliTestCommandIntegrationTestCase,
 )
@@ -169,7 +167,7 @@ def test_given_sql_native_test_project_when_running_test_command_then_it_reports
             paths=(),
             verbose=False,
             client=managed_client,
-            loaded_project=load_project_input_for_path(path=tmp_path),
+            loaded_project=_native.load_project_input_for_path(path=tmp_path),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
             database=clickhouse_database,
         )

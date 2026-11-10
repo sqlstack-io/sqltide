@@ -8,6 +8,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
 
+import sqltide._native as _native
 from sqltide.compiler.discovery.constants import (
     DEFAULT_ADAPTER_NAME,
     DEFAULT_KAFKA_FORMAT,
@@ -18,7 +19,6 @@ from sqltide.compiler.discovery.constants import (
     DEFAULT_VIEW_PREFIX,
 )
 from sqltide.compiler.discovery.exceptions import ProjectSpecError
-from sqltide.compiler.discovery.main._immutable_config_pairs import immutable_config_pairs
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     KafkaRetentionOrigin,
@@ -52,7 +52,7 @@ class RawConnectionConfig:
     values: tuple[tuple[str, object], ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "values", immutable_config_pairs(self.values))
+        object.__setattr__(self, "values", _native.immutable_config_pairs(self.values))
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,7 @@ class ProjectTarget:
     production: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "variables", immutable_config_pairs(self.variables))
+        object.__setattr__(self, "variables", _native.immutable_config_pairs(self.variables))
 
 
 @dataclass(frozen=True, repr=False)
@@ -164,7 +164,7 @@ class LocalProjectTarget:
     sensors: SensorAutomationOverride = field(default_factory=SensorAutomationOverride)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "variables", immutable_config_pairs(self.variables))
+        object.__setattr__(self, "variables", _native.immutable_config_pairs(self.variables))
 
 
 @dataclass(frozen=True)
@@ -348,7 +348,7 @@ class AuthoredProjectConfig:
     dependencies: ProjectDependencies = field(default_factory=ProjectDependencies)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "variables", immutable_config_pairs(self.variables))
+        object.__setattr__(self, "variables", _native.immutable_config_pairs(self.variables))
 
 
 @dataclass(frozen=True, repr=False)
@@ -363,7 +363,7 @@ class LocalProjectConfig:
     targets: tuple[tuple[str, LocalProjectTarget], ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "variables", immutable_config_pairs(self.variables))
+        object.__setattr__(self, "variables", _native.immutable_config_pairs(self.variables))
 
 
 @dataclass(frozen=True, repr=False)
@@ -397,7 +397,7 @@ class EffectiveProjectConfiguration:
     dependencies: ProjectDependencies = field(default_factory=ProjectDependencies)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "variables", immutable_config_pairs(self.variables))
+        object.__setattr__(self, "variables", _native.immutable_config_pairs(self.variables))
 
 
 @dataclass(frozen=True, repr=False)

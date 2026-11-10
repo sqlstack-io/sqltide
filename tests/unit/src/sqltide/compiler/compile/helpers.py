@@ -21,10 +21,6 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
-from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
     KafkaSettings,
@@ -54,11 +50,11 @@ def compile_test_pipeline(loaded_pipeline: LoadedPipeline) -> CompiledPipeline:
 def compile_logical_project(project_dir: Path) -> CompiledProject:
     loaded_project: LoadedProject = cast(
         LoadedProject,
-        load_project_input_for_path(path=project_dir),
+        _native.load_project_input_for_path(path=project_dir),
     )
     adapter_profile: CompilerAdapterProfile = build_compiler_adapter_profile(ClickHouseAdapter())
     inputs: CompileProjectInputs = build_compile_inputs(
-        discovered_inputs=discover_project_inputs(
+        discovered_inputs=_native.discover_project_inputs(
             pipelines_root=project_dir / "pipelines",
             loaded_project=loaded_project,
         ),

@@ -2,9 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.compiler.discovery._helpers.validation import (
-    validate_discovered_project_inputs,
-)
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import (
     DiscoveredProjectFile,
@@ -74,7 +72,7 @@ def test_given_shared_resource_name_when_validating_then_global_collision_is_rej
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        validate_discovered_project_inputs(
+        _native.validate_attached_project_inputs(
             source_files=source_files,
             loaded_project=None,
             loaded_pipelines=(loaded_pipeline,),

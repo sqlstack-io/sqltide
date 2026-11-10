@@ -65,6 +65,11 @@ rule = "FFT003"
 path = "tests/unit/examples/orders_demo/producer/_test_types.py"
 reason = "The runnable orders-demo producer lives outside the installable package; this local test-case role supports tests for that checked-in example."
 
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/discovery/__init__.py"
+reason = "Native bindings own project discovery, configuration, source registries and pipeline loading; this package only declares the discovery models, types, constants and errors they build and raise."
+
 [targets.web]
 analyzer = "svelte"
 root = "ui"

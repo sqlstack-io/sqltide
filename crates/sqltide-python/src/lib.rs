@@ -24,6 +24,7 @@ mod plan_render;
 mod planner;
 mod polyglot;
 mod population;
+mod project_discovery;
 mod realization;
 mod rules;
 mod sources;
@@ -100,6 +101,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     plan_render::register(module)?;
     planner::register(module)?;
     polyglot::register(module)?;
+    project_discovery::register(module)?;
     realization::register(module)?;
     population::register(module)?;
     rules::register(module)?;

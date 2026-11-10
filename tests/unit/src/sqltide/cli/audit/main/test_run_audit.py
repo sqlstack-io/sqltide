@@ -3,15 +3,13 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterInvocationRecord
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 from tests.unit.src.sqltide.cli.audit.main._test_types import (
     FailedAuditInvocationTestCase,
@@ -36,7 +34,7 @@ def test_given_audit_compile_failure_when_running_then_terminal_failure_is_recor
     tmp_path: Path,
 ) -> None:
     source_project: Path = Path("examples/orders_demo")
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=source_project)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=source_project)
     profile: CompilerAdapterProfile = replace(
         build_compiler_adapter_profile(ClickHouseAdapter()),
         sql_analysis_dialect="not-a-real-dialect",

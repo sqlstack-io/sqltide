@@ -3,11 +3,8 @@ from typing import cast
 
 import pytest
 
-from sqltide.compiler.discovery._helpers.source_registry import discover_source_registry
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     DiscoveredSourceFile,
     ExternalTableSourceStep,
@@ -121,7 +118,7 @@ def test_given_source_files_when_discovering_then_returns_stable_typed_registry(
         """,
     )
 
-    source_files: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    source_files: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables={"table_name": "orders_existing", "ttl_days": 14},
         environment={"BROKER_LIST": "redpanda:9092"},
@@ -177,7 +174,7 @@ def test_given_interpolated_source_retention_when_discovering_then_policy_is_nor
         """,
     )
 
-    source_files: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    source_files: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables={"retention_duration": "12h"},
         environment={"RETENTION_FALLBACK": "landed"},
@@ -224,7 +221,7 @@ def test_given_kafka_broker_defaults_when_discovering_source_then_applies_preced
         """,
     )
 
-    source_files: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    source_files: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables={},
         environment={},
@@ -275,7 +272,7 @@ kafka_broker_list = "{test_case.configured_broker_list}"
         """,
     )
 
-    loaded: LoadedProject | None = load_project_input_for_path(
+    loaded: LoadedProject | None = _native.load_project_input_for_path(
         path=tmp_path,
         environment=dict(test_case.environment),
     )
@@ -337,7 +334,7 @@ naming_macro = "kafka_source_name"
         """,
     )
 
-    loaded: LoadedProject | None = load_project_input_for_path(path=tmp_path)
+    loaded: LoadedProject | None = _native.load_project_input_for_path(path=tmp_path)
 
     assert loaded is not None
     source: KafkaLandingStep = cast(
@@ -358,7 +355,7 @@ naming_macro = "kafka_source_name"
         ),
         encoding="utf-8",
     )
-    reloaded: LoadedProject | None = load_project_input_for_path(path=tmp_path)
+    reloaded: LoadedProject | None = _native.load_project_input_for_path(path=tmp_path)
     assert reloaded is not None
     reloaded_source: KafkaLandingStep = cast(
         KafkaLandingStep, flatten_source_registry(reloaded.source_files)[0]
@@ -415,7 +412,7 @@ naming_macro = "kafka_source_name"
         """,
     )
 
-    loaded: LoadedProject | None = load_project_input_for_path(path=tmp_path)
+    loaded: LoadedProject | None = _native.load_project_input_for_path(path=tmp_path)
 
     assert loaded is not None
     source: KafkaLandingStep = cast(
@@ -505,7 +502,7 @@ naming_macro = "{test_case.macro_name}"
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        load_project_input_for_path(path=tmp_path)
+        _native.load_project_input_for_path(path=tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -637,7 +634,7 @@ def test_given_supported_source_mode_when_discovering_then_it_retains_boundary_c
         contents=test_case.source_contents,
     )
 
-    source_files: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    source_files: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables=dict(test_case.variables),
         environment={},
@@ -835,7 +832,7 @@ def test_given_invalid_source_registry_when_discovering_then_rejects_with_paths(
         )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        discover_source_registry(project_dir=tmp_path, variables={}, environment={})
+        _native.discover_source_registry(project_dir=tmp_path, variables={}, environment={})
 
 
 @pytest.mark.parametrize(
@@ -880,7 +877,7 @@ def test_given_freshness_config_when_discovering_then_returns_expected_policy(
 ) -> None:
     write_source_yml(project_dir=tmp_path, relative_path="a.yml", contents=test_case.source_yaml)
 
-    registry: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    registry: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables={},
         environment={},
@@ -948,7 +945,7 @@ def test_given_postgres_source_when_discovering_then_refresh_identity_is_retaine
         contents=test_case.sources_yaml,
     )
 
-    registry: tuple[DiscoveredSourceFile, ...] = discover_source_registry(
+    registry: tuple[DiscoveredSourceFile, ...] = _native.discover_source_registry(
         project_dir=tmp_path,
         variables={},
         environment={},
@@ -1039,4 +1036,4 @@ def test_given_invalid_postgres_source_when_discovering_then_reports_the_reason(
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        discover_source_registry(project_dir=tmp_path, variables={}, environment={})
+        _native.discover_source_registry(project_dir=tmp_path, variables={}, environment={})

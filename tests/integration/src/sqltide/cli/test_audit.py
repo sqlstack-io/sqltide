@@ -7,15 +7,13 @@ import pytest
 from _pytest.capture import CaptureResult
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audit
 from sqltide.compiler.compile.models import CompiledPipeline
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.planner.main.build_deployment_physical_name import (
     build_deployment_physical_name,
 )
@@ -166,7 +164,7 @@ def test_given_audit_project_when_running_live_audit_then_it_reports_expected_re
             selectors=test_case.selectors,
             json_output=False,
             client=managed_client,
-            loaded_project=load_project_input_for_path(path=tmp_path),
+            loaded_project=_native.load_project_input_for_path(path=tmp_path),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
     finally:
@@ -295,7 +293,7 @@ def test_given_audit_project_when_running_audit_backfill_then_it_includes_qualit
             deployment_id=deployment_id,
             json_output=True,
             client=managed_client,
-            loaded_project=load_project_input_for_path(path=tmp_path),
+            loaded_project=_native.load_project_input_for_path(path=tmp_path),
             adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
         )
     finally:

@@ -3,6 +3,7 @@
 from dataclasses import replace
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
     build_model_audit_instances,
 )
@@ -12,13 +13,6 @@ from sqltide.compiler.compile.models import (
     CompileProjectInputs,
     CompilerAdapterProfile,
     CompilerTargetMetadata,
-)
-from sqltide.compiler.discovery.main._load_discovered_pipelines import (
-    load_discovered_pipelines,
-)
-from sqltide.compiler.discovery.main._source_registry_by_name import source_registry_by_name
-from sqltide.compiler.discovery.main._validate_attached_project_inputs import (
-    validate_attached_project_inputs,
 )
 from sqltide.compiler.discovery.models import (
     DiscoveredProjectInputs,
@@ -108,8 +102,8 @@ def build_compile_inputs(
     )
     sources_by_name: dict[
         str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
-    ] = source_registry_by_name(discovered_inputs.source_files)
-    pipelines: tuple[LoadedPipeline, ...] = load_discovered_pipelines(
+    ] = _native.source_registry_by_name(discovered_inputs.source_files)
+    pipelines: tuple[LoadedPipeline, ...] = _native.load_discovered_pipelines(
         pipeline_directories=discovered_inputs.pipeline_directories,
         model_files=discovered_inputs.model_files,
         macro_registry=macro_registry,
@@ -152,7 +146,7 @@ def build_compile_inputs(
             generic_audit_instances=build_model_audit_instances(models=tuple(model_steps)),
         )
     )
-    validate_attached_project_inputs(
+    _native.validate_attached_project_inputs(
         source_files=discovered_inputs.source_files,
         loaded_project=discovered_inputs.loaded_project,
         loaded_pipelines=pipelines,

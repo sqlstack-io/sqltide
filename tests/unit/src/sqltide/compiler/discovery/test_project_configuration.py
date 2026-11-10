@@ -4,13 +4,10 @@ from typing import Literal, cast
 
 import pytest
 
+import sqltide._native as _native
 from sqltide._native import (
     load_project_configuration,
     resolve_effective_project_configuration,
-)
-from sqltide.compiler.discovery._helpers.interpolation import (
-    interpolate_config_value,
-    resolve_variable_values,
 )
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError, ProjectConfigError
 from sqltide.compiler.discovery.models import (
@@ -1249,13 +1246,13 @@ def test_given_interpolation_values_when_resolving_then_it_preserves_expected_ty
     test_case: InterpolationSuccessTestCase,
 ) -> None:
     environment: dict[str, str] = dict(test_case.environment)
-    variables: dict[str, object] = resolve_variable_values(
+    variables: dict[str, object] = _native.resolve_variable_values(
         values=dict(test_case.values),
         environment=environment,
         field_path_prefix="sqltide_project.toml",
     )
 
-    result: object = interpolate_config_value(
+    result: object = _native.interpolate_config_value(
         value=test_case.input_value,
         variables=variables,
         environment=environment,
@@ -1312,12 +1309,12 @@ def test_given_invalid_interpolation_when_resolving_then_it_reports_field_contex
     environment: dict[str, str] = dict(test_case.environment)
 
     with pytest.raises(ProjectConfigError, match=test_case.expected_error_fragment):
-        variables: dict[str, object] = resolve_variable_values(
+        variables: dict[str, object] = _native.resolve_variable_values(
             values=dict(test_case.values),
             environment=environment,
             field_path_prefix="sqltide_project.toml",
         )
-        interpolate_config_value(
+        _native.interpolate_config_value(
             value=test_case.input_value,
             variables=variables,
             environment=environment,
@@ -1453,7 +1450,7 @@ def test_given_target_connection_settings_when_resolving_then_nested_table_is_re
             (
                 name,
                 str(
-                    interpolate_config_value(
+                    _native.interpolate_config_value(
                         value=setting,
                         variables=dict(effective.variables),
                         environment={},
