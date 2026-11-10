@@ -45,8 +45,8 @@ from sqltide.executor.destruction.exceptions import DestructionError
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from sqltide._native import run_build, run_plan
     from sqltide.cli.audit.main._run_audit import run_audit
-    from sqltide.cli.build.main._run_build import run_build
     from sqltide.cli.compile.main._run_compile import run_compile
     from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
     from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
@@ -56,7 +56,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     from sqltide.cli.discover.main._run_discover import run_discover
     from sqltide.cli.doctor.main._run_doctor import run_doctor
     from sqltide.cli.janitor.main._run_janitor import run_janitor
-    from sqltide.cli.plan.main._run_plan import run_plan
     from sqltide.cli.promotion.main._run_deployment_promotion import (
         run_deployment_promotion,
     )
