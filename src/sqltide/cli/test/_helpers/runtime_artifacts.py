@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from sqltide.cli.compile.main._runtime_test_path import runtime_test_path
+from sqltide._native import runtime_test_path
 from sqltide.cli.test.constants import (
     RUNTIME_STAGING_PREFIX,
     RUNTIME_TARGET_OWNER,
