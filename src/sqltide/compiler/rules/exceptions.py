@@ -1,7 +1,6 @@
 """A configured Rule failure is a compile failure, not a source rewrite."""
 
 import sqltide._native as _native
-from sqltide.diagnostics.main.render_diagnostic import render_diagnostic
 
 
 class SqlRulesError(ValueError):
@@ -16,7 +15,7 @@ class RulesError(ValueError):
     ) -> None:
         self.findings = findings
         message: str = "\n\n".join(
-            render_diagnostic(diagnostic=finding.diagnostic) for finding in findings
+            _native.render_diagnostic(diagnostic=finding.diagnostic) for finding in findings
         )
         if defaults:
             message += (

@@ -87,6 +87,16 @@ reason = "Native bindings own the sqt admin commands and their password prompts;
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/events/__init__.py"
+reason = "Native bindings derive sensor events from persisted observations; this package only declares the observation and event shapes and the event catalog types."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/diagnostics/__init__.py"
+reason = "Native bindings own diagnostic rendering and attachment; this package only declares the diagnostic models and phase and severity types they consume."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/cli/plan/__init__.py"
 reason = "Native bindings own the plan command, its previews, rendering and workflow artifact publication; this package only declares the command option shape the CLI dispatcher builds."
 

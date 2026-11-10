@@ -1,1 +1,0 @@
-"""Public diagnostic rendering entrypoints."""

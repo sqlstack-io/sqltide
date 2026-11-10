@@ -176,8 +176,16 @@ from sqltide.dev_server.types import (
     DevServerReporter,
     RunPresentationStatus,
 )
-from sqltide.diagnostics.models import CompilerDiagnostic
+from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
+from sqltide.diagnostics.types import DiagnosticPhase
+from sqltide.events.models import (
+    AuditCompleted,
+    InvocationObservation,
+    NodeResultObservation,
+    RunCompleted,
+)
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
+from sqltide.executor.auditing.types import QualityResultStatus
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
     BackfillDeploymentIdentity,
@@ -258,9 +266,24 @@ def resolve_default_database(
     *, loaded_pipelines: Iterable[LoadedPipeline], override: str | None
 ) -> str: ...
 def render_diagnostic(
-    *, diagnostic: CompilerDiagnostic, source_by_path: Mapping[str, str] | None = None
+    *, diagnostic: CompilerDiagnostic, source_by_path: Mapping[Path, str] | None = None
 ) -> str: ...
+def render_diagnostic_json(*, diagnostic: CompilerDiagnostic) -> str: ...
 def render_error(error: BaseException) -> str: ...
+def events_from_node_result(
+    *, row: NodeResultObservation, previous_status: QualityResultStatus | None, target: str
+) -> tuple[AuditCompleted, ...]: ...
+def events_from_invocation(
+    *, row: InvocationObservation, target: str
+) -> tuple[RunCompleted, ...]: ...
+def attach_error_diagnostic[ErrorT: Exception](
+    *,
+    error: ErrorT,
+    phase: DiagnosticPhase,
+    code: str,
+    resource_name: str | None = None,
+    location: SourceLocation | None = None,
+) -> ErrorT: ...
 def render_expected_warehouse_error(
     *, command_name: str, database: str, error: AdapterWarehouseError
 ) -> str | None: ...

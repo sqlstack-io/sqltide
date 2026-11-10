@@ -3,11 +3,13 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import (
+    attach_error_diagnostic,
+    render_diagnostic,
+    render_diagnostic_json,
+    render_error,
+)
 from sqltide.adapter.exceptions import AdapterConfigurationError
-from sqltide.diagnostics.main._render_diagnostic_json import render_diagnostic_json
-from sqltide.diagnostics.main.attach_error_diagnostic import attach_error_diagnostic
-from sqltide.diagnostics.main.render_diagnostic import render_diagnostic
-from sqltide.diagnostics.main.render_error import render_error
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.diagnostics.types import DiagnosticPhase
 from tests.unit.src.sqltide.diagnostics._test_types import (

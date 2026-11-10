@@ -5,6 +5,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyMapping};
 use pyo3::wrap_pyfunction;
 
+use pyo3::exceptions::PyValueError;
+use sqltide_json::{JsonDialect, JsonValue, StdlibJsonOptions, dumps};
+
+use crate::cli::output::{json_value, object};
 use crate::cli::python::getattr_none;
 use crate::dev_server::support::attr;
 
@@ -205,12 +209,15 @@ pub(crate) fn render_diagnostic_text(
     Ok(lines.join("\n"))
 }
 
-/// Give `error` a runtime diagnostic unless its owner already supplied one.
-pub(crate) fn attach_error_diagnostic(
-    py: Python<'_>,
-    error: &Bound<'_, PyAny>,
-    phase: &str,
+/// Give `error` a diagnostic unless its owner already supplied one; a `SourceLocation` the error
+/// owns wins over `location`.
+pub(crate) fn attach_error_diagnostic<'py>(
+    py: Python<'py>,
+    error: &Bound<'py, PyAny>,
+    phase: Bound<'py, PyAny>,
     code: &str,
+    resource_name: Bound<'py, PyAny>,
+    location: Bound<'py, PyAny>,
 ) -> PyResult<()> {
     let model: Bound<'_, PyAny> = attr(py, DIAGNOSTIC_MODELS, "CompilerDiagnostic")?;
     if getattr_none(error, "diagnostic")?.is_instance(&model)? {
@@ -221,24 +228,101 @@ pub(crate) fn attach_error_diagnostic(
         if owned_location.is_instance(&attr(py, DIAGNOSTIC_MODELS, "SourceLocation")?)? {
             owned_location
         } else {
-            py.None().into_bound(py)
+            location
         };
     let kwargs: Bound<'_, PyDict> = PyDict::new(py);
-    kwargs.set_item(
-        "phase",
-        attr(py, DIAGNOSTIC_TYPES, "DiagnosticPhase")?.call1((phase,))?,
-    )?;
+    kwargs.set_item("phase", phase)?;
     kwargs.set_item(
         "severity",
         attr(py, DIAGNOSTIC_TYPES, "DiagnosticSeverity")?.getattr("ERROR")?,
     )?;
     kwargs.set_item("code", code)?;
     kwargs.set_item("message", error.str()?)?;
-    kwargs.set_item("resource_name", py.None())?;
+    kwargs.set_item("resource_name", resource_name)?;
     kwargs.set_item("location", location)?;
     error
         .getattr("__dict__")?
         .set_item("diagnostic", model.call((), Some(&kwargs))?)
+}
+
+fn location_payload(location: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
+    if location.is_none() {
+        return Ok(JsonValue::Null);
+    }
+    Ok(object(vec![
+        ("column", json_value(&location.getattr("column")?)?),
+        ("end_column", json_value(&location.getattr("end_column")?)?),
+        ("end_line", json_value(&location.getattr("end_line")?)?),
+        ("line", json_value(&location.getattr("line")?)?),
+        (
+            "path",
+            JsonValue::String(location.getattr("path")?.str()?.to_string()),
+        ),
+    ]))
+}
+
+/// `json.dumps(payload, indent=2, sort_keys=True) + "\n"` of one structured diagnostic.
+fn render_diagnostic_json_text(diagnostic: &Bound<'_, PyAny>) -> PyResult<String> {
+    let value = |name: &str| -> PyResult<JsonValue> { json_value(&diagnostic.getattr(name)?) };
+    let mut related: Vec<JsonValue> = Vec::new();
+    for item in diagnostic.getattr("related_locations")?.try_iter()? {
+        let item: Bound<'_, PyAny> = item?;
+        related.push(object(vec![
+            ("label", json_value(&item.getattr("label")?)?),
+            ("location", location_payload(&item.getattr("location")?)?),
+            ("message", json_value(&item.getattr("message")?)?),
+        ]));
+    }
+    let payload: JsonValue = object(vec![
+        ("code", value("code")?),
+        ("help", value("help")?),
+        (
+            "location",
+            location_payload(&diagnostic.getattr("location")?)?,
+        ),
+        ("message", value("message")?),
+        ("phase", value("phase")?),
+        ("related_locations", JsonValue::Array(related)),
+        ("resource_name", value("resource_name")?),
+        ("severity", value("severity")?),
+    ]);
+    let options: StdlibJsonOptions = StdlibJsonOptions {
+        sort_keys: true,
+        ..StdlibJsonOptions::new(Some(2))
+    };
+    let text: String = dumps(&payload, &JsonDialect::Stdlib(options))
+        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+    Ok(text + "\n")
+}
+
+/// Deterministic JSON for one structured diagnostic.
+#[pyfunction]
+#[pyo3(signature = (*, diagnostic))]
+fn render_diagnostic_json(diagnostic: &Bound<'_, PyAny>) -> PyResult<String> {
+    render_diagnostic_json_text(diagnostic)
+}
+
+/// Return the same exception with a diagnostic unless its owner already supplied one.
+#[pyfunction]
+#[pyo3(name = "attach_error_diagnostic", signature = (*, error, phase, code, resource_name=None, location=None))]
+fn attach_error_diagnostic_py<'py>(
+    py: Python<'py>,
+    error: Bound<'py, PyAny>,
+    phase: Bound<'py, PyAny>,
+    code: &str,
+    resource_name: Option<Bound<'py, PyAny>>,
+    location: Option<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let none = || py.None().into_bound(py);
+    attach_error_diagnostic(
+        py,
+        &error,
+        phase,
+        code,
+        resource_name.unwrap_or_else(none),
+        location.unwrap_or_else(none),
+    )?;
+    Ok(error)
 }
 
 /// Python's `str.title()` for the command names messages use.
@@ -353,6 +437,8 @@ fn render_expected_warehouse_error_py(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_diagnostic_py, module)?)?;
     module.add_function(wrap_pyfunction!(render_error_py, module)?)?;
+    module.add_function(wrap_pyfunction!(render_diagnostic_json, module)?)?;
+    module.add_function(wrap_pyfunction!(attach_error_diagnostic_py, module)?)?;
     module.add_function(wrap_pyfunction!(
         render_expected_warehouse_error_py,
         module

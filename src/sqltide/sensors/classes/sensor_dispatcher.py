@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from sqltide._native import events_from_invocation, events_from_node_result
 from sqltide.adapter.models import AdapterSensorTickRecord
-from sqltide.events.main.events_from_invocation import events_from_invocation
-from sqltide.events.main.events_from_node_result import events_from_node_result
 from sqltide.events.models import InvocationObservation, NodeResultObservation
 from sqltide.events.types import SensorEvent
 from sqltide.executor.auditing.types import QualityResultStatus

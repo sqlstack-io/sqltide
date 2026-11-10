@@ -284,7 +284,14 @@ fn report<'py>(
         return Ok(1);
     }
     if raised(py, &error, ADAPTER_EXCEPTIONS, "AdapterError")? {
-        attach_error_diagnostic(py, error.value(py).as_any(), "runtime", RUNTIME_ERROR_CODE)?;
+        attach_error_diagnostic(
+            py,
+            error.value(py).as_any(),
+            pyo3::types::PyString::new(py, "runtime").into_any(),
+            RUNTIME_ERROR_CODE,
+            py.None().into_bound(py),
+            py.None().into_bound(py),
+        )?;
         print_to(py, "stderr", &render_error(py, error.value(py).as_any())?)?;
         return Ok(1);
     }
