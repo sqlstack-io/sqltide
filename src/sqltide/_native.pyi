@@ -1,6 +1,7 @@
+import argparse
 import os
 import threading
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol, final
@@ -239,6 +240,7 @@ class SqlScanError(ValueError):
     args: tuple[str, str, _Span | None]
 
 def parse_model_header(header: str) -> dict[str, object]: ...
+def parse_cli_arguments(argv: Sequence[str] | None = None) -> argparse.Namespace: ...
 def load_toml(text: str) -> dict[str, Any]: ...
 def declares_virtual_pipeline(pipelines_root: Path) -> bool: ...
 def compile_access_policy(

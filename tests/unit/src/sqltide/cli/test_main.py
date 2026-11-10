@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sqltide._native import run_dev
+from sqltide._native import parse_cli_arguments, run_dev
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterTimeoutError
 from sqltide.adapter.models import AdapterConnectionConfig
@@ -19,7 +19,6 @@ from sqltide.cli.entry._helpers.entrypoint import (
     resolve_adapter_connection_config,
 )
 from sqltide.cli.entry._helpers.invocation import _resolved_cli_variables
-from sqltide.cli.entry._helpers.parser import build_cli_parser
 from sqltide.cli.entry.constants import DEV_CLI_VARIABLES_ENV_VAR
 from sqltide.cli.entry.main.main import _main_with_dependencies, main
 from sqltide.cli.entry.models import CliEntrypointHandlers, ResolvedInvocationConnection
@@ -450,9 +449,7 @@ def test_given_missing_project_when_running_dev_then_error_and_hint_are_styled(
 def test_given_dev_compilation_overrides_when_parsing_then_they_are_retained(
     test_case: CliDevRefactorTestCase,
 ) -> None:
-    parser: argparse.ArgumentParser = build_cli_parser()
-
-    args: argparse.Namespace = parser.parse_args(
+    args: argparse.Namespace = parse_cli_arguments(
         ["dev", "--target", "local", "--vars", '{"region":"eu","batch_size":50}']
     )
 
@@ -1665,7 +1662,7 @@ def test_given_compile_when_running_then_it_writes_target_artifacts(
 def test_given_deployment_audit_options_when_parsing_then_values_are_preserved(
     test_case: CliNestedAuditOptionsTestCase,
 ) -> None:
-    args: argparse.Namespace = build_cli_parser().parse_args(list(test_case.argv))
+    args: argparse.Namespace = parse_cli_arguments(list(test_case.argv))
 
     assert str(args.project_dir) == test_case.expected_project_dir
     assert args.host == test_case.expected_host
@@ -1713,6 +1710,6 @@ def test_given_deployment_command_without_id_when_parsing_then_it_is_rejected(
     test_case: CliRequiredDeploymentIdTestCase,
 ) -> None:
     with pytest.raises(SystemExit) as raised:
-        build_cli_parser().parse_args(list(test_case.argv))
+        parse_cli_arguments(list(test_case.argv))
 
     assert raised.value.code == test_case.expected_exit_code

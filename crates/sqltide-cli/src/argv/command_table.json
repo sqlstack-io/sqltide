@@ -1,0 +1,3947 @@
+{
+ "prog": "sqt",
+ "description": "Declarative, versioned streaming data pipelines for ClickHouse.",
+ "groups": [
+  {
+   "title": "positional arguments"
+  },
+  {
+   "title": "options"
+  }
+ ],
+ "actions": [
+  {
+   "kind": "help",
+   "options": [
+    "-h",
+    "--help"
+   ],
+   "dest": "help",
+   "nargs": 0,
+   "default": {
+    "suppress": true
+   },
+   "help": "show this help message and exit",
+   "group": 1
+  },
+  {
+   "kind": "version",
+   "options": [
+    "--version"
+   ],
+   "dest": "version",
+   "nargs": 0,
+   "default": {
+    "suppress": true
+   },
+   "help": "show program's version number and exit",
+   "group": 1,
+   "version": "sqt {version}"
+  },
+  {
+   "kind": "parsers",
+   "options": [],
+   "dest": "command",
+   "nargs": "A...",
+   "default": null,
+   "required": true,
+   "group": 0,
+   "parsers": [
+    {
+     "name": "admin",
+     "parser": {
+      "prog": "sqt admin",
+      "description": "Manage the account control store without a warehouse connection.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--control-store-url"
+        ],
+        "dest": "control_store_url",
+        "default": null,
+        "group": 1
+       },
+       {
+        "kind": "parsers",
+        "options": [],
+        "dest": "admin_command",
+        "nargs": "A...",
+        "default": null,
+        "required": true,
+        "group": 0,
+        "parsers": [
+         {
+          "name": "migrate",
+          "parser": {
+           "prog": "sqt admin migrate",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "create-user",
+          "parser": {
+           "prog": "sqt admin create-user",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--display-name"
+             ],
+             "dest": "display_name",
+             "default": null,
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--email"
+             ],
+             "dest": "email",
+             "default": null,
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--authentication-source"
+             ],
+             "dest": "authentication_source",
+             "default": null,
+             "choices": [
+              "password",
+              "trusted_proxy"
+             ],
+             "required": true,
+             "group": 1
+            },
+            {
+             "kind": "append",
+             "options": [
+              "--role"
+             ],
+             "dest": "role",
+             "default": null,
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "grant-role",
+          "parser": {
+           "prog": "sqt admin grant-role",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--role"
+             ],
+             "dest": "role",
+             "default": null,
+             "required": true,
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "revoke-role",
+          "parser": {
+           "prog": "sqt admin revoke-role",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--role"
+             ],
+             "dest": "role",
+             "default": null,
+             "required": true,
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "enable-user",
+          "parser": {
+           "prog": "sqt admin enable-user",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "disable-user",
+          "parser": {
+           "prog": "sqt admin disable-user",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "reset-password",
+          "parser": {
+           "prog": "sqt admin reset-password",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "required": true,
+             "group": 1
+            }
+           ]
+          }
+         }
+        ],
+        "choices_help": [
+         {
+          "metavar": "migrate",
+          "help": "Create or validate the account schema"
+         },
+         {
+          "metavar": "create-user",
+          "help": "Create a proxy or password account"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "name": "lint",
+     "parser": {
+      "prog": "sqt lint",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [],
+        "dest": "paths",
+        "nargs": "*",
+        "default": null,
+        "type": "Path",
+        "help": "Project SQL files or directories",
+        "group": 0
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Machine-readable results",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--select"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": null,
+        "help": "Exact SQLClean codes or SQLCLEAN",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "format",
+     "parser": {
+      "prog": "sqt format",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [],
+        "dest": "paths",
+        "nargs": "*",
+        "default": null,
+        "type": "Path",
+        "help": "Project SQL files or directories",
+        "group": 0
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Machine-readable results",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--select"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": null,
+        "help": "Exact SQLClean codes or SQLCLEAN",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--check"
+        ],
+        "dest": "check",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Check without writing",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--diff"
+        ],
+        "dest": "diff",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Show changes without writing",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--fix"
+        ],
+        "dest": "fix",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Also apply compiler-verified Rule fixes",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "playground",
+     "parser": {
+      "prog": "sqt playground",
+      "description": "Create a new example project without connecting to a warehouse. Compilation is offline; running the virtual workflow requires ClickHouse. The project includes Docker Compose setup and a step-by-step README.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [],
+        "dest": "directory",
+        "nargs": "?",
+        "default": {
+         "path": "sqltide-playground"
+        },
+        "type": "Path",
+        "help": "New directory to create (default: sqltide-playground); must not already exist",
+        "group": 0
+       }
+      ]
+     }
+    },
+    {
+     "name": "discover",
+     "parser": {
+      "prog": "sqt discover",
+      "description": "Scan the project directory and list all discovered pipelines.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "compile",
+     "parser": {
+      "prog": "sqt compile",
+      "description": "Compile all pipeline models into resolved SQL, CREATE TABLE statements, CREATE MATERIALIZED VIEW statements, and a numbered workflow.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target-dir"
+        ],
+        "dest": "target_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Replace the project-level target/ artifact root",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "test",
+     "parser": {
+      "prog": "sqt test",
+      "description": "Discover SQL-native tests under tests/, assemble their dependency chain, and execute them against ClickHouse.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "help": "Select models or pipelines by globally unique name, e.g. --select daily_revenue pl__order_events (space separated, repeatable). Optional 'model:' and 'pipeline:' prefixes disambiguate but are not required.",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [],
+        "dest": "paths",
+        "nargs": "*",
+        "default": null,
+        "type": "Path",
+        "help": "Optional test files or directories to run",
+        "group": 0
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--verbose"
+        ],
+        "dest": "verbose",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Show all diff rows for failing tests",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target-dir"
+        ],
+        "dest": "target_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Replace the project-level target/ artifact root",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "dev",
+     "parser": {
+      "prog": "sqt dev",
+      "description": "Compile the project, then serve the SQLTide UI and its JSON API until interrupted. Builds requested in the UI execute through the same resolved project context as the dev command.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--ui-host"
+        ],
+        "dest": "ui_host",
+        "default": "127.0.0.1",
+        "help": "Interface the dev server binds (default 127.0.0.1)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--ui-port"
+        ],
+        "dest": "ui_port",
+        "default": 8000,
+        "type": "int",
+        "help": "Port the dev server binds (default 8000)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-mode"
+        ],
+        "dest": "auth_mode",
+        "default": null,
+        "choices": [
+         "disabled",
+         "password",
+         "trusted_proxy"
+        ],
+        "help": "Web authentication mode (default: disabled)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--control-store-url"
+        ],
+        "dest": "control_store_url",
+        "default": null,
+        "help": "SQLite/PostgreSQL account control-store URL",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-username-header"
+        ],
+        "dest": "auth_username_header",
+        "default": null,
+        "help": "Trusted-proxy username header (default: X-SQLTide-User)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-display-name-header"
+        ],
+        "dest": "auth_display_name_header",
+        "default": null,
+        "help": "Optional trusted-proxy display-name header",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-email-header"
+        ],
+        "dest": "auth_email_header",
+        "default": null,
+        "help": "Optional trusted-proxy email header",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-unknown-user-policy"
+        ],
+        "dest": "auth_unknown_user_policy",
+        "default": null,
+        "choices": [
+         "auto_provision",
+         "deny"
+        ],
+        "help": "Trusted-proxy unknown-user policy (default: auto_provision)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-default-role"
+        ],
+        "dest": "auth_default_role",
+        "default": null,
+        "help": "Role assigned to auto-provisioned proxy users (default: viewer)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-session-ttl-seconds"
+        ],
+        "dest": "auth_session_ttl_seconds",
+        "default": null,
+        "type": "int",
+        "help": "Password session lifetime in seconds (default: 43200)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--auth-insecure-cookie"
+        ],
+        "dest": "auth_insecure_cookie",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Allow password session cookies over plain HTTP (unsafe; loopback development only)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--auth-proxy-logout-url"
+        ],
+        "dest": "auth_proxy_logout_url",
+        "default": null,
+        "help": "Optional upstream logout URL shown in trusted-proxy mode",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "plan",
+     "parser": {
+      "prog": "sqt plan",
+      "description": "Compare SQL models against the current state in ClickHouse and show what would change. No modifications are made.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "help": "Select models or pipelines by globally unique name, e.g. --select daily_revenue pl__order_events (space separated, repeatable). Optional 'model:' and 'pipeline:' prefixes disambiguate but are not required.",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--changed"
+        ],
+        "dest": "changed",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Select direct models changed since their last applied build, plus the models of pipelines reading a managed Kafka source whose deployed settings drifted",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--include-missing-upstream"
+        ],
+        "dest": "include_missing_upstream",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Also build absent project-owned upstream models required by the selection",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--deployment-id"
+        ],
+        "dest": "deployment_id",
+        "default": null,
+        "help": "Use a specific virtual deployment ID for exact workflow inspection",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--full-refresh"
+        ],
+        "dest": "full_refresh",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Force a full refresh of selected models (requires --select)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--start-time"
+        ],
+        "dest": "start_time",
+        "default": null,
+        "help": "Replay from a specific time, e.g. '2026-04-17T18:00:00' (requires --select)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Output the plan as JSON",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "-v",
+         "--verbose"
+        ],
+        "dest": "verbose",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Show full schema diffs for changed models",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "build",
+     "parser": {
+      "prog": "sqt build",
+      "description": "Build the selected downstream closure directly or as an isolated virtual deployment. Shows the connected plan and asks for confirmation before making changes.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "help": "Select models or pipelines by globally unique name, e.g. --select daily_revenue pl__order_events (space separated, repeatable). Optional 'model:' and 'pipeline:' prefixes disambiguate but are not required.",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--changed"
+        ],
+        "dest": "changed",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Select direct models changed since their last applied build, plus the models of pipelines reading a managed Kafka source whose deployed settings drifted",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--include-missing-upstream"
+        ],
+        "dest": "include_missing_upstream",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Also build absent project-owned upstream models required by the selection",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--deployment-id"
+        ],
+        "dest": "deployment_id",
+        "default": null,
+        "help": "Use a specific virtual deployment ID (auto-generated if omitted)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--full-refresh"
+        ],
+        "dest": "full_refresh",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Force a full refresh of selected virtual-environment models (requires --select)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--start-time"
+        ],
+        "dest": "start_time",
+        "default": null,
+        "help": "Replay from a specific time, e.g. '2026-04-17T18:00:00' (requires --select)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Output as JSON",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--events"
+        ],
+        "dest": "events",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Stream JSONL progress events to stdout (requires --auto-approve)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "-v",
+         "--verbose"
+        ],
+        "dest": "verbose",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Show full schema diffs for changed models",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--auto-approve"
+        ],
+        "dest": "auto_approve",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip the confirmation prompt",
+        "group": 1
+       },
+       {
+        "kind": "append",
+        "options": [
+         "--confirm"
+        ],
+        "dest": "confirm",
+        "default": [],
+        "help": "Confirm a protected pipeline (repeat for multiple protected pipelines)",
+        "metavar": "VALUE",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "destroy",
+     "parser": {
+      "prog": "sqt destroy",
+      "description": "Permanently destroy selected pipeline-owned warehouse objects after interactive review and exact typed challenges.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "required": true,
+        "help": "Named project target to destroy",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--control-store-url"
+        ],
+        "dest": "control_store_url",
+        "default": null,
+        "help": "SQLite/PostgreSQL account control-store URL",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "required": true,
+        "help": "Select pipelines by explicit pipeline-prefixed name, e.g. --select pipeline:orders",
+        "metavar": "pipeline:NAME",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--include-orphans"
+        ],
+        "dest": "include_orphans",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Include existing resources associated with selected pipelines in older manifests when no current pipeline owns them",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "reset-target",
+     "parser": {
+      "prog": "sqt reset-target",
+      "description": "Permanently reset all pipeline-owned objects and managed source replay data for a target after interactive review and exact typed challenges.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "required": true,
+        "help": "Named project target to destroy",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--control-store-url"
+        ],
+        "dest": "control_store_url",
+        "default": null,
+        "help": "SQLite/PostgreSQL account control-store URL",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "deployment",
+     "parser": {
+      "prog": "sqt deployment",
+      "description": "List, inspect, audit, promote, or roll back virtual deployments.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "parsers",
+        "options": [],
+        "dest": "deployment_command",
+        "nargs": "A...",
+        "default": null,
+        "required": true,
+        "group": 0,
+        "parsers": [
+         {
+          "name": "list",
+          "parser": {
+           "prog": "sqt deployment list",
+           "description": "List deployments from authoritative lifecycle and catalog evidence.",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "show",
+          "parser": {
+           "prog": "sqt deployment show",
+           "description": "Show authoritative lifecycle and catalog evidence for one deployment.",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [],
+             "dest": "deployment_id",
+             "default": null,
+             "required": true,
+             "help": "Deployment identifier to inspect",
+             "group": 0
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "diff",
+          "parser": {
+           "prog": "sqt deployment diff",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [],
+             "dest": "comparison",
+             "default": null,
+             "required": true,
+             "help": "Deployment ID (active baseline) or explicit FROM:TO endpoints",
+             "metavar": "DEPLOYMENT|FROM:TO",
+             "group": 0
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "audit",
+          "parser": {
+           "prog": "sqt deployment audit",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [],
+             "dest": "deployment_id",
+             "default": null,
+             "required": true,
+             "help": "Deployment identifier to audit",
+             "group": 0
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "promote",
+          "parser": {
+           "prog": "sqt deployment promote",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [],
+             "dest": "deployment_id",
+             "default": null,
+             "required": true,
+             "help": "Deployment identifier to promote",
+             "group": 0
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         },
+         {
+          "name": "rollback",
+          "parser": {
+           "prog": "sqt deployment rollback",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "mutex_groups": [
+            true
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [],
+             "dest": "deployment_id",
+             "nargs": "?",
+             "default": null,
+             "help": "Previously published deployment identifier",
+             "group": 0,
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--previous"
+             ],
+             "dest": "previous",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Select the publication immediately before the active deployment",
+             "group": 1,
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--auto-approve"
+             ],
+             "dest": "auto_approve",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip the rollback confirmation prompt",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--json"
+             ],
+             "dest": "json",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Output as JSON",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         }
+        ],
+        "choices_help": [
+         {
+          "metavar": "list",
+          "help": "List virtual deployments"
+         },
+         {
+          "metavar": "show",
+          "help": "Show one virtual deployment"
+         },
+         {
+          "metavar": "diff",
+          "help": "Compare active or retained deployments"
+         },
+         {
+          "metavar": "audit",
+          "help": "Audit a staged deployment"
+         },
+         {
+          "metavar": "promote",
+          "help": "Promote a staged deployment to active"
+         },
+         {
+          "metavar": "rollback",
+          "help": "Roll back to a previously published deployment"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "name": "audit",
+     "parser": {
+      "prog": "sqt audit",
+      "description": "Run user-defined SQL audits against published logical views.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "help": "Select models or pipelines by globally unique name, e.g. --select daily_revenue pl__order_events (space separated, repeatable). Optional 'model:' and 'pipeline:' prefixes disambiguate but are not required.",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Output as JSON",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--force"
+        ],
+        "dest": "force",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Run audits before their post-build warmup is complete",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "reconcile",
+     "parser": {
+      "prog": "sqt reconcile",
+      "description": "Reconcile the live metadata baseline for managed pipelines. Use --apply to persist changes.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "extend",
+        "options": [
+         "--select",
+         "-s"
+        ],
+        "dest": "select",
+        "nargs": "+",
+        "default": [],
+        "help": "Select models or pipelines by globally unique name, e.g. --select daily_revenue pl__order_events (space separated, repeatable). Optional 'model:' and 'pipeline:' prefixes disambiguate but are not required.",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Output as JSON",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--apply"
+        ],
+        "dest": "apply",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Apply the reconciliation (dry-run by default)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "janitor",
+     "parser": {
+      "prog": "sqt janitor",
+      "description": "Identify and optionally remove stale shadow tables from previous deployments. Dry-run by default; use --apply to drop tables.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--retention-days"
+        ],
+        "dest": "retention_days",
+        "default": 7,
+        "type": "int",
+        "help": "Keep deployments newer than this many days (default: 7)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--minimum-rollback-deployments"
+        ],
+        "dest": "minimum_rollback_deployments",
+        "default": 2,
+        "type": "int",
+        "help": "Keep at least this many previously published deployments (default: 2)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--apply"
+        ],
+        "dest": "apply",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Actually drop stale tables (dry-run by default)",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--json"
+        ],
+        "dest": "json",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Output as JSON",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "doctor",
+     "parser": {
+      "prog": "sqt doctor",
+      "description": "Inspect the current state of managed tables in ClickHouse and report any issues with logical views, shadow tables, or deployment references.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-sql-analysis"
+        ],
+        "dest": "no_sql_analysis",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
+     "name": "repair",
+     "parser": {
+      "prog": "sqt repair",
+      "description": "Repair broken logical views or deployment references.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "parsers",
+        "options": [],
+        "dest": "repair_command",
+        "nargs": "A...",
+        "default": null,
+        "required": true,
+        "group": 0,
+        "parsers": [
+         {
+          "name": "active-view",
+          "parser": {
+           "prog": "sqt repair active-view",
+           "description": "Repair a broken logical view by re-pointing it at a specific deployment's shadow table.",
+           "groups": [
+            {
+             "title": "positional arguments"
+            },
+            {
+             "title": "options"
+            }
+           ],
+           "actions": [
+            {
+             "kind": "help",
+             "options": [
+              "-h",
+              "--help"
+             ],
+             "dest": "help",
+             "nargs": 0,
+             "default": {
+              "suppress": true
+             },
+             "help": "show this help message and exit",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--project-dir"
+             ],
+             "dest": "project_dir",
+             "default": null,
+             "type": "Path",
+             "help": "Path to the project root containing pipelines/",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--host"
+             ],
+             "dest": "host",
+             "default": null,
+             "help": "ClickHouse host",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--port"
+             ],
+             "dest": "port",
+             "default": null,
+             "type": "int",
+             "help": "ClickHouse HTTP port",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--username"
+             ],
+             "dest": "username",
+             "default": null,
+             "help": "ClickHouse username",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--password"
+             ],
+             "dest": "password",
+             "default": null,
+             "help": "ClickHouse password",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--database"
+             ],
+             "dest": "database",
+             "default": null,
+             "help": "Target ClickHouse database",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--table"
+             ],
+             "dest": "table",
+             "default": null,
+             "required": true,
+             "help": "The logical table name to repair, e.g. tbl__orders",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--deployment-id"
+             ],
+             "dest": "deployment_id",
+             "default": null,
+             "required": true,
+             "help": "The deployment to point the view at",
+             "group": 1
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--no-sql-analysis"
+             ],
+             "dest": "no_sql_analysis",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Skip configurable SQL Rules; mandatory compiler validation still applies",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--target"
+             ],
+             "dest": "target",
+             "default": null,
+             "help": "Named project target to use",
+             "group": 1
+            },
+            {
+             "kind": "store",
+             "options": [
+              "--vars"
+             ],
+             "dest": "vars",
+             "default": {},
+             "type": "parse_cli_vars",
+             "help": "Project variable overrides as one JSON object",
+             "group": 1
+            }
+           ]
+          }
+         }
+        ],
+        "choices_help": [
+         {
+          "metavar": "active-view",
+          "help": "Re-point a logical view at a specific deployment"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ],
+   "choices_help": [
+    {
+     "metavar": "admin",
+     "help": "Bootstrap and recover SQLTide accounts"
+    },
+    {
+     "metavar": "lint",
+     "help": "Lint project SQL with SQLClean"
+    },
+    {
+     "metavar": "format",
+     "help": "Format project SQL with SQLClean"
+    },
+    {
+     "metavar": "playground",
+     "help": "Create a self-contained virtual-workflow example"
+    },
+    {
+     "metavar": "discover",
+     "help": "List discovered pipelines in a project"
+    },
+    {
+     "metavar": "compile",
+     "help": "Compile pipelines into resolved SQL and ClickHouse DDL"
+    },
+    {
+     "metavar": "test",
+     "help": "Execute SQL-native model tests against ClickHouse"
+    },
+    {
+     "metavar": "dev",
+     "help": "Serve the local web UI for this project"
+    },
+    {
+     "metavar": "plan",
+     "help": "Preview what would change without making any modifications"
+    },
+    {
+     "metavar": "build",
+     "help": "Build selected models in the effective project mode"
+    },
+    {
+     "metavar": "destroy",
+     "help": "Permanently destroy selected pipelines"
+    },
+    {
+     "metavar": "reset-target",
+     "help": "Permanently reset every pipeline in a target"
+    },
+    {
+     "metavar": "deployment",
+     "help": "Inspect and operate on virtual deployments"
+    },
+    {
+     "metavar": "audit",
+     "help": "Run SQL audits against live data"
+    },
+    {
+     "metavar": "reconcile",
+     "help": "Reconcile live metadata baseline"
+    },
+    {
+     "metavar": "janitor",
+     "help": "Clean up stale deployment artifacts"
+    },
+    {
+     "metavar": "doctor",
+     "help": "Diagnose issues with active views and managed tables"
+    },
+    {
+     "metavar": "repair",
+     "help": "Repair broken deployment state"
+    }
+   ]
+  }
+ ]
+}

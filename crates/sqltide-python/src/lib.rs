@@ -15,6 +15,7 @@ mod build_command;
 mod build_entry;
 mod build_preview;
 mod build_workflow;
+mod cli;
 mod clickhouse;
 mod clickhouse_adapter;
 mod clickhouse_catalog;
@@ -127,6 +128,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     build_entry::register(module)?;
     build_preview::register(module)?;
     build_workflow::register(module)?;
+    cli::register(module)?;
     clickhouse::register(module)?;
     clickhouse_adapter::register(module)?;
     clickhouse_catalog::register(module)?;

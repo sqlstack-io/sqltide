@@ -2,7 +2,7 @@ import argparse
 
 import pytest
 
-from sqltide.cli.entry._helpers.parser import build_cli_parser
+from sqltide._native import parse_cli_arguments
 from tests.unit.src.sqltide.cli.destruction._test_types import (
     DestructionParserTestCase,
     DestructionRejectedOptionTestCase,
@@ -48,10 +48,8 @@ def test_given_destruction_arguments_when_parsing_then_command_contract_is_expli
     test_case: DestructionParserTestCase,
 ) -> None:
     # Given: A destructive command with its mandatory scope.
-    parser: argparse.ArgumentParser = build_cli_parser()
-
     # When: The arguments are parsed.
-    parsed: argparse.Namespace = parser.parse_args(test_case.argv)
+    parsed: argparse.Namespace = parse_cli_arguments(test_case.argv)
 
     # Then: Only the explicit target and pipeline selection are represented.
     assert parsed.command == test_case.expected_command
@@ -150,7 +148,7 @@ def test_given_bypass_option_when_parsing_destroy_then_parser_rejects_it(
 
     # When: The command is parsed, then the unsupported option is rejected.
     with pytest.raises(SystemExit) as raised:
-        build_cli_parser().parse_args(argv)
+        parse_cli_arguments(argv)
 
     # Then: argparse reports command-line misuse.
     assert raised.value.code == test_case.expected_exit_code

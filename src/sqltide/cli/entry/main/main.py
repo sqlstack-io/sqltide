@@ -26,7 +26,6 @@ from sqltide.cli.entry._helpers.entrypoint import (
 )
 from sqltide.cli.entry._helpers.invocation import resolve_cli_invocation
 from sqltide.cli.entry._helpers.mode import validate_cli_command_mode
-from sqltide.cli.entry._helpers.parser import build_cli_parser
 from sqltide.cli.entry._helpers.user_error_rendering import render_cli_user_error
 from sqltide.cli.entry.constants import DISPLAY_NAME_BY_COMMAND
 from sqltide.cli.entry.exceptions import CliUserError
@@ -109,8 +108,9 @@ def _main_with_dependencies(
     adapter_connection: AdapterConnection | None = None,
     observation_adapter_connection: AdapterConnection | None = None,
 ) -> int:
-    parser: argparse.ArgumentParser = build_cli_parser()
-    args: argparse.Namespace = parser.parse_args(argv_for_parse_args(argv))
+    from sqltide._native import parse_cli_arguments
+
+    args: argparse.Namespace = parse_cli_arguments(argv_for_parse_args(argv))
     try:
         require_interactive_destruction(args=args)
         resolved_database: str | None = None

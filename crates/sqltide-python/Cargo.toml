@@ -25,6 +25,7 @@ pyo3.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqltide-cli.workspace = true
 sqltide-clickhouse.workspace = true
 sqltide-compile.workspace = true
 sqltide-config.workspace = true
