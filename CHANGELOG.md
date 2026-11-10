@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.8](https://github.com/sqlstack-io/sqltide/compare/v0.65.7...v0.65.8) (2026-11-10)
+
+
+### Refactoring
+
+* run the ClickHouse adapter natively ([#355](https://github.com/sqlstack-io/sqltide/issues/355)) ([5b431f6](https://github.com/sqlstack-io/sqltide/commit/5b431f6506e08f9ece77d02e0b7c4dab599aaa40))
+
 ## [0.65.7](https://github.com/sqlstack-io/sqltide/compare/v0.65.6...v0.65.7) (2026-11-10)
 
 
