@@ -46,7 +46,7 @@ const SENSITIVE_SETTING_FRAGMENTS: [&str; 6] = [
 type ArtifactFile = (String, String);
 
 /// `path.mkdir(parents=True, exist_ok=True)`.
-fn make_directories(path: &Value<'_>) -> PyResult<()> {
+pub(crate) fn make_directories(path: &Value<'_>) -> PyResult<()> {
     let py: Python<'_> = path.py();
     method(
         path,
@@ -60,7 +60,7 @@ fn make_directories(path: &Value<'_>) -> PyResult<()> {
 }
 
 /// `shutil.rmtree(path, ignore_errors=True)`.
-fn remove_tree(path: &Value<'_>) -> PyResult<()> {
+pub(crate) fn remove_tree(path: &Value<'_>) -> PyResult<()> {
     let py: Python<'_> = path.py();
     let arguments: Bound<'_, PyDict> = PyDict::new(py);
     arguments.set_item("ignore_errors", true)?;

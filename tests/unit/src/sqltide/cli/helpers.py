@@ -11,6 +11,7 @@ from sqltide._native import (
     run_build,
     run_compile,
     run_plan,
+    run_test,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
@@ -60,7 +61,6 @@ from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audi
 from sqltide.cli.reconcile.main._run_reconcile import run_reconcile
 from sqltide.cli.repair_active_view.main._run_repair_active_view import run_repair_active_view
 from sqltide.cli.rollback.main._run_deployment_rollback import run_deployment_rollback
-from sqltide.cli.test.main._run_test import run_test
 
 _RUN_STATEMENTS_TABLE_MARKER: str = "_sqltide_run_statements"
 _RUN_STATEMENTS_INSERT_MARKER: str = "INSERT_RUN_STATEMENTS "

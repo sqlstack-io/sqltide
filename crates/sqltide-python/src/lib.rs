@@ -58,6 +58,7 @@ mod rules;
 mod selection;
 mod sources;
 mod sql_scan;
+mod test_command;
 mod test_discovery;
 mod testing;
 mod timestamps;
@@ -135,6 +136,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compile::register(module)?;
     compile_artifacts::register(module)?;
     compile_command::register(module)?;
+    test_command::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     model_analysis::register(module)?;

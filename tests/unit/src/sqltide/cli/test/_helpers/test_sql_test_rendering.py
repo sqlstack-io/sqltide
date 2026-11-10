@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.test._helpers.rendering import render_sql_test_results
+from sqltide._native import render_sql_test_results
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from tests.unit.src.sqltide.cli.test._helpers._test_types import (
     RenderSqlTestResultsTestCase,
