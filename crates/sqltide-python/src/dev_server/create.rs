@@ -59,7 +59,9 @@ fn state_snapshot<'py>(
         Some(reader) => reader.bind(py).getattr("close")?,
         None => py.None().into_bound(py),
     };
-    let state: Py<PyAny> = state.clone().unbind();
+    // The state holds this snapshot, so the snapshot refers back to it weakly: a strong
+    // reference would form a cycle the garbage collector cannot see through native objects.
+    let state: Py<PyAny> = attr(py, "weakref", "ref")?.call1((state,))?.unbind();
     let warehouse: Py<PyAny> = warehouse.clone().unbind();
     let lag_reader: Py<PyAny> = kafka_lag_reader.clone().unbind();
     let build = PyCFunction::new_closure(py, None, None, move |args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<Py<PyAny>> {
@@ -73,7 +75,11 @@ fn state_snapshot<'py>(
         let Some(database) = database.clone() else {
             return Err(not_compiled("no warehouse connection"));
         };
-        let analysis = state.bind(py).call_method0("current_analysis")?;
+        let state = state.bind(py).call0()?;
+        if state.is_none() {
+            return Err(not_compiled("the dev server state was closed"));
+        }
+        let analysis = state.call_method0("current_analysis")?;
         if let Some(reader) = &reader {
             return Ok(reader
                 .bind(py)
@@ -84,7 +90,7 @@ fn state_snapshot<'py>(
         if connection.is_none() {
             return Err(not_compiled("no warehouse connection"));
         }
-        let lock = state.bind(py).getattr("query_lock")?;
+        let lock = state.getattr("query_lock")?;
         crate::handling::within(&lock, || {
             Ok(attr(py, NATIVE, "build_state_payload")?
                 .call(

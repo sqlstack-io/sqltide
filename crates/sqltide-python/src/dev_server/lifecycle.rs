@@ -274,7 +274,7 @@ struct HeldCompile {
 
 /// One long-running server's source of truth between requests: the held compile plus its
 /// guarding locks.
-#[pyclass(frozen, module = "sqltide._native")]
+#[pyclass(frozen, weakref, module = "sqltide._native")]
 pub(crate) struct DevServerState {
     run_compile: Py<PyAny>,
     compile_lock: Py<PyAny>,

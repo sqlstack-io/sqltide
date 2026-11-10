@@ -582,7 +582,13 @@ fn serve(py: Python<'_>, app: &Arc<DevApp>, host: &str, port: u16) -> PyResult<(
         }
         if let Err(error) = py.check_signals() {
             if !error.is_instance_of::<PyKeyboardInterrupt>(py) {
-                return Err(error);
+                // Stop the workers before the GIL-holding return drops the runtime, then close
+                // the services as the earlier server's lifespan did on the way out.
+                py.detach(|| runtime.shutdown_timeout(Duration::from_secs(1)));
+                return Err(match app.shutdown(py) {
+                    Ok(()) => error,
+                    Err(closing) => crate::handling::while_handling(py, closing, &error),
+                });
             }
             if stopping {
                 // A second interrupt abandons the connections still open.

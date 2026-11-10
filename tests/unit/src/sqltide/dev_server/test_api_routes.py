@@ -1,3 +1,5 @@
+import gc
+import weakref
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -17,6 +19,7 @@ from tests.unit.src.sqltide.dev_server._test_types import (
     BootstrapEndpointTestCase,
     CapabilitiesTestCase,
     DevAppLifespanTestCase,
+    DevRefactorTestCase,
     ReadConnectionRouteTestCase,
     ReloadAuthorizationTestCase,
     SnapshotRefreshPerformanceTestCase,
@@ -573,3 +576,34 @@ def test_given_dev_app_context_when_lifespan_exits_then_owned_resources_are_clos
         lag_reader.close.assert_called_once_with()
         topic_reader.close.assert_called_once_with()
         builds.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DevRefactorTestCase(
+            description="a closed app releases its state and the compile it holds",
+            expected_value=None,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_closed_dev_app_when_dropped_then_state_is_released(
+    test_case: DevRefactorTestCase,
+    tmp_path: Path,
+) -> None:
+    write_dev_server_project(project_dir=tmp_path)
+    state: DevServerState = DevServerState(run_compile=build_compile_callable(project_dir=tmp_path))
+    state.current()
+    app: DevApplication = create_dev_app(
+        state=state,
+        connection=build_fake_state_connection(),
+        database="analytics",
+        project_dir=tmp_path,
+    )
+    app.shutdown()
+    released: weakref.ref[DevServerState] = weakref.ref(state)
+    del app, state
+    gc.collect()
+
+    assert released() is test_case.expected_value
