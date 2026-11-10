@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import cast
 
 from sqltide._native import (
+    database_scoped_consumer_group,
     render_clickhouse_metadata_migration_workflow,
 )
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterWarehouseError
@@ -16,9 +17,6 @@ from sqltide.adapter.models import (
     CatalogColumn,
     CatalogRelation,
     CatalogSnapshot,
-)
-from sqltide.adapters.clickhouse.main.database_scoped_consumer_group import (
-    database_scoped_consumer_group,
 )
 from sqltide.compiler.compile.models import (
     CompiledPipeline,
