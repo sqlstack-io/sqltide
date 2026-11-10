@@ -14,6 +14,7 @@ from clickhouse_connect.driver.exceptions import DatabaseError
 import sqltide._native as _native
 from sqltide._native import (
     analyze_project,
+    build_direct_execution_result,
     load_clickhouse_catalog,
     render_direct_plan_json,
     row_error_policy_view_steps,
@@ -76,9 +77,6 @@ from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.direct.main.assemble_direct_build_workflow import (
     assemble_direct_build_workflow,
-)
-from sqltide.executor.direct.main.build_direct_execution_result import (
-    build_direct_execution_result,
 )
 from sqltide.executor.direct.main.execute_direct_build_workflow import (
     execute_direct_build_workflow,

@@ -24,6 +24,7 @@ mod destruction;
 mod destruction_planning;
 mod direct_plan;
 mod discovery;
+mod execution_results;
 mod executor;
 mod graph;
 mod macros;
@@ -123,6 +124,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     destruction::register(module)?;
     destruction_planning::register(module)?;
     direct_plan::register(module)?;
+    execution_results::register(module)?;
     executor::register(module)?;
     plan_render::register(module)?;
     planner::register(module)?;

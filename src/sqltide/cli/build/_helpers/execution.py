@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide._native import row_error_policy_failure_message
+from sqltide._native import build_direct_execution_result, row_error_policy_failure_message
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build._helpers.confirmation import confirm_build
@@ -15,9 +15,6 @@ from sqltide.cli.build._helpers.execution_artifacts import render_direct_executi
 from sqltide.cli.build.models import BuildCommandOptions, DirectWorkflowPreparation
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
-from sqltide.executor.direct.main.build_direct_execution_result import (
-    build_direct_execution_result,
-)
 from sqltide.executor.direct.main.execute_direct_build_workflow import (
     execute_direct_build_workflow,
 )

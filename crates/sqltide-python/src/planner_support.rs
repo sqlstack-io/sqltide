@@ -1067,7 +1067,7 @@ fn binding_triples<'py>(bindings: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
 /// One managed root classified as active, greenfield or damaged.
 #[pyfunction]
 #[pyo3(signature = (*, inspected_state, root_key))]
-fn inspect_root_deployment_state<'py>(
+pub(crate) fn inspect_root_deployment_state<'py>(
     py: Python<'py>,
     inspected_state: &Bound<'py, PyAny>,
     root_key: &Bound<'py, PyAny>,
@@ -1100,7 +1100,7 @@ fn inspect_root_deployment_state<'py>(
 /// Managed-table inspection from one catalog snapshot, without further warehouse reads.
 #[pyfunction]
 #[pyo3(signature = (*, catalog))]
-fn build_inspected_managed_table_state_from_catalog<'py>(
+pub(crate) fn build_inspected_managed_table_state_from_catalog<'py>(
     py: Python<'py>,
     catalog: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {

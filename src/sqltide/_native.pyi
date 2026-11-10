@@ -134,12 +134,22 @@ from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
+from sqltide.executor.backfill.models import (
+    BackfillBootstrapRequest,
+    BackfillExecutionResult,
+    RootBackfillReport,
+)
 from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRequest,
     InactivePipeline,
 )
 from sqltide.executor.destruction.types import DestructionPlanningConnection
+from sqltide.executor.direct.models import (
+    DirectBuildExecutionResult,
+    DirectBuildRequest,
+    DirectReplayCapture,
+)
 from sqltide.executor.population.models import (
     PopulationPlan,
     PopulationRealization,
@@ -147,6 +157,7 @@ from sqltide.executor.population.models import (
     PopulationSourceRecreation,
     PopulationWatermark,
 )
+from sqltide.executor.workflow.models import WorkflowExecutionResult
 from sqltide.executor.workflow.types import NativeStatement
 
 type _Span = tuple[int, int, int, int, int, int]
@@ -511,6 +522,22 @@ def with_metadata_dead_letter_target[ResourceT](
 def build_direct_population_plan(
     *, plan: DirectPlan, realized_project: RealizedProject
 ) -> PopulationPlan: ...
+def build_direct_execution_result(
+    *,
+    request: DirectBuildRequest,
+    execution: WorkflowExecutionResult,
+    captures: tuple[DirectReplayCapture, ...],
+) -> DirectBuildExecutionResult: ...
+def build_virtual_execution_result(
+    *,
+    request: BackfillBootstrapRequest,
+    root_reports: tuple[RootBackfillReport, ...],
+    existing_relation_names: frozenset[str],
+    execution: WorkflowExecutionResult,
+) -> BackfillExecutionResult: ...
+def build_root_backfill_reports(
+    *, catalog: CatalogSnapshot, desired_state: DesiredState
+) -> tuple[RootBackfillReport, ...]: ...
 def bounded_replay_outcome(
     mode: str | None,
     forced_start_time: bool,
