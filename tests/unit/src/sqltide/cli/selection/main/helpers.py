@@ -5,6 +5,8 @@ from itertools import chain
 from pathlib import Path
 from typing import cast
 
+import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
@@ -16,7 +18,6 @@ from sqltide.compiler.compile.models import (
     CompiledTableModel,
     CompilerAdapterProfile,
 )
-from sqltide.compiler.discovery.main._discover_pipelines import discover_pipelines
 from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     LoadedPipeline,
@@ -29,7 +30,6 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import ReplayBoundaryMode, ReplayLineageMode, SourceKind
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer
 
@@ -37,7 +37,7 @@ SELECTOR_PIPELINES_ROOT: Path = Path("tests/fixtures/selector_project/pipelines"
 
 
 def compile_selector_project_pipelines() -> tuple[CompiledPipeline, ...]:
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(SELECTOR_PIPELINES_ROOT)
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(SELECTOR_PIPELINES_ROOT)
     sql_analyzer: SqlModelAnalyzer = SqlModelAnalyzer(dialect="clickhouse")
     return tuple(
         compile_pipeline(loaded_pipeline=loaded_pipeline, sql_analyzer=sql_analyzer)

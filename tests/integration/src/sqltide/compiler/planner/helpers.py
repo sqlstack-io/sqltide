@@ -5,6 +5,7 @@ from typing import cast
 
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.models import AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -36,7 +37,6 @@ from sqltide.compiler.discovery.types import ReplayBoundaryMode
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.planner.models import DeploymentPlan, PlannedObjectChange
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     render_adapter_table_ddl,
     render_create_materialized_view_ddl,

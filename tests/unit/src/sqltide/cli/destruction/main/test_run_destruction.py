@@ -91,7 +91,7 @@ def test_given_reviewed_plan_when_running_destruction_then_executes_frozen_actor
         control_store_factory,
     )
     monkeypatch.setattr(
-        "sqltide.cli.destruction._helpers.execution.load_project_input_for_path",
+        "sqltide._native.load_project_input_for_path",
         project_loader,
     )
     monkeypatch.setattr(

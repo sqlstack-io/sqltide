@@ -1,6 +1,7 @@
 from collections.abc import Iterator, Mapping, Sequence
 from typing import cast
 
+from sqltide._native import sql_canonicalize
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
     AdapterManifest,
@@ -32,7 +33,6 @@ from sqltide.compiler.planner.models import (
     PreparedObjectMapping,
     PublishEventRecord,
 )
-from sqltide.compiler.sql_analysis.main._canonicalize_sql import canonicalize_sql
 
 
 def build_test_manifest() -> AdapterManifest:
@@ -336,4 +336,4 @@ def build_metadata_state() -> MetadataState:
 
 
 def normalize_clickhouse_sql(sql: str) -> str:
-    return canonicalize_sql(sql=sql, dialect="clickhouse")
+    return sql_canonicalize(sql, "clickhouse")

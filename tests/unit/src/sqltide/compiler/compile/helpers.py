@@ -4,6 +4,7 @@ from textwrap import dedent, indent
 from typing import cast
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
 from sqltide.adapter.models import AdapterManagedSource, AdapterMaterializedView, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -21,10 +22,6 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
-from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
     KafkaSettings,
@@ -37,10 +34,6 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
 
 
@@ -54,11 +47,11 @@ def compile_test_pipeline(loaded_pipeline: LoadedPipeline) -> CompiledPipeline:
 def compile_logical_project(project_dir: Path) -> CompiledProject:
     loaded_project: LoadedProject = cast(
         LoadedProject,
-        load_project_input_for_path(path=project_dir),
+        _native.load_project_input_for_path(path=project_dir),
     )
     adapter_profile: CompilerAdapterProfile = build_compiler_adapter_profile(ClickHouseAdapter())
     inputs: CompileProjectInputs = build_compile_inputs(
-        discovered_inputs=discover_project_inputs(
+        discovered_inputs=_native.discover_project_inputs(
             pipelines_root=project_dir / "pipelines",
             loaded_project=loaded_project,
         ),

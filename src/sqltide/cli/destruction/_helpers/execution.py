@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.constants import SQLITE_MEMORY_URLS
@@ -21,9 +22,6 @@ from sqltide.cli.destruction.models import DestructionCommandOptions
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -101,7 +99,7 @@ def run_authorized_destruction(
             )
             fresh_analysis: CompileAnalysis = _analyze(
                 options=options,
-                loaded_project=load_project_input_for_path(
+                loaded_project=_native.load_project_input_for_path(
                     path=options.project_dir,
                     selected_target=options.selected_target,
                     cli_variables=dict(options.cli_variables),

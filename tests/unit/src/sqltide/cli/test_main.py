@@ -598,7 +598,7 @@ def test_given_resolved_dev_context_when_reloading_then_compilation_reuses_it(
         return 0
 
     monkeypatch.setattr(
-        "sqltide.cli.dev.main._run_dev.load_project_input_for_path",
+        "sqltide._native.load_project_input_for_path",
         fake_load_project_input_for_path,
     )
     monkeypatch.setattr("sqltide.cli.dev.main._run_dev.analyze_project", fake_analyze_project)

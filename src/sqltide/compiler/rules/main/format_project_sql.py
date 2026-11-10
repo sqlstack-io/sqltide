@@ -4,7 +4,6 @@ from pathlib import Path
 
 import sqltide._native as _native
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.discovery.main._discover_project_inputs import discover_project_inputs
 from sqltide.compiler.discovery.models import DiscoveredProjectInputs, LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.rules._helpers.fixes import fixed_file
@@ -33,7 +32,7 @@ def format_project_sql(
             enforce_rules=False,
             rule_selection=selection,
         )
-    discovered: DiscoveredProjectInputs = discover_project_inputs(
+    discovered: DiscoveredProjectInputs = _native.discover_project_inputs(
         pipelines_root=root, loaded_project=loaded_project
     )
     results: list[FormattedSource] = []

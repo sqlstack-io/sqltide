@@ -3,10 +3,10 @@
 from collections import Counter
 from pathlib import Path
 
+from sqltide._native import sql_canonicalize
 from sqltide.compiler.compile.models import CompiledModel, CompiledTableModel, CompiledViewModel
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.rules.exceptions import SqlRulesError
-from sqltide.compiler.sql_analysis.main._canonicalize_sql import canonicalize_sql
 
 
 def verify_fix(*, before: CompileAnalysis, after: CompileAnalysis, edited: Path) -> None:
@@ -49,8 +49,8 @@ def verify_fix(*, before: CompileAnalysis, after: CompileAnalysis, edited: Path)
         )
         if owner != edited:
             dialect: str = before.adapter_profile.sql_analysis_dialect
-            old_sql: str = canonicalize_sql(sql=model.query, dialect=dialect)
-            new_sql: str = canonicalize_sql(sql=other.query, dialect=dialect)
+            old_sql: str = sql_canonicalize(model.query, dialect)
+            new_sql: str = sql_canonicalize(other.query, dialect)
             if old_sql != new_sql:
                 raise SqlRulesError("Rule fix changed another model's SQL")
     previous_diagnostics: Counter[tuple[Path | None, str, str]] = Counter(

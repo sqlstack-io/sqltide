@@ -11,6 +11,8 @@ use sqltide_compile::retention::{self, ModelRetention};
 use sqltide_compile::transforms::{self, Reference};
 use sqltide_discovery::model_spec::DEFAULT_SQL_MODEL_ENGINE;
 
+use crate::testing::{build_audit_quality_identity, build_sql_test_cases, replace_refs};
+
 const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
 const COMPILE_TYPES: &str = "sqltide.compiler.compile.types";
 const COMPILE_EXCEPTIONS: &str = "sqltide.compiler.compile.exceptions";
@@ -21,9 +23,6 @@ const SQL_ANALYSIS_EXCEPTIONS: &str = "sqltide.compiler.sql_analysis.exceptions"
 const SQL_ANALYSIS_TYPES: &str = "sqltide.compiler.sql_analysis.types";
 const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
 const DIAGNOSTICS_TYPES: &str = "sqltide.diagnostics.types";
-const SQL_TEST_CASES: &str = "sqltide.compiler.testing.main._build_sql_test_cases";
-const REPLACE_REFS: &str = "sqltide.compiler.compile.main.replace_refs";
-const AUDIT_IDENTITY: &str = "sqltide.compiler.quality.main._build_audit_quality_identity";
 
 /// One transform's `(name, relation type, ref type)` references in query order.
 type References = Vec<(String, String, Option<String>)>;
@@ -1055,22 +1054,15 @@ impl<'py> Compiler<'py> {
         }
         let adapter_profile: Bound<'py, PyAny> = inputs.getattr("adapter_profile")?;
         let dialect: Bound<'py, PyAny> = adapter_profile.getattr("sql_analysis_dialect")?;
-        let test_cases: Bound<'py, PyAny> = self.call(
-            &self
-                .py
-                .import(SQL_TEST_CASES)?
-                .getattr("build_sql_test_cases")?,
-            &[
-                ("loaded_tests", inputs.getattr("tests")?),
-                ("compiled_pipelines", pipelines.clone()),
-                ("reference_rewriter", reference_rewriter.clone()),
-                (
-                    "comparison_renderer",
-                    adapter_profile.getattr("render_set_difference_comparison")?,
-                ),
-                ("dialect", dialect.clone()),
-            ],
-        )?;
+        let test_cases: Bound<'py, PyAny> = build_sql_test_cases(
+            self.py,
+            &inputs.getattr("tests")?,
+            &pipelines,
+            reference_rewriter,
+            &adapter_profile.getattr("render_set_difference_comparison")?,
+            &dialect.extract::<String>()?,
+        )?
+        .into_any();
         let audits: Vec<Bound<'py, PyAny>> = self.resolve_audit_policies(inputs, &pipelines)?;
         let target: Bound<'py, PyAny> = inputs.getattr("effective_target")?;
         let audits: Bound<'py, PyAny> = self.compiled_audits(
@@ -1245,30 +1237,18 @@ impl<'py> Compiler<'py> {
             };
             resolver.set_item(model.getattr("key")?.getattr("name")?, resolved)?;
         }
-        let replace_refs: Bound<'py, PyAny> =
-            self.py.import(REPLACE_REFS)?.getattr("replace_refs")?;
-        let identity: Bound<'py, PyAny> = self
-            .py
-            .import(AUDIT_IDENTITY)?
-            .getattr("build_audit_quality_identity")?;
+        let dialect: String = dialect.extract()?;
         let mut compiled: Vec<Bound<'py, PyAny>> = Vec::new();
         for audit in audits {
-            let resolved_query: Bound<'py, PyAny> = self.call(
-                &replace_refs,
-                &[
-                    ("sql", audit.getattr("query")?),
-                    ("resolver", resolver.clone().into_any()),
-                    ("rewriter", reference_rewriter.clone()),
-                ],
-            )?;
-            let quality_identity: Bound<'py, PyAny> = self.call(
-                &identity,
-                &[
-                    ("audit", audit.clone()),
-                    ("resolved_query", resolved_query),
-                    ("dialect", dialect.clone()),
-                ],
-            )?;
+            let resolved_query: String = replace_refs(
+                self.py,
+                &audit.getattr("query")?,
+                &resolver,
+                reference_rewriter,
+            )?
+            .extract()?;
+            let quality_identity: Bound<'py, PyAny> =
+                build_audit_quality_identity(self.py, &audit, &resolved_query, &dialect)?;
             compiled.push(self.replace(&audit, &[("quality_identity", quality_identity)])?);
         }
         self.tuple(compiled)

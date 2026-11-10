@@ -2,12 +2,9 @@ from collections.abc import Callable
 from pathlib import Path
 from textwrap import dedent
 
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
 from sqltide.compiler.compile.main._assemble_project import assemble_project
 from sqltide.compiler.compile.models import CompiledProject, CompileProjectInputs
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 
 
 def assemble_project_with_completion(

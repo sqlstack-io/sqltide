@@ -1,10 +1,9 @@
 """Rewrite staged shadow queries onto deployment-suffixed physical relations."""
 
+from sqltide._native import rewrite_query, rewrite_template_query
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_TABLE
 from sqltide.compiler.compile.models import ObjectKey
-from sqltide.compiler.sql_analysis.main.rewrite_query import rewrite_query
-from sqltide.compiler.sql_analysis.main.rewrite_template_query import rewrite_template_query
 from sqltide.compiler.sql_analysis.models import SqlQueryRewriteResult, SqlRelationRewrite
 
 

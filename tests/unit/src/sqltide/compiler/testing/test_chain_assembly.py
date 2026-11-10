@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.compiler.testing.classes.sql_test_chain_assembler import SqlTestChainAssembler
 from sqltide.compiler.testing.models import SqlTestCase
 from tests.unit.src.sqltide.compiler.testing._test_types import (
     BuildSqlTestCasesErrorTestCase,
@@ -11,7 +10,7 @@ from tests.unit.src.sqltide.compiler.testing._test_types import (
     SqlTestWarningTestCase,
 )
 from tests.unit.src.sqltide.compiler.testing.helpers import (
-    build_deep_chain_assembler,
+    build_deep_chain_test_case,
     build_single_sql_test_case,
 )
 
@@ -145,12 +144,13 @@ def test_given_terminal_expected_target_when_assembling_then_it_resolves_the_rea
 def test_given_deep_model_chain_when_resolving_then_it_uses_iterative_dependency_order(
     test_case: SqlTestDeepChainTestCase,
 ) -> None:
-    assembler: SqlTestChainAssembler = build_deep_chain_assembler(model_count=test_case.model_count)
+    assembled: SqlTestCase = build_deep_chain_test_case(model_count=test_case.model_count)
+    cte_names: tuple[str, ...] = tuple(name for name, _query in assembled.target_cases[0].ctes)
 
-    terminal_cte_name: str = assembler.resolve(logical_name=f"model_{test_case.model_count - 1}")
-
-    assert terminal_cte_name == test_case.expected_terminal_cte_name
-    assert len(assembler.assembled_ctes) == test_case.expected_assembled_count
+    assert cte_names[-1] == test_case.expected_terminal_cte_name
+    assert sum(name.startswith("__model__") for name in cte_names) == (
+        test_case.expected_assembled_count
+    )
 
 
 @pytest.mark.parametrize(

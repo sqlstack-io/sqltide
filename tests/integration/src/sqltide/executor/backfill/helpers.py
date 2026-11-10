@@ -11,6 +11,7 @@ from typing import cast
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterConnectionConfig,
@@ -66,7 +67,6 @@ from sqltide.compiler.planner.models import (
     PlanningWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import RebuildExecutionMode
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.executor.backfill.main._build_virtual_bootstrap_workflow import (
     build_virtual_bootstrap_workflow,
 )

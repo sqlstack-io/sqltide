@@ -9,16 +9,3 @@ class AuditAttachmentKind(StrEnum):
     STANDALONE = "standalone"
     MODEL = "model"
     COLUMN = "column"
-
-
-type NativeGenericAuditInstance = tuple[
-    str,
-    list[tuple[str, object]],
-    str,
-    str,
-    str | None,
-    bool,
-    int | None,
-    int | None,
-    bool | None,
-]

@@ -4,11 +4,9 @@ from typing import cast
 
 from clickhouse_connect.driver.client import Client
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.compile.models import CompiledPipeline
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.dev_server._helpers.queries.message_query import read_source_messages
 from sqltide.dev_server.models import MessageQueryCursor, MessagesQueryRequest
@@ -62,7 +60,7 @@ def write_scheduled_audit_project(
         {audit_query}
         """,
     )
-    return cast(LoadedProject, load_project_input_for_path(path=project_dir))
+    return cast(LoadedProject, _native.load_project_input_for_path(path=project_dir))
 
 
 MESSAGE_CORPUS_RELATION_NAME: str = "raw__orders"

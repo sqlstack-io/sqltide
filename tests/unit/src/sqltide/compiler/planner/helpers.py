@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
@@ -70,9 +71,6 @@ from sqltide.compiler.compile.models import (
     KafkaSettings as CompiledKafkaSettings,
 )
 from sqltide.compiler.compile.types import DesiredObjectType
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
@@ -113,7 +111,6 @@ from sqltide.compiler.planner.models import (
     PublishEventRecord,
 )
 from sqltide.compiler.planner.types import ActualObject, DesiredObject, DirectSelectionMode
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer
 
 EXAMPLE_PIPELINE_DIRECTORY: Path = Path("tests/fixtures/basic_project/pipelines/pl__orders")
@@ -689,7 +686,7 @@ def analyze_direct_scope_project(*, project_root: Path) -> CompileAnalysis:
 
     return analyze_project(
         pipelines_root=project_root / "pipelines",
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

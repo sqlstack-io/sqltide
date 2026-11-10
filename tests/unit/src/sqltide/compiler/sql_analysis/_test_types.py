@@ -217,11 +217,3 @@ class SqlStringLiteralTestCase:
     description: str
     value: str
     expected_literal: str
-
-
-@dataclass(frozen=True)
-class SqlHeaderBlockTestCase:
-    description: str
-    sql: str
-    expected_headers: tuple[str, ...]
-    expected_body_fragments: tuple[str, ...]

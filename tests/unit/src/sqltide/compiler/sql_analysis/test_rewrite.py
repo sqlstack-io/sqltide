@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import SqlReferenceRewriter
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main._rewrite_references import rewrite_references
 from tests.unit.src.sqltide.compiler.sql_analysis._test_types import (
     ReferenceRewriteErrorTestCase,
     ReferenceRewriteTestCase,
@@ -79,10 +79,9 @@ from tests.unit.src.sqltide.compiler.sql_analysis._test_types import (
 def test_given_relation_markers_when_rewriting_then_preserves_non_reference_text(
     test_case: ReferenceRewriteTestCase,
 ) -> None:
-    rewritten: str = rewrite_references(
+    rewritten: str = SqlReferenceRewriter(dialect="clickhouse").rewrite(
         sql=test_case.sql,
-        resolver=test_case.resolver,
-        dialect="clickhouse",
+        resolver=dict(test_case.resolver),
     )
 
     assert rewritten == test_case.expected_sql
@@ -128,8 +127,7 @@ def test_given_invalid_relation_rewrite_when_rewriting_then_raises_without_fallb
     test_case: ReferenceRewriteErrorTestCase,
 ) -> None:
     with pytest.raises(SqlAnalysisError, match=test_case.expected_error_fragment):
-        rewrite_references(
+        SqlReferenceRewriter(dialect="clickhouse").rewrite(
             sql=test_case.sql,
-            resolver=test_case.resolver,
-            dialect="clickhouse",
+            resolver=dict(test_case.resolver),
         )

@@ -5,14 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterQueryResult
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile.main.replace_refs import replace_refs
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.executor.auditing.constants import AUDIT_SAMPLE_LIMIT
 from sqltide.executor.auditing.exceptions import AuditExecutionError
 from sqltide.executor.auditing.models import SqlAuditResult, SqlAuditRunResult
@@ -48,7 +45,7 @@ def _execute_single_sql_audit(
     client: AdapterConnection,
     reference_rewriter: SqlReferenceRewriter,
 ) -> SqlAuditResult:
-    resolved_query: str = replace_refs(
+    resolved_query: str = _native.replace_refs(
         sql=loaded_audit.query,
         resolver=dict(resolver),
         rewriter=reference_rewriter,

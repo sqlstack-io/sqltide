@@ -1,10 +1,9 @@
 """Parse ClickHouse catalog details through the SQL-analysis boundary."""
 
+from sqltide._native import analyze_catalog_sql, parse_expression_list
 from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapters.clickhouse.constants import CLICKHOUSE_VIEW_ENGINE, EMPTY_KEY_EXPRESSIONS
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main.analyze_catalog_sql import analyze_catalog_sql
-from sqltide.compiler.sql_analysis.main.parse_expression_list import parse_expression_list
 from sqltide.compiler.sql_analysis.models import SqlCatalogAnalysis, SqlRelationIdentity
 
 

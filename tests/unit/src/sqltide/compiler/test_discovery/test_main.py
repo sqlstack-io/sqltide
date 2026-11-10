@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
 from sqltide.compiler.test_discovery.models import LoadedSqlTest, SqlTestModelPayload
 from tests.unit.src.sqltide.compiler.macros.helpers import (
     build_test_macro_runtime,
@@ -101,7 +101,7 @@ def test_given_valid_sql_test_files_when_discovering_then_it_returns_loaded_sql_
     tests_root: Path = tmp_path / "tests"
     write_sql_test_file(tests_root / test_case.relative_file_path, test_case.file_contents)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(root=tests_root)
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(root=tests_root)
 
     payload: SqlTestModelPayload = model_payload(loaded_tests[0])
 
@@ -230,7 +230,7 @@ def test_given_invalid_sql_test_files_when_discovering_then_it_raises_clear_erro
     write_sql_test_file(tests_root / test_case.relative_file_path, test_case.file_contents)
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        discover_sql_tests(root=tests_root)
+        _native.discover_sql_tests(root=tests_root)
 
 
 @pytest.mark.parametrize(
@@ -271,7 +271,7 @@ def test_given_sql_test_macros_when_discovering_then_it_expands_test_body(
     macro_context: MacroContext
     macro_registry, macro_context = build_test_macro_runtime(tmp_path)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(
         root=tests_root,
         macro_registry=macro_registry,
         macro_context=macro_context,
@@ -325,7 +325,7 @@ def test_given_multiple_sql_tests_in_one_file_when_discovering_then_it_returns_e
     tests_root: Path = tmp_path / "tests"
     write_sql_test_file(tests_root / "order_events/test_multi.sql", test_case.file_contents)
 
-    loaded_tests: list[LoadedSqlTest] = discover_sql_tests(root=tests_root)
+    loaded_tests: list[LoadedSqlTest] = _native.discover_sql_tests(root=tests_root)
 
     assert (
         tuple(

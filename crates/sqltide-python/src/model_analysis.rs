@@ -114,7 +114,7 @@ pub(crate) fn sql_analysis_error(py: Python<'_>, failure: PyErr) -> PyResult<PyE
 
 /// Each storage expression with the output columns it references; an unknown column raises
 /// `SqlStorageReferenceError`.
-fn storage_expressions<'py>(
+pub(crate) fn storage_expressions<'py>(
     py: Python<'py>,
     analyzer: &Bound<'py, PyAny>,
     order_by: &Bound<'py, PyAny>,
@@ -185,24 +185,8 @@ fn storage_expressions<'py>(
     Ok(PyTuple::new(py, analyzed)?.into_any())
 }
 
-/// Parse every authored storage expression once and validate its references.
-#[pyfunction]
-#[pyo3(signature = (*, order_by, partition_by, ttl, output_columns, analyzer))]
-fn analyze_storage_expressions<'py>(
-    py: Python<'py>,
-    order_by: &Bound<'py, PyAny>,
-    partition_by: &Bound<'py, PyAny>,
-    ttl: &Bound<'py, PyAny>,
-    output_columns: &Bound<'py, PyAny>,
-    analyzer: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
-    storage_expressions(py, analyzer, order_by, partition_by, ttl, output_columns)
-}
-
 /// `(analysis, tree)` with every compiler-critical fact of one model.
-#[pyfunction]
-#[pyo3(signature = (*, sql, engine, order_by, partition_by, ttl, analyzer))]
-fn analyze_model_sql<'py>(
+pub(crate) fn analyze_model_sql<'py>(
     py: Python<'py>,
     sql: &Bound<'py, PyAny>,
     engine: &str,
@@ -311,18 +295,6 @@ fn aggregate_facts<'py>(
     )
 }
 
-/// Query and engine aggregation facts from a parsed tree's aggregate function names.
-#[pyfunction]
-#[pyo3(signature = (*, function_names, has_group_by, engine))]
-fn build_aggregate_facts<'py>(
-    py: Python<'py>,
-    function_names: Vec<String>,
-    has_group_by: bool,
-    engine: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    aggregate_facts(py, function_names, has_group_by, engine)
-}
-
 /// Logical relation references found outside comments and quoted text, in authored order.
 #[pyfunction]
 pub(crate) fn extract_references<'py>(py: Python<'py>, sql: &str) -> PyResult<Bound<'py, PyAny>> {
@@ -352,8 +324,5 @@ pub(crate) fn extract_references<'py>(py: Python<'py>, sql: &str) -> PyResult<Bo
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(analyze_model_sql, module)?)?;
-    module.add_function(wrap_pyfunction!(build_aggregate_facts, module)?)?;
-    module.add_function(wrap_pyfunction!(extract_references, module)?)?;
-    module.add_function(wrap_pyfunction!(analyze_storage_expressions, module)?)
+    module.add_function(wrap_pyfunction!(extract_references, module)?)
 }

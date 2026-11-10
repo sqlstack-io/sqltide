@@ -36,24 +36,6 @@ class SqlReference:
 
 
 @dataclass(frozen=True)
-class SqlCommonTableExpression:
-    """One authored top-level common table expression and its verbatim body."""
-
-    name: str
-    query: str
-    span: SqlSourceSpan
-
-
-@dataclass(frozen=True)
-class SqlTopLevelCtes:
-    """Authored top-level CTEs plus the statement text that follows them."""
-
-    ctes: tuple[SqlCommonTableExpression, ...]
-    trailing_sql: str
-    trailing_span: SqlSourceSpan
-
-
-@dataclass(frozen=True)
 class SqlOutputColumn:
     """One exact typed output from the outer model projection list."""
 
@@ -175,13 +157,3 @@ class SqlCatalogAnalysis:
         """Return the first physical source when one exists."""
 
         return self.source_relations[0] if self.source_relations else None
-
-
-@dataclass(frozen=True)
-class SqlHeaderBlock:
-    """One lexically isolated SQL extension header and following body."""
-
-    start: int
-    body_start: int
-    header: str
-    body: str

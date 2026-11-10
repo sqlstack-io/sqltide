@@ -8,14 +8,12 @@ from unittest.mock import Mock
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry.main.main import _main_with_dependencies
 from sqltide.cli.entry.models import CliConnectionOptions, CliEntrypointHandlers
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import LoadedProject
 from tests.unit.src.sqltide.cli._test_types import (
     CliAdapterPlanExecutionTestCase,
@@ -496,7 +494,7 @@ def test_given_resolved_project_secret_when_rendering_surfaces_then_it_is_never_
         '[targets.test]\ndatabase = "analytics"\n',
         encoding="utf-8",
     )
-    loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
     connect: Mock = Mock(side_effect=AssertionError("connection IO occurred"))
     monkeypatch.setattr(ClickHouseAdapter, "connect", connect)
     handlers: CliEntrypointHandlers = handlers_with_overrides()

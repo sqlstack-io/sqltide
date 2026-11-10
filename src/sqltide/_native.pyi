@@ -1,5 +1,5 @@
 import os
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -9,9 +9,9 @@ from sqltide.adapter.models import (
     AdapterReplayRequest,
     CatalogSnapshot,
 )
-from sqltide.adapter.types import AdapterResourceRenderer
+from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
-from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
+from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
     CompiledPipeline,
     CompiledProject,
@@ -27,6 +27,8 @@ from sqltide.compiler.discovery.models import (
     AuditDefaults,
     DiscoveredPipelineDirectory,
     DiscoveredProjectFile,
+    DiscoveredProjectInputs,
+    DiscoveredSourceFile,
     EffectiveProjectConfiguration,
     ExecutionSettings,
     ExternalTableSourceStep,
@@ -40,6 +42,7 @@ from sqltide.compiler.discovery.models import (
     PipelineNaming,
     PipelineProtection,
     PostgresRefreshSourceStep,
+    Project,
     ProjectNaming,
     ReplayOnChangePolicy,
     SourceFreshnessPolicy,
@@ -62,19 +65,20 @@ from sqltide.compiler.planner.models import (
     RebuildSubtree,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
+from sqltide.compiler.quality.models import QualityNodeIdentity
 from sqltide.compiler.sql_analysis.models import (
-    SqlAggregateFacts,
-    SqlHeaderBlock,
+    SqlCatalogAnalysis,
     SqlModelAnalysis,
     SqlNamedQuery,
     SqlOutputColumn,
+    SqlQueryRewriteResult,
     SqlReference,
     SqlRelationRewrite,
+    SqlResolvedQuery,
     SqlStorageExpression,
-    SqlTopLevelCtes,
 )
+from sqltide.compiler.test_discovery.models import LoadedSqlTest
+from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -138,22 +142,15 @@ def render_clickhouse_run_statement_inserts(
 def render_clickhouse_latest_node_status_query(
     database: str, project_identity: str, target_identity: str, nodes: tuple[object, ...]
 ) -> str: ...
-def skip_trivia(sql: str, start: int) -> int: ...
-def find_matching_parenthesis(sql: str, open_index: int, context: str) -> int: ...
-def find_next_unquoted_character(sql: str, character: str, start: int) -> int | None: ...
-def try_consume_keyword(sql: str, start: int, keyword: str) -> int | None: ...
 def extract_references(sql: str) -> tuple[SqlReference, ...]: ...
-def split_header_blocks(sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]: ...
-def extract_top_level_ctes(sql: str, context: str) -> SqlTopLevelCtes: ...
-def expand_macro_calls(
+def expand_sql_macros(
+    *,
     sql: str,
-    macro_names: list[str],
-    file_path: str,
-    call: Callable[..., object],
-    fail: Callable[..., BaseException],
-    locate: Callable[..., BaseException],
-    declarations: Declarations | None,
-    capture: Callable[[tuple[str, list[tuple[int, int, int, int]]]], None] | None = None,
+    file_path: Path,
+    registry: MacroRegistry,
+    context: MacroContext,
+    source_line: int = 1,
+    source_column: int = 1,
 ) -> str: ...
 
 class RulesConfig:
@@ -198,19 +195,58 @@ class Declarations:
     def render_enum_member(self, name: str, member: str, file_path: str) -> str: ...
 
 def load_declarations(
-    constant_files: list[tuple[str, str]], enum_files: list[tuple[str, str]]
+    *,
+    constant_files: tuple[DiscoveredProjectFile, ...],
+    enum_files: tuple[DiscoveredProjectFile, ...],
 ) -> Declarations: ...
-def find_macro_call_names(sql: str) -> tuple[list[str], str | None]: ...
-def find_next_macro_start(sql: str, start: int) -> int | None: ...
-def rewrite_template_relations(
-    template: str, rewrites: list[SqlRelationRewrite], database_placeholder: str
-) -> str: ...
-def append_template_predicate(template: str, predicate: str) -> str: ...
-def merge_template_ctes(template: str, named_queries: list[SqlNamedQuery]) -> str: ...
+def find_macro_call_names(sql: str) -> tuple[str, ...]: ...
+def discover_sql_audits(
+    *,
+    root: Path,
+    contents_by_path: Mapping[Path, str] | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+    generic_audit_instances: tuple[LoadedGenericSqlAuditInstance, ...] = (),
+) -> list[LoadedSqlAudit]: ...
+def discover_sql_tests(
+    *,
+    root: Path,
+    contents_by_path: Mapping[Path, str] | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+) -> list[LoadedSqlTest]: ...
+def sql_test_target_names(*, loaded_test: LoadedSqlTest) -> tuple[str, ...]: ...
+def replace_refs(*, sql: str, resolver: dict[str, str], rewriter: SqlReferenceRewriter) -> str: ...
+def build_sql_test_cases(
+    *,
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    reference_rewriter: SqlReferenceRewriter,
+    comparison_renderer: AdapterSetDifferenceComparisonRenderer,
+    dialect: str,
+) -> tuple[SqlTestCase, ...]: ...
+def build_test_quality_identity(
+    *, loaded_test: LoadedSqlTest, test_case: SqlTestCase, dialect: str
+) -> QualityNodeIdentity: ...
+def build_audit_quality_identity(
+    *, audit: LoadedSqlAudit, resolved_query: str, dialect: str
+) -> QualityNodeIdentity: ...
+def require_quality_identity(identity: QualityNodeIdentity | None) -> QualityNodeIdentity: ...
+def build_model_audit_instances(
+    *, models: tuple[TransformStep | ViewStep, ...]
+) -> tuple[LoadedGenericSqlAuditInstance, ...]: ...
+def rewrite_template_query(
+    *,
+    template: str,
+    dialect: str,
+    database_placeholder: str,
+    relation_rewrites: tuple[SqlRelationRewrite, ...] = (),
+    predicate: str | None = None,
+    prepend_ctes: tuple[SqlNamedQuery, ...] = (),
+) -> SqlQueryRewriteResult: ...
 
 class PolyglotError(ValueError): ...
 
-def sql_normalize_data_type(sql: str, dialect_name: str) -> str: ...
 def sql_infer_projection_names(sql: str, dialect_name: str) -> tuple[str, ...]: ...
 
 class SqlTreeError(ValueError):
@@ -240,30 +276,51 @@ class SqlTreeAnalyzer:
     def canonicalize_query(self, sql: str, database_placeholder: str) -> tuple[str, str]: ...
     def storage_column_names(self, expression: str) -> list[str]: ...
 
-def sql_rewrite_query(
+class SqlModelAnalyzer:
+    def __init__(self, *, dialect: str) -> None: ...
+    def analyze(
+        self,
+        *,
+        sql: str,
+        engine: str,
+        order_by: tuple[str, ...],
+        partition_by: str | None,
+        ttl: str | None,
+    ) -> SqlModelAnalysis: ...
+    def resolve(
+        self, *, analysis: SqlModelAnalysis, resolver: Mapping[str, str]
+    ) -> SqlResolvedQuery: ...
+    def uses_prewhere(self, *, analysis: SqlModelAnalysis) -> bool: ...
+    def canonicalize_query(self, *, sql: str) -> SqlResolvedQuery: ...
+    def analyze_storage(
+        self,
+        *,
+        order_by: tuple[str, ...],
+        partition_by: str | None,
+        ttl: str | None,
+        output_columns: tuple[SqlOutputColumn, ...],
+    ) -> tuple[SqlStorageExpression, ...]: ...
+    def is_row_level(self, *, analysis: SqlModelAnalysis) -> bool: ...
+    def quarantine_ineligibility(self, *, analysis: SqlModelAnalysis) -> tuple[str, str] | None: ...
+    def quarantine_split(self, *, sql: str, model_name: str) -> tuple[str, str]: ...
+
+class SqlReferenceRewriter:
+    def __init__(self, *, dialect: str) -> None: ...
+    def rewrite(self, *, sql: str, resolver: Mapping[str, str]) -> str: ...
+
+def rewrite_query(
+    *,
     sql: str,
-    dialect_name: str,
-    rewrites: list[tuple[str, str, list[str | None] | None, bool]],
-    predicate: str | None,
-    ctes: list[tuple[str, str]],
-) -> tuple[str, list[str], bool]: ...
+    dialect: str,
+    relation_rewrites: tuple[SqlRelationRewrite, ...] = (),
+    predicate: str | None = None,
+    prepend_ctes: tuple[SqlNamedQuery, ...] = (),
+) -> SqlQueryRewriteResult: ...
 def sql_quarantine_ineligibility(sql: str, dialect_name: str) -> tuple[str, str] | None: ...
 def sql_quarantine_split(sql: str, model_name: str, dialect_name: str) -> tuple[str, str]: ...
 def sql_select_is_row_level(sql: str, dialect_name: str) -> bool: ...
-def sql_select_aggregate_facts(sql: str, dialect_name: str) -> tuple[list[str], bool]: ...
-def sql_analyze_catalog(
-    sql: str, dialect_name: str
-) -> tuple[
-    str,
-    str | None,
-    list[tuple[str | None, str]],
-    tuple[str | None, str] | None,
-    tuple[str | None, str] | None,
-    str | None,
-    str | None,
-    list[tuple[str, str]],
-]: ...
-def sql_expression_list(sql: str, dialect_name: str) -> list[str]: ...
+def analyze_catalog_sql(*, sql: str, dialect: str) -> SqlCatalogAnalysis: ...
+def parse_expression_list(*, sql: str, dialect: str) -> tuple[str, ...]: ...
 def sql_validate_query(sql: str, dialect_name: str) -> None: ...
 def sql_canonicalize(sql: str, dialect_name: str) -> str: ...
 def sql_render_string_literal(value: str, dialect_name: str) -> str: ...
@@ -496,13 +553,18 @@ def find_direct_out_of_scope_consumers(
     execution_scope: tuple[LogicalResourceKey, ...],
 ) -> tuple[str, ...]: ...
 def resolve_variable_values(
+    *,
     values: Mapping[str, object],
     environment: Mapping[str, str],
     field_path_prefix: str,
-    defer_missing_environment: bool,
+    defer_missing_environment: bool = False,
 ) -> dict[str, object]: ...
 def interpolate_config_value(
-    value: object, variables: Mapping[str, object], environment: Mapping[str, str], field_path: str
+    *,
+    value: object,
+    variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    field_path: str,
 ) -> object: ...
 def model_header_block(contents: str) -> tuple[str, str, int, int] | None: ...
 def sql_test_blocks(contents: str) -> list[tuple[int, tuple[str, str, int] | None]]: ...
@@ -568,16 +630,6 @@ def parse_pipeline_settings(
     ModelRetentionPolicy | Literal[False] | None,
     str | None,
 ]: ...
-def parse_source_registry(
-    files: list[tuple[str, object, str | None]],
-    variables: Mapping[str, object],
-    environment: Mapping[str, str],
-    default_ttl: str | None,
-    default_retention: KafkaRetentionPolicy | Literal[False] | None,
-    default_broker_list: str | None,
-    default_freshness: SourceFreshnessPolicy | None,
-    derive_name: Callable[..., tuple[str, str, str]],
-) -> list[tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...]]: ...
 
 DEFAULT_ADAPTER_NAME: str
 DEFAULT_PIPELINE_PREFIX: str
@@ -874,18 +926,6 @@ class DesiredGraph:
         self, object_changes: Iterable[PlannedObjectChange]
     ) -> tuple[RebuildSubtree, ...]: ...
 
-def validate_replay_policies(
-    project_policy: tuple[str, bool, bool, bool] | None,
-    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
-) -> None: ...
-def validate_project_inputs(
-    sources: list[tuple[str, str]],
-    pipelines: list[tuple[str, str, bool, bool, bool, list[tuple[str, bool, bool, bool]]]],
-    project_references: tuple[str, list[tuple[str, str]]] | None,
-    project_policy: tuple[str, bool, bool, bool] | None,
-    tests: list[tuple[str, str]],
-    audits: list[tuple[str, str]],
-) -> None: ...
 def quality_test_identity(
     node_name: str,
     mode: str,
@@ -943,6 +983,71 @@ def parse_model_sql(
     macro_registry: MacroRegistry | None = None,
     macro_context: MacroContext | None = None,
 ) -> tuple[dict[str, Any], str]: ...
+def read_discovered_files(
+    *, file_paths: Iterable[Path], project_dir: Path
+) -> tuple[DiscoveredProjectFile, ...]: ...
+def discover_macro_files(*, project_dir: Path) -> tuple[DiscoveredProjectFile, ...]: ...
+def discover_pipeline_directories(
+    *, pipelines_root: Path, project_dir: Path
+) -> tuple[DiscoveredPipelineDirectory, ...]: ...
+def load_discovered_pipelines(
+    *,
+    pipeline_directories: tuple[DiscoveredPipelineDirectory, ...],
+    model_files: tuple[DiscoveredProjectFile, ...],
+    macro_registry: MacroRegistry | None,
+    macro_context: MacroContext | None,
+    sources_by_name: Mapping[
+        str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
+    ],
+    project: Project | None,
+    project_naming: ProjectNaming,
+    default_mode: PipelineMode | str,
+) -> tuple[LoadedPipeline, ...]: ...
+def discover_project_inputs(
+    *, pipelines_root: Path, loaded_project: LoadedProject | None
+) -> DiscoveredProjectInputs: ...
+def discover_pipelines(root: Path) -> list[LoadedPipeline]: ...
+def discover_source_registry(
+    *,
+    project_dir: Path,
+    variables: Mapping[str, object],
+    environment: Mapping[str, str],
+    default_managed_source_ttl: str | None = None,
+    default_managed_source_retention: KafkaRetentionPolicy | Literal[False] | None = None,
+    default_kafka_broker_list: str | None = None,
+    default_freshness: SourceFreshnessPolicy | None = None,
+    default_kafka_naming_macro: str | None = None,
+    macro_registry: MacroRegistry | None = None,
+) -> tuple[DiscoveredSourceFile, ...]: ...
+def source_registry_by_name(
+    source_files: Iterable[DiscoveredSourceFile],
+) -> dict[str, KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep]: ...
+def load_project_input_for_path(
+    *,
+    path: Path,
+    selected_target: str | None = None,
+    cli_variables: Mapping[str, object] | None = None,
+    environment: Mapping[str, str] | None = None,
+) -> LoadedProject | None: ...
+def validate_replay_policies_for_mode(
+    *,
+    default_pipeline_mode: PipelineMode,
+    project: Project | None,
+    project_file_path: Path | None,
+    loaded_pipelines: tuple[LoadedPipeline, ...],
+) -> None: ...
+def validate_attached_project_inputs(
+    *,
+    source_files: tuple[DiscoveredSourceFile, ...],
+    loaded_project: LoadedProject | None,
+    loaded_pipelines: tuple[LoadedPipeline, ...],
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+) -> None: ...
+def immutable_config_pairs(
+    values: tuple[tuple[str, object], ...],
+) -> tuple[tuple[str, object], ...]: ...
+def parse_sql_header(*, header: str) -> dict[str, object]: ...
 def load_pipeline_directories(
     *,
     pipeline_directories: tuple[DiscoveredPipelineDirectory, ...],
@@ -966,26 +1071,6 @@ def load_transform_from_sql_file(
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
-def analyze_model_sql(
-    *,
-    sql: str,
-    engine: str,
-    order_by: tuple[str, ...],
-    partition_by: str | None,
-    ttl: str | None,
-    analyzer: SqlTreeAnalyzer,
-) -> tuple[SqlModelAnalysis, SqlModelTree]: ...
-def analyze_storage_expressions(
-    *,
-    order_by: tuple[str, ...],
-    partition_by: str | None,
-    ttl: str | None,
-    output_columns: tuple[SqlOutputColumn, ...],
-    analyzer: SqlTreeAnalyzer,
-) -> tuple[SqlStorageExpression, ...]: ...
-def build_aggregate_facts(
-    *, function_names: list[str], has_group_by: bool, engine: str
-) -> SqlAggregateFacts: ...
 def compile_pipeline(
     *, loaded_pipeline: LoadedPipeline, sql_analyzer: SqlModelAnalyzer
 ) -> CompiledPipeline: ...

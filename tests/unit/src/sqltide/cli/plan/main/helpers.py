@@ -8,6 +8,8 @@ from typing import cast
 
 import pytest
 
+import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.models import AdapterDirectFingerprintSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -19,10 +21,6 @@ from sqltide.compiler.compile.models import (
     CompiledProject,
     CompiledSource,
     CompilerAdapterProfile,
-)
-from sqltide.compiler.discovery.main._discover_pipelines import discover_pipelines
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
 )
 from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
@@ -36,7 +34,6 @@ from sqltide.compiler.discovery.types import ReplayBoundaryMode, SourceKind
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.executor.direct.models import DirectBuildRequest
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer
@@ -57,7 +54,7 @@ _ABSENT_DIRECT_FINGERPRINTS: AdapterDirectFingerprintSnapshot = AdapterDirectFin
 
 
 def compile_selector_project_pipelines() -> tuple[CompiledPipeline, ...]:
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(SELECTOR_PIPELINES_ROOT)
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(SELECTOR_PIPELINES_ROOT)
     sql_analyzer: SqlModelAnalyzer = SqlModelAnalyzer(dialect="clickhouse")
     return tuple(
         compile_pipeline(loaded_pipeline=loaded_pipeline, sql_analyzer=sql_analyzer)
@@ -170,7 +167,7 @@ def run_scope_project_plan(
             }[virtual_environments],
             direct_fingerprints=direct_fingerprints,
         ),
-        loaded_project=load_project_input_for_path(path=project_root),
+        loaded_project=_native.load_project_input_for_path(path=project_root),
         adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
     )
 

@@ -1,10 +1,8 @@
 import pytest
 
+import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter
 from sqltide.compiler.compile.exceptions import PipelineCompileError
-from sqltide.compiler.compile.main.replace_refs import replace_refs
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from tests.unit.src.sqltide.compiler.compile._helpers.refs._test_types import (
     ReplaceRefsErrorTestCase,
     ReplaceRefsTestCase,
@@ -57,7 +55,7 @@ from tests.unit.src.sqltide.compiler.compile._helpers.refs.helpers import build_
 def test_given_sql_when_replacing_refs_then_it_rewrites_only_real_ref_calls(
     test_case: ReplaceRefsTestCase,
 ) -> None:
-    replaced_sql: str = replace_refs(
+    replaced_sql: str = _native.replace_refs(
         sql=test_case.sql,
         resolver=test_case.resolver,
         rewriter=SqlReferenceRewriter(dialect="clickhouse"),
@@ -86,7 +84,7 @@ def test_given_unresolved_ref_when_replacing_then_it_raises_expected_error(
     test_case: ReplaceRefsErrorTestCase,
 ) -> None:
     with pytest.raises(test_case.expected_error_type, match=test_case.expected_error_fragment):
-        replace_refs(
+        _native.replace_refs(
             sql=test_case.sql,
             resolver=test_case.resolver,
             rewriter=SqlReferenceRewriter(dialect="clickhouse"),

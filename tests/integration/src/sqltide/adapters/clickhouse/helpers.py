@@ -13,6 +13,7 @@ from testcontainers.core.waiting_utils import wait_for
 from testcontainers.postgres import PostgresContainer
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterConnectionConfig,
@@ -30,7 +31,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
 )
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
 

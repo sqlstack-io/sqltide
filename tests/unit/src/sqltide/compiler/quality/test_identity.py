@@ -2,12 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.compiler.quality.main._build_audit_quality_identity import (
-    build_audit_quality_identity,
-)
-from sqltide.compiler.quality.main._build_test_quality_identity import (
-    build_test_quality_identity,
-)
+import sqltide._native as _native
 from sqltide.compiler.quality.models import QualityNodeIdentity
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from tests.unit.src.sqltide.compiler.quality._test_types import (
@@ -96,7 +91,7 @@ from tests.unit.src.sqltide.compiler.quality.helpers import audit, build_test_ca
 def test_given_audit_variants_when_building_identity_then_classifies_changes(
     test_case: AuditIdentityComparisonTestCase,
 ) -> None:
-    first: QualityNodeIdentity = build_audit_quality_identity(
+    first: QualityNodeIdentity = _native.build_audit_quality_identity(
         audit=audit(
             path=Path("/project/audits/original.sql"),
             name=test_case.first_name,
@@ -106,7 +101,7 @@ def test_given_audit_variants_when_building_identity_then_classifies_changes(
         resolved_query=test_case.first_resolved_query,
         dialect="clickhouse",
     )
-    second: QualityNodeIdentity = build_audit_quality_identity(
+    second: QualityNodeIdentity = _native.build_audit_quality_identity(
         audit=audit(
             path=Path("/project/audits/moved.sql"),
             name=test_case.second_name,
@@ -144,12 +139,12 @@ def test_given_unchanged_test_when_model_sql_changes_then_only_execution_changes
     test_case: QualityExecutionIdentityTestCase,
 ) -> None:
     loaded: LoadedSqlTest = loaded_test()
-    first: QualityNodeIdentity = build_test_quality_identity(
+    first: QualityNodeIdentity = _native.build_test_quality_identity(
         loaded_test=loaded,
         test_case=build_test_case(test_case.first_model_query),
         dialect="clickhouse",
     )
-    second: QualityNodeIdentity = build_test_quality_identity(
+    second: QualityNodeIdentity = _native.build_test_quality_identity(
         loaded_test=loaded,
         test_case=build_test_case(test_case.second_model_query),
         dialect="clickhouse",

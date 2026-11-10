@@ -1,9 +1,9 @@
 """Compilation entry point for one loaded pipeline."""
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.discovery.models import LoadedPipeline
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 
 
 def compile_pipeline(

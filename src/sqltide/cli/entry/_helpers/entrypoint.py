@@ -4,13 +4,11 @@ import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.models import ResolvedCliProjectConfig
 from sqltide.compiler.discovery.constants import DEFAULT_ADAPTER_NAME
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import EffectiveProjectConfiguration, LoadedProject
 
 
@@ -67,7 +65,7 @@ def resolve_project_config(
     cli_variables: Mapping[str, object] | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> ResolvedCliProjectConfig:
-    loaded_project: LoadedProject | None = load_project_input_for_path(
+    loaded_project: LoadedProject | None = _native.load_project_input_for_path(
         path=pipelines_root
         if pipelines_root is not None
         else project_dir

@@ -13,6 +13,8 @@ from urllib.request import urlopen
 from clickhouse_connect.driver.client import Client
 from kafka import KafkaProducer
 
+import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
     CompiledModel,
@@ -21,7 +23,6 @@ from sqltide.compiler.compile.models import (
     CompiledTableModel,
     DesiredState,
 )
-from sqltide.compiler.discovery.main._discover_pipelines import discover_pipelines
 from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
     LoadedPipeline,
@@ -29,7 +30,6 @@ from sqltide.compiler.discovery.models import (
     ReplayOnChangeRule,
 )
 from sqltide.compiler.discovery.types import ReplayLineageMode, ReplayOnChangeMode
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
 from sqltide.dev_server._helpers.payloads.activity_payload import (
     build_query_views_activity_query,
@@ -84,7 +84,7 @@ def build_greenfield_workflow_compiled_pipeline(
 
 
 def build_authored_greenfield_workflow_compiled_pipeline(*, project_dir: Path) -> CompiledPipeline:
-    loaded_pipelines: list[LoadedPipeline] = discover_pipelines(project_dir / "pipelines")
+    loaded_pipelines: list[LoadedPipeline] = _native.discover_pipelines(project_dir / "pipelines")
     assert not (len(loaded_pipelines) != 1), "Expected exactly one authored e2e pipeline fixture"
     return compile_pipeline(
         loaded_pipeline=loaded_pipelines[0],

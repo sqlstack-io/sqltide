@@ -1,11 +1,10 @@
 """Build a compiler-analyzed query for adapter replay."""
 
+from sqltide._native import rewrite_query, rewrite_template_query
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.adapter.models import AdapterPhysicalRelationMapping, AdapterReplayQuery
 from sqltide.compiler.planner.exceptions import DeploymentPlanError
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main.rewrite_query import rewrite_query
-from sqltide.compiler.sql_analysis.main.rewrite_template_query import rewrite_template_query
 from sqltide.compiler.sql_analysis.models import SqlQueryRewriteResult, SqlRelationRewrite
 
 

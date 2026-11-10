@@ -15,16 +15,16 @@ use sqltide_sqlanalysis::{
     RewrittenQuery, SqlDialect, analyze_catalog, analyze_model,
     canonical_query_with_database_template, canonicalize_sql, expression_list,
     quarantine_ineligibility, quarantine_split, render_string_literal, rewrite_query,
-    select_aggregate_facts, select_row_level, storage_column_names, validate_query,
-    validated_relation_rewrite,
+    select_row_level, storage_column_names, validate_query, validated_relation_rewrite,
 };
 use sqltide_sqltext::sql_scan::SourceSpan;
 
-use crate::model_analysis::domain;
+use crate::model_analysis::{analyze_model_sql, domain, storage_expressions};
 use crate::sql_scan::{Span, raise as raise_scan, scan_failure, scan_references, span};
 
 const MODELS: &str = "sqltide.compiler.sql_analysis.models";
 const EXCEPTIONS: &str = "sqltide.compiler.sql_analysis.exceptions";
+const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
 
 create_exception!(_native, SqlTreeError, PyValueError);
 
@@ -36,7 +36,7 @@ fn raw_analysis_error(error: AnalysisError) -> PyErr {
 }
 
 /// The SQL analysis exception for one analysis failure.
-fn analysis_error(error: AnalysisError) -> PyErr {
+pub(crate) fn analysis_error(error: AnalysisError) -> PyErr {
     let native: PyErr = raw_analysis_error(error);
     Python::attach(|py| domain(py, native))
 }
@@ -286,72 +286,83 @@ impl SqlTreeAnalyzer {
     }
 }
 
-type NativeRewrite = (String, String, Option<Vec<Option<String>>>, bool);
-type NativeIdentity = (Option<String>, String);
-type NativeCatalog = (
-    String,
-    Option<String>,
-    Vec<NativeIdentity>,
-    Option<NativeIdentity>,
-    Option<NativeIdentity>,
-    Option<String>,
-    Option<String>,
-    Vec<(String, String)>,
-);
-
-fn identity(relation: RelationIdentity) -> NativeIdentity {
-    (relation.database, relation.name)
+fn identity<'py>(py: Python<'py>, relation: RelationIdentity) -> PyResult<Bound<'py, PyAny>> {
+    py.import(MODELS)?
+        .getattr("SqlRelationIdentity")?
+        .call1((relation.database, relation.name))
 }
 
-/// Rewrite relations, conjoin a predicate and prepend CTEs in one SELECT, returning
-/// `(query, function_names, has_group_by)`.
+/// The `SqlQueryRewriteResult` of one rewritten SELECT and its aggregate facts.
+pub(crate) fn rewrite_result<'py>(
+    py: Python<'py>,
+    query: String,
+    function_names: &[String],
+    has_group_by: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    keywords.set_item("query", query)?;
+    keywords.set_item(
+        "has_aggregate_semantics",
+        has_group_by || !function_names.is_empty(),
+    )?;
+    py.import(MODELS)?
+        .getattr("SqlQueryRewriteResult")?
+        .call((), Some(&keywords))
+}
+
+/// Rewrite relations, conjoin a predicate and prepend CTEs in one parsed SELECT.
 #[pyfunction]
-#[pyo3(signature = (sql, dialect_name, rewrites, predicate, ctes))]
-fn sql_rewrite_query(
-    py: Python<'_>,
+#[pyo3(
+    name = "rewrite_query",
+    signature = (*, sql, dialect, relation_rewrites = Vec::new(), predicate = None, prepend_ctes = Vec::new())
+)]
+fn rewrite_select_query<'py>(
+    py: Python<'py>,
     sql: &str,
-    dialect_name: &str,
-    rewrites: Vec<NativeRewrite>,
+    dialect: &str,
+    relation_rewrites: Vec<Bound<'py, PyAny>>,
     predicate: Option<String>,
-    ctes: Vec<(String, String)>,
-) -> PyResult<(String, Vec<String>, bool)> {
-    let rewrites: Vec<RelationRewrite> = rewrites
-        .into_iter()
-        .map(
-            |(source_name, target_relation, source_databases, preserve_source_database)| {
-                RelationRewrite {
-                    source_name,
-                    target_relation,
-                    source_databases,
-                    preserve_source_database,
-                }
-            },
-        )
-        .collect();
-    let ctes: Vec<NamedQuery> = ctes
-        .into_iter()
-        .map(|(name, query)| NamedQuery { name, query })
-        .collect();
-    py.detach(|| {
-        rewrite_query(
-            sql,
-            &SqlDialect::new(dialect_name),
-            &rewrites,
-            predicate.as_deref(),
-            &ctes,
-        )
-    })
-    .map(|rewritten: RewrittenQuery| {
-        (
-            rewritten.query,
-            rewritten.function_names,
-            rewritten.has_group_by,
-        )
-    })
-    .map_err(analysis_error)
+    prepend_ctes: Vec<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let rewrites: Vec<RelationRewrite> = relation_rewrites
+        .iter()
+        .map(|rewrite| {
+            Ok(RelationRewrite {
+                source_name: rewrite.getattr("source_name")?.extract()?,
+                target_relation: rewrite.getattr("target_relation")?.extract()?,
+                source_databases: rewrite.getattr("source_databases")?.extract()?,
+                preserve_source_database: rewrite.getattr("preserve_source_database")?.extract()?,
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    let ctes: Vec<NamedQuery> = prepend_ctes
+        .iter()
+        .map(|named_query| {
+            Ok(NamedQuery {
+                name: named_query.getattr("name")?.extract()?,
+                query: named_query.getattr("query")?.extract()?,
+            })
+        })
+        .collect::<PyResult<_>>()?;
+    let rewritten: RewrittenQuery = py
+        .detach(|| {
+            rewrite_query(
+                sql,
+                &SqlDialect::new(dialect),
+                &rewrites,
+                predicate.as_deref(),
+                &ctes,
+            )
+        })
+        .map_err(analysis_error)?;
+    rewrite_result(
+        py,
+        rewritten.query,
+        &rewritten.function_names,
+        rewritten.has_group_by,
+    )
 }
 
-/// `(function_names, has_group_by)` of one SELECT.
 /// `(column, reason)` for the first column preventing a quarantine split, else `None`.
 #[pyfunction]
 fn sql_quarantine_ineligibility(
@@ -380,86 +391,280 @@ fn sql_select_is_row_level(sql: &str, dialect_name: &str) -> PyResult<bool> {
     select_row_level(sql, &SqlDialect::new(dialect_name)).map_err(raw_analysis_error)
 }
 
+/// The `SqlCatalogAnalysis` of one query or catalog statement.
 #[pyfunction]
-fn sql_select_aggregate_facts(sql: &str, dialect_name: &str) -> PyResult<(Vec<String>, bool)> {
-    select_aggregate_facts(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
-}
-
-/// Canonical query and catalog facts of one statement, as a flat tuple.
-#[pyfunction]
-fn sql_analyze_catalog(py: Python<'_>, sql: &str, dialect_name: &str) -> PyResult<NativeCatalog> {
+#[pyo3(signature = (*, sql, dialect))]
+fn analyze_catalog_sql<'py>(
+    py: Python<'py>,
+    sql: &str,
+    dialect: &str,
+) -> PyResult<Bound<'py, PyAny>> {
     let analysis: CatalogAnalysis = py
-        .detach(|| analyze_catalog(sql, &SqlDialect::new(dialect_name)))
+        .detach(|| analyze_catalog(sql, &SqlDialect::new(dialect)))
         .map_err(analysis_error)?;
-    Ok((
-        analysis.canonical_sql,
-        analysis.query_sql,
+    let source_relations: Vec<Bound<'py, PyAny>> = analysis
+        .source_relations
+        .into_iter()
+        .map(|relation| identity(py, relation))
+        .collect::<PyResult<_>>()?;
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    keywords.set_item("canonical_sql", analysis.canonical_sql)?;
+    keywords.set_item("query_sql", analysis.query_sql)?;
+    keywords.set_item("source_relations", PyTuple::new(py, source_relations)?)?;
+    keywords.set_item(
+        "direct_source",
         analysis
-            .source_relations
-            .into_iter()
-            .map(identity)
-            .collect(),
-        analysis.direct_source.map(identity),
-        analysis.target_relation.map(identity),
-        analysis.engine,
-        analysis.ttl,
-        analysis.settings,
-    ))
+            .direct_source
+            .map(|relation| identity(py, relation))
+            .transpose()?,
+    )?;
+    keywords.set_item(
+        "target_relation",
+        analysis
+            .target_relation
+            .map(|relation| identity(py, relation))
+            .transpose()?,
+    )?;
+    keywords.set_item("engine", analysis.engine)?;
+    keywords.set_item("ttl", analysis.ttl)?;
+    let settings: Vec<Bound<'py, PyTuple>> = analysis
+        .settings
+        .into_iter()
+        .map(|setting| PyTuple::new(py, [setting.0, setting.1]))
+        .collect::<PyResult<_>>()?;
+    keywords.set_item("settings", PyTuple::new(py, settings)?)?;
+    py.import(MODELS)?
+        .getattr("SqlCatalogAnalysis")?
+        .call((), Some(&keywords))
+}
+
+/// The top-level expressions of one comma-separated ClickHouse expression list.
+#[pyfunction]
+#[pyo3(signature = (*, sql, dialect))]
+fn parse_expression_list<'py>(
+    py: Python<'py>,
+    sql: &str,
+    dialect: &str,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let expressions: Vec<String> =
+        expression_list(sql, &SqlDialect::new(dialect)).map_err(analysis_error)?;
+    PyTuple::new(py, expressions)
 }
 
 #[pyfunction]
-fn sql_expression_list(sql: &str, dialect_name: &str) -> PyResult<Vec<String>> {
-    expression_list(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
-}
-
-#[pyfunction]
-fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
+pub(crate) fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
     validate_query(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
 #[pyfunction]
-fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
+pub(crate) fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
     canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
-/// One canonical data type. A failure raises `SqlAnalysisError` with the compiler's message.
 #[pyfunction]
-fn sql_normalize_data_type(py: Python<'_>, sql: &str, dialect_name: &str) -> PyResult<String> {
-    match sqltide_sqlanalysis::normalize_data_type(sql, dialect_name) {
-        Ok(normalized) => Ok(normalized),
-        Err(error) => {
-            let context: Bound<'_, PyAny> = PyValueError::new_err(error.0.clone())
-                .value(py)
-                .clone()
-                .into_any();
-            let failure: Bound<'_, PyAny> = py
-                .import(EXCEPTIONS)?
-                .getattr("SqlAnalysisError")?
-                .call1((error.0,))?;
-            failure.setattr("__context__", context)?;
-            failure.setattr("__cause__", py.None())?;
-            Err(PyErr::from_value(failure))
+pub(crate) fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
+    render_string_literal(value, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+}
+
+fn database_placeholder(py: Python<'_>) -> PyResult<String> {
+    py.import(ADAPTER_CONSTANTS)?
+        .getattr("ADAPTER_DATABASE_PLACEHOLDER")?
+        .extract()
+}
+
+fn resolved_query<'py>(
+    py: Python<'py>,
+    (canonical_sql, database_template): (String, String),
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    keywords.set_item("canonical_sql", canonical_sql)?;
+    keywords.set_item("database_template", database_template)?;
+    py.import(MODELS)?
+        .getattr("SqlResolvedQuery")?
+        .call((), Some(&keywords))
+}
+
+/// Private parsed model state for one complete compiler invocation.
+#[pyclass(module = "sqltide._native", frozen)]
+pub(crate) struct SqlModelAnalyzer {
+    dialect: String,
+    analyzer: Py<SqlTreeAnalyzer>,
+    trees: Py<PyDict>,
+}
+
+impl SqlModelAnalyzer {
+    fn tree<'py>(
+        &self,
+        py: Python<'py>,
+        analysis: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, SqlModelTree>> {
+        match self.trees.bind(py).get_item(analysis)? {
+            Some(tree) => Ok(tree.cast_into::<SqlModelTree>()?),
+            None => Err(PyErr::from_value(
+                py.import(EXCEPTIONS)?
+                    .getattr("SqlAnalysisError")?
+                    .call1(("Model analysis does not belong to this compiler invocation",))?,
+            )),
         }
+    }
+
+    fn authored_sql(analysis: &Bound<'_, PyAny>) -> PyResult<String> {
+        analysis.getattr("authored_sql")?.extract()
     }
 }
 
-#[pyfunction]
-fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
-    render_string_literal(value, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+#[pymethods]
+impl SqlModelAnalyzer {
+    #[new]
+    #[pyo3(signature = (*, dialect))]
+    fn new(py: Python<'_>, dialect: &str) -> PyResult<Self> {
+        Ok(Self {
+            dialect: dialect.to_owned(),
+            analyzer: Py::new(py, SqlTreeAnalyzer::new(dialect))?,
+            trees: PyDict::new(py).unbind(),
+        })
+    }
+
+    /// Analyze one authored model and retain only private rewrite state.
+    #[pyo3(signature = (*, sql, engine, order_by, partition_by, ttl))]
+    fn analyze<'py>(
+        &self,
+        py: Python<'py>,
+        sql: &Bound<'py, PyAny>,
+        engine: &str,
+        order_by: &Bound<'py, PyAny>,
+        partition_by: &Bound<'py, PyAny>,
+        ttl: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (analysis, tree) = analyze_model_sql(
+            py,
+            sql,
+            engine,
+            order_by,
+            partition_by,
+            ttl,
+            self.analyzer.bind(py).as_any(),
+        )?;
+        self.trees.bind(py).set_item(&analysis, tree)?;
+        Ok(analysis)
+    }
+
+    /// Resolve and qualify a previously analyzed model without reparsing it.
+    #[pyo3(signature = (*, analysis, resolver))]
+    fn resolve<'py>(
+        &self,
+        py: Python<'py>,
+        analysis: &Bound<'py, PyAny>,
+        resolver: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let tree: Bound<'py, SqlModelTree> = self.tree(py, analysis)?;
+        let references: Vec<Bound<'py, PyAny>> = analysis
+            .getattr("references")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        let resolved: (String, String) = self.analyzer.get().resolve_model(
+            tree.get(),
+            &Self::authored_sql(analysis)?,
+            references,
+            resolver,
+            &database_placeholder(py)?,
+        )?;
+        resolved_query(py, resolved)
+    }
+
+    /// Whether an analyzed query contains a PREWHERE clause.
+    #[pyo3(signature = (*, analysis))]
+    fn uses_prewhere(&self, py: Python<'_>, analysis: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Ok(self.tree(py, analysis)?.get().uses_prewhere())
+    }
+
+    /// Canonical and adapter-template forms of a generated query.
+    #[pyo3(signature = (*, sql))]
+    fn canonicalize_query<'py>(&self, py: Python<'py>, sql: &str) -> PyResult<Bound<'py, PyAny>> {
+        let canonical: (String, String) =
+            self.analyzer
+                .get()
+                .canonicalize_query(py, sql, &database_placeholder(py)?)?;
+        resolved_query(py, canonical)
+    }
+
+    /// Standalone storage clauses analyzed through this invocation's dialect.
+    #[pyo3(signature = (*, order_by, partition_by, ttl, output_columns))]
+    fn analyze_storage<'py>(
+        &self,
+        py: Python<'py>,
+        order_by: &Bound<'py, PyAny>,
+        partition_by: &Bound<'py, PyAny>,
+        ttl: &Bound<'py, PyAny>,
+        output_columns: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        storage_expressions(
+            py,
+            self.analyzer.bind(py).as_any(),
+            order_by,
+            partition_by,
+            ttl,
+            output_columns,
+        )
+    }
+
+    /// Whether the outer SELECT produces one row per input row.
+    #[pyo3(signature = (*, analysis))]
+    fn is_row_level(&self, analysis: &Bound<'_, PyAny>) -> PyResult<bool> {
+        sql_select_is_row_level(&Self::authored_sql(analysis)?, &self.dialect)
+    }
+
+    /// The first `(column, reason)` preventing a quarantine split.
+    #[pyo3(signature = (*, analysis))]
+    fn quarantine_ineligibility(
+        &self,
+        analysis: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<(String, String)>> {
+        sql_quarantine_ineligibility(&Self::authored_sql(analysis)?, &self.dialect)
+    }
+
+    /// The kept-rows and dead-letter queries generated from one resolved query.
+    #[pyo3(signature = (*, sql, model_name))]
+    fn quarantine_split(&self, sql: &str, model_name: &str) -> PyResult<(String, String)> {
+        sql_quarantine_split(sql, model_name, &self.dialect)
+    }
+}
+
+/// Logical relation rewriting with one private relation cache per invocation.
+#[pyclass(module = "sqltide._native", frozen)]
+pub(crate) struct SqlReferenceRewriter {
+    analyzer: SqlTreeAnalyzer,
+}
+
+#[pymethods]
+impl SqlReferenceRewriter {
+    #[new]
+    #[pyo3(signature = (*, dialect))]
+    fn new(dialect: &str) -> Self {
+        Self {
+            analyzer: SqlTreeAnalyzer::new(dialect),
+        }
+    }
+
+    /// Replace logical relation calls while preserving authored surrounding text.
+    #[pyo3(signature = (*, sql, resolver))]
+    fn rewrite(&self, py: Python<'_>, sql: &str, resolver: &Bound<'_, PyAny>) -> PyResult<String> {
+        self.analyzer.rewrite_references(py, sql, resolver)
+    }
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("SqlTreeError", module.py().get_type::<SqlTreeError>())?;
-    module.add_function(wrap_pyfunction!(sql_normalize_data_type, module)?)?;
     module.add_class::<SqlModelTree>()?;
     module.add_class::<SqlTreeAnalyzer>()?;
-    module.add_function(wrap_pyfunction!(sql_rewrite_query, module)?)?;
-    module.add_function(wrap_pyfunction!(sql_select_aggregate_facts, module)?)?;
+    module.add_class::<SqlModelAnalyzer>()?;
+    module.add_class::<SqlReferenceRewriter>()?;
+    module.add_function(wrap_pyfunction!(rewrite_select_query, module)?)?;
     module.add_function(wrap_pyfunction!(sql_select_is_row_level, module)?)?;
     module.add_function(wrap_pyfunction!(sql_quarantine_ineligibility, module)?)?;
     module.add_function(wrap_pyfunction!(sql_quarantine_split, module)?)?;
-    module.add_function(wrap_pyfunction!(sql_analyze_catalog, module)?)?;
-    module.add_function(wrap_pyfunction!(sql_expression_list, module)?)?;
+    module.add_function(wrap_pyfunction!(analyze_catalog_sql, module)?)?;
+    module.add_function(wrap_pyfunction!(parse_expression_list, module)?)?;
     module.add_function(wrap_pyfunction!(sql_validate_query, module)?)?;
     module.add_function(wrap_pyfunction!(sql_canonicalize, module)?)?;
     module.add_function(wrap_pyfunction!(sql_render_string_literal, module)?)?;

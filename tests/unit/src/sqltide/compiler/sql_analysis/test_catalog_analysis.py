@@ -1,8 +1,6 @@
 import pytest
 
-from sqltide.compiler.sql_analysis.main._render_string_literal import render_string_literal
-from sqltide.compiler.sql_analysis.main.analyze_catalog_sql import analyze_catalog_sql
-from sqltide.compiler.sql_analysis.main.parse_expression_list import parse_expression_list
+from sqltide._native import analyze_catalog_sql, parse_expression_list, sql_render_string_literal
 from sqltide.compiler.sql_analysis.models import SqlCatalogAnalysis
 from tests.unit.src.sqltide.compiler.sql_analysis._test_types import (
     CatalogPhysicalSourcesTestCase,
@@ -363,6 +361,6 @@ def test_given_nested_expression_list_when_parsing_then_preserves_inner_commas(
 def test_given_string_value_when_rendering_then_returns_clickhouse_literal(
     test_case: SqlStringLiteralTestCase,
 ) -> None:
-    result: str = render_string_literal(value=test_case.value, dialect="clickhouse")
+    result: str = sql_render_string_literal(test_case.value, "clickhouse")
 
     assert result == test_case.expected_literal

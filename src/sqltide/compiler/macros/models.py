@@ -9,7 +9,6 @@ from pathlib import Path
 from types import MappingProxyType
 
 import sqltide._native as _native
-from sqltide.compiler.discovery.main._immutable_config_pairs import immutable_config_pairs
 from sqltide.compiler.discovery.types import PipelineMode
 from sqltide.compiler.macros.types import MacroFunction
 
@@ -72,7 +71,7 @@ class MacroContext:
     variables: Mapping[str, object]
 
     def __post_init__(self) -> None:
-        frozen_variables: tuple[tuple[str, object], ...] = immutable_config_pairs(
+        frozen_variables: tuple[tuple[str, object], ...] = _native.immutable_config_pairs(
             tuple(self.variables.items())
         )
         object.__setattr__(self, "variables", MappingProxyType(dict(frozen_variables)))

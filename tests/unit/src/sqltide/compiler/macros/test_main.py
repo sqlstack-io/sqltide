@@ -5,7 +5,6 @@ import pytest
 
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.macros.exceptions import MacroError
-from sqltide.compiler.macros.main._build_macro_context import build_macro_context
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from tests.unit.src.sqltide.compiler.macros._test_types import (
     DeclarationReferenceErrorTestCase,
@@ -525,7 +524,7 @@ def test_given_loaded_macro_runtime_when_mutating_then_registry_and_context_are_
     registry: MacroRegistry
     _default_context: MacroContext
     registry, _default_context = build_test_macro_runtime(tmp_path)
-    context: MacroContext = build_macro_context(
+    context: MacroContext = MacroContext(
         adapter_name="clickhouse",
         dialect="clickhouse",
         target_name="dev",

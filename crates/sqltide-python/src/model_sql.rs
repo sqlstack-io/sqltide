@@ -5,10 +5,11 @@ use std::collections::BTreeSet;
 
 use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyString};
 use sqltide_sqltext::python_text::python_strip;
 
 use crate::config::{check_model_header_keys, model_header_block, parse_model_spec};
+use crate::macros::expand_sql_macros_with;
 use crate::model_analysis::domain;
 use crate::sql_scan::{Reference, scan_references};
 
@@ -21,7 +22,6 @@ const SQL_ANALYSIS_EXCEPTIONS: &str = "sqltide.compiler.sql_analysis.exceptions"
 const SQL_ANALYSIS_MODELS: &str = "sqltide.compiler.sql_analysis.models";
 const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
 const DIAGNOSTICS_TYPES: &str = "sqltide.diagnostics.types";
-const MACRO_EXPANSION: &str = "sqltide.compiler.macros.main._expand_macro_calls";
 const SOURCE_RELATION: &str = "source";
 const REF_RELATION: &str = "ref";
 const VIEW_KIND: &str = "view";
@@ -148,7 +148,7 @@ fn references(
 /// `[ParsedRef]` for the logical `__source(...)` and `__ref(...)` references of `sql`.
 #[pyfunction]
 #[pyo3(signature = (*, sql, source_path=None, source_line=1, source_column=1))]
-fn extract_refs<'py>(
+pub(crate) fn extract_refs<'py>(
     py: Python<'py>,
     sql: &str,
     source_path: Option<Bound<'py, PyAny>>,
@@ -330,16 +330,13 @@ fn parse_model_sql<'py>(
     let characters: Vec<char> = raw_query.chars().collect();
     let stripped: String = python_strip(&characters).iter().collect();
     let query: String = match (macro_registry, macro_context) {
-        (Some(registry), Some(context)) => call(
-            &py.import(MACRO_EXPANSION)?.getattr("expand_macro_calls")?,
-            &[
-                ("sql", object(py, stripped)?),
-                ("file_path", file_path.clone()),
-                ("registry", registry.clone()),
-                ("context", context.clone()),
-                ("source_line", object(py, line)?),
-                ("source_column", object(py, column)?),
-            ],
+        (Some(registry), Some(context)) => expand_sql_macros_with(
+            &PyString::new(py, &stripped),
+            file_path,
+            registry,
+            context,
+            &object(py, line)?,
+            &object(py, column)?,
         )?
         .extract()?,
         _ => stripped,

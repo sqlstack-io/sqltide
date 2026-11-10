@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.main.default_control_store_url import default_control_store_url
 from sqltide.auth.models import AuthSettings
@@ -13,9 +14,6 @@ from sqltide.cli.dev.classes.dev_terminal_reporter import DevTerminalReporter
 from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.presentation.main._cli_style import cli_style
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.discovery.main.load_project_input_for_path import (
-    load_project_input_for_path,
-)
 from sqltide.compiler.discovery.models import (
     EffectiveProjectConfiguration,
     LoadedProject,
@@ -64,7 +62,7 @@ def run_dev(
 
     def run_compile() -> CompileAnalysis:
         reloaded: LoadedProject | None = (
-            load_project_input_for_path(
+            _native.load_project_input_for_path(
                 path=project_dir,
                 selected_target=execution_context.selected_target,
                 cli_variables=dict(execution_context.cli_variables),
