@@ -1,10 +1,10 @@
 """Split SQL extension header blocks through lexical analysis."""
 
-from sqltide.compiler.sql_analysis._helpers.scanning import split_header_blocks
+import sqltide._native as _native
 from sqltide.compiler.sql_analysis.models import SqlHeaderBlock
 
 
 def split_sql_header_blocks(*, sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]:
     """Return line-leading extension headers and their SQL bodies."""
 
-    return split_header_blocks(sql=sql, keyword=keyword)
+    return _native.split_header_blocks(sql, keyword)

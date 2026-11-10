@@ -1,7 +1,6 @@
 """Analyze one query or ClickHouse catalog statement."""
 
 import sqltide._native as _native
-from sqltide.compiler.sql_analysis._helpers.polyglot import native_sql
 from sqltide.compiler.sql_analysis.models import SqlCatalogAnalysis, SqlRelationIdentity
 
 
@@ -17,7 +16,7 @@ def analyze_catalog_sql(*, sql: str, dialect: str) -> SqlCatalogAnalysis:
         engine,
         ttl,
         settings,
-    ) = native_sql(lambda: _native.sql_analyze_catalog(sql, dialect))
+    ) = _native.sql_analyze_catalog(sql, dialect)
     return SqlCatalogAnalysis(
         canonical_sql=canonical_sql,
         query_sql=query_sql,

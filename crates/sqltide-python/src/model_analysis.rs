@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use crate::analysis::{SqlModelTree, SqlTreeError};
-use crate::sql_scan::{SqlScanError, extract_references};
+use crate::sql_scan::{SqlScanError, scan_references};
 
 const MODELS: &str = "sqltide.compiler.sql_analysis.models";
 const TYPES: &str = "sqltide.compiler.sql_analysis.types";
@@ -31,6 +31,11 @@ fn span<'py>(py: Python<'py>, native: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
     py.import(MODELS)?
         .getattr("SqlSourceSpan")?
         .call1(native.cast::<PyTuple>()?.clone())
+}
+
+/// `failure` as its SQL analysis exception when it is a native scan or tree failure.
+pub(crate) fn domain(py: Python<'_>, failure: PyErr) -> PyErr {
+    sql_analysis_error(py, failure).unwrap_or_else(|error| error)
 }
 
 /// The SQL analysis exception for one native scan or tree failure, raised `from None` while
@@ -234,7 +239,7 @@ fn analyze_model_sql<'py>(
         )?);
         outputs.push(output);
     }
-    let references: Bound<'py, PyAny> = references(py, &sql.extract::<String>()?)?;
+    let references: Bound<'py, PyAny> = extract_references(py, &sql.extract::<String>()?)?;
     let storage: Bound<'py, PyAny> = storage_expressions(
         py,
         analyzer,
@@ -318,9 +323,10 @@ fn build_aggregate_facts<'py>(
     aggregate_facts(py, function_names, has_group_by, engine)
 }
 
-/// Logical relation references found outside comments and quoted text.
-fn references<'py>(py: Python<'py>, sql: &str) -> PyResult<Bound<'py, PyAny>> {
-    let scanned = match extract_references(sql) {
+/// Logical relation references found outside comments and quoted text, in authored order.
+#[pyfunction]
+pub(crate) fn extract_references<'py>(py: Python<'py>, sql: &str) -> PyResult<Bound<'py, PyAny>> {
+    let scanned = match scan_references(sql) {
         Ok(scanned) => scanned,
         Err(failure) => return Err(sql_analysis_error(py, failure)?),
     };
@@ -348,5 +354,6 @@ fn references<'py>(py: Python<'py>, sql: &str) -> PyResult<Bound<'py, PyAny>> {
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(analyze_model_sql, module)?)?;
     module.add_function(wrap_pyfunction!(build_aggregate_facts, module)?)?;
+    module.add_function(wrap_pyfunction!(extract_references, module)?)?;
     module.add_function(wrap_pyfunction!(analyze_storage_expressions, module)?)
 }
