@@ -164,7 +164,7 @@ pub(crate) fn create_dev_app(
         connection.call_method1("validate_metadata_state", (database.as_str(),))?;
     }
     let lock = state.getattr("query_lock")?;
-    let warehouse = class(py, "warehouse_runtime", "WarehouseRuntime")?.call(
+    let warehouse = attr(py, NATIVE, "WarehouseRuntime")?.call(
         (),
         Some(&py_kwargs!(py;
             connection = connection.clone(),
@@ -175,7 +175,7 @@ pub(crate) fn create_dev_app(
             query_lock = lock,
         )?),
     )?;
-    let cancellation = class(py, "build_cancellation_coordinator", "BuildCancellationCoordinator")?
+    let cancellation = attr(py, NATIVE, "BuildCancellationCoordinator")?
         .call((), Some(&py_kwargs!(py; warehouse = &warehouse, database = effective_database.clone())?))?;
     let builds = class(py, "build_process", "BuildProcessManager")?.call(
         (),
@@ -200,7 +200,7 @@ pub(crate) fn create_dev_app(
             presumed_failed_after_seconds = &presumed_failed_after_seconds,
         )?),
     )?;
-    let sensor_scheduler = class(py, "sensor_scheduler", "SensorScheduler")?.call(
+    let sensor_scheduler = attr(py, NATIVE, "SensorScheduler")?.call(
         (),
         Some(&py_kwargs!(py; state = &state, warehouse = &warehouse, database = effective_database.clone())?),
     )?;
@@ -404,5 +404,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::messages::register(module)?;
     super::readers::register(module)?;
     super::lifecycle::register(module)?;
-    super::audits::register(module)
+    super::audits::register(module)?;
+    super::warehouse::register(module)?;
+    super::sensor_scheduler::register(module)
 }

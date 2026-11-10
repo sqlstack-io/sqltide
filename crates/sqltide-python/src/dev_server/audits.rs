@@ -831,7 +831,7 @@ impl AuditScheduler {
     ) -> PyResult<Self> {
         let warehouse: Any<'_> = match warehouse.filter(|warehouse| warehouse.is_truthy().unwrap_or(true)) {
             Some(warehouse) => warehouse,
-            None => attr(py, "sqltide.dev_server.classes.warehouse_runtime", "WarehouseRuntime")?.call(
+            None => attr(py, NATIVE, "WarehouseRuntime")?.call(
                 (),
                 Some(&py_kwargs!(py;
                     connection = connection,

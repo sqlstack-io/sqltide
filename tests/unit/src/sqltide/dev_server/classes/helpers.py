@@ -6,12 +6,12 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import cast
 
+from sqltide._native import WarehouseRuntime
 from sqltide.adapter.models import (
     AdapterQueryCancellation,
     AdapterQueryResult,
     AdapterRunEventRecord,
 )
-from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
 from sqltide.dev_server.types import KafkaLagOffsets
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 

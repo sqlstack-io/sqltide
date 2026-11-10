@@ -81,12 +81,20 @@ pub(crate) fn within<'py, T>(
     manager: &Bound<'py, PyAny>,
     body: impl FnOnce() -> PyResult<T>,
 ) -> PyResult<T> {
+    within_entered(manager, |_| body())
+}
+
+/// `with manager as entered: body(entered)`, with the same exit handling as `within`.
+pub(crate) fn within_entered<'py, T>(
+    manager: &Bound<'py, PyAny>,
+    body: impl FnOnce(&Bound<'py, PyAny>) -> PyResult<T>,
+) -> PyResult<T> {
     let py: Python<'py> = manager.py();
     let kind: Bound<'py, pyo3::types::PyType> = manager.get_type();
     let enter: Bound<'py, PyAny> = kind.getattr("__enter__")?;
     let exit: Bound<'py, PyAny> = kind.getattr("__exit__")?;
-    enter.call1((manager,))?;
-    match body() {
+    let entered: Bound<'py, PyAny> = enter.call1((manager,))?;
+    match body(&entered) {
         Ok(value) => {
             exit.call1((manager, py.None(), py.None(), py.None()))?;
             Ok(value)

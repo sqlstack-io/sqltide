@@ -8,11 +8,11 @@ from unittest.mock import PropertyMock, patch
 
 import pytest
 
+from sqltide._native import WarehouseRuntime
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.authorization.models import AuthorizationDecision
 from sqltide.authorization.types import AuthorizationReason
 from sqltide.compiler.access.types import Permission
-from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
 from sqltide.executor.destruction.exceptions import (
     DestructionDependencyError,
     DestructionResourceError,

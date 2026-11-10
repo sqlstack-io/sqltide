@@ -18,9 +18,11 @@ pub(crate) mod plan;
 pub(crate) mod readers;
 pub(crate) mod routes;
 pub(crate) mod runs;
+pub(crate) mod sensor_scheduler;
 pub(crate) mod sensors;
 pub(crate) mod state;
 pub(crate) mod static_files;
 pub(crate) mod support;
+pub(crate) mod warehouse;
 
 pub(crate) use create::register;

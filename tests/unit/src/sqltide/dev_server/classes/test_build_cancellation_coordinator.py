@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from sqltide.adapter.models import AdapterQueryCancellation
-from sqltide.dev_server.classes.build_cancellation_coordinator import (
+from sqltide._native import (
     BuildCancellationCoordinator,
 )
+from sqltide.adapter.models import AdapterQueryCancellation
 from sqltide.dev_server.models import BuildCancellationOutcome
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     BuildCancellationPersistenceTestCase,
