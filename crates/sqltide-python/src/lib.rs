@@ -25,6 +25,7 @@ mod clickhouse_runtime;
 mod compilation;
 mod compile;
 mod compile_artifacts;
+mod compile_command;
 mod config;
 mod deployment_resolution;
 mod destruction;
@@ -133,6 +134,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compilation::register(module)?;
     compile::register(module)?;
     compile_artifacts::register(module)?;
+    compile_command::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     model_analysis::register(module)?;

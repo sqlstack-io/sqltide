@@ -2,23 +2,21 @@ from pathlib import Path
 
 import pytest
 
-from sqltide._native import sql_validate_query
+from sqltide._native import (
+    runtime_test_path,
+    sql_validate_query,
+    stage_static_compile_artifacts,
+    static_audit_path,
+    static_source_resource_path,
+    static_test_path,
+    validate_unique_artifact_paths,
+)
 from sqltide.adapter.models import (
     AdapterSetDifferenceComparisonRequest,
     AdapterSetDifferenceTarget,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.compile._helpers.content import static_test_sql
-from sqltide.cli.compile._helpers.paths import (
-    audit_path,
-    runtime_test_path,
-    source_resource_path,
-    static_test_path,
-)
-from sqltide.cli.compile._helpers.publication import _stage_artifacts
-from sqltide.cli.compile._helpers.static_artifacts import _validate_unique_paths
 from sqltide.cli.compile.exceptions import CompileArtifactError
-from sqltide.cli.compile.models import StaticArtifactFile, StaticCompileArtifacts
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.testing.models import SqlTestCase, SqlTestChainStep
 from tests.unit.src.sqltide.cli.compile._test_types import (
@@ -105,7 +103,7 @@ def test_given_named_audit_when_resolving_artifact_path_then_mirrors_authored_su
         name=test_case.audit_name,
     )
 
-    assert audit_path(audit=audit, project_dir=Path(test_case.project_dir)) == (
+    assert static_audit_path(audit=audit, project_dir=Path(test_case.project_dir)) == (
         test_case.expected_path
     )
 
@@ -130,7 +128,9 @@ def test_given_unsafe_logical_name_when_resolving_path_then_rejects_escape(
     test_case: UnsafeArtifactPathTestCase,
 ) -> None:
     with pytest.raises(CompileArtifactError, match=test_case.expected_error_fragment):
-        source_resource_path(source_name=test_case.unsafe_name, resource_name="kafka__orders")
+        static_source_resource_path(
+            source_name=test_case.unsafe_name, resource_name="kafka__orders"
+        )
 
 
 @pytest.mark.parametrize(
@@ -188,7 +188,7 @@ def test_given_unsafe_audit_name_when_resolving_path_then_rejects_escape(
     )
 
     with pytest.raises(CompileArtifactError, match=test_case.expected_error_fragment):
-        audit_path(audit=audit, project_dir=Path("project"))
+        static_audit_path(audit=audit, project_dir=Path("project"))
 
 
 @pytest.mark.parametrize(
@@ -206,16 +206,13 @@ def test_given_crafted_relative_path_when_staging_then_enforces_root_containment
     test_case: UnsafeArtifactPathTestCase,
     tmp_path: Path,
 ) -> None:
-    artifacts: StaticCompileArtifacts = StaticCompileArtifacts(
-        compiled_files=(
-            StaticArtifactFile(relative_path=test_case.unsafe_name, contents="SELECT 1\n"),
-        ),
-        manifest_json="{}\n",
-        dag_json="{}\n",
-    )
-
     with pytest.raises(CompileArtifactError, match=test_case.expected_error_fragment):
-        _stage_artifacts(artifacts=artifacts, staging_root=tmp_path / "staging")
+        stage_static_compile_artifacts(
+            staging_root=tmp_path / "staging",
+            compiled_files=[(test_case.unsafe_name, "SELECT 1\n")],
+            manifest_json="{}\n",
+            dag_json="{}\n",
+        )
     assert not (tmp_path / "escaped.sql").exists()
 
 
@@ -233,14 +230,8 @@ def test_given_crafted_relative_path_when_staging_then_enforces_root_containment
 def test_given_duplicate_static_paths_when_validating_then_rejects_collision(
     test_case: DuplicateArtifactPathTestCase,
 ) -> None:
-    duplicate_path: str = test_case.duplicate_path
-    files: tuple[StaticArtifactFile, ...] = (
-        StaticArtifactFile(relative_path=duplicate_path, contents="SELECT 1\n"),
-        StaticArtifactFile(relative_path=duplicate_path, contents="SELECT 2\n"),
-    )
-
     with pytest.raises(CompileArtifactError, match=test_case.expected_error_fragment):
-        _validate_unique_paths(files=files)
+        validate_unique_artifact_paths([test_case.duplicate_path, test_case.duplicate_path])
 
 
 @pytest.mark.parametrize(
@@ -292,7 +283,7 @@ def test_given_multi_target_test_when_assembling_static_sql_then_emits_one_state
         target_cases=target_cases,
     )
 
-    sql: str = static_test_sql(test_case=compiled_test)
+    sql: str = compiled_test.query
 
     sql_validate_query(sql, "clickhouse")
     assert tuple(fragment in sql for fragment in test_case.expected_fragments) == (
