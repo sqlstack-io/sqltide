@@ -1238,6 +1238,16 @@ def infer_pipeline_sources(
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
+def execute_recovery_statements(
+    *,
+    statements: tuple[WarehouseStatement, ...],
+    connection: AdapterConnection,
+    emitter: WorkflowEventEmitter | None,
+    cause: BaseException,
+    start_sequence: int,
+    completed_step_ids: frozenset[str] | None,
+    retry_command: str,
+) -> tuple[WarehouseStatement, ...]: ...
 def execute_sql_audits(
     *,
     loaded_audits: tuple[LoadedSqlAudit, ...],

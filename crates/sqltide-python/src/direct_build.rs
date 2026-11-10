@@ -39,7 +39,7 @@ const WORKFLOW_EXCEPTIONS: &str = "sqltide.executor.workflow.exceptions";
 const WORKFLOW_CONSTANTS: &str = "sqltide.executor.workflow.constants";
 const WAREHOUSE_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_warehouse_workflow";
 const OBSERVATION_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_observation_workflow";
-const RECOVERY_WORKFLOW: &str = "sqltide.executor.workflow.main._execute_recovery_statements";
+const RECOVERY_WORKFLOW: &str = "sqltide._native";
 const PAUSED_SOURCE_STEP_PREFIXES: [&str; 2] = ["pause_source_", "clear_staged_source_"];
 const RETRY_COMMAND: &str = "sqt build --changed";
 
