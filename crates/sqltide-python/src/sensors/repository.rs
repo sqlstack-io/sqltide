@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDict, PySlice, PyTuple};
 
@@ -187,11 +189,13 @@ fn decode_invocation<'py>(row: &Any<'py>) -> PyResult<Any<'py>> {
 }
 
 /// All sensor reads and writes against one metadata database.
-#[pyclass(module = "sqltide._native", subclass)]
+/// Frozen so concurrent callers interleave as the Python class allowed: a handler thread that
+/// outlives its timeout can still record steps while the dispatcher records ticks.
+#[pyclass(module = "sqltide._native", frozen, subclass)]
 pub(crate) struct SensorStateRepository {
     connection: Py<PyAny>,
     database: String,
-    migrated: bool,
+    migrated: AtomicBool,
 }
 
 impl SensorStateRepository {
@@ -243,18 +247,18 @@ impl SensorStateRepository {
         Ok(())
     }
 
-    fn persist(&mut self, py: Python<'_>, state: Any<'_>) -> PyResult<()> {
+    fn persist(&self, py: Python<'_>, state: Any<'_>) -> PyResult<()> {
         let rendered: Any<'_> = self.connection.bind(py).call_method(
             "render_sensor_state",
             (),
             Some(&py_kwargs!(py;
                 database = &self.database,
                 state = state,
-                include_migration = !self.migrated,
+                include_migration = !self.migrated.load(Ordering::SeqCst),
             )?),
         )?;
         self.execute(py, &rendered)?;
-        self.migrated = true;
+        self.migrated.store(true, Ordering::SeqCst);
         Ok(())
     }
 
@@ -314,12 +318,12 @@ impl SensorStateRepository {
         Self {
             connection,
             database,
-            migrated: false,
+            migrated: AtomicBool::new(false),
         }
     }
 
     /// Idempotently create sensor state tables before the first read.
-    fn ensure_ready(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn ensure_ready(&self, py: Python<'_>) -> PyResult<()> {
         let state: Any<'_> = attr(py, ADAPTER_MODELS, "AdapterSensorState")?.call0()?;
         self.persist(py, state)
     }
@@ -348,7 +352,7 @@ impl SensorStateRepository {
 
     #[pyo3(signature = (*, sensor_name, source, position))]
     fn advance_checkpoint(
-        &mut self,
+        &self,
         py: Python<'_>,
         sensor_name: Any<'_>,
         source: Any<'_>,
@@ -497,7 +501,7 @@ impl SensorStateRepository {
     }
 
     #[pyo3(signature = (*, ticks))]
-    fn record_ticks(&mut self, py: Python<'_>, ticks: Any<'_>) -> PyResult<()> {
+    fn record_ticks(&self, py: Python<'_>, ticks: Any<'_>) -> PyResult<()> {
         let arguments: Bound<'_, PyDict> = PyDict::new(py);
         arguments.set_item("ticks", ticks)?;
         let state: Any<'_> =
@@ -695,7 +699,7 @@ impl SensorStateRepository {
     }
 
     #[pyo3(signature = (*, step))]
-    fn record_step(&mut self, py: Python<'_>, step: Any<'_>) -> PyResult<()> {
+    fn record_step(&self, py: Python<'_>, step: Any<'_>) -> PyResult<()> {
         let state: Any<'_> = Self::state(py, "steps", vec![step])?;
         self.persist(py, state)
     }
@@ -714,7 +718,7 @@ impl SensorStateRepository {
 
     #[pyo3(signature = (*, sensor_name, status, actor))]
     fn record_override(
-        &mut self,
+        &self,
         py: Python<'_>,
         sensor_name: Any<'_>,
         status: Any<'_>,
@@ -753,7 +757,7 @@ impl SensorStateRepository {
     ) -> PyResult<bool> {
         let py: Python<'_> = slf.py();
         let now: String = slf.call_method0("warehouse_now")?.extract()?;
-        let current: Option<String> = slf.borrow().current_lease_owner(py, &now)?;
+        let current: Option<String> = slf.get().current_lease_owner(py, &now)?;
         if current
             .as_deref()
             .is_some_and(|current| current != owner_id)
@@ -770,7 +774,7 @@ impl SensorStateRepository {
             )?),
         )?;
         let state: Any<'_> = Self::state(py, "leases", vec![record])?;
-        slf.borrow_mut().persist(py, state)?;
-        Ok(slf.borrow().current_lease_owner(py, &now)?.as_deref() == Some(owner_id))
+        slf.get().persist(py, state)?;
+        Ok(slf.get().current_lease_owner(py, &now)?.as_deref() == Some(owner_id))
     }
 }

@@ -101,7 +101,7 @@ class RelationalDestructionPlanStore:
     def bootstrap(self) -> None:
         """Create the additive schema component and reject incompatible versions."""
 
-        rename_streambuild_tables(url=self._url)
+        rename_streambuild_tables(url=self._url, sqlite_timeout_seconds=30)
         _METADATA.create_all(self._engine)
         try:
             with self._engine.begin() as connection:

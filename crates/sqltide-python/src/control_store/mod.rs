@@ -150,8 +150,14 @@ fn required_assignment_name<'py>(
 /// `secrets.token_urlsafe(length)` from the operating system's random source.
 fn token_urlsafe(length: usize) -> PyResult<String> {
     let mut bytes: Vec<u8> = vec![0; length];
-    getrandom::fill(&mut bytes).map_err(|failure| PyValueError::new_err(failure.to_string()))?;
-    let mut encoded: String = String::with_capacity(length.div_ceil(3) * 4);
+    getrandom::fill(&mut bytes)
+        .map_err(|failure| pyo3::exceptions::PyOSError::new_err(failure.to_string()))?;
+    Ok(urlsafe_base64(&bytes))
+}
+
+/// Unpadded URL-safe base64, as `secrets.token_urlsafe` encodes its bytes.
+fn urlsafe_base64(bytes: &[u8]) -> String {
+    let mut encoded: String = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
         let group: u32 = chunk.iter().enumerate().fold(0, |acc, (index, byte)| {
             acc | (u32::from(*byte) << (16 - 8 * index))
@@ -162,7 +168,7 @@ fn token_urlsafe(length: usize) -> PyResult<String> {
             ));
         }
     }
-    Ok(encoded)
+    encoded
 }
 
 fn token_hash(token: &Any<'_>) -> PyResult<String> {
@@ -1717,12 +1723,20 @@ pub(crate) fn default_control_store_url(project_dir: &Bound<'_, PyAny>) -> PyRes
     Ok(format!("sqlite:///{}", state_dir.div("control.db")?.str()?))
 }
 
-/// Rename every pre-rename table at `url` whose SQLTide name is still free.
+/// Rename every pre-rename table at `url` whose SQLTide name is still free, waiting up to
+/// `sqlite_timeout_seconds` for a SQLite lock as the caller's own engine would.
 #[pyfunction]
-#[pyo3(signature = (*, url))]
-fn rename_streambuild_tables(py: Python<'_>, url: Bound<'_, PyAny>) -> PyResult<()> {
+#[pyo3(signature = (*, url, sqlite_timeout_seconds = None))]
+fn rename_streambuild_tables(
+    py: Python<'_>,
+    url: Bound<'_, PyAny>,
+    sqlite_timeout_seconds: Option<f64>,
+) -> PyResult<()> {
     let url_text: String = url.extract()?;
-    let driver: Any<'_> = driver_class(py)?.call((), Some(&py_kwargs!(py; url = &url)?))?;
+    let driver: Any<'_> = driver_class(py)?.call(
+        (),
+        Some(&py_kwargs!(py; url = &url, sqlite_timeout_seconds = sqlite_timeout_seconds)?),
+    )?;
     let store: ControlStore = ControlStore {
         url: url.unbind(),
         postgres: !url_text.starts_with(SQLITE_URL_PREFIX),
@@ -1739,4 +1753,26 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(canonical_username_py, module)?)?;
     module.add_function(wrap_pyfunction!(default_control_store_url, module)?)?;
     module.add_function(wrap_pyfunction!(rename_streambuild_tables, module)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::urlsafe_base64;
+
+    #[test]
+    fn urlsafe_base64_matches_rfc_4648_without_padding() {
+        let cases: [(&[u8], &str); 8] = [
+            (b"", ""),
+            (b"f", "Zg"),
+            (b"fo", "Zm8"),
+            (b"foo", "Zm9v"),
+            (b"foob", "Zm9vYg"),
+            (b"fooba", "Zm9vYmE"),
+            (b"foobar", "Zm9vYmFy"),
+            (&[0xfb, 0xff, 0xbf, 0x00, 0x10], "-_-_ABA"),
+        ];
+        for (bytes, expected) in cases {
+            assert_eq!(urlsafe_base64(bytes), expected);
+        }
+    }
 }

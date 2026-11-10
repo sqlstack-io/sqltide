@@ -12,13 +12,12 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 class RelationalDriver:
     """A pooled SQLAlchemy engine for one SQLite or PostgreSQL URL."""
 
-    def __init__(self, *, url: str) -> None:
+    def __init__(self, *, url: str, sqlite_timeout_seconds: float | None = None) -> None:
         sqlite_url: bool = url.startswith("sqlite:")
-        self._engine: Engine = create_engine(
-            url,
-            connect_args={"check_same_thread": False} if sqlite_url else {},
-            pool_pre_ping=True,
-        )
+        connect_args: dict[str, object] = {"check_same_thread": False} if sqlite_url else {}
+        if sqlite_url and sqlite_timeout_seconds is not None:
+            connect_args["timeout"] = sqlite_timeout_seconds
+        self._engine: Engine = create_engine(url, connect_args=connect_args, pool_pre_ping=True)
         if sqlite_url:
             event.listen(self._engine, "connect", _enable_sqlite_foreign_keys)
 
