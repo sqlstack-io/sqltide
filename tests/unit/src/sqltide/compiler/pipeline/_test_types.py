@@ -93,7 +93,7 @@ class ReadOnceCompilationTestCase:
 @dataclass(frozen=True)
 class SharedMacroRuntimeTestCase:
     description: str
-    expected_expansion_call_count: int
+    expected_expansion_roots: tuple[str, ...]
     expected_registry_identity: bool
     expected_context_identity: bool
 

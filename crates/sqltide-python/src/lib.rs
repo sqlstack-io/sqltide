@@ -7,6 +7,7 @@ mod actual_state;
 mod adopted_sources;
 mod analysis;
 mod artifacts;
+mod audit_discovery;
 mod clickhouse;
 mod compilation;
 mod compile;
@@ -29,6 +30,7 @@ mod realization;
 mod rules;
 mod sources;
 mod sql_scan;
+mod test_discovery;
 mod timestamps;
 mod toml;
 mod workflow;
@@ -85,6 +87,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     adopted_sources::register(module)?;
     analysis::register(module)?;
     artifacts::register(module)?;
+    audit_discovery::register(module)?;
     clickhouse::register(module)?;
     compilation::register(module)?;
     compile::register(module)?;
@@ -107,6 +110,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     rules::register(module)?;
     sources::register(module)?;
     sql_scan::register(module)?;
+    test_discovery::register(module)?;
     timestamps::register(module)?;
     toml::register(module)?;
     workflow::register(module)

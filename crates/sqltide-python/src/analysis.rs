@@ -413,7 +413,7 @@ fn sql_expression_list(sql: &str, dialect_name: &str) -> PyResult<Vec<String>> {
 }
 
 #[pyfunction]
-fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
+pub(crate) fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> {
     validate_query(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
@@ -444,7 +444,7 @@ fn sql_normalize_data_type(py: Python<'_>, sql: &str, dialect_name: &str) -> PyR
 }
 
 #[pyfunction]
-fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
+pub(crate) fn sql_render_string_literal(value: &str, dialect_name: &str) -> PyResult<String> {
     render_string_literal(value, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 

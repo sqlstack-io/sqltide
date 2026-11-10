@@ -29,7 +29,6 @@ from sqltide.compiler.sql_analysis.models import (
     SqlSourceSpan,
 )
 from sqltide.compiler.sql_analysis.types import SqlQueryShape, SqlRelationType
-from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
 from sqltide.compiler.test_discovery.models import (
     LoadedSqlTest,
     SqlTestMock,
@@ -140,7 +139,7 @@ def build_compiled_pipeline_with_tests(
         loaded_pipeline=_native.load_pipeline_directory(pipeline_dir),
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),
     )
-    loaded_test: LoadedSqlTest = discover_sql_tests(root=tmp_path / "tests")[0]
+    loaded_test: LoadedSqlTest = _native.discover_sql_tests(root=tmp_path / "tests")[0]
     return compiled_pipeline, loaded_test
 
 
@@ -301,7 +300,7 @@ def build_cyclic_sql_test_case(*, tmp_path: Path, test_file_contents: str) -> Sq
         loaded_pipeline=_native.load_pipeline_directory(pipeline_dir),
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),
     )
-    loaded_test: LoadedSqlTest = discover_sql_tests(root=tmp_path / "tests")[0]
+    loaded_test: LoadedSqlTest = _native.discover_sql_tests(root=tmp_path / "tests")[0]
     return build_sql_test_cases(
         loaded_tests=(loaded_test,),
         compiled_pipelines=(compiled_pipeline,),

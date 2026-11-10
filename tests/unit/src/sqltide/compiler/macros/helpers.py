@@ -4,9 +4,6 @@ from textwrap import dedent
 
 import sqltide._native as _native
 from sqltide.compiler.discovery.models import DiscoveredProjectFile
-from sqltide.compiler.macros.main._build_macro_context import build_macro_context
-from sqltide.compiler.macros.main._expand_macro_calls import expand_macro_calls
-from sqltide.compiler.macros.main._load_declarations import load_declarations
 from sqltide.compiler.macros.main._load_macro_registry import load_macro_registry
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 
@@ -21,7 +18,7 @@ def build_test_macro_runtime(project_dir: Path) -> tuple[MacroRegistry, MacroCon
         for macro_path in sorted((project_dir / "macros").rglob("*.py"))
     )
     registry: MacroRegistry = load_macro_registry(macro_files=macro_files)
-    context: MacroContext = build_macro_context(
+    context: MacroContext = MacroContext(
         adapter_name="clickhouse",
         dialect="clickhouse",
         target_name="dev",
@@ -37,7 +34,7 @@ def expand_project_sql_macros(*, project_dir: Path, sql: str, file_path: Path) -
     registry: MacroRegistry
     context: MacroContext
     registry, context = build_test_macro_runtime(project_dir)
-    return expand_macro_calls(
+    return _native.expand_sql_macros(
         sql=sql,
         file_path=file_path,
         registry=registry,
@@ -98,13 +95,13 @@ def expand_with_declarations(
     registry: MacroRegistry
     context: MacroContext
     registry, context = build_test_macro_runtime(project_dir)
-    declarations: _native.Declarations = load_declarations(
+    declarations: _native.Declarations = _native.load_declarations(
         constant_files=(
             _declaration_file(project_dir, "constants/main.sql", constants or DECLARED_CONSTANTS),
         ),
         enum_files=(_declaration_file(project_dir, "enums/main.sql", enums or DECLARED_ENUMS),),
     )
-    return expand_macro_calls(
+    return _native.expand_sql_macros(
         sql=sql,
         file_path=project_dir / "pipelines/orders/order_items.sql",
         registry=replace(registry, declarations=declarations),

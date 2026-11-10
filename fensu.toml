@@ -70,6 +70,16 @@ rule = "FFR309"
 path = "src/sqltide/compiler/discovery/__init__.py"
 reason = "Native bindings own project discovery, configuration, source registries and pipeline loading; this package only declares the discovery models, types, constants and errors they build and raise."
 
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/audit_discovery/__init__.py"
+reason = "Native bindings own SQL audit file parsing, generic audit definitions and model header audit instances; this package only declares the audit models, types and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/test_discovery/__init__.py"
+reason = "Native bindings own SQL test file parsing, CTE classification and test target names; this package only declares the test models, types, constants and errors they build and raise."
+
 [targets.web]
 analyzer = "svelte"
 root = "ui"

@@ -982,7 +982,7 @@ fn immutable_config_pairs<'py>(
 /// `ModelHeaderSyntaxError` for invalid syntax.
 #[pyfunction]
 #[pyo3(signature = (*, header))]
-fn parse_sql_header<'py>(py: Python<'py>, header: &str) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn parse_sql_header<'py>(py: Python<'py>, header: &str) -> PyResult<Bound<'py, PyAny>> {
     crate::parse_model_header(py, header)
         .map_err(|failure| converted(py, failure, DISCOVERY_EXCEPTIONS, "ModelHeaderSyntaxError"))
 }

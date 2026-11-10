@@ -4,10 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
-    build_model_audit_instances,
-)
-from sqltide.compiler.audit_discovery.main._discover_sql_audits import discover_sql_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import (
     CompileProjectInputs,
@@ -27,11 +23,8 @@ from sqltide.compiler.discovery.models import (
     ViewStep,
 )
 from sqltide.compiler.discovery.types import ModelReferenceScope, PipelineMode
-from sqltide.compiler.macros.main._build_macro_context import build_macro_context
-from sqltide.compiler.macros.main._load_declarations import load_declarations
 from sqltide.compiler.macros.main._load_macro_registry import load_macro_registry
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 
 
@@ -83,13 +76,13 @@ def build_compile_inputs(
             or discovered_inputs.loaded_project.macro_registry is None
             else discovered_inputs.loaded_project.macro_registry
         ),
-        declarations=load_declarations(
+        declarations=_native.load_declarations(
             constant_files=discovered_inputs.constant_files,
             enum_files=discovered_inputs.enum_files,
         ),
         expansions={},
     )
-    macro_context: MacroContext = build_macro_context(
+    macro_context: MacroContext = MacroContext(
         adapter_name=adapter_profile.identity.name,
         dialect=adapter_profile.sql_analysis_dialect,
         target_name=(
@@ -127,7 +120,7 @@ def build_compile_inputs(
         )
     }
     tests: tuple[LoadedSqlTest, ...] = tuple(
-        discover_sql_tests(
+        _native.discover_sql_tests(
             root=discovered_inputs.project_dir / "tests",
             contents_by_path=contents_by_path,
             macro_registry=macro_registry,
@@ -138,12 +131,12 @@ def build_compile_inputs(
     for loaded_pipeline in pipelines:
         model_steps.extend(loaded_pipeline.pipeline.transforms)
     audits: tuple[LoadedSqlAudit, ...] = tuple(
-        discover_sql_audits(
+        _native.discover_sql_audits(
             root=discovered_inputs.project_dir / "audits",
             contents_by_path=contents_by_path,
             macro_registry=macro_registry,
             macro_context=macro_context,
-            generic_audit_instances=build_model_audit_instances(models=tuple(model_steps)),
+            generic_audit_instances=_native.build_model_audit_instances(models=tuple(model_steps)),
         )
     )
     _native.validate_attached_project_inputs(

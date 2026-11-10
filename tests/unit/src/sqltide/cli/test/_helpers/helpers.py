@@ -1,7 +1,7 @@
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.compiler.compile.models import CompiledPipeline
-from sqltide.compiler.test_discovery.main._discover_sql_tests import discover_sql_tests
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase, SqlTestChainStep
 from sqltide.executor.testing.models import SqlTestExecutionResult, SqlTestTargetExecutionResult
@@ -62,7 +62,7 @@ def build_selector_project_loaded_tests(tmp_path: Path) -> tuple[LoadedSqlTest, 
         SELECT 1
         """,
     )
-    return tuple(discover_sql_tests(root=tests_root))
+    return tuple(_native.discover_sql_tests(root=tests_root))
 
 
 def build_selector_project_compiled_pipelines() -> tuple[CompiledPipeline, ...]:
@@ -250,4 +250,4 @@ def build_selector_project_loaded_tests_with_macro(tmp_path: Path) -> tuple[Load
     loaded_tests: tuple[LoadedSqlTest, ...] = build_selector_project_loaded_tests(tmp_path)
     write_sql_test_file(tests_root / "macros" / "test_orphan_macro.sql", MACRO_SQL_TEST_CONTENTS)
     del loaded_tests
-    return tuple(discover_sql_tests(root=tests_root))
+    return tuple(_native.discover_sql_tests(root=tests_root))

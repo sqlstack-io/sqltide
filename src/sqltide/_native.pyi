@@ -1,5 +1,5 @@
 import os
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -11,7 +11,7 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapter.types import AdapterResourceRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
-from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
+from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
     CompiledPipeline,
     CompiledProject,
@@ -149,15 +149,14 @@ def try_consume_keyword(sql: str, start: int, keyword: str) -> int | None: ...
 def extract_references(sql: str) -> tuple[SqlReference, ...]: ...
 def split_header_blocks(sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]: ...
 def extract_top_level_ctes(sql: str, context: str) -> SqlTopLevelCtes: ...
-def expand_macro_calls(
+def expand_sql_macros(
+    *,
     sql: str,
-    macro_names: list[str],
-    file_path: str,
-    call: Callable[..., object],
-    fail: Callable[..., BaseException],
-    locate: Callable[..., BaseException],
-    declarations: Declarations | None,
-    capture: Callable[[tuple[str, list[tuple[int, int, int, int]]]], None] | None = None,
+    file_path: Path,
+    registry: MacroRegistry,
+    context: MacroContext,
+    source_line: int = 1,
+    source_column: int = 1,
 ) -> str: ...
 
 class RulesConfig:
@@ -202,9 +201,30 @@ class Declarations:
     def render_enum_member(self, name: str, member: str, file_path: str) -> str: ...
 
 def load_declarations(
-    constant_files: list[tuple[str, str]], enum_files: list[tuple[str, str]]
+    *,
+    constant_files: tuple[DiscoveredProjectFile, ...],
+    enum_files: tuple[DiscoveredProjectFile, ...],
 ) -> Declarations: ...
-def find_macro_call_names(sql: str) -> tuple[list[str], str | None]: ...
+def find_macro_call_names(sql: str) -> tuple[str, ...]: ...
+def discover_sql_audits(
+    *,
+    root: Path,
+    contents_by_path: Mapping[Path, str] | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+    generic_audit_instances: tuple[LoadedGenericSqlAuditInstance, ...] = (),
+) -> list[LoadedSqlAudit]: ...
+def discover_sql_tests(
+    *,
+    root: Path,
+    contents_by_path: Mapping[Path, str] | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+) -> list[LoadedSqlTest]: ...
+def sql_test_target_names(*, loaded_test: LoadedSqlTest) -> tuple[str, ...]: ...
+def build_model_audit_instances(
+    *, models: tuple[TransformStep | ViewStep, ...]
+) -> tuple[LoadedGenericSqlAuditInstance, ...]: ...
 def find_next_macro_start(sql: str, start: int) -> int | None: ...
 def rewrite_template_relations(
     template: str, rewrites: list[SqlRelationRewrite], database_placeholder: str

@@ -3,11 +3,9 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.test._helpers.selection import select_loaded_sql_tests
-from sqltide.compiler.test_discovery.main.sql_test_target_names import (
-    sql_test_target_names,
-)
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from tests.unit.src.sqltide.cli.test._helpers._test_types import (
     MacroSqlTestSelectionTestCase,
@@ -91,7 +89,7 @@ def test_given_valid_test_selectors_when_selecting_then_it_returns_expected_targ
         sorted(
             set(
                 chain.from_iterable(
-                    sql_test_target_names(loaded_test=test) for test in selected_tests
+                    _native.sql_test_target_names(loaded_test=test) for test in selected_tests
                 )
             )
         )

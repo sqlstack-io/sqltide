@@ -1352,7 +1352,7 @@ type SqlTestBlockResult = (usize, Option<(String, String, usize)>);
 /// The `TEST(...);` blocks of one SQL test file. Raises `ValueError` when content precedes the
 /// first header.
 #[pyfunction]
-fn sql_test_blocks(contents: &str) -> PyResult<Vec<SqlTestBlockResult>> {
+pub(crate) fn sql_test_blocks(contents: &str) -> PyResult<Vec<SqlTestBlockResult>> {
     let blocks: Vec<Block> = test_blocks::sql_test_blocks(contents)
         .map_err(|LeadingContent| PyValueError::new_err("leading content"))?;
     Ok(blocks
@@ -1378,7 +1378,7 @@ pub(crate) fn model_header_block(contents: &str) -> Option<(String, String, usiz
 /// `(name, mode)` of one parsed `TEST()` header. Raises `ValueError(message)` for unsupported
 /// keys, then an invalid name, then an invalid mode.
 #[pyfunction]
-fn sql_test_header_fields(
+pub(crate) fn sql_test_header_fields(
     py: Python<'_>,
     file_path: &str,
     header: Vec<(String, Bound<'_, PyAny>)>,
@@ -1412,7 +1412,7 @@ type AuditHeaderResult = (
 
 /// The message naming a parsed `AUDIT()` header's unsupported keys, or `None`.
 #[pyfunction]
-fn unsupported_audit_header_keys(
+pub(crate) fn unsupported_audit_header_keys(
     py: Python<'_>,
     file_path: &str,
     header: Vec<(String, Bound<'_, PyAny>)>,
@@ -1432,7 +1432,7 @@ fn unsupported_audit_header_keys(
 /// The settings of one parsed `AUDIT()` header. Raises `ValueError(message)` for the first
 /// invalid setting.
 #[pyfunction]
-fn audit_header_fields(
+pub(crate) fn audit_header_fields(
     py: Python<'_>,
     file_path: &str,
     header: Vec<(String, Bound<'_, PyAny>)>,
@@ -1476,7 +1476,7 @@ type GenericAuditInstanceResult<'py> = (
 /// The generic audits one model or column header declares. Raises `ValueError(message)` for
 /// the first invalid entry.
 #[pyfunction]
-fn generic_audit_instances<'py>(
+pub(crate) fn generic_audit_instances<'py>(
     py: Python<'py>,
     file_path: &str,
     raw_audits: &Bound<'py, PyAny>,
@@ -1520,14 +1520,14 @@ fn generic_audit_instances<'py>(
 
 /// `(raw parameter names, quoted parameter names)` of a generic audit definition query.
 #[pyfunction]
-fn generic_audit_parameter_names(query: &str) -> (Vec<String>, Vec<String>) {
+pub(crate) fn generic_audit_parameter_names(query: &str) -> (Vec<String>, Vec<String>) {
     parameter_names(query)
 }
 
 /// The concrete query of one generic audit instance. Raises `ValueError(("invalid", message))`
 /// or `ValueError(("literal", text))` for a string the dialect could not render.
 #[pyfunction]
-fn render_generic_audit<'py>(
+pub(crate) fn render_generic_audit<'py>(
     py: Python<'py>,
     file_path: &str,
     definition_name: &str,

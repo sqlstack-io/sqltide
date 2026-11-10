@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError, replace
 from functools import partial
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -27,7 +27,6 @@ from sqltide.compiler.discovery.models import KafkaLandingStep, LoadedPipeline, 
 from sqltide.compiler.graph.main._build_project_graph import (
     build_project_graph_from_compiled_project,
 )
-from sqltide.compiler.macros.main._expand_macro_calls import expand_macro_calls
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from tests.unit.src.sqltide.compiler.audit_discovery.helpers import write_sql_audit_file
@@ -889,7 +888,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     [
         SharedMacroRuntimeTestCase(
             description="shares one macro registry and context across models tests and audits",
-            expected_expansion_call_count=4,
+            expected_expansion_roots=("audits", "pipelines", "pipelines", "tests"),
             expected_registry_identity=True,
             expected_context_identity=True,
         )
@@ -904,50 +903,19 @@ def test_given_complete_project_when_expanding_macros_then_all_inputs_share_one_
     write_compilation_project(project_dir)
     loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
 
-    with (
-        patch(
-            "sqltide.compiler.macros.main._expand_macro_calls.expand_macro_calls",
-            wraps=expand_macro_calls,
-        ) as model_expansion,
-        patch(
-            "sqltide.compiler.test_discovery._helpers.parsing.expand_macro_calls",
-            wraps=expand_macro_calls,
-        ) as test_expansion,
-        patch(
-            "sqltide.compiler.audit_discovery._helpers.parsing.expand_macro_calls",
-            wraps=expand_macro_calls,
-        ) as audit_expansion,
-    ):
-        analysis: CompileAnalysis = analyze_project(
-            pipelines_root=project_dir / "pipelines",
-            loaded_project=loaded_project,
-            adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
+    analysis: CompileAnalysis = analyze_project(
+        pipelines_root=project_dir / "pipelines",
+        loaded_project=loaded_project,
+        adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
+    )
+    expanded_roots: tuple[str, ...] = tuple(
+        sorted(
+            file_path.relative_to(project_dir).parts[0]
+            for file_path, _sql, _line, _column in analysis.compile_inputs.macro_registry.expansions
         )
+    )
 
-    expansion_calls: tuple[Any, ...] = tuple(
-        (
-            *model_expansion.call_args_list,
-            *test_expansion.call_args_list,
-            *audit_expansion.call_args_list,
-        )
-    )
-    expected_identities: tuple[bool, ...] = (True,) * test_case.expected_expansion_call_count
-
-    assert len(expansion_calls) == test_case.expected_expansion_call_count
-    assert (
-        tuple(
-            call.kwargs["registry"] is analysis.compile_inputs.macro_registry
-            for call in expansion_calls
-        )
-        == expected_identities
-    )
-    assert (
-        tuple(
-            call.kwargs["context"] is analysis.compile_inputs.macro_context
-            for call in expansion_calls
-        )
-        == expected_identities
-    )
+    assert expanded_roots == test_case.expected_expansion_roots
     assert (
         analysis.compiled_project.macro_registry is analysis.compile_inputs.macro_registry
     ) is test_case.expected_registry_identity

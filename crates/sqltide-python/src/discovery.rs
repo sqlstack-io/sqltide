@@ -268,7 +268,10 @@ pub(crate) fn project_policy_facts(
 /// `macro_actual`, `macro_expected`); an invalid test raises `ValueError(detail)`, the message
 /// without its `SQL test '<path>' ` prefix.
 #[pyfunction]
-fn classify_sql_test_ctes(names: Vec<String>, macro_mode: bool) -> PyResult<Vec<&'static str>> {
+pub(crate) fn classify_sql_test_ctes(
+    names: Vec<String>,
+    macro_mode: bool,
+) -> PyResult<Vec<&'static str>> {
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     let classify = if macro_mode {
         classify_macro_test_ctes
