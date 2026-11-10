@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from sqltide.compiler.dag.main.build_dag_json import build_dag_json
+from sqltide._native import build_dag_json
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from tests.unit.src.sqltide.compiler.dag._test_types import DagArtifactTestCase
 from tests.unit.src.sqltide.compiler.dag.helpers import analyze_orders_demo

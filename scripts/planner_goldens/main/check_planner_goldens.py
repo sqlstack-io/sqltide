@@ -16,9 +16,9 @@ from scripts.compiler_goldens.main.write_generated_chain_project import (
 from scripts.planner_goldens._helpers.scenarios import planner_scenarios
 from scripts.planner_goldens.constants import GOLDEN_DIRECTORY, PLANNER_CHAIN_MODEL_COUNT
 from scripts.planner_goldens.models import PlannerCapture
+from sqltide._native import analyze_project
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 
 
 def check_planner_goldens(*, update: bool) -> int:

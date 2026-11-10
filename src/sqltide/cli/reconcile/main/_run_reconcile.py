@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
+from sqltide._native import analyze_project, load_actual_state
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
@@ -20,9 +21,7 @@ from sqltide.compiler.compile.models import (
     DesiredState,
 )
 from sqltide.compiler.discovery.models import LoadedPipeline, LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.main.load_actual_state import load_actual_state
 from sqltide.compiler.planner.models import ActualState
 from sqltide.executor.reconcile.main.execute_direct_reconcile import (
     execute_direct_reconcile,

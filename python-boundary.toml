@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 52514
+remaining_lines = 49432
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -36,9 +36,19 @@ rule = 1
 note = "Rule 1: Logic-free protocols describing the clickhouse-connect client and query result the ClickHouse connection wraps."
 
 [[stays]]
+path = "compiler/macros/_helpers/registry.py"
+rule = 2
+note = "Rule 2: Executes one project macro file's source as a module, locates load failures in the user traceback, and collects its public top-level functions with their def lines and docstrings. Reserved-name and collision checks and registry assembly are native (load_macro_registry)."
+
+[[stays]]
 path = "compiler/macros/constants.py"
 rule = 2
 note = "Rule 2: Data-only names the user macro loader reads: the reserved macro names and the constants and enums directory names."
+
+[[stays]]
+path = "compiler/macros/main/_load_macro_file.py"
+rule = 2
+note = "Rule 2: Entry point the native registry loader calls to execute one user macro file and return its public macro functions."
 
 [[stays]]
 path = "compiler/macros/types.py"
@@ -169,10 +179,6 @@ location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_manifests"
 note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
 
 [[handled_native_errors]]
-location = "compiler/planner/_helpers/warehouse_metadata.py::load_all_object_state_records"
-note = "Catches AdapterRelationNotFoundError for an absent metadata table only; a native rendering failure raises ValueError and propagates."
-
-[[handled_native_errors]]
 location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"
 note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."
 
@@ -185,5 +191,17 @@ location = "executor/destruction/_helpers/planning.py::build_destruction_challen
 note = "Translates native planning errors into the domain exceptions through _raise_planning_error, which always raises."
 
 [[handled_native_errors]]
-location = "compiler/rules/main/format_project_sql.py::format_project_sql"
-note = "A formatter refusal for one file becomes that file's reported error and leaves its source unchanged; `sqt format` exits non-zero for it. Other files still format."
+location = "cli/build/main/_run_build.py::run_build"
+note = "Command error reporting: a build failure is recorded as a failed invocation and printed, and the command exits 1; an interrupt is recorded as cancelled and exits 130."
+
+[[handled_native_errors]]
+location = "cli/compile/main/_run_compile.py::run_compile"
+note = "Command error reporting: a SQL contract failure is rendered with its diagnostic and the command exits 1 without writing artifacts."
+
+[[handled_native_errors]]
+location = "cli/plan/main/_run_plan.py::run_plan"
+note = "Command error reporting: a compile, planning or adapter failure is printed and the command exits 1 without planning."
+
+[[handled_native_errors]]
+location = "cli/readiness/main/_run_deployment_audit.py::run_deployment_audit"
+note = "Command error reporting: a known warehouse failure is rendered and the command exits 1; any other warehouse failure re-raises."

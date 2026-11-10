@@ -4,6 +4,7 @@ import os
 import sys
 from time import monotonic_ns
 
+from sqltide._native import analyze_project
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord
@@ -28,7 +29,6 @@ from sqltide.cli.entry.main._resolve_default_database import resolve_default_dat
 from sqltide.compiler.compile.exceptions import TransformSqlContractError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.exceptions import DirectPlanError
 from sqltide.executor.backfill.exceptions import BackfillExecutionError

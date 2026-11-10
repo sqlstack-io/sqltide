@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
+from sqltide._native import analyze_project, format_project_sql
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.models import ResolvedCliInvocation
 from sqltide.cli.entry.types import CliCommand
 from sqltide.cli.sql._helpers.output import report_format_results, report_lint_results
 from sqltide.compiler.compile.models import CompilerAdapterProfile
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.rules.main.format_project_sql import format_project_sql
 from sqltide.compiler.rules.models import FormattedSource
 from sqltide.diagnostics.models import CompilerDiagnostic
 

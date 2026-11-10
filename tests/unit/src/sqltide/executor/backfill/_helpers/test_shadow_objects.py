@@ -1,8 +1,8 @@
 import pytest
 
+from sqltide._native import plan_deployment
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import DesiredState
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import ActualState, DeploymentPlan
 from sqltide.executor.population._helpers.relations import plan_population_objects
 from sqltide.executor.population.models import (

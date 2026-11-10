@@ -1,6 +1,7 @@
 """Build replay requests for shared population workflows."""
 
 import sqltide._native as _native
+from sqltide._native import build_adapter_replay_query
 from sqltide.adapter.models import (
     AdapterPhysicalRelationMapping,
     AdapterReplayBoundary,
@@ -21,7 +22,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     ObjectKey,
 )
-from sqltide.compiler.planner.main.build_adapter_replay_query import build_adapter_replay_query
 from sqltide.executor.population.models import PopulationPlan, PopulationWatermark
 
 type _NativeReplayPlan = tuple[

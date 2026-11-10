@@ -3,9 +3,9 @@
 import json
 from pathlib import Path
 
+from sqltide._native import analyze_project
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 
 

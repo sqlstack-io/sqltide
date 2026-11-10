@@ -2,6 +2,9 @@ from textwrap import dedent
 
 import pytest
 
+from sqltide._native import (
+    build_adapter_replay_query,
+)
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
@@ -22,9 +25,6 @@ from sqltide.adapter.types import (
 from sqltide.adapters.clickhouse._helpers.replay import (
     render_clickhouse_replay_from_capture,
     render_clickhouse_replay_from_deployment,
-)
-from sqltide.compiler.planner.main.build_adapter_replay_query import (
-    build_adapter_replay_query,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     OffsetDedupeRenderTestCase,

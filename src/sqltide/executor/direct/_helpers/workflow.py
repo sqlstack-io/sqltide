@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 import sqltide._native as _native
+from sqltide._native import build_adapter_resource
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
@@ -24,7 +25,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
 )

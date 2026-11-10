@@ -4,9 +4,6 @@ use std::collections::{HashMap, HashSet};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use sqltide_compile::manifest::{
-    ManifestLogicalResource, ManifestResourceKind, ManifestTarget, manifest_contents,
-};
 use sqltide_compile::quality::{self, AuditIdentityInput, QualityFingerprints, TestIdentityInput};
 use sqltide_compile::sql_test_chain::{ChainError, resolve_chain};
 
@@ -58,56 +55,6 @@ pub(crate) fn quality_audit_identity(
         definition_sql,
         execution_sql,
     })
-}
-
-/// `(logical type, logical name, pipeline names, [(resource kind, resource name)])`.
-type ManifestLogicalArgument = (String, String, Vec<String>, Vec<(String, String)>);
-/// `(sorted pipelines, sorted resource identities, fingerprint)`.
-type ManifestResult = (Vec<String>, Vec<[String; 7]>, String);
-
-/// The manifest's sorted pipelines, sorted resource identities, and fingerprint.
-#[pyfunction]
-fn build_manifest_contents(
-    project_identity: &str,
-    target_name: &str,
-    target_database: &str,
-    is_production: bool,
-    pipeline_names: Vec<String>,
-    logical_resources: Vec<ManifestLogicalArgument>,
-) -> PyResult<ManifestResult> {
-    let logical_resources: Vec<ManifestLogicalResource> = logical_resources
-        .into_iter()
-        .map(|(logical_type, logical_name, pipeline_names, resources)| {
-            Ok(ManifestLogicalResource {
-                logical_type,
-                logical_name,
-                pipeline_names,
-                resources: resources
-                    .into_iter()
-                    .map(|(kind, name)| {
-                        ManifestResourceKind::parse(&kind)
-                            .map(|kind| (kind, name))
-                            .ok_or_else(|| {
-                                PyValueError::new_err(format!(
-                                    "Unknown manifest resource kind '{kind}'"
-                                ))
-                            })
-                    })
-                    .collect::<PyResult<_>>()?,
-            })
-        })
-        .collect::<PyResult<_>>()?;
-    let contents = manifest_contents(
-        &ManifestTarget {
-            project_identity,
-            target_name,
-            target_database,
-            is_production,
-        },
-        pipeline_names,
-        &logical_resources,
-    );
-    Ok((contents.pipelines, contents.resources, contents.fingerprint))
 }
 
 /// Every compiled model's references, converted once per compile and shared by its tests.
@@ -181,6 +128,5 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(sql_test_chain_step_queries, module)?)?;
     module.add_function(wrap_pyfunction!(quality_test_identity, module)?)?;
     module.add_function(wrap_pyfunction!(quality_audit_identity, module)?)?;
-    module.add_function(wrap_pyfunction!(build_manifest_contents, module)?)?;
     module.add_class::<SqlTestChainRegistry>()
 }

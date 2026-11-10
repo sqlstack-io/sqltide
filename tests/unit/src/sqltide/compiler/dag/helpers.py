@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 
 

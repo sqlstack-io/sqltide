@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.auth.main.default_control_store_url import default_control_store_url
 from sqltide.auth.models import AuthSettings
@@ -19,7 +20,6 @@ from sqltide.compiler.discovery.models import (
     LoadedProject,
     ProjectDefaults,
 )
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.main.run_dev_server import run_dev_server
 from sqltide.dev_server.models import DevExecutionContext

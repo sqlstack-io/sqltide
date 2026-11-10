@@ -6,6 +6,7 @@ import datetime
 from dataclasses import dataclass, replace
 from typing import cast
 
+from sqltide._native import DirectModelFingerprint
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
@@ -25,7 +26,6 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.dev_server._helpers.payloads.activity_payload import read_model_activity
 from sqltide.dev_server._helpers.payloads.model_drift_payload import model_drift_payload
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader

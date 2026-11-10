@@ -2,12 +2,9 @@
 
 import os
 
+from sqltide._native import build_manifest, resolve_manifest_project_identity
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
-from sqltide.compiler.manifest.main.build_manifest import build_manifest
-from sqltide.compiler.manifest.main.resolve_manifest_project_identity import (
-    resolve_manifest_project_identity,
-)
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.observability.constants import PROJECT_REVISION_ENV_VAR
 from sqltide.executor.observability.main.initialize_observability import (

@@ -13,7 +13,7 @@ from testcontainers.core.waiting_utils import wait_for
 from testcontainers.postgres import PostgresContainer
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer
+from sqltide._native import SqlModelAnalyzer, build_adapter_resource, compile_pipeline
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterConnectionConfig,
@@ -23,14 +23,12 @@ from sqltide.adapter.models import (
     AdapterTable,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
     CompiledPipeline,
     DesiredKafkaTable,
     DesiredMaterializedView,
     DesiredTable,
 )
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
 

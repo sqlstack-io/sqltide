@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from sqltide._native import collect_reachable_keys
 from sqltide.cli.selection._helpers.selection import (
     expand_included_keys,
     filter_desired_state,
@@ -16,7 +17,6 @@ from sqltide.compiler.compile.models import (
 )
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.graph.constants import ALL_DEPENDENCY_EDGE_TYPES
-from sqltide.compiler.graph.main.collect_reachable_keys import collect_reachable_keys
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.graph.types import GraphTraversalDirection
 from sqltide.compiler.pipeline.models import RealizedProject

@@ -2,6 +2,7 @@
 
 import sys
 
+from sqltide._native import analyze_project
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build.main.prepare_build_workflow import prepare_build_workflow
@@ -17,7 +18,6 @@ from sqltide.cli.workflow_artifacts.main._publish_plan_workflow import publish_p
 from sqltide.compiler.compile.exceptions import TransformSqlContractError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.exceptions import DirectPlanError
 from sqltide.executor.backfill.exceptions import BackfillExecutionError

@@ -1,6 +1,7 @@
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import load_actual_state, plan_deployment
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
@@ -14,8 +15,6 @@ from sqltide.compiler.planner.constants import (
     TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE,
     TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE,
 )
-from sqltide.compiler.planner.main.load_actual_state import load_actual_state
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
 from sqltide.compiler.planner.models import ActualState, DeploymentPlan, PlannedObjectChange
 from sqltide.executor.backfill.models import BackfillExecutionResult
 from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish

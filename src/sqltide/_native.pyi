@@ -3,21 +3,39 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
+    AdapterDirectFingerprintRecord,
+    AdapterManagedSource,
+    AdapterManifest,
     AdapterManifestSnapshot,
+    AdapterMaterializedView,
+    AdapterMetadataState,
+    AdapterPhysicalRelationMapping,
+    AdapterReplayQuery,
     AdapterReplayRequest,
+    AdapterStableView,
+    AdapterTable,
+    AdapterView,
+    CatalogRelation,
     CatalogSnapshot,
+    InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
+    CompiledModel,
     CompiledPipeline,
     CompiledProject,
     CompileProjectInputs,
     CompilerAdapterProfile,
+    DesiredKafkaTable,
+    DesiredMaterializedView,
     DesiredState,
+    DesiredTable,
+    DesiredView,
     ExternalSourceReplayConfig,
     LogicalResourceKey,
     ObjectKey,
@@ -51,21 +69,30 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback, PipelineMode
 from sqltide.compiler.graph.models import ProjectGraph
+from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.pipeline.models import RealizedProject
+from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
+    DeploymentRecord,
+    DeploymentWatermarkRecord,
     DirectPlan,
     DirectRowErrorPolicyChange,
     DirectSourceDriftSelection,
     DirectWarehouseSnapshot,
+    MetadataState,
+    ObjectStateMetadataRow,
+    ObjectStateRecord,
     PlannedObjectChange,
     PlanningWarehouseSnapshot,
+    PublishEventRecord,
     RebuildSubtree,
+    RootDeploymentInspection,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.quality.models import QualityNodeIdentity
+from sqltide.compiler.rules.models import FormattedSource
 from sqltide.compiler.sql_analysis.models import (
     SqlCatalogAnalysis,
     SqlModelAnalysis,
@@ -194,6 +221,7 @@ class Declarations:
     def render_constant(self, name: str, file_path: str) -> str: ...
     def render_enum_member(self, name: str, member: str, file_path: str) -> str: ...
 
+def load_macro_registry(*, macro_files: Iterable[DiscoveredProjectFile]) -> MacroRegistry: ...
 def load_declarations(
     *,
     constant_files: tuple[DiscoveredProjectFile, ...],
@@ -333,13 +361,17 @@ def artifact_model_resource_path(pipeline: str, model: str, resource_kind: str) 
 def artifact_source_resource_path(source: str, resource: str) -> str: ...
 def artifact_audit_path(relative_file: str, name: str | None = None) -> str: ...
 def artifact_test_path(name: str, target_names: list[str]) -> str: ...
-def build_project_graph(
-    sources: list[str],
-    models: list[tuple[str, str, str, str | None, list[tuple[str, str | None]]]],
-    pipeline_modes: list[tuple[str, str]],
-    pipeline_reference_scope: bool,
-    allowed_cross_pipeline_references: list[tuple[str, str]],
-) -> tuple[list[int], list[list[tuple[int, str]]], list[list[tuple[int, int]]], list[int]]: ...
+def build_project_graph_from_compiled_project(*, project: CompiledProject) -> ProjectGraph: ...
+def collect_reachable_keys(
+    *,
+    graph: ProjectGraph,
+    root_keys: frozenset[LogicalResourceKey],
+    direction: GraphTraversalDirection,
+    edge_types: frozenset[DependencyEdgeType],
+) -> tuple[LogicalResourceKey, ...]: ...
+def resolve_named_model_keys(
+    *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
+) -> frozenset[LogicalResourceKey]: ...
 def destruction_available_pipelines(
     current: list[str], snapshot: AdapterManifestSnapshot | None
 ) -> list[str]: ...
@@ -528,10 +560,10 @@ def plan_deployment(
     actual_state: ActualState,
     default_database: str,
     render_resource: AdapterResourceRenderer,
-    deployment_id: str | None,
-    full_refresh_keys: frozenset[ObjectKey],
-    start_time_keys: frozenset[ObjectKey],
-    start_time: str | None,
+    deployment_id: str | None = None,
+    full_refresh_keys: frozenset[ObjectKey] = frozenset(),
+    start_time_keys: frozenset[ObjectKey] = frozenset(),
+    start_time: str | None = None,
 ) -> DeploymentPlan: ...
 def plan_direct_build(
     *,
@@ -540,10 +572,10 @@ def plan_direct_build(
     snapshot: DirectWarehouseSnapshot,
     database: str,
     selected_model_keys: frozenset[LogicalResourceKey],
-    selection_mode: DirectSelectionMode | None,
-    include_missing_upstream: bool,
-    effective_start_time: str | None,
-    source_drift_selections: tuple[DirectSourceDriftSelection, ...],
+    selection_mode: DirectSelectionMode | None = None,
+    include_missing_upstream: bool = False,
+    effective_start_time: str | None = None,
+    source_drift_selections: tuple[DirectSourceDriftSelection, ...] = (),
 ) -> DirectPlan: ...
 def find_direct_out_of_scope_consumers(
     *,
@@ -635,6 +667,7 @@ DEFAULT_ADAPTER_NAME: str
 DEFAULT_PIPELINE_PREFIX: str
 DEFAULT_TABLE_PREFIX: str
 DEFAULT_VIEW_PREFIX: str
+MANIFEST_VERSION: int
 RUN_UNRESPONSIVE_AFTER_SECONDS: int
 DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS: int
 DEFAULT_POSTGRES_PORT: int
@@ -895,6 +928,74 @@ def realize_direct_replay_capture(
 ]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
+def build_adapter_resource(
+    desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
+) -> (
+    AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView | AdapterStableView
+): ...
+def build_shadow_adapter_resource(
+    *,
+    desired_object: DesiredTable | DesiredMaterializedView | DesiredView,
+    physical_name: str,
+    physical_name_by_key: Mapping[ObjectKey, str],
+) -> (
+    AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView | AdapterStableView
+): ...
+def build_adapter_replay_query(
+    *,
+    query: str,
+    database_template: str | None = None,
+    source_relation_name: str,
+    database: str,
+    physical_relation_mappings: tuple[AdapterPhysicalRelationMapping, ...],
+) -> AdapterReplayQuery: ...
+def build_metadata_state(
+    *,
+    object_states: tuple[ObjectStateRecord, ...],
+    deployments: tuple[DeploymentRecord, ...],
+    deployment_watermarks: tuple[DeploymentWatermarkRecord, ...],
+    publish_events: tuple[PublishEventRecord, ...],
+) -> MetadataState: ...
+def build_adapter_metadata_state(state: MetadataState) -> AdapterMetadataState: ...
+def decode_object_state_metadata_row(row: Mapping[str, object]) -> ObjectStateMetadataRow: ...
+def load_planning_warehouse_snapshot(
+    *, client: AdapterConnection, database: str
+) -> PlanningWarehouseSnapshot: ...
+def load_actual_state(
+    *, client: AdapterConnection, desired_state: DesiredState, database: str
+) -> ActualState: ...
+def load_direct_warehouse_snapshot(
+    *,
+    client: AdapterConnection,
+    database: str,
+    metadata_database: str | None = None,
+    logical_model_identities: tuple[str, ...] = (),
+) -> DirectWarehouseSnapshot: ...
+def inspect_root_deployment_state(
+    *, inspected_state: InspectedManagedTableState, root_key: ObjectKey
+) -> RootDeploymentInspection: ...
+def build_inspected_managed_table_state_from_catalog(
+    *, catalog: CatalogSnapshot
+) -> InspectedManagedTableState: ...
+def build_deployment_physical_name(*, logical_name: str, deployment_id: str) -> str: ...
+def deployment_id_from_physical_name(physical_name: str) -> str: ...
+def logical_name_from_physical_name(physical_name: str) -> str: ...
+def build_normalized_fingerprint(value: object) -> str: ...
+
+class DirectModelFingerprint:
+    @staticmethod
+    def identity(*, model: CompiledModel) -> dict[str, object]: ...
+    @staticmethod
+    def query_hash(query_sql: str) -> str: ...
+    @staticmethod
+    def record(
+        *, model: CompiledModel, database: str, workflow_id: str, tool_version: str
+    ) -> AdapterDirectFingerprintRecord: ...
+    @staticmethod
+    def drift_reasons(
+        *, model: CompiledModel, baseline: AdapterDirectFingerprintRecord | None
+    ) -> tuple[str, ...]: ...
+
 def deployment_inventory_summaries(
     records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
     physical_candidate_names: list[str],
@@ -944,14 +1045,28 @@ def quality_audit_identity(
     definition_sql: str,
     execution_sql: str,
 ) -> tuple[str, str, str]: ...
-def build_manifest_contents(
+def plan_row_error_policy_changes(
+    *, analysis: CompileAnalysis, plan: DirectPlan, relations: tuple[CatalogRelation, ...]
+) -> tuple[DirectRowErrorPolicyChange, ...]: ...
+def plan_virtual_row_error_policy_changes(
+    *,
+    analysis: CompileAnalysis,
+    planned_model_names: frozenset[str],
+    selected_model_keys: frozenset[LogicalResourceKey],
+    relations: tuple[CatalogRelation, ...],
+) -> tuple[DirectRowErrorPolicyChange, ...]: ...
+def build_dag_json(*, graph: ProjectGraph, macro_registry: MacroRegistry) -> str: ...
+def resolve_manifest_project_identity(*, analysis: CompileAnalysis) -> str: ...
+def build_manifest(
+    *,
+    analysis: CompileAnalysis,
+    invocation_id: str,
     project_identity: str,
-    target_name: str,
     target_database: str,
-    is_production: bool,
-    pipeline_names: list[str],
-    logical_resources: list[tuple[str, str, list[str], list[tuple[str, str]]]],
-) -> tuple[list[str], list[list[str]], str]: ...
+    tool_version: str,
+    project_revision: str | None = None,
+    published_at: str | None = None,
+) -> AdapterManifest: ...
 def classify_sql_test_ctes(names: list[str], macro_mode: bool) -> list[str]: ...
 
 class SqlTestChainRegistry:
@@ -1086,6 +1201,27 @@ def realize_project(
     adapter_profile: CompilerAdapterProfile,
     sql_analyzer: SqlModelAnalyzer,
 ) -> RealizedProject: ...
+def build_compile_inputs(
+    *, discovered_inputs: DiscoveredProjectInputs, adapter_profile: CompilerAdapterProfile
+) -> CompileProjectInputs: ...
+def analyze_project(
+    *,
+    pipelines_root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    enforce_rules: bool = True,
+    source_overrides: Mapping[Path, str] | None = None,
+    rule_selection: tuple[str, ...] | None = None,
+) -> CompileAnalysis: ...
+def format_project_sql(
+    *,
+    root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    selection: tuple[str, ...] | None,
+    paths: tuple[Path, ...],
+    fix: bool,
+) -> tuple[FormattedSource, ...]: ...
 def build_direct_reconcile_actual_state(
     *, desired_state: DesiredState, catalog: CatalogSnapshot
 ) -> ActualState: ...

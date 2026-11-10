@@ -10,50 +10,14 @@ from pathlib import Path
 from types import ModuleType
 
 from sqltide.compiler.discovery.models import DiscoveredProjectFile
-from sqltide.compiler.macros.constants import RESERVED_MACRO_NAMES
 from sqltide.compiler.macros.exceptions import MacroError
-from sqltide.compiler.macros.models import LoadedMacro, MacroRegistry
-from sqltide.diagnostics.models import RelatedDiagnosticLocation, SourceLocation
+from sqltide.compiler.macros.models import LoadedMacro
+from sqltide.diagnostics.models import SourceLocation
 
 
-def load_project_macros(*, macro_files: tuple[DiscoveredProjectFile, ...]) -> MacroRegistry:
-    """Load one deterministic registry from retained project macro sources."""
+def execute_macro_module(*, macro_file: DiscoveredProjectFile) -> ModuleType:
+    """Execute one macro file's source as a fresh module, locating any load failure."""
 
-    loaded_macros: dict[str, LoadedMacro] = {}
-    macro_file: DiscoveredProjectFile
-    for macro_file in macro_files:
-        module: ModuleType = _load_macro_module(
-            macro_file=macro_file,
-        )
-        loaded_macro: LoadedMacro
-        for loaded_macro in _load_public_macros_from_module(
-            module=module,
-            macro_file=macro_file,
-        ):
-            if loaded_macro.name in RESERVED_MACRO_NAMES:
-                raise MacroError(
-                    f"Macro '{loaded_macro.name}' in '{macro_file.file_path}' uses a reserved "
-                    "name; @const and @enum read project constants and enums",
-                    location=_definition_location(loaded_macro),
-                )
-            existing_macro: LoadedMacro | None = loaded_macros.get(loaded_macro.name)
-            if existing_macro is not None:
-                collision_paths: str = f"'{macro_file.file_path}' and '{existing_macro.file_path}'"
-                raise MacroError(
-                    f"Macro name collision for '{loaded_macro.name}' in {collision_paths}",
-                    location=_definition_location(loaded_macro),
-                    related_locations=(
-                        RelatedDiagnosticLocation(
-                            label="first macro definition",
-                            location=_definition_location(existing_macro),
-                        ),
-                    ),
-                )
-            loaded_macros[loaded_macro.name] = loaded_macro
-    return MacroRegistry(macros=loaded_macros)
-
-
-def _load_macro_module(*, macro_file: DiscoveredProjectFile) -> ModuleType:
     module_name: str = _macro_module_name(macro_file)
     module: ModuleType = ModuleType(module_name)
     module.__file__ = str(macro_file.file_path)
@@ -83,9 +47,11 @@ def _load_macro_module(*, macro_file: DiscoveredProjectFile) -> ModuleType:
     return module
 
 
-def _load_public_macros_from_module(
+def collect_public_macros(
     *, module: ModuleType, macro_file: DiscoveredProjectFile
 ) -> tuple[LoadedMacro, ...]:
+    """The module's public synchronous functions defined at its top level, by name."""
+
     definition_line_by_name: dict[str, int] = _definition_lines(macro_file)
     loaded_macros: list[LoadedMacro] = []
     name: str
@@ -144,14 +110,6 @@ def _definition_lines(macro_file: DiscoveredProjectFile) -> dict[str, int]:
         for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-
-
-def _definition_location(macro: LoadedMacro) -> SourceLocation:
-    return SourceLocation(
-        path=macro.file_path,
-        line=macro.definition_line,
-        column=1,
-    )
 
 
 def _macro_exception_line(*, error: Exception, macro_file: DiscoveredProjectFile) -> int:

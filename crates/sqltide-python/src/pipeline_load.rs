@@ -22,7 +22,6 @@ const NATIVE: &str = "sqltide._native";
 const DISCOVERY_MODELS: &str = "sqltide.compiler.discovery.models";
 const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const MACRO_MODELS: &str = "sqltide.compiler.macros.models";
-const LOAD_MACRO_REGISTRY: &str = "sqltide.compiler.macros.main._load_macro_registry";
 const PIPELINE_CONFIG_FILE_NAME: &str = "pipeline.toml";
 const PROJECT_CONFIG_FILE_NAME: &str = "sqltide_project.toml";
 const SQL_SUFFIX: &str = ".sql";
@@ -596,8 +595,7 @@ fn load_pipeline_directory<'py>(
         let macro_files: Bound<'py, PyAny> =
             discover_macro_files(py, project_dir.clone())?.into_any();
         call(
-            &py.import(LOAD_MACRO_REGISTRY)?
-                .getattr("load_macro_registry")?,
+            &wrap_pyfunction!(crate::macros::load_macro_registry, py)?.into_any(),
             &[("macro_files", macro_files)],
         )?
     };

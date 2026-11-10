@@ -1,18 +1,14 @@
 """Doctor execution entrypoint."""
 
+from sqltide._native import (
+    build_inspected_managed_table_state_from_catalog,
+    deployment_id_from_physical_name,
+    inspect_root_deployment_state,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot, InspectedManagedTableState
 from sqltide.compiler.compile.constants import DESIRED_OBJECT_TYPE_TABLE
 from sqltide.compiler.compile.models import ObjectKey
-from sqltide.compiler.planner.main.build_inspected_managed_table_state_from_catalog import (
-    build_inspected_managed_table_state_from_catalog,
-)
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
-    deployment_id_from_physical_name,
-)
-from sqltide.compiler.planner.main.inspect_root_deployment_state import (
-    inspect_root_deployment_state,
-)
 from sqltide.compiler.planner.models import (
     RootDeploymentInspection,
 )

@@ -1,1 +1,0 @@
-"""Logical DAG artifact construction."""

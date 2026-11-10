@@ -21,7 +21,6 @@ const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const DISCOVERY_EXCEPTIONS: &str = "sqltide.compiler.discovery.exceptions";
 const MACRO_CONSTANTS: &str = "sqltide.compiler.macros.constants";
 const ACCESS_CONSTANTS: &str = "sqltide.compiler.access.constants";
-const LOAD_MACRO_REGISTRY: &str = "sqltide.compiler.macros.main._load_macro_registry";
 const SOURCES_DIRECTORY_NAME: &str = "sources";
 const MACROS_DIRECTORY_NAME: &str = "macros";
 const TESTS_DIRECTORY_NAME: &str = "tests";
@@ -748,8 +747,7 @@ pub(crate) fn load_project_input_for_path<'py>(
         None
     } else {
         Some(call(
-            &py.import(LOAD_MACRO_REGISTRY)?
-                .getattr("load_macro_registry")?,
+            &wrap_pyfunction!(crate::macros::load_macro_registry, py)?.into_any(),
             &[("macro_files", macro_files.clone().into_any())],
         )?)
     };

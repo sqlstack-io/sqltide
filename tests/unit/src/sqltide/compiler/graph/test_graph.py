@@ -3,6 +3,7 @@ from types import MappingProxyType
 
 import pytest
 
+from sqltide._native import build_project_graph_from_compiled_project, collect_reachable_keys
 from sqltide.compiler.compile.models import CompiledProject
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.graph.constants import (
@@ -10,10 +11,6 @@ from sqltide.compiler.graph.constants import (
     DRIVING_DEPENDENCY_EDGE_TYPES,
 )
 from sqltide.compiler.graph.exceptions import GraphInputError
-from sqltide.compiler.graph.main._build_project_graph import (
-    build_project_graph_from_compiled_project,
-)
-from sqltide.compiler.graph.main.collect_reachable_keys import collect_reachable_keys
 from sqltide.compiler.graph.models import DependencyEdge, ProjectGraph
 from sqltide.compiler.graph.types import GraphTraversalDirection
 from tests.unit.src.sqltide.compiler.compile.helpers import compile_logical_project

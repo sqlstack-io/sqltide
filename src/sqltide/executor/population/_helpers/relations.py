@@ -1,6 +1,9 @@
 """Realize one population plan through explicit physical mappings."""
 
 import sqltide._native as _native
+from sqltide._native import (
+    build_shadow_adapter_resource,
+)
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -15,9 +18,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     DesiredView,
     ObjectKey,
-)
-from sqltide.compiler.planner.main.build_shadow_adapter_resource import (
-    build_shadow_adapter_resource,
 )
 from sqltide.executor.population.exceptions import PopulationScopeError
 from sqltide.executor.population.main._index_population_keys import index_population_keys

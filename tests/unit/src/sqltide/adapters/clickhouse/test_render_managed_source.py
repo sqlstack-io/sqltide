@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import build_adapter_resource
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     RenderManagedSourceTestCase,
 )

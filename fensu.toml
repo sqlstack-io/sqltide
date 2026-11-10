@@ -95,6 +95,36 @@ rule = "FFR309"
 path = "src/sqltide/compiler/sql_analysis/__init__.py"
 reason = "Native bindings own model SQL analysis, reference rewriting, query and template rewriting and catalog analysis; this package only declares the SQL analysis models, types and errors they build and raise."
 
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/access/__init__.py"
+reason = "Native bindings own access policy compilation inside project analysis; this package only declares the access policy models, types, constants and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/compile/__init__.py"
+reason = "Native bindings own compile input attachment, pipeline compilation and project assembly; this package only declares the compiled models, types, constants and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/graph/__init__.py"
+reason = "Native bindings own project graph construction, reachability and named model selection; this package only declares the graph models, types, selector constants and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/pipeline/__init__.py"
+reason = "Native bindings own project analysis and its phases; this package only declares the compile analysis models and types they build."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/planner/__init__.py"
+reason = "Native bindings own deployment and direct planning, adapter resource requests, replay queries, metadata state, warehouse snapshot loading and fingerprints; this package only declares the planner models, types, constants and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/rules/__init__.py"
+reason = "Native bindings own SQL Rule evaluation, ignore resolution, verified fixes and formatting; this package only declares the formatting result model and Rule errors they build and raise."
+
 [targets.web]
 analyzer = "svelte"
 root = "ui"

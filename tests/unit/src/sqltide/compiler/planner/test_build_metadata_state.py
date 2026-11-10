@@ -1,6 +1,6 @@
 import pytest
 
-from sqltide.compiler.planner.main.build_metadata_state import build_metadata_state
+from sqltide._native import build_metadata_state
 from sqltide.compiler.planner.models import DeploymentRecord, MetadataState
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     BuildMetadataStateTestCase,

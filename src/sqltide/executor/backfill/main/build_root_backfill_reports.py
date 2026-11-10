@@ -1,16 +1,14 @@
 """Build the per-root reports describing planned backfill work."""
 
+from sqltide._native import (
+    build_inspected_managed_table_state_from_catalog,
+    inspect_root_deployment_state,
+)
 from sqltide.adapter.models import CatalogSnapshot, InspectedManagedTableState
 from sqltide.compiler.compile.constants import (
     RAW_TABLE_NAME_PREFIX,
 )
 from sqltide.compiler.compile.models import DesiredState, DesiredTable, ObjectKey
-from sqltide.compiler.planner.main.build_inspected_managed_table_state_from_catalog import (
-    build_inspected_managed_table_state_from_catalog,
-)
-from sqltide.compiler.planner.main.inspect_root_deployment_state import (
-    inspect_root_deployment_state,
-)
 from sqltide.executor.backfill._helpers.reporting import (
     _build_root_backfill_report,
 )

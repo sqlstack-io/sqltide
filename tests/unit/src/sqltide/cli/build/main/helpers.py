@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import analyze_project
 from sqltide.adapter.models import (
     AdapterDirectFingerprintSnapshot,
     AdapterMutationResult,
@@ -20,7 +21,6 @@ from sqltide.cli.build.models import (
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
