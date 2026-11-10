@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from sqltide.compiler.compile.models import KafkaSettings, KafkaTableSpec
-from sqltide.compiler.planner.main.build_normalized_fingerprint import (
+from sqltide._native import (
     build_normalized_fingerprint,
 )
+from sqltide.compiler.compile.models import KafkaSettings, KafkaTableSpec
 from tests.unit.src.sqltide.compiler.planner.main._test_types import (
     NormalizedFingerprintTestCase,
 )

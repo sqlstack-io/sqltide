@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from sqltide._native import DirectModelFingerprint
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
 from sqltide.compiler.compile.models import CompiledModel
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.executor.direct._helpers.workflow import (
     assemble_direct_fingerprint_statements,
 )

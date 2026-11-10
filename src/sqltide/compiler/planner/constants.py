@@ -14,7 +14,6 @@ from sqltide.compiler.planner.types import (
 
 PLANNED_CHANGE_TYPE_REBUILD: Final[PlannedChangeType] = PlannedChangeType(PlannedChangeType.REBUILD)
 PLANNED_CHANGE_TYPE_CREATE: Final[PlannedChangeType] = PlannedChangeType(PlannedChangeType.CREATE)
-PLANNED_CHANGE_TYPE_REPLACE: Final[PlannedChangeType] = PlannedChangeType(PlannedChangeType.REPLACE)
 PLANNED_CHANGE_TYPE_NO_OP: Final[PlannedChangeType] = PlannedChangeType(PlannedChangeType.NO_OP)
 
 TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING: Final[TableSchemaChangeKind] = TableSchemaChangeKind(
@@ -32,7 +31,6 @@ TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE: Final[TableSchemaSeedCompatibility
 )
 
 REBUILD_STRATEGY_SHADOW: Final[RebuildStrategy] = RebuildStrategy(RebuildStrategy.SHADOW_REBUILD)
-REBUILD_STRATEGY_OFFLINE: Final[RebuildStrategy] = RebuildStrategy(RebuildStrategy.OFFLINE_REBUILD)
 
 REBUILD_EXECUTION_MODE_FULL: Final[RebuildExecutionMode] = RebuildExecutionMode(
     RebuildExecutionMode.FULL_REBUILD
@@ -45,29 +43,10 @@ REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED: Final[RebuildExecutionMode] = RebuildEx
 )
 
 DEPLOYMENT_PHASE_PLAN: Final[DeploymentPhase] = DeploymentPhase(DeploymentPhase.PLAN)
-DEPLOYMENT_PHASE_BACKFILL: Final[DeploymentPhase] = DeploymentPhase(DeploymentPhase.BACKFILL)
-DEPLOYMENT_PHASE_AUDIT: Final[DeploymentPhase] = DeploymentPhase(DeploymentPhase.AUDIT)
-DEPLOYMENT_PHASE_PUBLISH: Final[DeploymentPhase] = DeploymentPhase(DeploymentPhase.PUBLISH)
 
 DEPLOYMENT_ACTION_PLAN_SHADOW_TABLE: Final[DeploymentAction] = DeploymentAction(
     DeploymentAction.PLAN_SHADOW_TABLE
 )
-DEPLOYMENT_ACTION_PLAN_SHADOW_MATERIALIZED_VIEW: Final[DeploymentAction] = DeploymentAction(
-    DeploymentAction.PLAN_SHADOW_MATERIALIZED_VIEW
-)
-DEPLOYMENT_ACTION_PLAN_SHADOW_VIEW: Final[DeploymentAction] = DeploymentAction(
-    DeploymentAction.PLAN_SHADOW_VIEW
-)
-DEPLOYMENT_ACTION_BACKFILL_SUBTREE: Final[DeploymentAction] = DeploymentAction(
-    DeploymentAction.BACKFILL_SUBTREE
-)
-DEPLOYMENT_ACTION_AUDIT_SUBTREE: Final[DeploymentAction] = DeploymentAction(
-    DeploymentAction.AUDIT_SUBTREE
-)
-DEPLOYMENT_ACTION_PUBLISH_SUBTREE: Final[DeploymentAction] = DeploymentAction(
-    DeploymentAction.PUBLISH_SUBTREE
-)
 
-VIEW_RELATION_ENGINE: str = "View"
 BLANK_VALUES: tuple[object, ...] = (None, "")
 DIRECT_DEAD_LETTERS_VIEW_SUFFIX: str = "__dead_letters"

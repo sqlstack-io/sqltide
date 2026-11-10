@@ -4,7 +4,10 @@ import pytest
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
-from sqltide._native import analyze_project
+from sqltide._native import (
+    analyze_project,
+    load_planning_warehouse_snapshot,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
@@ -27,9 +30,6 @@ from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.constants import (
     REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
     REBUILD_STRATEGY_SHADOW,
-)
-from sqltide.compiler.planner.main.load_planning_warehouse_snapshot import (
-    load_planning_warehouse_snapshot,
 )
 from sqltide.compiler.planner.models import (
     DeploymentPlan,

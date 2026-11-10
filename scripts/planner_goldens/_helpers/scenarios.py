@@ -12,6 +12,7 @@ from scripts.planner_goldens.constants import (
     GOLDEN_START_TIME,
 )
 from scripts.planner_goldens.types import ActualObject, DesiredObject
+from sqltide._native import plan_deployment, plan_direct_build
 from sqltide.adapter.models import (
     AdapterIdentity,
     CatalogColumn,
@@ -28,8 +29,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.main.plan_deployment import plan_deployment
-from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
 from sqltide.compiler.planner.models import (
     ActualKafkaTable,
     ActualMaterializedView,

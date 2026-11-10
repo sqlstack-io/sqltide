@@ -262,10 +262,10 @@ impl<'py> Project<'py> {
     snapshot,
     database,
     selected_model_keys,
-    selection_mode,
-    include_missing_upstream,
-    effective_start_time,
-    source_drift_selections,
+    selection_mode = None,
+    include_missing_upstream = false,
+    effective_start_time = None,
+    source_drift_selections = None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn plan_direct_build<'py>(
@@ -275,20 +275,23 @@ fn plan_direct_build<'py>(
     snapshot: &Bound<'py, PyAny>,
     database: &str,
     selected_model_keys: &Bound<'py, PyAny>,
-    selection_mode: &Bound<'py, PyAny>,
+    selection_mode: Option<Bound<'py, PyAny>>,
     include_missing_upstream: bool,
     effective_start_time: Option<String>,
-    source_drift_selections: &Bound<'py, PyAny>,
+    source_drift_selections: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let selection_mode: Bound<'py, PyAny> = if selection_mode.is_truthy()? {
-        selection_mode.clone()
-    } else {
-        let mode_class = py.import(PLANNER_TYPES)?.getattr("DirectSelectionMode")?;
-        mode_class.getattr(if selected_model_keys.is_truthy()? {
-            "EXPLICIT"
-        } else {
-            "ALL_MODELS"
-        })?
+    let source_drift_selections: &Bound<'py, PyAny> =
+        &source_drift_selections.unwrap_or_else(|| PyTuple::empty(py).into_any());
+    let selection_mode: Bound<'py, PyAny> = match selection_mode {
+        Some(mode) if mode.is_truthy()? => mode,
+        _ => {
+            let mode_class = py.import(PLANNER_TYPES)?.getattr("DirectSelectionMode")?;
+            mode_class.getattr(if selected_model_keys.is_truthy()? {
+                "EXPLICIT"
+            } else {
+                "ALL_MODELS"
+            })?
+        }
     };
     let project: Project<'py> = Project::new(py, graph, realized_project)?;
     let desired_state: Bound<'py, PyAny> = realized_project.getattr("desired_state")?;

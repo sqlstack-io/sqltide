@@ -1,6 +1,9 @@
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import (
+    build_adapter_replay_query,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
@@ -19,9 +22,6 @@ from sqltide.adapter.types import (
     AdapterReplayBoundaryMode,
     AdapterReplayLowerBoundMode,
     AdapterReplaySeedMode,
-)
-from sqltide.compiler.planner.main.build_adapter_replay_query import (
-    build_adapter_replay_query,
 )
 from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     ClickHouseOffsetReplayIntegrationTestCase,

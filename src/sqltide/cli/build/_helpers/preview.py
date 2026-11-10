@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 import sqltide._native as _native
-from sqltide._native import collect_reachable_keys, plan_row_error_policy_changes
+from sqltide._native import (
+    DirectModelFingerprint,
+    collect_reachable_keys,
+    load_direct_warehouse_snapshot,
+    plan_direct_build,
+    plan_row_error_policy_changes,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
 from sqltide.adapter.types import AdapterOptionalStateStatus
@@ -19,12 +25,7 @@ from sqltide.compiler.discovery.types import PipelineMode
 from sqltide.compiler.graph.constants import ALL_DEPENDENCY_EDGE_TYPES
 from sqltide.compiler.graph.types import GraphTraversalDirection
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.compiler.planner.exceptions import DirectPlanError
-from sqltide.compiler.planner.main.load_direct_warehouse_snapshot import (
-    load_direct_warehouse_snapshot,
-)
-from sqltide.compiler.planner.main.plan_direct_build import plan_direct_build
 from sqltide.compiler.planner.models import (
     DirectPlan,
     DirectRowErrorPolicyChange,

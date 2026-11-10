@@ -2,6 +2,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import (
+    build_adapter_metadata_state,
+)
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
     AdapterIdentity,
@@ -17,9 +20,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
-from sqltide.compiler.planner.main.build_adapter_metadata_state import (
-    build_adapter_metadata_state,
-)
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     RenderLifecycleMutationSqlTestCase,
     RenderMetadataMutationSqlTestCase,

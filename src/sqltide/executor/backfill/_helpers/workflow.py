@@ -7,6 +7,7 @@ from hashlib import sha256
 from importlib.metadata import version
 
 import sqltide._native as _native
+from sqltide._native import build_adapter_resource
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
     METADATA_DEPLOYMENTS_TABLE_NAME,
@@ -30,7 +31,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.planner.models import DeploymentPlan
 from sqltide.executor.backfill._helpers.metadata import build_deployment_metadata_state
 from sqltide.executor.backfill._helpers.row_error_policy import (

@@ -1,12 +1,8 @@
 import pytest
 
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
+from sqltide._native import (
     deployment_id_from_physical_name,
-)
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
     is_deployment_physical_name,
-)
-from sqltide.compiler.planner.main.logical_name_from_physical_name import (
     logical_name_from_physical_name,
 )
 from tests.unit.src.sqltide.compiler.planner._test_types import (

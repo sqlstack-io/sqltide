@@ -1,14 +1,14 @@
 import pytest
 
+from sqltide._native import (
+    inspect_root_deployment_state,
+)
 from sqltide.adapter.models import (
     InspectedActiveTableBinding,
     InspectedManagedTableState,
     InspectedPhysicalTableCandidate,
 )
 from sqltide.compiler.compile.models import ObjectKey
-from sqltide.compiler.planner.main.inspect_root_deployment_state import (
-    inspect_root_deployment_state,
-)
 from sqltide.compiler.planner.models import (
     RootDeploymentInspection,
 )

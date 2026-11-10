@@ -3,13 +3,13 @@
 from itertools import chain
 
 import sqltide._native as _native
+from sqltide._native import (
+    build_adapter_resource,
+    build_shadow_adapter_resource,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogRelation, CatalogSnapshot
 from sqltide.compiler.compile.models import DesiredMaterializedView, DesiredTable, ObjectKey
-from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
-from sqltide.compiler.planner.main.build_shadow_adapter_resource import (
-    build_shadow_adapter_resource,
-)
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.population.main._row_error_policy_restore_statements import (

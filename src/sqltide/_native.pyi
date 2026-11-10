@@ -3,23 +3,39 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
+    AdapterDirectFingerprintRecord,
+    AdapterManagedSource,
     AdapterManifest,
     AdapterManifestSnapshot,
+    AdapterMaterializedView,
+    AdapterMetadataState,
+    AdapterPhysicalRelationMapping,
+    AdapterReplayQuery,
     AdapterReplayRequest,
+    AdapterStableView,
+    AdapterTable,
+    AdapterView,
     CatalogRelation,
     CatalogSnapshot,
+    InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
+    CompiledModel,
     CompiledPipeline,
     CompiledProject,
     CompileProjectInputs,
     CompilerAdapterProfile,
+    DesiredKafkaTable,
+    DesiredMaterializedView,
     DesiredState,
+    DesiredTable,
+    DesiredView,
     ExternalSourceReplayConfig,
     LogicalResourceKey,
     ObjectKey,
@@ -59,13 +75,20 @@ from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
+    DeploymentRecord,
+    DeploymentWatermarkRecord,
     DirectPlan,
     DirectRowErrorPolicyChange,
     DirectSourceDriftSelection,
     DirectWarehouseSnapshot,
+    MetadataState,
+    ObjectStateMetadataRow,
+    ObjectStateRecord,
     PlannedObjectChange,
     PlanningWarehouseSnapshot,
+    PublishEventRecord,
     RebuildSubtree,
+    RootDeploymentInspection,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.quality.models import QualityNodeIdentity
@@ -198,6 +221,7 @@ class Declarations:
     def render_constant(self, name: str, file_path: str) -> str: ...
     def render_enum_member(self, name: str, member: str, file_path: str) -> str: ...
 
+def load_macro_registry(*, macro_files: Iterable[DiscoveredProjectFile]) -> MacroRegistry: ...
 def load_declarations(
     *,
     constant_files: tuple[DiscoveredProjectFile, ...],
@@ -536,10 +560,10 @@ def plan_deployment(
     actual_state: ActualState,
     default_database: str,
     render_resource: AdapterResourceRenderer,
-    deployment_id: str | None,
-    full_refresh_keys: frozenset[ObjectKey],
-    start_time_keys: frozenset[ObjectKey],
-    start_time: str | None,
+    deployment_id: str | None = None,
+    full_refresh_keys: frozenset[ObjectKey] = frozenset(),
+    start_time_keys: frozenset[ObjectKey] = frozenset(),
+    start_time: str | None = None,
 ) -> DeploymentPlan: ...
 def plan_direct_build(
     *,
@@ -548,10 +572,10 @@ def plan_direct_build(
     snapshot: DirectWarehouseSnapshot,
     database: str,
     selected_model_keys: frozenset[LogicalResourceKey],
-    selection_mode: DirectSelectionMode | None,
-    include_missing_upstream: bool,
-    effective_start_time: str | None,
-    source_drift_selections: tuple[DirectSourceDriftSelection, ...],
+    selection_mode: DirectSelectionMode | None = None,
+    include_missing_upstream: bool = False,
+    effective_start_time: str | None = None,
+    source_drift_selections: tuple[DirectSourceDriftSelection, ...] = (),
 ) -> DirectPlan: ...
 def find_direct_out_of_scope_consumers(
     *,
@@ -904,6 +928,74 @@ def realize_direct_replay_capture(
 ]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
+def build_adapter_resource(
+    desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
+) -> (
+    AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView | AdapterStableView
+): ...
+def build_shadow_adapter_resource(
+    *,
+    desired_object: DesiredTable | DesiredMaterializedView | DesiredView,
+    physical_name: str,
+    physical_name_by_key: Mapping[ObjectKey, str],
+) -> (
+    AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView | AdapterStableView
+): ...
+def build_adapter_replay_query(
+    *,
+    query: str,
+    database_template: str | None = None,
+    source_relation_name: str,
+    database: str,
+    physical_relation_mappings: tuple[AdapterPhysicalRelationMapping, ...],
+) -> AdapterReplayQuery: ...
+def build_metadata_state(
+    *,
+    object_states: tuple[ObjectStateRecord, ...],
+    deployments: tuple[DeploymentRecord, ...],
+    deployment_watermarks: tuple[DeploymentWatermarkRecord, ...],
+    publish_events: tuple[PublishEventRecord, ...],
+) -> MetadataState: ...
+def build_adapter_metadata_state(state: MetadataState) -> AdapterMetadataState: ...
+def decode_object_state_metadata_row(row: Mapping[str, object]) -> ObjectStateMetadataRow: ...
+def load_planning_warehouse_snapshot(
+    *, client: AdapterConnection, database: str
+) -> PlanningWarehouseSnapshot: ...
+def load_actual_state(
+    *, client: AdapterConnection, desired_state: DesiredState, database: str
+) -> ActualState: ...
+def load_direct_warehouse_snapshot(
+    *,
+    client: AdapterConnection,
+    database: str,
+    metadata_database: str | None = None,
+    logical_model_identities: tuple[str, ...] = (),
+) -> DirectWarehouseSnapshot: ...
+def inspect_root_deployment_state(
+    *, inspected_state: InspectedManagedTableState, root_key: ObjectKey
+) -> RootDeploymentInspection: ...
+def build_inspected_managed_table_state_from_catalog(
+    *, catalog: CatalogSnapshot
+) -> InspectedManagedTableState: ...
+def build_deployment_physical_name(*, logical_name: str, deployment_id: str) -> str: ...
+def deployment_id_from_physical_name(physical_name: str) -> str: ...
+def logical_name_from_physical_name(physical_name: str) -> str: ...
+def build_normalized_fingerprint(value: object) -> str: ...
+
+class DirectModelFingerprint:
+    @staticmethod
+    def identity(*, model: CompiledModel) -> dict[str, object]: ...
+    @staticmethod
+    def query_hash(query_sql: str) -> str: ...
+    @staticmethod
+    def record(
+        *, model: CompiledModel, database: str, workflow_id: str, tool_version: str
+    ) -> AdapterDirectFingerprintRecord: ...
+    @staticmethod
+    def drift_reasons(
+        *, model: CompiledModel, baseline: AdapterDirectFingerprintRecord | None
+    ) -> tuple[str, ...]: ...
+
 def deployment_inventory_summaries(
     records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
     physical_candidate_names: list[str],

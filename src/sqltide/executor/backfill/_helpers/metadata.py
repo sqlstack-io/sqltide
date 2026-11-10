@@ -1,16 +1,14 @@
 """Metadata persistence for backfill bootstrap execution."""
 
+from sqltide._native import (
+    build_adapter_metadata_state,
+    build_metadata_state,
+    build_normalized_fingerprint,
+)
 from sqltide.adapter.constants import VIRTUAL_OBJECT_STATE_KIND_DEPLOYMENT
 from sqltide.adapter.models import AdapterMetadataState
 from sqltide.compiler.compile.models import DesiredMaterializedView, DesiredView, ObjectKey
 from sqltide.compiler.discovery.types import ReplayLineageMode
-from sqltide.compiler.planner.main.build_adapter_metadata_state import (
-    build_adapter_metadata_state,
-)
-from sqltide.compiler.planner.main.build_metadata_state import build_metadata_state
-from sqltide.compiler.planner.main.build_normalized_fingerprint import (
-    build_normalized_fingerprint,
-)
 from sqltide.compiler.planner.models import (
     DeploymentPlan,
     DeploymentRecord,

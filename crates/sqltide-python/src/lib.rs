@@ -24,6 +24,7 @@ mod model_sql;
 mod pipeline_load;
 mod plan_render;
 mod planner;
+mod planner_support;
 mod polyglot;
 mod population;
 mod project_analysis;
@@ -108,6 +109,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     executor::register(module)?;
     plan_render::register(module)?;
     planner::register(module)?;
+    planner_support::register(module)?;
     polyglot::register(module)?;
     project_analysis::register(module)?;
     project_discovery::register(module)?;

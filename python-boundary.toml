@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 50621
+remaining_lines = 49432
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -36,9 +36,19 @@ rule = 1
 note = "Rule 1: Logic-free protocols describing the clickhouse-connect client and query result the ClickHouse connection wraps."
 
 [[stays]]
+path = "compiler/macros/_helpers/registry.py"
+rule = 2
+note = "Rule 2: Executes one project macro file's source as a module, locates load failures in the user traceback, and collects its public top-level functions with their def lines and docstrings. Reserved-name and collision checks and registry assembly are native (load_macro_registry)."
+
+[[stays]]
 path = "compiler/macros/constants.py"
 rule = 2
 note = "Rule 2: Data-only names the user macro loader reads: the reserved macro names and the constants and enums directory names."
+
+[[stays]]
+path = "compiler/macros/main/_load_macro_file.py"
+rule = 2
+note = "Rule 2: Entry point the native registry loader calls to execute one user macro file and return its public macro functions."
 
 [[stays]]
 path = "compiler/macros/types.py"
@@ -167,10 +177,6 @@ note = "Catches AdapterWarehouseError from the warehouse read only; a native ren
 [[handled_native_errors]]
 location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_manifests"
 note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
-
-[[handled_native_errors]]
-location = "compiler/planner/_helpers/warehouse_metadata.py::load_all_object_state_records"
-note = "Catches AdapterRelationNotFoundError for an absent metadata table only; a native rendering failure raises ValueError and propagates."
 
 [[handled_native_errors]]
 location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"

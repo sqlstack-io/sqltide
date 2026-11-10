@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
+from sqltide._native import DirectModelFingerprint
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
@@ -22,7 +23,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.planner.classes.direct_model_fingerprint import DirectModelFingerprint
 from sqltide.dev_server._helpers.payloads.state_payload import (
     build_partitions_query,
     build_throughputs_query,

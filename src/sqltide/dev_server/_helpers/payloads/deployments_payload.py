@@ -4,18 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from sqltide._native import (
+    deployment_id_from_physical_name,
+    is_deployment_physical_name,
+    logical_name_from_physical_name,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import InspectedManagedTableState
 from sqltide.compiler.compile.constants import MATERIALIZED_VIEW_NAME_PREFIX
-from sqltide.compiler.planner.main.deployment_id_from_physical_name import (
-    deployment_id_from_physical_name,
-)
-from sqltide.compiler.planner.main.is_deployment_physical_name import (
-    is_deployment_physical_name,
-)
-from sqltide.compiler.planner.main.logical_name_from_physical_name import (
-    logical_name_from_physical_name,
-)
 from sqltide.dev_server._helpers.payloads.state_payload import build_relation_stats_query
 from sqltide.dev_server.models import RelationStorage
 from sqltide.executor.deployment.main.load_deployments import load_deployments

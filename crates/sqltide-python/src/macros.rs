@@ -28,6 +28,8 @@ const MACRO_CONTEXT_ANNOTATION: &str = "MacroContext";
 const MACRO_EXCEPTIONS: &str = "sqltide.compiler.macros.exceptions";
 const MACRO_MODELS: &str = "sqltide.compiler.macros.models";
 const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
+const MACRO_CONSTANTS: &str = "sqltide.compiler.macros.constants";
+const MACRO_FILE_LOADER: &str = "sqltide.compiler.macros.main._load_macro_file";
 const CONSTANT_CALL: &str = "const";
 const ENUM_CALL: &str = "enum";
 
@@ -964,7 +966,112 @@ pub(crate) fn find_macro_call_names<'py>(
     PyTuple::new(py, names)
 }
 
+fn keywords<'py>(
+    py: Python<'py>,
+    entries: &[(&str, Bound<'py, PyAny>)],
+) -> PyResult<Bound<'py, PyDict>> {
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    for (name, value) in entries {
+        keywords.set_item(name, value)?;
+    }
+    Ok(keywords)
+}
+
+/// Where one loaded macro is defined: its file and `def` line.
+fn definition_location<'py>(loaded_macro: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py: Python<'py> = loaded_macro.py();
+    py.import(DIAGNOSTICS_MODELS)?
+        .getattr("SourceLocation")?
+        .call(
+            (),
+            Some(&keywords(
+                py,
+                &[
+                    ("path", loaded_macro.getattr("file_path")?),
+                    ("line", loaded_macro.getattr("definition_line")?),
+                    ("column", 1.into_bound_py_any(py)?),
+                ],
+            )?),
+        )
+}
+
+/// One deterministic registry of the public macros of every retained macro file, loaded in
+/// order. A reserved macro name or a name defined twice raises `MacroError` at its definition.
+#[pyfunction]
+#[pyo3(signature = (*, macro_files))]
+pub(crate) fn load_macro_registry<'py>(
+    py: Python<'py>,
+    macro_files: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let load_file: Bound<'py, PyAny> = py.import(MACRO_FILE_LOADER)?.getattr("load_macro_file")?;
+    let reserved: Bound<'py, PyAny> = py
+        .import(MACRO_CONSTANTS)?
+        .getattr("RESERVED_MACRO_NAMES")?;
+    let error_class: Bound<'py, PyAny> = py.import(MACRO_EXCEPTIONS)?.getattr("MacroError")?;
+    let loaded_macros: Bound<'py, PyDict> = PyDict::new(py);
+    for macro_file in macro_files.try_iter()? {
+        let macro_file: Bound<'py, PyAny> = macro_file?;
+        let file_path: String = macro_file.getattr("file_path")?.str()?.extract()?;
+        let file_macros: Bound<'py, PyAny> = load_file.call(
+            (),
+            Some(&keywords(py, &[("macro_file", macro_file.clone())])?),
+        )?;
+        for loaded_macro in file_macros.try_iter()? {
+            let loaded_macro: Bound<'py, PyAny> = loaded_macro?;
+            let name: Bound<'py, PyAny> = loaded_macro.getattr("name")?;
+            if reserved.contains(&name)? {
+                return Err(PyErr::from_value(error_class.call(
+                    (format!(
+                        "Macro '{}' in '{file_path}' uses a reserved name; @const and @enum \
+                         read project constants and enums",
+                        name.str()?
+                    ),),
+                    Some(&keywords(
+                        py,
+                        &[("location", definition_location(&loaded_macro)?)],
+                    )?),
+                )?));
+            }
+            if let Some(existing) = loaded_macros.get_item(&name)? {
+                let related: Bound<'py, PyAny> = py
+                    .import(DIAGNOSTICS_MODELS)?
+                    .getattr("RelatedDiagnosticLocation")?
+                    .call(
+                        (),
+                        Some(&keywords(
+                            py,
+                            &[
+                                ("label", "first macro definition".into_bound_py_any(py)?),
+                                ("location", definition_location(&existing)?),
+                            ],
+                        )?),
+                    )?;
+                return Err(PyErr::from_value(error_class.call(
+                    (format!(
+                        "Macro name collision for '{}' in '{file_path}' and '{}'",
+                        name.str()?,
+                        existing.getattr("file_path")?.str()?
+                    ),),
+                    Some(&keywords(
+                        py,
+                        &[
+                            ("location", definition_location(&loaded_macro)?),
+                            ("related_locations", PyTuple::new(py, [related])?.into_any()),
+                        ],
+                    )?),
+                )?));
+            }
+            loaded_macros.set_item(&name, &loaded_macro)?;
+        }
+    }
+    py.import(MACRO_MODELS)?.getattr("MacroRegistry")?.call(
+        (),
+        Some(&keywords(py, &[("macros", loaded_macros.into_any())])?),
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(load_macro_registry, module)?)?;
     module.add_function(wrap_pyfunction!(expand_sql_macros, module)?)?;
     module.add_function(wrap_pyfunction!(find_macro_call_names, module)?)?;
     module.add_function(wrap_pyfunction!(load_declarations, module)?)?;

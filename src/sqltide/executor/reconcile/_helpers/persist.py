@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from sqltide._native import (
+    build_adapter_metadata_state,
+    build_normalized_fingerprint,
+)
 from sqltide.adapter.constants import VIRTUAL_OBJECT_STATE_KIND_RECONCILE
 from sqltide.adapter.models import AdapterMetadataState
 from sqltide.compiler.compile.models import (
@@ -9,12 +13,6 @@ from sqltide.compiler.compile.models import (
     DesiredMaterializedView,
     DesiredTable,
     DesiredView,
-)
-from sqltide.compiler.planner.main.build_adapter_metadata_state import (
-    build_adapter_metadata_state,
-)
-from sqltide.compiler.planner.main.build_normalized_fingerprint import (
-    build_normalized_fingerprint,
 )
 from sqltide.compiler.planner.models import MetadataState, ObjectStateRecord
 from sqltide.executor.reconcile.models import ReconcilePreview
