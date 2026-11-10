@@ -7,12 +7,11 @@ from datetime import UTC, datetime
 from time import monotonic
 from uuid import uuid4
 
-from sqltide._native import DevServerState
+from sqltide._native import DevServerState, sensors_enabled
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
-from sqltide.dev_server.main._sensors_enabled import sensors_enabled
 from sqltide.dev_server.types import SensorSchedulerState
 from sqltide.sensors.classes.sensor_dispatcher import SensorDispatcher
 from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository

@@ -155,6 +155,8 @@ from sqltide.compiler.sql_analysis.models import (
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
+from sqltide.dev_server.classes.build_process import BuildProcessManager
+from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
 from sqltide.dev_server.models import (
     CompileErrorInfo,
     CompileOutcome,
@@ -1977,3 +1979,43 @@ class SilentDevServerReporter:
         self, *, category: str, status: str, tone: ActivityTone, detail: str
     ) -> None: ...
     def report_shutdown(self) -> None: ...
+
+def scheduler_enabled(analysis: CompileAnalysis) -> bool: ...
+def sensors_enabled(analysis: CompileAnalysis) -> bool: ...
+def build_audit_scheduler_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def execute_due_audits(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    observation_connection: AdapterConnection | None = None,
+    database: str,
+    project_dir: Path,
+    due: tuple[dict[str, object], ...],
+) -> int: ...
+
+@final
+class AuditScheduler:
+    """Poll current compile and metadata state, then run one due batch at a time."""
+
+    def __init__(
+        self,
+        *,
+        state: DevServerState,
+        warehouse: WarehouseRuntime | None = None,
+        connection: AdapterConnection | None = None,
+        observation_connection: AdapterConnection | None = None,
+        database: str | None,
+        project_dir: Path,
+        builds: BuildProcessManager,
+        presumed_failed_after_seconds: int | None = None,
+    ) -> None: ...
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def tick(self) -> int: ...
+    def health(self) -> dict[str, object]: ...

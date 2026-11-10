@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sqltide._native import execute_due_audits
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterNodeResultRecord
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.quality.models import QualityNodeIdentity
-from sqltide.dev_server.main._execute_due_audits import execute_due_audits
 from tests.unit.src.sqltide.dev_server.main._test_types import (
     ScheduledBatchFailureTestCase,
 )
@@ -54,11 +54,11 @@ def test_given_selected_due_audit_when_batch_fails_then_error_result_keeps_origi
     connection: AdapterConnection = cast(AdapterConnection, MagicMock())
     with (
         patch(
-            "sqltide.dev_server.main._execute_due_audits.execute_sql_audits",
+            "sqltide.executor.auditing.main.execute_sql_audits.execute_sql_audits",
             side_effect=RuntimeError(test_case.error_message),
         ),
         patch(
-            "sqltide.dev_server.main._execute_due_audits.persist_terminal_observations",
+            "sqltide.executor.observability.main.persist_terminal_observations.persist_terminal_observations",
             return_value=None,
         ) as persist_observations,
     ):

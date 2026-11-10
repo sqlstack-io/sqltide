@@ -739,7 +739,7 @@ fn read_audit_scheduler(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         let payload = invoke(
             py,
-            "sqltide.dev_server.main._build_audit_scheduler_payload",
+            NATIVE,
             "build_audit_scheduler_payload",
             py_kwargs!(py;
                 analysis = &analysis,

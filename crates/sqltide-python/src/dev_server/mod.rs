@@ -4,6 +4,7 @@
 pub(crate) mod activity;
 pub(crate) mod app;
 pub(crate) mod auth;
+pub(crate) mod audits;
 pub(crate) mod authz;
 pub(crate) mod create;
 pub(crate) mod definitions;

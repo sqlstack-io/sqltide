@@ -4,10 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sqltide._native import build_audit_scheduler_payload
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.audit_schedule_calculator import AuditScheduleCalculator
 from sqltide.executor.auditing.models import AuditWarmupState
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     AuditScheduleCalculationTestCase,
@@ -153,11 +153,11 @@ def test_given_compiled_audit_state_when_calculating_schedule_then_due_slot_is_d
     connection: AdapterConnection = cast(AdapterConnection, connection_mock)
     with (
         patch(
-            "sqltide.dev_server.classes.audit_schedule_calculator.load_model_anchors",
+            "sqltide.executor.auditing.main.load_model_anchors.load_model_anchors",
             return_value=test_case.anchors_by_model,
         ),
         patch(
-            "sqltide.dev_server.classes.audit_schedule_calculator.resolve_audit_warmup_states",
+            "sqltide._native.resolve_audit_warmup_states",
             return_value={
                 "orders are valid": AuditWarmupState(
                     eligible=test_case.warmup_eligible,
@@ -168,21 +168,20 @@ def test_given_compiled_audit_state_when_calculating_schedule_then_due_slot_is_d
             },
         ),
         patch(
-            "sqltide.dev_server.classes.audit_schedule_calculator.build_checks_status_payload",
+            "sqltide.dev_server._helpers.server.checks_execution.build_checks_status_payload",
             return_value=list(test_case.status_payloads),
         ),
         patch(
-            "sqltide.dev_server.classes.audit_schedule_calculator."
-            "read_latest_direct_build_materialization",
+            "sqltide._native.read_latest_direct_build_materialization",
             return_value=test_case.materialization_outcome,
         ),
     ):
-        payload: dict[str, object] = AuditScheduleCalculator(
+        payload: dict[str, object] = build_audit_scheduler_payload(
             analysis=analysis,
             connection=connection,
             database="analytics",
             project_dir=Path("/project"),
-        ).build_payload(enabled=True)
+        )
 
     audit_payload: dict[str, object] = cast(list[dict[str, object]], payload["audits"])[0]
     assert payload["state"] == test_case.expected_scheduler_state

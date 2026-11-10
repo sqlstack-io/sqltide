@@ -189,7 +189,7 @@ pub(crate) fn create_dev_app(
     let kafka_lag_reader = attr(py, NATIVE, "KafkaLagReader")?.call0()?;
     let kafka_topic_reader = attr(py, NATIVE, "KafkaTopicReader")?.call0()?;
     let presumed_failed_after_seconds = context.getattr("run_presumed_failed_after_seconds")?;
-    let audit_scheduler = class(py, "audit_scheduler", "AuditScheduler")?.call(
+    let audit_scheduler = attr(py, NATIVE, "AuditScheduler")?.call(
         (),
         Some(&py_kwargs!(py;
             state = &state,
@@ -403,5 +403,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::runs::register(module)?;
     super::messages::register(module)?;
     super::readers::register(module)?;
-    super::lifecycle::register(module)
+    super::lifecycle::register(module)?;
+    super::audits::register(module)
 }
