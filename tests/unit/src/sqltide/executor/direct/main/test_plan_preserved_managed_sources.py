@@ -9,13 +9,11 @@ from sqltide._native import (
     plan_preserved_managed_sources,
     render_direct_plan_json,
     render_direct_plan_text,
+    reset_fresh_landing_offsets,
 )
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
 from sqltide.executor.direct.models import DirectBuildRequest, DirectBuildWorkflow
-from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
-    reset_fresh_landing_offsets,
-)
 from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
 from sqltide.executor.population.models import (
     PopulationRealization,

@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 9199
+remaining_lines = 9014
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -84,6 +84,11 @@ note = "Rule 3: Public sqltide.events facade that documented sensors import; re-
 path = "events/types.py"
 rule = 3
 note = "Rule 3: Public AuditTransition and ObservedCommand enums and the SensorEvent alias re-exported by sqltide.events; data only."
+
+[[stays]]
+path = "executor/kafka_admin/_helpers/offset_reset.py"
+rule = 4
+note = "Rule 4: kafka-python-ng glue: builds the admin client, deletes one consumer group and maps the library's NoError and GroupIdNotFoundError sentinels; selection, configuration and notices are native."
 
 [[stays]]
 path = "executor/kafka_admin/models.py"

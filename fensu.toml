@@ -251,6 +251,11 @@ reason = "Native bindings own SQL Rule evaluation, ignore resolution, verified f
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/executor/kafka_admin/__init__.py"
+reason = "Native bindings own fresh-landing selection, admin client configuration, consumer group scoping and reset notices; this package only declares the reset result, the admin client protocols and the kafka-python glue that deletes one group."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/executor/population/__init__.py"
 reason = "Native bindings own population scope, fan-in expansion, realization order, replay requests, source preparation and row-error policy steps; this package only declares the population models, constants and errors they build and raise."
 

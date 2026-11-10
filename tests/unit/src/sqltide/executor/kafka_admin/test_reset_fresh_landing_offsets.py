@@ -2,9 +2,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
-    reset_fresh_landing_offsets,
-)
+from sqltide._native import reset_fresh_landing_offsets
 from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
 from sqltide.executor.population.models import PopulationSourcePreparation
 from tests.unit.src.sqltide.executor.kafka_admin._test_types import (

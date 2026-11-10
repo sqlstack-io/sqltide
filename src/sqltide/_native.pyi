@@ -244,6 +244,8 @@ from sqltide.executor.janitor.models import (
     JanitorPreviewResult,
     JanitorRequest,
 )
+from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
+from sqltide.executor.kafka_admin.types import KafkaAdminClientFactory
 from sqltide.executor.observability.models import (
     QualityResultContext,
     RunStartupTimings,
@@ -457,6 +459,11 @@ class RunEventSink:
 
 def canonical_username(value: str) -> str: ...
 def default_control_store_url(*, project_dir: Path) -> str: ...
+def reset_fresh_landing_offsets(
+    *,
+    source_preparation: PopulationSourcePreparation,
+    client_factory: KafkaAdminClientFactory | None = None,
+) -> tuple[ConsumerGroupOffsetReset, ...]: ...
 def rename_streambuild_tables(*, url: str, sqlite_timeout_seconds: float | None = None) -> None: ...
 
 @final

@@ -49,6 +49,7 @@ mod executor;
 mod graph;
 mod handling;
 mod janitor_command;
+mod kafka_offsets;
 mod macros;
 mod maintenance_command;
 mod model_analysis;
@@ -183,6 +184,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     authorization::register(module)?;
     control_store::register(module)?;
     destruction_store::register(module)?;
+    kafka_offsets::register(module)?;
     dev_server::register(module)?;
     events::register(module)?;
     direct_build::register(module)?;
