@@ -483,7 +483,7 @@ pub(crate) fn run_one_test<'py>(
     let started: Any<'py> = start_invocation(py)?;
     let results: Any<'py> = call(
         py,
-        "sqltide.executor.testing.main.execute_sql_tests",
+        "sqltide._native",
         "execute_sql_tests",
         py_kwargs!(py; test_cases = PyTuple::new(py, [&test_case])?, client = connection)?,
     )?;

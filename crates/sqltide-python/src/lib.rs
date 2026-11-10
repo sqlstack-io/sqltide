@@ -72,6 +72,7 @@ mod selection;
 mod sensors;
 mod sources;
 mod sql_scan;
+mod sql_tests_command;
 mod test_command;
 mod test_discovery;
 mod testing;
@@ -166,6 +167,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     promotion_command::register(module)?;
     reconcile_command::register(module)?;
     maintenance_command::register(module)?;
+    sql_tests_command::register(module)?;
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;

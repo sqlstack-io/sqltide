@@ -121,6 +121,11 @@ reason = "Native bindings rebind a stable view to a chosen deployment table unde
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/executor/testing/__init__.py"
+reason = "Native bindings execute SQL-native tests and decode their bag-comparison rows into per-target results; this package only declares the execution result shapes and the test execution error."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/executor/janitor/exceptions.py"
 reason = "Native bindings own janitor preview and apply: inventory evidence, retention decisions, the mutation lock and the teardown workflow; this package only declares the request and result shapes and the janitor error."
 

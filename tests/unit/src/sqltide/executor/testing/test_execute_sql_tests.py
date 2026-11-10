@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import execute_sql_tests
 from sqltide.executor.testing.exceptions import SqlTestExecutionError
-from sqltide.executor.testing.main.execute_sql_tests import execute_sql_tests
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from tests.unit.src.sqltide.executor.testing._test_types import (
     ComparisonDecodingErrorTestCase,

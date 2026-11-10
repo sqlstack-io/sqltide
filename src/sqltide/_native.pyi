@@ -1238,6 +1238,9 @@ def infer_pipeline_sources(
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
+def execute_sql_tests(
+    *, test_cases: tuple[SqlTestCase, ...], client: AdapterConnection
+) -> tuple[SqlTestExecutionResult, ...]: ...
 def execute_doctor(*, request: DoctorRequest, client: AdapterConnection) -> DoctorResult: ...
 def execute_repair_active_view(
     *, request: RepairActiveViewRequest, client: AdapterConnection
