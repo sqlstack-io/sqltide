@@ -1,7 +1,7 @@
-from sqltide.adapter.models import AdapterBindingReplacementRequest
-from sqltide.adapters.clickhouse._helpers.lifecycle import (
+from sqltide._native import (
     render_clickhouse_stable_binding_replacement,
 )
+from sqltide.adapter.models import AdapterBindingReplacementRequest
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 
 

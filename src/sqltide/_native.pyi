@@ -5,14 +5,18 @@ from typing import Any, Literal
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
+    AdapterBindingReplacementRequest,
     AdapterDeploymentInventory,
     AdapterDirectFingerprintRecord,
+    AdapterIdentity,
     AdapterManagedSource,
     AdapterManifest,
     AdapterManifestSnapshot,
     AdapterMaterializedView,
     AdapterMetadataState,
     AdapterPhysicalRelationMapping,
+    AdapterRefreshState,
+    AdapterRelationCleanupRequest,
     AdapterReplayQuery,
     AdapterReplayRequest,
     AdapterStableView,
@@ -928,6 +932,34 @@ def realize_direct_replay_capture(
 ]: ...
 def is_deployment_id(text: str) -> bool: ...
 def is_deployment_physical_name(physical_name: str) -> bool: ...
+def quote_clickhouse_sql_string(value: str) -> str: ...
+def load_clickhouse_catalog(
+    *, connection: AdapterConnection, adapter_identity: AdapterIdentity, database: str
+) -> CatalogSnapshot: ...
+def load_clickhouse_external_dependants(
+    *, connection: AdapterConnection, database: str, relation_names: tuple[str, ...]
+) -> tuple[str, ...]: ...
+def clickhouse_catalog_resource_matches(
+    *,
+    resource: AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView,
+    relation: CatalogRelation,
+    database: str,
+) -> bool: ...
+def load_clickhouse_refresh_states(
+    *, connection: AdapterConnection, database: str
+) -> tuple[AdapterRefreshState, ...]: ...
+def build_inspected_managed_table_state(
+    *, client: AdapterConnection, database: str
+) -> InspectedManagedTableState: ...
+def load_clickhouse_deployment_inventory(
+    *, connection: AdapterConnection, database: str
+) -> AdapterDeploymentInventory: ...
+def render_clickhouse_relation_cleanup(
+    *, connection: AdapterConnection, request: AdapterRelationCleanupRequest
+) -> tuple[str, ...]: ...
+def render_clickhouse_stable_binding_replacement(
+    *, connection: AdapterConnection, request: AdapterBindingReplacementRequest
+) -> tuple[str, ...]: ...
 def build_adapter_resource(
     desired_object: DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView,
 ) -> (

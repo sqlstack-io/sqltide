@@ -10,6 +10,16 @@ from hashlib import sha256
 from clickhouse_connect.driver.exceptions import ClickHouseError, StreamFailureError
 from clickhouse_connect.driver.summary import QuerySummary
 
+from sqltide._native import (
+    build_inspected_managed_table_state,
+    clickhouse_catalog_resource_matches,
+    load_clickhouse_catalog,
+    load_clickhouse_deployment_inventory,
+    load_clickhouse_external_dependants,
+    load_clickhouse_refresh_states,
+    render_clickhouse_relation_cleanup,
+    render_clickhouse_stable_binding_replacement,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
     METADATA_DEAD_LETTERS_TABLE_NAME,
@@ -78,20 +88,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse._helpers.errors import translate_driver_error
-from sqltide.adapters.clickhouse._helpers.inspection import (
-    clickhouse_catalog_resource_matches,
-    load_clickhouse_catalog,
-    load_clickhouse_external_dependants,
-    load_clickhouse_refresh_states,
-)
-from sqltide.adapters.clickhouse._helpers.lifecycle import (
-    load_clickhouse_deployment_inventory,
-    render_clickhouse_relation_cleanup,
-    render_clickhouse_stable_binding_replacement,
-)
-from sqltide.adapters.clickhouse._helpers.managed_tables import (
-    build_inspected_managed_table_state,
-)
 from sqltide.adapters.clickhouse._helpers.metadata import (
     load_clickhouse_direct_fingerprints,
     load_clickhouse_manifests,
