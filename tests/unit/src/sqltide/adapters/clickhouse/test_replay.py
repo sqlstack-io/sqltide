@@ -4,6 +4,8 @@ import pytest
 
 from sqltide._native import (
     build_adapter_replay_query,
+    render_clickhouse_replay_from_capture,
+    render_clickhouse_replay_from_deployment,
 )
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.adapter.models import (
@@ -21,10 +23,6 @@ from sqltide.adapter.types import (
     AdapterReplayBoundaryMode,
     AdapterReplayLowerBoundMode,
     AdapterReplaySeedMode,
-)
-from sqltide.adapters.clickhouse._helpers.replay import (
-    render_clickhouse_replay_from_capture,
-    render_clickhouse_replay_from_deployment,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     OffsetDedupeRenderTestCase,

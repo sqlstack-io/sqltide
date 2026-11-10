@@ -2,13 +2,13 @@
 
 import pytest
 
+from sqltide._native import render_clickhouse_resource
 from sqltide.adapter.constants import (
     ADAPTER_SECRET_PLACEHOLDER_PREFIX,
     ADAPTER_SECRET_PLACEHOLDER_SUFFIX,
 )
 from sqltide.adapter.exceptions import AdapterCapabilityError
 from sqltide.adapter.models import AdapterMaterializedView
-from sqltide.adapters.clickhouse._helpers.rendering import render_clickhouse_resource
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     MissingSecretTestCase,
     RefreshRenderingTestCase,

@@ -4,6 +4,11 @@ from dataclasses import replace
 from pathlib import Path
 from textwrap import dedent
 
+from sqltide._native import (
+    render_clickhouse_replay_coverage_query,
+    render_clickhouse_replay_from_capture,
+    render_clickhouse_replay_from_deployment,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterBindingReplacementRequest,
@@ -36,11 +41,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterReplayBoundaryMode
-from sqltide.adapters.clickhouse._helpers.replay import (
-    render_clickhouse_replay_coverage_query,
-    render_clickhouse_replay_from_capture,
-    render_clickhouse_replay_from_deployment,
-)
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.audit.main._run_audit import run_audit
 from sqltide.cli.build.main._run_build import run_build

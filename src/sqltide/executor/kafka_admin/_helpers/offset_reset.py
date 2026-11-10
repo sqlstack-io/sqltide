@@ -6,10 +6,8 @@ from collections.abc import Mapping
 
 from kafka.errors import GroupIdNotFoundError, NoError
 
+from sqltide._native import database_scoped_consumer_group
 from sqltide.adapter.models import AdapterManagedSource
-from sqltide.adapters.clickhouse.main.database_scoped_consumer_group import (
-    database_scoped_consumer_group,
-)
 from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
 from sqltide.executor.kafka_admin.types import (
     KafkaAdminClientFactory,

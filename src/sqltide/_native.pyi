@@ -4,31 +4,44 @@ from pathlib import Path
 from typing import Any, Literal
 
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
+    AdapterAdoptedSourceRealizationRequest,
     AdapterBindingReplacementRequest,
+    AdapterConnectionConfig,
     AdapterCurrentQualityNode,
     AdapterDeploymentInventory,
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
     AdapterIdentity,
     AdapterManagedSource,
+    AdapterManagedSourceRealizationRequest,
     AdapterManifest,
     AdapterManifestSnapshot,
     AdapterMaterializedView,
     AdapterMetadataState,
+    AdapterModelRealization,
+    AdapterModelRealizationRequest,
     AdapterPhysicalRelationMapping,
+    AdapterQueryCancellation,
     AdapterReadinessRequest,
     AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
+    AdapterReplayOffsetFrontier,
+    AdapterReplayOffsetProgressRequest,
     AdapterReplayQuery,
     AdapterReplayRequest,
     AdapterRunEventRecord,
     AdapterRunStatementRecord,
     AdapterSensorState,
+    AdapterSourceRealization,
     AdapterStableView,
+    AdapterStatementProgress,
     AdapterTable,
+    AdapterTargetMutationLock,
     AdapterView,
+    AdapterViewRealizationRequest,
     AdapterWarehouseHealth,
     CatalogRelation,
     CatalogSnapshot,
@@ -139,13 +152,12 @@ ACCESS_PIPELINE_PERMISSIONS: list[str]
 ACCESS_PROJECT_PERMISSIONS: list[str]
 ACCESS_TARGET_PERMISSIONS: list[str]
 
-def render_clickhouse_resource(resource: object, database: str, if_not_exists: bool) -> str: ...
 def render_clickhouse_set_difference_comparison(targets: tuple[object, ...]) -> str: ...
 def render_clickhouse_ensure_database(database: str) -> str: ...
 def render_clickhouse_replay_coverage_query(request: object) -> str: ...
 def render_clickhouse_replay_from_capture(request: object) -> str: ...
-def render_clickhouse_replay_from_deployment(request: object) -> list[str]: ...
-def database_scoped_consumer_group(consumer_group: str, database: str) -> str: ...
+def render_clickhouse_replay_from_deployment(request: object) -> tuple[str, ...]: ...
+def database_scoped_consumer_group(*, consumer_group: str, database: str) -> str: ...
 def render_clickhouse_metadata_migration_statements(database: str) -> tuple[str, ...]: ...
 def render_clickhouse_metadata_migration_workflow(database: str) -> tuple[str, ...]: ...
 def render_clickhouse_metadata_state(
@@ -920,16 +932,26 @@ def direct_population_scope(
 def destruction_drop_statements(
     relations: list[tuple[str, str, str]], size_override: int | None
 ) -> list[tuple[str, str, str]]: ...
-def realize_clickhouse_managed_source(
-    logical_name: str,
-    source_kind: str,
-    format: str,
-    consumer_group: str | None,
-    project_name: str | None,
-    target_name: str | None,
-    setting_keys: list[str],
-) -> tuple[str, str, str, str, str]: ...
-def clickhouse_raw_landing_columns() -> list[tuple[str, str]]: ...
+def translate_clickhouse_driver_error(error: Exception) -> AdapterWarehouseError: ...
+def render_clickhouse_resource(
+    *,
+    resource: AdapterManagedSource
+    | AdapterTable
+    | AdapterMaterializedView
+    | AdapterView
+    | AdapterStableView,
+    database: str,
+    if_not_exists: bool = False,
+) -> str: ...
+def realize_clickhouse_source(
+    *, request: AdapterManagedSourceRealizationRequest | AdapterAdoptedSourceRealizationRequest
+) -> AdapterSourceRealization: ...
+def realize_clickhouse_model(
+    *, request: AdapterModelRealizationRequest | AdapterViewRealizationRequest
+) -> AdapterModelRealization: ...
+def build_clickhouse_connection_config(
+    *, values: Mapping[str, object], database: str | None
+) -> AdapterConnectionConfig: ...
 def clickhouse_external_source_relation_sql(table_name: str, columns: list[str | None]) -> str: ...
 def clickhouse_postgres_source_relation_sql(
     host: str, port: str, database: str, table: str, user: str, password_env: str | None
@@ -966,6 +988,27 @@ def clickhouse_catalog_resource_matches(
     relation: CatalogRelation,
     database: str,
 ) -> bool: ...
+def acquire_clickhouse_target_mutation_lock(
+    *, connection: AdapterConnection, database: str, owner_id: str
+) -> AdapterTargetMutationLock: ...
+def release_clickhouse_target_mutation_lock(
+    *, connection: AdapterConnection, lock: AdapterTargetMutationLock
+) -> None: ...
+def rename_clickhouse_streambuild_metadata(
+    *, connection: AdapterConnection, database: str
+) -> None: ...
+def load_clickhouse_statement_progress(
+    *, connection: AdapterConnection, query_id: str
+) -> AdapterStatementProgress | None: ...
+def cancel_clickhouse_workflow_query(
+    *, connection: AdapterConnection, query_id: str
+) -> AdapterQueryCancellation: ...
+def observe_clickhouse_replay_offset_frontiers(
+    *,
+    connection: AdapterConnection,
+    request: AdapterReplayOffsetProgressRequest,
+    previous: tuple[AdapterReplayOffsetFrontier, ...],
+) -> tuple[AdapterReplayOffsetFrontier, ...]: ...
 def load_clickhouse_warehouse_health(
     *,
     connection: AdapterConnection,

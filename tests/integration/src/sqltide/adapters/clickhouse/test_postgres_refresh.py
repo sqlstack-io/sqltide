@@ -5,6 +5,7 @@ from collections.abc import Sequence
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import render_clickhouse_resource
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterColumn,
@@ -12,7 +13,6 @@ from sqltide.adapter.models import (
     AdapterRefreshState,
     AdapterTable,
 )
-from sqltide.adapters.clickhouse._helpers.rendering import render_clickhouse_resource
 from tests.integration.src.sqltide.adapters.clickhouse._test_types import (
     PostgresRefreshEndToEndTestCase,
     RefreshableViewIntegrationTestCase,

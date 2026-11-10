@@ -10,7 +10,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import sqltide._native as _native
-from sqltide._native import analyze_project
+from sqltide._native import (
+    analyze_project,
+    render_clickhouse_replay_coverage_query,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterCapabilities,
@@ -36,9 +39,6 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
     InspectedActiveTableBinding,
     InspectedManagedTableState,
-)
-from sqltide.adapters.clickhouse._helpers.replay import (
-    render_clickhouse_replay_coverage_query,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.auth.classes.control_store import ControlStore

@@ -1,6 +1,7 @@
 import pytest
 from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
 
+from sqltide._native import translate_clickhouse_driver_error
 from sqltide.adapter.exceptions import (
     AdapterAuthenticationError,
     AdapterDatabaseNotFoundError,
@@ -8,7 +9,6 @@ from sqltide.adapter.exceptions import (
     AdapterTimeoutError,
     AdapterWarehouseError,
 )
-from sqltide.adapters.clickhouse._helpers.errors import translate_driver_error
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     DriverErrorTranslationTestCase,
 )
@@ -60,7 +60,7 @@ _TIMEOUT_MESSAGE: str = (
 def test_given_driver_error_when_translating_then_it_returns_the_neutral_equivalent(
     test_case: DriverErrorTranslationTestCase,
 ) -> None:
-    translated: AdapterWarehouseError = translate_driver_error(test_case.driver_error)
+    translated: AdapterWarehouseError = translate_clickhouse_driver_error(test_case.driver_error)
 
     assert type(translated) is test_case.expected_error_type
     assert str(translated) == test_case.expected_message

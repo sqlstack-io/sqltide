@@ -1,7 +1,7 @@
 //! ClickHouse SQL rendering for the Python adapter: reads the neutral adapter dataclasses and
 //! returns SQL text.
 
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyFloat, PyInt, PyString, PyTuple};
 use sqltide_clickhouse::CapabilityError;
@@ -168,8 +168,7 @@ fn resource(object: &Bound<'_, PyAny>) -> PyResult<Resource> {
 }
 
 /// Render one neutral adapter resource as ClickHouse DDL, leaving credential placeholders.
-#[pyfunction]
-fn render_clickhouse_resource(
+pub(crate) fn render_resource_with_placeholders(
     py: Python<'_>,
     resource_object: &Bound<'_, PyAny>,
     database: &str,
@@ -244,11 +243,11 @@ fn render_clickhouse_replay_from_capture(
 
 /// Seed and replay statements for an `AdapterDeploymentReplayRequest`.
 #[pyfunction]
-fn render_clickhouse_replay_from_deployment(
-    py: Python<'_>,
-    request: &Bound<'_, PyAny>,
-) -> PyResult<Vec<String>> {
-    replay_from_deployment(&DeploymentReplay {
+fn render_clickhouse_replay_from_deployment<'py>(
+    py: Python<'py>,
+    request: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyTuple>> {
+    let statements: Vec<String> = replay_from_deployment(&DeploymentReplay {
         replay: replay(&request.getattr("replay")?)?,
         metadata_database: field(request, "metadata_database")?,
         deployment_id: field(request, "deployment_id")?,
@@ -257,7 +256,8 @@ fn render_clickhouse_replay_from_deployment(
         active_column_names: field(request, "active_column_names")?,
         anchor_column_names: field(request, "anchor_column_names")?,
     })
-    .map_err(|error| replay_error(py, error))
+    .map_err(|error| replay_error(py, error))?;
+    PyTuple::new(py, statements)
 }
 
 /// One manually executable ClickHouse database creation statement.
@@ -268,6 +268,7 @@ fn render_clickhouse_ensure_database(database: &str) -> String {
 
 /// The Kafka consumer group ClickHouse uses for one target database.
 #[pyfunction]
+#[pyo3(signature = (*, consumer_group, database))]
 fn database_scoped_consumer_group(consumer_group: &str, database: &str) -> String {
     scoped_consumer_group(consumer_group, database)
 }
@@ -745,44 +746,6 @@ fn render_clickhouse_latest_node_status_query(
     ))
 }
 
-/// `(Kafka table, raw table, materialized view, consumer group, landing query)` names one
-/// managed source realizes as. Raises `ValueError(message)` for an unrealizable source.
-#[pyfunction]
-#[allow(clippy::too_many_arguments)]
-fn realize_clickhouse_managed_source(
-    logical_name: &str,
-    source_kind: &str,
-    format: &str,
-    consumer_group: Option<&str>,
-    project_name: Option<&str>,
-    target_name: Option<&str>,
-    setting_keys: Vec<String>,
-) -> PyResult<(String, String, String, String, String)> {
-    let realization = realization::realize_managed_source(&realization::ManagedSourceRequest {
-        logical_name,
-        source_kind,
-        format,
-        consumer_group,
-        project_name,
-        target_name,
-        setting_keys: setting_keys.iter().map(String::as_str).collect(),
-    })
-    .map_err(PyValueError::new_err)?;
-    Ok((
-        realization.kafka_table_name,
-        realization.raw_table_name,
-        realization.materialized_view_name,
-        realization.consumer_group,
-        realization.landing_query,
-    ))
-}
-
-/// The raw landing table's `(name, type)` columns.
-#[pyfunction]
-fn clickhouse_raw_landing_columns() -> Vec<(&'static str, &'static str)> {
-    realization::RAW_LANDING_COLUMNS.to_vec()
-}
-
 /// The relation SQL an adopted table is read through, from its authored
 /// `(partition, offset, timestamp, landed at, cursor)` lineage columns.
 #[pyfunction]
@@ -807,8 +770,6 @@ fn clickhouse_postgres_source_relation_sql(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(realize_clickhouse_managed_source, module)?)?;
-    module.add_function(wrap_pyfunction!(clickhouse_raw_landing_columns, module)?)?;
     module.add_function(wrap_pyfunction!(
         clickhouse_external_source_relation_sql,
         module
@@ -817,7 +778,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         clickhouse_postgres_source_relation_sql,
         module
     )?)?;
-    module.add_function(wrap_pyfunction!(render_clickhouse_resource, module)?)?;
     module.add_function(wrap_pyfunction!(
         render_clickhouse_set_difference_comparison,
         module
