@@ -434,10 +434,7 @@ fn build_clickhouse_connection_config<'py>(
     database: Value<'py>,
 ) -> PyResult<Value<'py>> {
     let py: Python<'py> = values.py();
-    let keys: Bound<'py, PySet> = PySet::empty(py)?;
-    for key in values.try_iter()? {
-        keys.add(key?)?;
-    }
+    let keys: Value<'py> = py.get_type::<PySet>().call1((values,))?;
     let unknown_keys: Value<'py> = keys.sub(PyFrozenSet::new(py, CONNECTION_CONFIG_KEYS)?)?;
     if unknown_keys.is_truthy()? {
         let names: Value<'py> = PyString::new(py, ", ").call_method1(
