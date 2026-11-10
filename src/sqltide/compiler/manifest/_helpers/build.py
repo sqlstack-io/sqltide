@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import sqltide._native as _native
+from sqltide._native import collect_reachable_keys
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterManifest,
@@ -15,7 +16,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.compile.models import CompiledProject, LogicalResourceKey
 from sqltide.compiler.graph.constants import ALL_DEPENDENCY_EDGE_TYPES
-from sqltide.compiler.graph.main.collect_reachable_keys import collect_reachable_keys
 from sqltide.compiler.graph.types import GraphTraversalDirection
 from sqltide.compiler.manifest.constants import MANIFEST_VERSION
 from sqltide.compiler.manifest.types import ManifestAdapterResource

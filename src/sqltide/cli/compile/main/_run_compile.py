@@ -3,11 +3,11 @@
 import sys
 from pathlib import Path
 
+from sqltide._native import analyze_project
 from sqltide.cli.compile.main._write_static_compile_target import write_static_compile_target
 from sqltide.compiler.compile.exceptions import TransformSqlContractError
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.diagnostics.main.render_error import render_error
 

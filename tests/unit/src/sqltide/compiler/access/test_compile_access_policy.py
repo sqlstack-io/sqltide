@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
+from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
+from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.access.exceptions import AccessPolicyError
-from sqltide.compiler.access.main._compile_access_policy import compile_access_policy
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.access.types import GrantScope, Permission
 from sqltide.compiler.discovery.models import DiscoveredProjectFile
@@ -16,7 +18,11 @@ from tests.unit.src.sqltide.compiler.access._test_types import (
     InvalidAccessPolicyTestCase,
     MissingAccessPolicyTestCase,
 )
-from tests.unit.src.sqltide.compiler.access.helpers import access_source_file
+from tests.unit.src.sqltide.compiler.access.helpers import (
+    access_source_file,
+    compile_access_policy,
+)
+from tests.unit.src.sqltide.compiler.pipeline.helpers import write_compilation_project
 
 
 @pytest.mark.parametrize(
@@ -31,10 +37,16 @@ from tests.unit.src.sqltide.compiler.access.helpers import access_source_file
 )
 def test_given_no_access_file_when_compiling_then_policy_is_absent(
     test_case: MissingAccessPolicyTestCase,
+    tmp_path: Path,
 ) -> None:
-    policy: CompiledAccessPolicy | None = compile_access_policy(
-        source_file=None, pipeline_names=test_case.pipeline_names
-    )
+    project_dir: Path = tmp_path / "project"
+    write_compilation_project(project_dir)
+
+    policy: CompiledAccessPolicy | None = _native.analyze_project(
+        pipelines_root=project_dir / "pipelines",
+        loaded_project=_native.load_project_input_for_path(path=project_dir),
+        adapter_profile=build_compiler_adapter_profile(ClickHouseAdapter()),
+    ).access_policy
 
     assert policy is test_case.expected_policy
 

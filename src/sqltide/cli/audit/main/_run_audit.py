@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide._native import resolve_audit_warmup_states
+from sqltide._native import analyze_project, resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
 from sqltide.cli.audit._helpers.referenced_models import referenced_model_names
@@ -12,7 +12,6 @@ from sqltide.cli.audit._helpers.selection import select_loaded_sql_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import CompiledPipeline, CompilerAdapterProfile
 from sqltide.compiler.discovery.models import LoadedProject
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.auditing.main.deferred_audit_result import deferred_audit_result
 from sqltide.executor.auditing.main.execute_sql_audits import execute_sql_audits

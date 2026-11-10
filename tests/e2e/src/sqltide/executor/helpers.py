@@ -14,8 +14,7 @@ from clickhouse_connect.driver.client import Client
 from kafka import KafkaProducer
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer
-from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
+from sqltide._native import SqlModelAnalyzer, compile_pipeline
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,

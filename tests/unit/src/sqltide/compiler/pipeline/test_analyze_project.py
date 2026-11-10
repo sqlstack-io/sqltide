@@ -10,13 +10,17 @@ from unittest.mock import Mock, patch
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import (
+    analyze_project,
+    build_compile_inputs,
+    build_project_graph_from_compiled_project,
+)
 from sqltide.adapter.models import AdapterManagedSource, AdapterTable
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.compile.main._run_compile import run_compile
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.exceptions import PipelineCompileError
-from sqltide.compiler.compile.main._build_compile_inputs import build_compile_inputs
 from sqltide.compiler.compile.models import (
     CompiledTableModel,
     CompilerAdapterProfile,
@@ -24,10 +28,6 @@ from sqltide.compiler.compile.models import (
 )
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import KafkaLandingStep, LoadedPipeline, LoadedProject
-from sqltide.compiler.graph.main._build_project_graph import (
-    build_project_graph_from_compiled_project,
-)
-from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from tests.unit.src.sqltide.compiler.audit_discovery.helpers import write_sql_audit_file
 from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
@@ -376,18 +376,18 @@ def test_given_project_sources_when_analyzing_then_builds_one_stable_offline_res
             wraps=_native.discover_project_inputs,
         ) as discover_phase,
         patch(
-            "sqltide.compiler.pipeline.main.analyze_project.build_compile_inputs",
+            "sqltide._native.build_compile_inputs",
             wraps=build_compile_inputs,
         ) as compile_inputs_phase,
         patch(
-            "sqltide.compiler.pipeline.main.analyze_project.assemble_project",
+            "sqltide._native.assemble_project",
             side_effect=partial(
                 assemble_project_with_completion,
                 completion=assembly_completed,
             ),
         ) as assembly_phase,
         patch(
-            "sqltide.compiler.pipeline.main.analyze_project.build_project_graph_from_compiled_project",
+            "sqltide._native.build_project_graph_from_compiled_project",
             wraps=build_project_graph_from_compiled_project,
         ) as graph_phase,
     ):
@@ -856,7 +856,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     assembly_source: str = Path("crates/sqltide-python/src/compilation.rs").read_text(
         encoding="utf-8"
     )
-    analysis_source: str = Path("src/sqltide/compiler/pipeline/main/analyze_project.py").read_text(
+    analysis_source: str = Path("crates/sqltide-python/src/project_analysis.rs").read_text(
         encoding="utf-8"
     )
     test_command_source: str = Path("src/sqltide/cli/test/main/_run_test.py").read_text(
@@ -871,8 +871,8 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     assert service_call_counts == (1,) * test_case.expected_entrypoint_count
     assert old_entrypoint_counts == (0,) * test_case.expected_entrypoint_count
     assert assembly_source.count("build_sql_test_cases(") == test_case.expected_assembly_call_count
-    assert analysis_source.count("realize_project(") == test_case.expected_realization_call_count
-    assert analysis_source.index("assemble_project(") < analysis_source.index("realize_project(")
+    assert analysis_source.count('"realize_project"') == test_case.expected_realization_call_count
+    assert analysis_source.index('"assemble_project"') < analysis_source.index('"realize_project"')
     assert assembly_source.count(".realize_model(") == test_case.expected_consumer_rebuild_count
     assert (
         test_command_source.count("build_sql_test_cases(")

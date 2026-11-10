@@ -2,8 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 from textwrap import dedent
 
-from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
-from sqltide.compiler.compile.main._assemble_project import assemble_project
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter, assemble_project
 from sqltide.compiler.compile.models import CompiledProject, CompileProjectInputs
 
 
@@ -276,10 +275,7 @@ def write_policy_validation_project(
 
 
 def has_compilation_service_import(file_path: Path) -> bool:
-    return (
-        "from sqltide.compiler.pipeline.main.analyze_project import analyze_project"
-        in file_path.read_text(encoding="utf-8")
-    )
+    return "from sqltide._native import analyze_project" in file_path.read_text(encoding="utf-8")
 
 
 def _write_pipeline(

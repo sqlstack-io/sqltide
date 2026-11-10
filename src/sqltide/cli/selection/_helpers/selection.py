@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqltide._native as _native
+from sqltide._native import resolve_named_model_keys
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
@@ -23,7 +24,6 @@ from sqltide.compiler.compile.models import (
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.discovery.types import ReplayLineageMode
 from sqltide.compiler.graph.exceptions import GraphInputError
-from sqltide.compiler.graph.main.resolve_named_model_keys import resolve_named_model_keys
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.pipeline.types import AdapterResource
 
