@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.10](https://github.com/sqlstack-io/sqltide/compare/v0.65.9...v0.65.10) (2026-11-10)
+
+
+### Refactoring
+
+* move the direct build, destruction execution and virtual build workflow to Rust ([#359](https://github.com/sqlstack-io/sqltide/issues/359)) ([7d61afd](https://github.com/sqlstack-io/sqltide/commit/7d61afd6f65b9fb805e7791e1be0a13469c32b29))
+
 ## [0.65.9](https://github.com/sqlstack-io/sqltide/compare/v0.65.8...v0.65.9) (2026-11-10)
 
 
