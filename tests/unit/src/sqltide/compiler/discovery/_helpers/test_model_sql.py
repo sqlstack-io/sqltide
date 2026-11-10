@@ -3,11 +3,7 @@ from typing import cast
 
 import pytest
 
-from sqltide.compiler.discovery._helpers.model_sql import (
-    infer_transform_source,
-    load_transform_from_sql_file,
-    parse_model_sql,
-)
+import sqltide._native as _native
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import TransformStep, ViewStep
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
@@ -143,7 +139,7 @@ from tests.unit.src.sqltide.compiler.macros.helpers import (
 def test_given_sql_model_header_variants_when_parsing_then_it_returns_expected_header_values(
     test_case: ParseModelSqlHeaderTestCase,
 ) -> None:
-    header_values, query = parse_model_sql(
+    header_values, query = _native.parse_model_sql(
         contents=test_case.contents, file_path=Path("orders.sql")
     )
 
@@ -188,7 +184,7 @@ def test_given_model_kind_when_loading_sql_then_returns_coherent_step(
     model_path: Path = tmp_path / "model.sql"
     model_path.write_text(test_case.contents, encoding="utf-8")
 
-    model: TransformStep | ViewStep = load_transform_from_sql_file(file_path=model_path)
+    model: TransformStep | ViewStep = _native.load_transform_from_sql_file(file_path=model_path)
 
     assert isinstance(model, test_case.expected_step_type)
     assert model.relation_name == test_case.expected_relation_name
@@ -216,7 +212,9 @@ def test_given_replay_execution_settings_when_loading_model_then_retains_them_by
     model_path: Path = tmp_path / "model.sql"
     model_path.write_text(test_case.contents, encoding="utf-8")
 
-    model: TransformStep = cast(TransformStep, load_transform_from_sql_file(file_path=model_path))
+    model: TransformStep = cast(
+        TransformStep, _native.load_transform_from_sql_file(file_path=model_path)
+    )
 
     assert dict(model.execution_settings.replay or {}) == test_case.expected_replay_settings
 
@@ -254,7 +252,7 @@ def test_given_yaml_like_model_header_when_parsing_then_it_raises_conversion_gui
     test_case: ParseModelSqlHeaderErrorTestCase,
 ) -> None:
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        parse_model_sql(contents=test_case.contents, file_path=Path("orders.sql"))
+        _native.parse_model_sql(contents=test_case.contents, file_path=Path("orders.sql"))
 
 
 @pytest.mark.parametrize(
@@ -279,7 +277,7 @@ def test_given_unsupported_execution_phase_when_loading_model_then_it_fails_befo
     model_path.write_text(test_case.contents, encoding="utf-8")
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        load_transform_from_sql_file(file_path=model_path)
+        _native.load_transform_from_sql_file(file_path=model_path)
 
 
 @pytest.mark.parametrize(
@@ -312,7 +310,7 @@ def test_given_non_scalar_replay_choice_when_loading_model_then_it_raises_discov
     model_path.write_text(test_case.contents, encoding="utf-8")
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        load_transform_from_sql_file(file_path=model_path)
+        _native.load_transform_from_sql_file(file_path=model_path)
 
 
 @pytest.mark.parametrize(
@@ -379,7 +377,7 @@ def test_given_view_with_table_semantics_when_loading_then_rejects_field(
     model_path.write_text(test_case.contents, encoding="utf-8")
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        load_transform_from_sql_file(file_path=model_path)
+        _native.load_transform_from_sql_file(file_path=model_path)
 
 
 @pytest.mark.parametrize(
@@ -397,7 +395,7 @@ def test_given_typed_driving_ref_when_inferring_transform_source_then_it_raises_
     test_case: InferTransformSourceErrorTestCase,
 ) -> None:
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        infer_transform_source(
+        _native.infer_transform_source(
             query=test_case.query,
             file_path=Path("orders.sql"),
             source_line=1,
@@ -445,7 +443,7 @@ def test_given_sql_model_macros_when_loading_then_it_expands_query_body(
 
     transform: TransformStep = cast(
         TransformStep,
-        load_transform_from_sql_file(
+        _native.load_transform_from_sql_file(
             file_path=model_file_path,
             macro_registry=macro_registry,
             macro_context=macro_context,
@@ -487,7 +485,7 @@ def test_given_model_header_when_loading_sql_then_returns_expected_description(
     model_path: Path = tmp_path / "model.sql"
     model_path.write_text(test_case.contents, encoding="utf-8")
 
-    model: TransformStep | ViewStep = load_transform_from_sql_file(file_path=model_path)
+    model: TransformStep | ViewStep = _native.load_transform_from_sql_file(file_path=model_path)
 
     assert model.description == test_case.expected_description
 
@@ -511,4 +509,4 @@ def test_given_invalid_description_when_loading_sql_then_it_raises_specific_erro
     model_path.write_text(test_case.contents, encoding="utf-8")
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        load_transform_from_sql_file(file_path=model_path)
+        _native.load_transform_from_sql_file(file_path=model_path)

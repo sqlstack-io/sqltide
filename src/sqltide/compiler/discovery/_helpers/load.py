@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Literal
 
 import sqltide._native as _native
-from sqltide.compiler.discovery._helpers.model_sql import load_transform_from_sql_file
 from sqltide.compiler.discovery._helpers.replay_policy_validation import (
     validate_replay_policies_for_mode,
 )
@@ -431,7 +430,7 @@ def _load_pipeline_transforms(
             )
         model_paths_by_name[model_file_path.stem] = model_file_path
         transforms.append(
-            load_transform_from_sql_file(
+            _native.load_transform_from_sql_file(
                 file_path=model_file_path,
                 contents=(
                     None
