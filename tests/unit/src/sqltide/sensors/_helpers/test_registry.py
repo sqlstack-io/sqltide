@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.sensors._helpers.registry import discover_sensor_paths, load_project_sensors
 from sqltide.sensors.exceptions import SensorError
 from sqltide.sensors.models import SensorRegistry
 from tests.unit.src.sqltide.sensors._helpers._test_types import (
@@ -14,6 +13,7 @@ from tests.unit.src.sqltide.sensors._helpers._test_types import (
 from tests.unit.src.sqltide.sensors._helpers.helpers import (
     LAG_SENSOR_SOURCE,
     QUALITY_SENSOR_SOURCE,
+    load_registry,
     write_project_files,
 )
 
@@ -51,10 +51,7 @@ def test_given_sensor_modules_when_loading_then_registry_contains_declarations(
 ) -> None:
     write_project_files(project_dir=tmp_path, files=test_case.files)
 
-    registry: SensorRegistry = load_project_sensors(
-        project_dir=tmp_path,
-        sensor_paths=discover_sensor_paths(project_dir=tmp_path),
-    )
+    registry: SensorRegistry = load_registry(project_dir=tmp_path)
 
     assert tuple(sensor.name for sensor in registry.ordered()) == test_case.expected_names
     assert tuple(str(sensor.kind) for sensor in registry.ordered()) == test_case.expected_kinds
@@ -82,12 +79,8 @@ def test_given_unchanged_sources_when_reloading_then_fingerprints_are_stable(
 ) -> None:
     write_project_files(project_dir=tmp_path, files=test_case.files)
 
-    first: SensorRegistry = load_project_sensors(
-        project_dir=tmp_path, sensor_paths=discover_sensor_paths(project_dir=tmp_path)
-    )
-    second: SensorRegistry = load_project_sensors(
-        project_dir=tmp_path, sensor_paths=discover_sensor_paths(project_dir=tmp_path)
-    )
+    first: SensorRegistry = load_registry(project_dir=tmp_path)
+    second: SensorRegistry = load_registry(project_dir=tmp_path)
 
     assert tuple(sensor.name for sensor in first.ordered()) == test_case.expected_names
     assert tuple(sensor.identity_fingerprint for sensor in first.ordered()) == tuple(
@@ -136,9 +129,7 @@ def test_given_invalid_sensor_modules_when_loading_then_diagnostics_locate_the_s
     write_project_files(project_dir=tmp_path, files=test_case.files)
 
     with pytest.raises(SensorError, match=test_case.expected_error_fragment) as error_info:
-        _ = load_project_sensors(
-            project_dir=tmp_path, sensor_paths=discover_sensor_paths(project_dir=tmp_path)
-        )
+        _ = load_registry(project_dir=tmp_path)
 
     assert error_info.value.location is not None
     assert error_info.value.location.line == test_case.expected_location_line

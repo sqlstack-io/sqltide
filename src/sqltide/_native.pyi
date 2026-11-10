@@ -4,7 +4,7 @@ import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Protocol, final
+from typing import Any, Literal, Protocol, Self, final
 
 from sqltide.adapter.classes.adapter import Adapter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -40,6 +40,8 @@ from sqltide.adapter.models import (
     AdapterRunEventRecord,
     AdapterRunStatementRecord,
     AdapterSensorState,
+    AdapterSensorStepRecord,
+    AdapterSensorTickRecord,
     AdapterSourceRealization,
     AdapterStableView,
     AdapterStatementProgress,
@@ -247,9 +249,29 @@ from sqltide.executor.workflow.models import (
     WorkflowExecutionResult,
 )
 from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
-from sqltide.sensors.classes.sensor_dispatcher import SensorDispatcher
-from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
-from sqltide.sensors.models import SensorDispatchSummary
+from sqltide.provider.models import DiscoveredProvider
+from sqltide.sensors.models import (
+    CompiledSensors,
+    EventSensorDeclaration,
+    LoadedSensor,
+    PollingSensorDeclaration,
+    PollingTickState,
+    SensorDispatchSummary,
+    SensorRegistry,
+    SensorRetryPolicy,
+    SensorStreamPosition,
+    SensorTickView,
+    StepMarker,
+    TickAttemptState,
+)
+from sqltide.sensors.types import (
+    DefaultSensorStatus,
+    SensorFunction,
+    SensorOverrideStatus,
+    SensorStepStore,
+    SensorTickStatus,
+    StepPolicy,
+)
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -301,6 +323,124 @@ def render_expected_warehouse_error(
 ) -> str | None: ...
 def load_toml(text: str) -> dict[str, Any]: ...
 def declares_virtual_pipeline(pipelines_root: Path) -> bool: ...
+def compile_sensors(
+    *, project_dir: Path, reserved_names: frozenset[str]
+) -> CompiledSensors | None: ...
+def event_sensor(
+    *,
+    on: type,
+    name: str | None = None,
+    targets: Iterable[str] | None = None,
+    triggers: Iterable[str] | None = None,
+    maximum_event_age_seconds: float | None = None,
+    default_status: DefaultSensorStatus = ...,
+    retry_policy: SensorRetryPolicy | None = None,
+    timeout_seconds: float = 60.0,
+) -> Callable[[SensorFunction], EventSensorDeclaration]: ...
+def polling_sensor(
+    *,
+    minimum_interval_seconds: float,
+    name: str | None = None,
+    default_status: DefaultSensorStatus = ...,
+    retry_policy: SensorRetryPolicy | None = None,
+    timeout_seconds: float = 60.0,
+) -> Callable[[SensorFunction], PollingSensorDeclaration]: ...
+def effective_sensor_status(
+    *, sensor: LoadedSensor, overrides: Mapping[str, SensorOverrideStatus]
+) -> SensorOverrideStatus: ...
+
+class SensorStateRepository:
+    def __new__(cls, *, connection: AdapterConnection, database: str) -> Self: ...
+    def ensure_ready(self) -> None: ...
+    def warehouse_now(self) -> str: ...
+    def read_checkpoint(self, *, sensor_name: str, source: str) -> SensorStreamPosition | None: ...
+    def advance_checkpoint(
+        self, *, sensor_name: str, source: str, position: SensorStreamPosition
+    ) -> None: ...
+    def newest_node_result_position(self, *, target: str) -> SensorStreamPosition | None: ...
+    def newest_invocation_position(self, *, target: str) -> SensorStreamPosition | None: ...
+    def fetch_node_results_after(
+        self, *, position: SensorStreamPosition, target: str, limit: int
+    ) -> tuple[NodeResultObservation, ...]: ...
+    def fetch_node_result(self, *, result_id: str) -> NodeResultObservation | None: ...
+    def fetch_invocations_after(
+        self, *, position: SensorStreamPosition, target: str, limit: int
+    ) -> tuple[InvocationObservation, ...]: ...
+    def fetch_invocation(self, *, invocation_id: str) -> InvocationObservation | None: ...
+    def previous_node_status(
+        self, *, binding_key: str, target: str, position: SensorStreamPosition
+    ) -> QualityResultStatus | None: ...
+    def record_ticks(self, *, ticks: tuple[AdapterSensorTickRecord, ...]) -> None: ...
+    def tick_attempt_state(self, *, sensor_name: str, event_id: str) -> TickAttemptState: ...
+    def list_ticks(
+        self, *, sensor_name: str, limit: int, after: str | None = None, before: str | None = None
+    ) -> tuple[SensorTickView, ...]: ...
+    def list_dead_letters(self) -> tuple[SensorTickView, ...]: ...
+    def polling_tick_state(self, *, sensor_name: str) -> PollingTickState: ...
+    def read_step(self, *, sensor_name: str, event_id: str, step_key: str) -> StepMarker | None: ...
+    def record_step(self, *, step: AdapterSensorStepRecord) -> None: ...
+    def override_statuses(self) -> dict[str, SensorOverrideStatus]: ...
+    def record_override(
+        self, *, sensor_name: str, status: SensorOverrideStatus, actor: str | None
+    ) -> None: ...
+    def apply_tick_retention(self, *, retention_days: int) -> None: ...
+    def acquire_dispatch_lease(self, *, owner_id: str, ttl_seconds: float) -> bool: ...
+
+class SensorDispatcher:
+    def __init__(
+        self,
+        *,
+        repository: SensorStateRepository,
+        event_target: str,
+        providers: tuple[DiscoveredProvider, ...] = (),
+        dispatcher_id: str | None = None,
+        batch_limit: int = 50,
+        lease_ttl_seconds: float = 60.0,
+        maximum_event_age_seconds: float | None = None,
+    ) -> None: ...
+    def dispatch_once(self, *, registry: SensorRegistry, target: str) -> SensorDispatchSummary: ...
+    def initialize_event_checkpoints(self, *, registry: SensorRegistry, target: str) -> None: ...
+    def retry_dead_letter(
+        self, *, registry: SensorRegistry, sensor_name: str, event_id: str
+    ) -> SensorTickStatus: ...
+    def skip_dead_letter(
+        self, *, registry: SensorRegistry, sensor_name: str, event_id: str, reason: str
+    ) -> None: ...
+
+class DurableStepRunner:
+    def __init__(self, *, store: SensorStepStore) -> None: ...
+    def run(self, key: str, fn: Callable[[], object], policy: StepPolicy = ...) -> object: ...
+
+class InMemoryStepStore:
+    def __init__(self) -> None: ...
+    def read_step(self, *, step_key: str) -> StepMarker | None: ...
+    def record_step(
+        self,
+        *,
+        step_key: str,
+        policy: StepPolicy,
+        status: SensorTickStatus,
+        attempt: int,
+        result_json: str | None,
+        error_message: str | None,
+    ) -> None: ...
+
+class RepositoryStepStore:
+    def __init__(
+        self, *, repository: SensorStateRepository, sensor_name: str, event_id: str
+    ) -> None: ...
+    def read_step(self, *, step_key: str) -> StepMarker | None: ...
+    def record_step(
+        self,
+        *,
+        step_key: str,
+        policy: StepPolicy,
+        status: SensorTickStatus,
+        attempt: int,
+        result_json: str | None,
+        error_message: str | None,
+    ) -> None: ...
+
 def compile_access_policy(
     contents: str, source_path: Path, pipeline_names: frozenset[str]
 ) -> CompiledAccessPolicy: ...

@@ -2,8 +2,10 @@ import time
 from pathlib import Path
 from textwrap import dedent
 
+from sqltide._native import compile_sensors
 from sqltide.events import AuditCompleted
 from sqltide.sensors import DefaultSensorStatus, SkipReason, event_sensor
+from sqltide.sensors.models import CompiledSensors, SensorRegistry
 
 QUALITY_SENSOR_SOURCE: str = """
 from sqltide.events import AuditCompleted
@@ -57,3 +59,11 @@ def raising_handler(ctx: object) -> None:
 )
 def hanging_handler(ctx: object) -> None:
     time.sleep(0.5)
+
+
+def load_registry(*, project_dir: Path) -> SensorRegistry:
+    compiled: CompiledSensors | None = compile_sensors(
+        project_dir=project_dir, reserved_names=frozenset()
+    )
+    assert compiled is not None
+    return compiled.registry

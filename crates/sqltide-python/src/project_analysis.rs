@@ -23,7 +23,6 @@ const RULES_MODELS: &str = "sqltide.compiler.rules.models";
 const RULES_EXCEPTIONS: &str = "sqltide.compiler.rules.exceptions";
 const DIAGNOSTICS_MODELS: &str = "sqltide.diagnostics.models";
 const DIAGNOSTICS_TYPES: &str = "sqltide.diagnostics.types";
-const SENSORS: &str = "sqltide.sensors.main.compile_sensors";
 const RELAXED_GC_THRESHOLDS: [i64; 3] = [2000, 100, 100];
 const MAX_FIX_PASSES: usize = 128;
 
@@ -540,7 +539,7 @@ pub(crate) fn analyze_project<'py>(
                 ))?
             };
             let sensors: Bound<'py, PyAny> = call(
-                &py.import(SENSORS)?.getattr("compile_sensors")?,
+                &native(py, "compile_sensors")?,
                 &[
                     ("project_dir", pipelines_root.getattr("parent")?),
                     ("reserved_names", reserved_sensor_names(&compile_inputs)?),

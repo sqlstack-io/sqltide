@@ -110,7 +110,7 @@ fn audit_sample<'py>(
 /// Map one node result row to its derived events, exhaustively by node kind.
 #[pyfunction]
 #[pyo3(signature = (*, row, previous_status, target))]
-fn events_from_node_result<'py>(
+pub(crate) fn events_from_node_result<'py>(
     row: Bound<'py, PyAny>,
     previous_status: Bound<'py, PyAny>,
     target: Bound<'py, PyAny>,
@@ -166,7 +166,7 @@ fn events_from_node_result<'py>(
 /// Map one invocation row to its derived events, exhaustively by command.
 #[pyfunction]
 #[pyo3(signature = (*, row, target))]
-fn events_from_invocation<'py>(
+pub(crate) fn events_from_invocation<'py>(
     row: Bound<'py, PyAny>,
     target: Bound<'py, PyAny>,
 ) -> PyResult<Option<Bound<'py, PyTuple>>> {

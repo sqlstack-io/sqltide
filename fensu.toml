@@ -38,12 +38,6 @@ symbols = ["EventSensorContext.step"]
 reason = "The authored durable-step API is ctx.step(key, fn, policy=...) with positional key and callable per the documented sensor API; keyword-only parameters would break the documented authored ergonomics."
 
 [[targets.python.rule_exceptions]]
-rule = "FFS120"
-path = "src/sqltide/sensors/classes/durable_step_runner.py"
-symbols = ["DurableStepRunner.run"]
-reason = "DurableStepRunner.run backs the authored ctx.step(key, fn, policy=...) signature, so its parameters mirror that positional authored contract."
-
-[[targets.python.rule_exceptions]]
 rule = "FFT104"
 path = "tests/e2e/src/sqltide/dev_server/helpers.py"
 symbols = ["wait_for_sensor_first_dispatch", "wait_for_sensor_dead_letter"]
@@ -84,6 +78,11 @@ reason = "Native bindings own the sqt entry point: argument parsing, invocation 
 rule = "FFR309"
 path = "src/sqltide/cli/admin/__init__.py"
 reason = "Native bindings own the sqt admin commands and their password prompts; this package only declares the admin command types and constants they consume."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/sensors/__init__.py"
+reason = "Native bindings own sensor loading, dispatch, durable steps and state persistence; this package keeps the public authored sensor API, the contexts handed to user handlers, the shim that runs a user handler, and the sensor shapes."
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"

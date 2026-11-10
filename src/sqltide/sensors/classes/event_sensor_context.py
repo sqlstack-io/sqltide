@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from sqltide.sensors.classes.durable_step_runner import DurableStepRunner
-from sqltide.sensors.classes.in_memory_step_store import InMemoryStepStore
+from sqltide._native import DurableStepRunner, InMemoryStepStore
 from sqltide.sensors.types import StepPolicy
 
 

@@ -36,7 +36,7 @@ fn repository<'py>(
     let py: Python<'py> = call.py;
     invoke(
         py,
-        "sqltide.sensors.classes.sensor_state_repository",
+        "sqltide._native",
         "SensorStateRepository",
         py_kwargs!(py; connection = connection, database = call.app.services.database.clone())?,
     )

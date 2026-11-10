@@ -13,12 +13,13 @@ const EPOCH_ORDINAL: i64 = 719_163;
 const MIN_YEAR: i64 = 1;
 const MAX_YEAR: i64 = 9_999;
 
-/// Why a timestamp is unusable. `Value` and `Overflow` correspond to Python's `ValueError` and
-/// `OverflowError`.
+/// Why a timestamp is unusable. `Value`, `Overflow` and `Type` correspond to Python's
+/// `ValueError`, `OverflowError` and `TypeError`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TimestampError {
     Value(String),
     Overflow(String),
+    Type(String),
 }
 
 fn out_of_range() -> TimestampError {
@@ -510,6 +511,114 @@ fn from_isoformat(text: &str) -> Result<(Civil, Option<i64>), TimestampError> {
     }
     .checked()?;
     Ok((civil, offset))
+}
+
+/// `datetime.fromisoformat(text)`: its wall clock in microseconds since 1970-01-01 and the UTC
+/// offset it was written with, if any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IsoDateTime {
+    wall: i64,
+    offset: Option<i64>,
+}
+
+impl IsoDateTime {
+    /// `datetime.fromisoformat(text)`.
+    pub fn parse(text: &str) -> Result<Self, TimestampError> {
+        let (civil, offset) = from_isoformat(text)?;
+        Ok(Self {
+            wall: civil.micros(),
+            offset,
+        })
+    }
+
+    /// `self + timedelta(seconds=seconds)`.
+    pub fn plus_seconds(self, seconds: f64) -> Result<Self, TimestampError> {
+        let wall: i64 = self
+            .wall
+            .checked_add(timedelta_micros(seconds)?)
+            .ok_or_else(out_of_range)?;
+        Instant::from_micros(wall).map(|_| Self {
+            wall,
+            offset: self.offset,
+        })
+    }
+
+    /// `self.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]`, with CPython 3.12's unpadded years on Linux.
+    pub fn render_millis(self) -> String {
+        let seconds: i64 = self.wall.div_euclid(MICROS_PER_SECOND);
+        let micros: i64 = self.wall.rem_euclid(MICROS_PER_SECOND);
+        let (year, month, day) = civil_from_days(seconds.div_euclid(SECONDS_PER_DAY));
+        let clock: i64 = seconds.rem_euclid(SECONDS_PER_DAY);
+        format!(
+            "{year}-{month:02}-{day:02} {:02}:{:02}:{:02}.{:03}",
+            clock / 3_600,
+            clock % 3_600 / 60,
+            clock % 60,
+            micros / 1_000
+        )
+    }
+
+    /// `self < other`: naive values compare by wall clock, aware ones in UTC, and a naive value
+    /// never compares with an aware one.
+    pub fn is_before(self, other: Self) -> Result<bool, TimestampError> {
+        match (self.offset, other.offset) {
+            (None, None) => Ok(self.wall < other.wall),
+            (Some(offset), Some(other_offset)) => Ok(i128::from(self.wall) - i128::from(offset)
+                < i128::from(other.wall) - i128::from(other_offset)),
+            _ => Err(TimestampError::Type(
+                "can't compare offset-naive and offset-aware datetimes".to_owned(),
+            )),
+        }
+    }
+}
+
+/// `timedelta(seconds=seconds)` in microseconds, rounding the fraction as CPython does: the
+/// whole seconds exactly, the microsecond fraction half to even against the running total.
+pub fn timedelta_micros(seconds: f64) -> Result<i64, TimestampError> {
+    const MAX_DELTA_DAYS: i128 = 999_999_999;
+    const MICROS_PER_DAY: i128 = (SECONDS_PER_DAY * MICROS_PER_SECOND) as i128;
+    if seconds.is_nan() {
+        return Err(TimestampError::Value(
+            "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
+    if seconds.is_infinite() {
+        return Err(TimestampError::Overflow(
+            "cannot convert float infinity to integer".to_owned(),
+        ));
+    }
+    let too_large =
+        || TimestampError::Overflow("Python int too large to convert to C int".to_owned());
+    let whole: f64 = seconds.trunc();
+    if whole.abs() >= 1e30 {
+        return Err(too_large());
+    }
+    let mut total: i128 = whole as i128 * i128::from(MICROS_PER_SECOND);
+    let fraction: f64 = seconds - whole;
+    if fraction != 0.0 {
+        let scaled: f64 = 1e6 * fraction;
+        let whole_micros: f64 = scaled.trunc();
+        total += whole_micros as i128;
+        let leftover: f64 = scaled - whole_micros;
+        if leftover != 0.0 {
+            let mut rounded: f64 = leftover.round();
+            if (rounded - leftover).abs() == 0.5 {
+                let odd: f64 = (total & 1) as f64;
+                rounded = 2.0 * ((leftover + odd) * 0.5).round() - odd;
+            }
+            total += rounded as i128;
+        }
+    }
+    let days: i128 = total.div_euclid(MICROS_PER_DAY);
+    if i32::try_from(days).is_err() {
+        return Err(too_large());
+    }
+    if days.abs() > MAX_DELTA_DAYS {
+        return Err(TimestampError::Overflow(format!(
+            "days={days}; must have magnitude <= {MAX_DELTA_DAYS}"
+        )));
+    }
+    i64::try_from(total).map_err(|_| too_large())
 }
 
 /// A warehouse timestamp read as `datetime.fromisoformat` after spaces become `T` and `Z`

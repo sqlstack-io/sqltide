@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import compile_sensors
 from sqltide.sensors.exceptions import SensorError
-from sqltide.sensors.main.compile_sensors import compile_sensors
 from sqltide.sensors.models import CompiledSensors
 from tests.unit.src.sqltide.sensors.main._test_types import (
     CompileSensorsErrorTestCase,

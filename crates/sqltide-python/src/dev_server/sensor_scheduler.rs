@@ -94,12 +94,7 @@ impl SensorScheduler {
             return Ok(None);
         };
         Ok(Some(
-            attr(
-                py,
-                "sqltide.sensors.classes.sensor_state_repository",
-                "SensorStateRepository",
-            )?
-            .call(
+            attr(py, "sqltide._native", "SensorStateRepository")?.call(
                 (),
                 Some(&py_kwargs!(py; connection = connection, database = database)?),
             )?,
@@ -299,12 +294,7 @@ impl SensorScheduler {
             py.None().into_bound(py),
         )?;
         Ok(Some(
-            attr(
-                py,
-                "sqltide.sensors.classes.sensor_dispatcher",
-                "SensorDispatcher",
-            )?
-            .call(
+            attr(py, "sqltide._native", "SensorDispatcher")?.call(
                 (),
                 Some(&py_kwargs!(py;
                     repository = repository,

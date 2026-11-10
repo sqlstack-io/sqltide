@@ -2,12 +2,11 @@
 
 import pytest
 
+from sqltide._native import SensorDispatcher, SensorStateRepository
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterSensorStepRecord
 from sqltide.events import AuditCompleted
 from sqltide.sensors import DefaultSensorStatus, SensorRetryPolicy, event_sensor
-from sqltide.sensors.classes.sensor_dispatcher import SensorDispatcher
-from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
 from sqltide.sensors.models import (
     EventSensorDeclaration,
     LoadedSensor,

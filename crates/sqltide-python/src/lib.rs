@@ -62,6 +62,7 @@ mod realization;
 mod row_error_policy;
 mod rules;
 mod selection;
+mod sensors;
 mod sources;
 mod sql_scan;
 mod test_command;
@@ -177,6 +178,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     plan_warnings::register(module)?;
     rules::register(module)?;
     selection::register(module)?;
+    sensors::register(module)?;
     sources::register(module)?;
     sql_scan::register(module)?;
     test_discovery::register(module)?;

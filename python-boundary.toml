@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 15319
+remaining_lines = 13484
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -106,11 +106,6 @@ rule = 1
 note = "Rule 1: Entry into the warehouse statement runner for a published build workflow."
 
 [[stays]]
-path = "executor/workflow/main/execute_sensor_state_workflow.py"
-rule = 1
-note = "Rule 1: Entry into the warehouse statement runner for sensor state writes."
-
-[[stays]]
 path = "executor/workflow/main/target_mutation_lock.py"
 rule = 1
 note = "Rule 1: Acquires and releases the warehouse target mutation lock through the adapter connection around one operation."
@@ -146,7 +141,7 @@ rule = 2
 note = "Rule 2: Instantiates user Provider subclasses into a session."
 
 [[stays]]
-path = "provider/main/discover_provider_classes.py"
+path = "provider/main/_discover_provider_classes.py"
 rule = 2
 note = "Rule 2: Entry point of the shim that imports project provider modules."
 

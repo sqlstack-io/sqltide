@@ -82,12 +82,7 @@ fn sensor_payload<'py>(
             Some(ticks.get_item(count - 1)?)
         }
     };
-    let effective = attr(
-        py,
-        "sqltide.sensors._helpers.dispatch",
-        "effective_sensor_status",
-    )?
-    .call(
+    let effective = attr(py, "sqltide._native", "effective_sensor_status")?.call(
         (),
         Some(&py_kwargs!(py; sensor = sensor, overrides = overrides)?),
     )?;
