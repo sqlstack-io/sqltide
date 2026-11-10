@@ -6,12 +6,11 @@ from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 import sqltide._native as _native
 from sqltide._native import (
+    DevApplication,
     analyze_project,
+    create_dev_app,
     render_clickhouse_replay_coverage_query,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -79,13 +78,11 @@ from sqltide.dev_server._helpers.queries.message_query import (
     build_messages_sql,
     parse_messages_document,
 )
-from sqltide.dev_server._helpers.server.static_assets import register_static_assets
 from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
 from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
 from sqltide.dev_server.classes.overlay_reader import OverlayReader
 from sqltide.dev_server.classes.state_snapshot import StateSnapshot
-from sqltide.dev_server.main._create_dev_app import create_dev_app
 from sqltide.dev_server.models import (
     KafkaLagSnapshot,
     KafkaTopicsSnapshot,
@@ -105,6 +102,7 @@ from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
     write_pipeline_file,
     write_project_configuration_and_source,
 )
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 
 
 def changed_storage_identity(identity: dict[str, object]) -> str:
@@ -228,18 +226,18 @@ def break_project_compile(*, project_dir: Path) -> None:
     )
 
 
-def build_test_client(*, project_dir: Path) -> TestClient:
+def build_test_client(*, project_dir: Path) -> NativeTestClient:
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
-    return TestClient(create_dev_app(state=state, project_dir=project_dir))
+    return NativeTestClient(create_dev_app(state=state, project_dir=project_dir))
 
 
-def build_proxy_test_client(*, project_dir: Path, store: ControlStore) -> TestClient:
+def build_proxy_test_client(*, project_dir: Path, store: ControlStore) -> NativeTestClient:
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
-    return TestClient(
+    return NativeTestClient(
         create_dev_app(
             state=state,
             project_dir=project_dir,
@@ -253,7 +251,9 @@ def build_proxy_test_client(*, project_dir: Path, store: ControlStore) -> TestCl
     )
 
 
-def build_assigned_proxy_reload_client(*, project_dir: Path) -> tuple[TestClient, ControlStore]:
+def build_assigned_proxy_reload_client(
+    *, project_dir: Path
+) -> tuple[NativeTestClient, ControlStore]:
     write_dev_server_project(project_dir=project_dir)
     write_reload_access_policy(project_dir=project_dir, permission="project.reload")
     store: ControlStore = build_control_store(tmp_path=project_dir)
@@ -289,7 +289,9 @@ def write_reload_access_policy(*, project_dir: Path, permission: str) -> None:
     )
 
 
-def build_assigned_proxy_message_client(*, project_dir: Path) -> tuple[TestClient, ControlStore]:
+def build_assigned_proxy_message_client(
+    *, project_dir: Path
+) -> tuple[NativeTestClient, ControlStore]:
     write_dev_server_project(project_dir=project_dir)
     write_pipeline_file(
         project_dir / "access.yml",
@@ -321,7 +323,9 @@ def build_assigned_proxy_message_client(*, project_dir: Path) -> tuple[TestClien
     return build_proxy_test_client(project_dir=project_dir, store=store), store
 
 
-def build_assigned_proxy_quality_client(*, project_dir: Path) -> tuple[TestClient, ControlStore]:
+def build_assigned_proxy_quality_client(
+    *, project_dir: Path
+) -> tuple[NativeTestClient, ControlStore]:
     write_dev_server_project(project_dir=project_dir)
     write_pipeline_file(
         project_dir / "access.yml",
@@ -355,7 +359,9 @@ def build_assigned_proxy_quality_client(*, project_dir: Path) -> tuple[TestClien
     return build_proxy_test_client(project_dir=project_dir, store=store), store
 
 
-def build_assigned_proxy_operations_client(*, project_dir: Path) -> tuple[TestClient, ControlStore]:
+def build_assigned_proxy_operations_client(
+    *, project_dir: Path
+) -> tuple[NativeTestClient, ControlStore]:
     """Build operational personas where administrator Alice holds authored grants."""
 
     return _build_assigned_proxy_operations_client(
@@ -367,7 +373,7 @@ def build_assigned_proxy_operations_client(*, project_dir: Path) -> tuple[TestCl
 
 def build_assigned_proxy_operations_client_without_warehouse(
     *, project_dir: Path
-) -> tuple[TestClient, ControlStore]:
+) -> tuple[NativeTestClient, ControlStore]:
     """Build the operational personas without a warehouse connection."""
 
     return _build_assigned_proxy_operations_client(
@@ -379,7 +385,7 @@ def build_assigned_proxy_operations_client_without_warehouse(
 
 def _build_assigned_proxy_operations_client(
     *, project_dir: Path, connection: AdapterConnection | None, database: str | None
-) -> tuple[TestClient, ControlStore]:
+) -> tuple[NativeTestClient, ControlStore]:
     write_dev_server_project(project_dir=project_dir)
     write_sensor_file(project_dir=project_dir)
     write_pipeline_file(
@@ -425,7 +431,7 @@ def _build_assigned_proxy_operations_client(
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=connection,
@@ -520,18 +526,19 @@ def write_static_assets_build(*, assets_root: Path) -> None:
 _UNSAFE_HTTP_METHODS: frozenset[str] = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
-def registered_mutation_routes(*, client: TestClient) -> frozenset[tuple[str, str]]:
+def registered_mutation_routes(*, client: NativeTestClient) -> frozenset[tuple[str, str]]:
     routes: set[tuple[str, str]] = set()
-    for route in client.app.routes:  # type: ignore[union-attr]
-        methods: frozenset[str] = frozenset(getattr(route, "methods", None) or ())
-        path: str = str(getattr(route, "path", ""))
-        routes.update((method, path) for method in methods & _UNSAFE_HTTP_METHODS)
+    for methods, path in client.app.routes():
+        routes.update((method, path) for method in frozenset(methods) & _UNSAFE_HTTP_METHODS)
     return frozenset(routes)
 
 
-def build_static_test_client(*, assets_root: Path) -> TestClient:
-    app: FastAPI = register_static_assets(app=FastAPI(), assets_root=assets_root)
-    return TestClient(app)
+def build_static_test_client(*, assets_root: Path) -> NativeTestClient:
+    app: DevApplication = create_dev_app(
+        state=DevServerState(run_compile=MagicMock()), project_dir=assets_root
+    )
+    app.mount_static_assets(assets_root)
+    return NativeTestClient(app)
 
 
 def named_payload_item(items: list, name: str) -> dict:
@@ -718,12 +725,12 @@ _MODEL_LIVE_COLUMNS: tuple[CatalogColumn, ...] = (
 )
 
 
-def build_state_test_client(*, project_dir: Path) -> TestClient:
+def build_state_test_client(*, project_dir: Path) -> NativeTestClient:
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
     connection: FakeAdapterConnection = build_fake_state_connection()
-    return TestClient(
+    return NativeTestClient(
         create_dev_app(
             state=state, connection=connection, database="analytics", project_dir=project_dir
         )
@@ -1237,7 +1244,7 @@ def build_canned_messages_sql(*, limit: int, window_seconds: int | None) -> str:
 
 def build_message_test_client(
     *, project_dir: Path, results_by_query: dict[str, AdapterQueryResult]
-) -> TestClient:
+) -> NativeTestClient:
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
@@ -1252,7 +1259,7 @@ def build_message_test_client(
         results_by_query=results_by_query,
         warehouse_timestamp=_STATE_WAREHOUSE_NOW,
     )
-    return TestClient(
+    return NativeTestClient(
         create_dev_app(
             state=state, connection=connection, database="analytics", project_dir=project_dir
         )
@@ -1584,14 +1591,14 @@ def write_connection_settings_project(*, project_dir: Path) -> None:
     )
 
 
-def build_snapshot_counting_client(*, project_dir: Path, calls: list[str]) -> TestClient:
+def build_snapshot_counting_client(*, project_dir: Path, calls: list[str]) -> NativeTestClient:
     """Build a client whose state overlay records every build it performs."""
 
     write_dev_server_project(project_dir=project_dir)
     state: DevServerState = DevServerState(
         run_compile=build_compile_callable(project_dir=project_dir)
     )
-    app: FastAPI = create_dev_app(
+    app: DevApplication = create_dev_app(
         state=state,
         connection=build_fake_state_connection(),
         database="analytics",
@@ -1603,7 +1610,7 @@ def build_snapshot_counting_client(*, project_dir: Path, calls: list[str]) -> Te
         return {"capturedAt": f"build-{len(calls)}", "models": {}, "sources": {}}
 
     state.attach_snapshot(StateSnapshot(build=build))
-    return TestClient(app)
+    return NativeTestClient(app)
 
 
 def build_overlay_reader(

@@ -3,11 +3,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import sqltide.dev_server.main.run_dev_server as run_dev_server_module
+import sqltide._native as _native
+import sqltide.dev_server.classes.dev_server_state as dev_server_state_module
+from sqltide._native import run_dev_server
 from sqltide.auth.models import AuthSettings
 from sqltide.auth.types import AuthenticationMode
-from sqltide.dev_server.main.run_dev_server import _is_loopback_bind, run_dev_server
 from tests.unit.src.sqltide.dev_server.main._test_types import AuthBindTestCase
+
+_INSECURE_COOKIE_MESSAGE: str = "insecure password cookies may only be used on a loopback address"
 
 
 @pytest.mark.parametrize(
@@ -15,20 +18,47 @@ from tests.unit.src.sqltide.dev_server.main._test_types import AuthBindTestCase
     [
         AuthBindTestCase(
             description="only loopback names and addresses",
-            expected_result=(True, True, True, False, False),
+            expected_result=(True, True, True, True, True, False, False),
         )
     ],
     ids=lambda case: case.description,
 )
 def test_given_bind_host_when_classifying_loopback_then_only_loopback_is_detected(
     test_case: AuthBindTestCase,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # Without a built UI a loopback bind stops at the asset check instead of the cookie check.
+    monkeypatch.setattr(_native, "static_assets_root", lambda: tmp_path)
+    monkeypatch.setattr(_native, "static_assets_present", lambda *, assets_root: False)
+
+    def is_loopback(host: str) -> bool:
+        run_dev_server(
+            run_compile=MagicMock(),
+            connection=None,
+            observation_connection=None,
+            database=None,
+            project_dir=tmp_path,
+            host=host,
+            port=8000,
+            reporter=MagicMock(),
+            auth_settings=AuthSettings(
+                mode=AuthenticationMode.PASSWORD,
+                control_store_url="unused",
+                session_cookie_secure=False,
+            ),
+        )
+        return _INSECURE_COOKIE_MESSAGE not in capsys.readouterr().err
+
     assert (
-        _is_loopback_bind("127.0.0.1"),
-        _is_loopback_bind("::1"),
-        _is_loopback_bind("localhost"),
-        _is_loopback_bind("0.0.0.0"),
-        _is_loopback_bind("sqltide.internal"),
+        is_loopback("127.0.0.1"),
+        is_loopback("::1"),
+        is_loopback("localhost"),
+        is_loopback("::ffff:127.0.0.1"),
+        is_loopback("::1%lo"),
+        is_loopback("0.0.0.0"),
+        is_loopback("sqltide.internal"),
     ) == test_case.expected_result
 
 
@@ -48,14 +78,11 @@ def test_given_disabled_auth_when_starting_on_shared_bind_then_startup_proceeds_
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setattr(run_dev_server_module, "static_assets_root", lambda: tmp_path)
-    monkeypatch.setattr(run_dev_server_module, "static_assets_present", lambda *, assets_root: True)
-    monkeypatch.setattr(run_dev_server_module, "DevServerState", MagicMock())
-    monkeypatch.setattr(run_dev_server_module, "create_dev_app", MagicMock())
-    monkeypatch.setattr(
-        run_dev_server_module, "register_static_assets", MagicMock(return_value=MagicMock())
-    )
-    monkeypatch.setattr(run_dev_server_module.uvicorn, "run", MagicMock())
+    application: MagicMock = MagicMock()
+    monkeypatch.setattr(_native, "static_assets_root", lambda: tmp_path)
+    monkeypatch.setattr(_native, "static_assets_present", lambda *, assets_root: True)
+    monkeypatch.setattr(dev_server_state_module, "DevServerState", MagicMock())
+    monkeypatch.setattr(_native, "create_dev_app", MagicMock(return_value=application))
 
     result: int = run_dev_server(
         run_compile=MagicMock(),
@@ -76,6 +103,7 @@ def test_given_disabled_auth_when_starting_on_shared_bind_then_startup_proceeds_
         capsys.readouterr().err
     )
     assert (result, warned) == test_case.expected_result
+    application.serve.assert_called_once_with("0.0.0.0", 8000)
 
 
 @pytest.mark.parametrize(

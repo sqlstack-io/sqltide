@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from fastapi.testclient import TestClient
 
 from sqltide.adapter.models import AdapterQueryResult
 from sqltide.compiler.pipeline.models import CompileAnalysis
@@ -16,6 +15,7 @@ from sqltide.dev_server.models import (
     KafkaTopicInfo,
     KafkaTopicsSnapshot,
 )
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 from tests.unit.src.sqltide.dev_server._test_types import (
     TopicsColdCachePayloadTestCase,
     TopicsMergedPayloadTestCase,
@@ -181,7 +181,7 @@ def test_given_topics_route_when_reading_then_serves_managed_inventory(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_message_test_client(
+    client: NativeTestClient = build_message_test_client(
         project_dir=tmp_path,
         results_by_query={
             build_relation_stats_query(database="analytics"): AdapterQueryResult(

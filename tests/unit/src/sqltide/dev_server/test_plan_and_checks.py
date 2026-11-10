@@ -6,10 +6,8 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
-from sqltide._native import validate_expected_build_scope
+from sqltide._native import create_dev_app, validate_expected_build_scope
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
@@ -26,10 +24,13 @@ from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.classes.build_process import _build_environment, build_invocation
 from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.exceptions import DevConfigurationError
-from sqltide.dev_server.main._create_dev_app import create_dev_app
 from sqltide.dev_server.models import DevExecutionContext
 from sqltide.dev_server.types import ActivityTone, DevServerReporter
 from sqltide.executor.observability.constants import RUN_DISPLAY_COMMAND_ENV_VAR
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     AuditBatchRouteTestCase,
     BuildConflictScopeTestCase,
@@ -94,7 +95,7 @@ def test_given_selectors_when_planning_then_returns_expected_plan(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     params: list[tuple[str, str]] = [("select", selector) for selector in test_case.selectors]
 
     response: object = client.get("/api/plan", params=params)
@@ -130,9 +131,9 @@ def test_given_direct_pipeline_when_planning_then_returns_direct_execution_phase
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/plan", params={"select": "orders_clean"})
+    response: NativeResponse = client.get("/api/plan", params={"select": "orders_clean"})
 
     assert response.status_code == 200
     assert response.json()["mode"] == "direct"
@@ -162,15 +163,15 @@ def test_given_mode_aware_preparation_when_planning_then_returns_exact_execution
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     deployment_id: str = "20260811T120000Z_plan"
     preparation: object = test_case.preparation_builder(deployment_id)
 
     with patch(
-        "sqltide.dev_server._helpers.server.api_routes.prepare_build_workflow",
+        "sqltide._native.prepare_build_workflow",
         return_value=preparation,
     ) as prepare_build:
-        response: Response = client.get(
+        response: NativeResponse = client.get(
             "/api/plan",
             params={
                 "select": "orders_clean",
@@ -259,13 +260,13 @@ def test_given_source_recreation_when_planning_then_plan_describes_it(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     with patch(
-        "sqltide.dev_server._helpers.server.api_routes.prepare_build_workflow",
+        "sqltide._native.prepare_build_workflow",
         return_value=test_case.preparation_builder(),
     ):
-        response: Response = client.get("/api/plan", params={"select": "orders_clean"})
+        response: NativeResponse = client.get("/api/plan", params={"select": "orders_clean"})
 
     payload: dict = response.json()
     warnings: list[dict] = payload["warnings"]
@@ -320,7 +321,7 @@ confirmation = "DEPLOY_ORDER_EVENTS"
 """.strip(),
         encoding="utf-8",
     )
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     response: object = client.get("/api/plan", params={"select": "orders_clean"})
 
@@ -358,7 +359,7 @@ def test_given_resolved_dev_context_when_planning_then_preview_and_build_command
         connection_username="builder",
         connection_password="secret-value",
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=build_fake_state_connection(),
@@ -434,7 +435,7 @@ def test_given_changed_plan_flags_when_planning_then_route_and_command_preserve_
             ),
         ),
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(fingerprints=fingerprints),
@@ -443,7 +444,7 @@ def test_given_changed_plan_flags_when_planning_then_route_and_command_preserve_
         )
     )
 
-    response: Response = client.get(
+    response: NativeResponse = client.get(
         "/api/plan",
         params={"changed": "true", "include_missing_upstream": "true"},
     )
@@ -487,7 +488,7 @@ def test_given_changed_build_flags_when_starting_then_process_receives_them(
             ),
         ),
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(fingerprints=fingerprints),
@@ -497,7 +498,7 @@ def test_given_changed_build_flags_when_starting_then_process_receives_them(
     )
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
             return_value=[],
         ),
         patch(
@@ -505,7 +506,7 @@ def test_given_changed_build_flags_when_starting_then_process_receives_them(
             return_value={"invocationId": "new-run", "status": "starting"},
         ) as start_build,
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/build",
             json={"changed": True, "includeMissingUpstream": True},
         )
@@ -635,11 +636,11 @@ def test_given_planned_deployment_when_starting_build_then_launches_same_deploym
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     deployment_id: str = str(test_case.expected_value)
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
             return_value=[],
         ),
         patch(
@@ -647,7 +648,7 @@ def test_given_planned_deployment_when_starting_build_then_launches_same_deploym
             return_value={"invocationId": "new-run", "status": "starting"},
         ) as start_build,
     ):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/build",
             json={
                 "selectors": ["orders_clean"],
@@ -674,7 +675,7 @@ def test_given_start_time_without_selection_when_planning_then_matches_cli_valid
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     response: object = client.get("/api/plan", params={"start": "2026-08-01"})
 
@@ -708,10 +709,10 @@ def test_given_non_utc_warehouse_when_planning_then_replay_count_keeps_utc_start
         return {"orders_clean": 1}
 
     monkeypatch.setattr(
-        "sqltide.dev_server._helpers.server.api_routes.count_replay_rows",
+        "sqltide.dev_server._helpers.payloads.plan_payload.count_replay_rows",
         fake_count_replay_rows,
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=connection,
@@ -806,7 +807,7 @@ def test_given_check_request_when_running_then_returns_expected_result(
         results_by_query={},
         warehouse_timestamp="2026-08-03 12:00:00.000",
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state, connection=connection, database="analytics", project_dir=tmp_path
         )
@@ -842,7 +843,7 @@ def test_given_audit_names_when_running_batch_then_returns_all_results(
         results_by_query={},
         warehouse_timestamp="2026-08-03 12:00:00.000",
     )
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state, connection=connection, database="analytics", project_dir=tmp_path
         )
@@ -880,8 +881,8 @@ def test_given_warming_audit_when_run_from_ui_then_activity_is_deferred(
         }
     )
     reporter_mock: MagicMock = MagicMock()
-    monkeypatch.setattr("sqltide.dev_server._helpers.server.api_routes.run_one_audit", runner)
-    client: TestClient = TestClient(
+    monkeypatch.setattr("sqltide.dev_server._helpers.server.checks_execution.run_one_audit", runner)
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=DevServerState(run_compile=build_compile_callable(project_dir=tmp_path)),
             connection=build_fake_state_connection(),
@@ -919,7 +920,7 @@ def test_given_recorded_history_when_reading_checks_status_then_maps_names(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     payload: list = client.get("/api/checks/status").json()
 
@@ -949,7 +950,7 @@ def test_given_unmaterialized_relation_when_reading_quality_then_missing_relatio
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     with (
         patch(
@@ -986,7 +987,7 @@ def test_given_recorded_run_when_reading_events_then_returns_ordered_timeline(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     payload: dict[str, object] = client.get(f"/api/runs/{test_case.invocation_id}/events").json()
     events: list[dict[str, object]] = payload["events"]
@@ -1019,9 +1020,9 @@ def test_given_unresponsive_run_when_starting_build_then_conflict_explains_retry
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+        "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
         return_value=[
             {
                 "invocationId": "stale-run",
@@ -1030,7 +1031,7 @@ def test_given_unresponsive_run_when_starting_build_then_conflict_explains_retry
             }
         ],
     ):
-        response: Response = client.post("/api/build", json={"selectors": ["orders_clean"]})
+        response: NativeResponse = client.post("/api/build", json={"selectors": ["orders_clean"]})
 
     assert response.status_code == 409
     assert response.json()["detail"] == test_case.expected_value
@@ -1063,7 +1064,7 @@ def test_given_active_run_scope_when_starting_build_then_only_overlap_conflicts(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     launch_payload: dict[str, object] = {
         "invocationId": "new-run",
         "command": "sqt build --select orders_clean",
@@ -1071,7 +1072,7 @@ def test_given_active_run_scope_when_starting_build_then_only_overlap_conflicts(
     }
     with (
         patch(
-            "sqltide.dev_server._helpers.server.api_routes.read_active_runs",
+            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
             return_value=[
                 {
                     "invocationId": "active-run",
@@ -1087,7 +1088,7 @@ def test_given_active_run_scope_when_starting_build_then_only_overlap_conflicts(
             return_value=launch_payload,
         ) as start_build,
     ):
-        response: Response = client.post("/api/build", json={"selectors": ["orders_clean"]})
+        response: NativeResponse = client.post("/api/build", json={"selectors": ["orders_clean"]})
 
     assert response.status_code == test_case.expected_status
     assert start_build.called is test_case.expected_started
@@ -1120,10 +1121,10 @@ def test_given_build_exceeding_pipeline_limit_when_starting_then_rejects_before_
         project_path.read_text(encoding="utf-8") + "\n[build]\nmax_pipelines = 1\n",
         encoding="utf-8",
     )
-    client: TestClient = build_state_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
 
     with patch("sqltide.dev_server.classes.build_process.BuildProcessManager.start") as start_build:
-        response: Response = client.post("/api/build", json={"selectors": []})
+        response: NativeResponse = client.post("/api/build", json={"selectors": []})
 
     assert response.status_code == 400
     assert str(test_case.expected_value) in response.text

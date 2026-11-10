@@ -50,6 +50,8 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.auth.classes.control_store import ControlStore
+from sqltide.auth.models import AuthSettings
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     BuildProtectionRequirement,
@@ -150,6 +152,9 @@ from sqltide.compiler.sql_analysis.models import (
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
+from sqltide.dev_server.classes.dev_server_state import DevServerState
+from sqltide.dev_server.models import DevExecutionContext
+from sqltide.dev_server.types import DevServerReporter
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
 from sqltide.executor.backfill.models import (
@@ -1575,3 +1580,50 @@ class InMemoryDestructionPlanStore:
     def consume(
         self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
     ) -> DestructionPlan: ...
+
+class DevApplication:
+    @property
+    def state(self) -> DevServerState: ...
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        query_string: str = "",
+        headers: list[tuple[str, str]] = ...,
+        body: bytes = b"",
+        client: str | None = None,
+    ) -> tuple[int, list[tuple[str, str]], bytes]: ...
+    def routes(self) -> list[tuple[list[str], str]]: ...
+    def mount_static_assets(self, assets_root: Path) -> None: ...
+    def startup(self) -> None: ...
+    def shutdown(self) -> None: ...
+    def serve(self, host: str, port: int) -> None: ...
+
+def create_dev_app(
+    *,
+    state: DevServerState,
+    connection: AdapterConnection | None = None,
+    observation_connection: AdapterConnection | None = None,
+    database: str | None = None,
+    project_dir: Path | None = None,
+    reporter: DevServerReporter | None = None,
+    execution_context: DevExecutionContext | None = None,
+    auth_settings: AuthSettings | None = None,
+    control_store: ControlStore | None = None,
+) -> DevApplication: ...
+def static_assets_root() -> Path: ...
+def static_assets_present(*, assets_root: Path) -> bool: ...
+def run_dev_server(
+    *,
+    run_compile: Callable[[], CompileAnalysis],
+    connection: AdapterConnection | None,
+    observation_connection: AdapterConnection | None,
+    database: str | None,
+    project_dir: Path,
+    host: str,
+    port: int,
+    reporter: DevServerReporter,
+    execution_context: DevExecutionContext | None = None,
+    auth_settings: AuthSettings | None = None,
+) -> int: ...

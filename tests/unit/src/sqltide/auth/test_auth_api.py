@@ -3,8 +3,6 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.exceptions import AuthConfigurationError
@@ -12,6 +10,10 @@ from sqltide.auth.models import AuthSettings, UserAccount
 from sqltide.auth.types import AuthenticationMode, UnknownUserPolicy
 from tests.unit.src.sqltide.auth._test_types import AuthTestCase
 from tests.unit.src.sqltide.auth.helpers import build_auth_client, build_control_store
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 
 
 @pytest.mark.parametrize(
@@ -23,7 +25,7 @@ def test_given_local_mode_when_reading_me_then_deterministic_admin_is_returned(
     test_case: AuthTestCase, tmp_path: Path
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.DISABLED,
             control_store_url="unused",
@@ -31,7 +33,7 @@ def test_given_local_mode_when_reading_me_then_deterministic_admin_is_returned(
         store=store,
     )
 
-    response: Response = client.get("/api/auth/me")
+    response: NativeResponse = client.get("/api/auth/me")
 
     assert response.status_code == test_case.expected_result
     assert response.json()["user"]["username"] == "local"
@@ -53,11 +55,11 @@ def test_given_proxy_mode_when_identity_is_new_then_viewer_is_provisioned(
         control_store_url="unused",
         username_header="X-SQLTide-User",
     )
-    client: TestClient = build_auth_client(settings=settings, store=store)
+    client: NativeTestClient = build_auth_client(settings=settings, store=store)
 
-    missing: Response = client.get("/api/auth/me")
-    first: Response = client.get("/api/auth/me", headers={"X-SQLTide-User": "Alice"})
-    second: Response = client.get("/api/auth/me", headers={"X-SQLTide-User": "alice"})
+    missing: NativeResponse = client.get("/api/auth/me")
+    first: NativeResponse = client.get("/api/auth/me", headers={"X-SQLTide-User": "Alice"})
+    second: NativeResponse = client.get("/api/auth/me", headers={"X-SQLTide-User": "alice"})
 
     assert missing.status_code == 401
     assert first.status_code == test_case.expected_result
@@ -76,7 +78,7 @@ def test_given_proxy_deny_policy_when_identity_is_new_then_request_is_forbidden(
     test_case: AuthTestCase, tmp_path: Path
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.TRUSTED_PROXY,
             control_store_url="unused",
@@ -85,7 +87,7 @@ def test_given_proxy_deny_policy_when_identity_is_new_then_request_is_forbidden(
         store=store,
     )
 
-    response: Response = client.get("/api/protected", headers={"X-SQLTide-User": "alice"})
+    response: NativeResponse = client.get("/api/auth/me", headers={"X-SQLTide-User": "alice"})
 
     assert response.status_code == test_case.expected_result
     assert store.list_users() == ()
@@ -101,7 +103,7 @@ def test_given_proxy_principal_when_posting_then_request_proof_is_required(
     test_case: AuthTestCase, tmp_path: Path
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.TRUSTED_PROXY,
             control_store_url="unused",
@@ -111,9 +113,9 @@ def test_given_proxy_principal_when_posting_then_request_proof_is_required(
     headers: dict[str, str] = {"X-SQLTide-User": "alice"}
     assert client.get("/api/auth/me", headers=headers).status_code == 200
 
-    rejected: Response = client.post("/api/protected", headers=headers)
-    accepted: Response = client.post(
-        "/api/protected",
+    rejected: NativeResponse = client.post("/api/auth/logout", headers=headers)
+    accepted: NativeResponse = client.post(
+        "/api/auth/logout",
         headers={**headers, "X-SQLTide-CSRF": "trusted-proxy"},
     )
 
@@ -136,7 +138,7 @@ def test_given_password_mode_when_logging_in_then_cookie_and_csrf_protect_sessio
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -145,14 +147,14 @@ def test_given_password_mode_when_logging_in_then_cookie_and_csrf_protect_sessio
         store=store,
     )
 
-    unauthenticated: Response = client.get("/api/protected")
-    login: Response = client.post(
+    unauthenticated: NativeResponse = client.get("/api/auth/me")
+    login: NativeResponse = client.post(
         "/api/auth/login",
         json={"username": "alice", "password": "correct sample battery staple"},
     )
-    me: Response = client.get("/api/auth/me")
-    rejected_logout: Response = client.post("/api/auth/logout")
-    logout: Response = client.post(
+    me: NativeResponse = client.get("/api/auth/me")
+    rejected_logout: NativeResponse = client.post("/api/auth/logout")
+    logout: NativeResponse = client.post(
         "/api/auth/logout",
         headers={"X-SQLTide-CSRF": login.json()["csrfToken"]},
     )
@@ -163,7 +165,7 @@ def test_given_password_mode_when_logging_in_then_cookie_and_csrf_protect_sessio
     assert me.json()["user"]["authenticationSource"] == "password"
     assert rejected_logout.status_code == 403
     assert logout.status_code == 200
-    assert client.get("/api/protected").status_code == 401
+    assert client.get("/api/auth/me").status_code == 401
     store.close()
 
 
@@ -185,7 +187,7 @@ def test_given_active_password_session_when_requests_fan_out_then_resolution_is_
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -200,22 +202,22 @@ def test_given_active_password_session_when_requests_fan_out_then_resolution_is_
 
     with patch.object(store, "resolve_session", wraps=store.resolve_session) as resolved:
         resolver: Mock = resolved
-        first: Response = client.get("/api/auth/me")
-        second: Response = client.get("/api/auth/me")
+        first: NativeResponse = client.get("/api/auth/me")
+        second: NativeResponse = client.get("/api/auth/me")
 
         assert first.status_code == 200
         assert second.status_code == 200
         assert resolver.call_count == test_case.expected_result
 
         store.grant_role(user_id=account.user_id, role_name="admin", actor_user_id=None)
-        changed: Response = client.get("/api/auth/me")
+        changed: NativeResponse = client.get("/api/auth/me")
 
         assert changed.json()["roles"] == ["admin", "viewer"]
         assert resolver.call_count == 2
 
         token: str = client.cookies["sqltide_session"]
         store.revoke_session(token=token)
-        assert client.get("/api/protected").status_code == 401
+        assert client.get("/api/auth/me").status_code == 401
         assert resolver.call_count == 3
     store.close()
 
@@ -238,7 +240,7 @@ def test_given_recent_password_session_when_reading_pages_then_last_seen_is_not_
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -246,7 +248,7 @@ def test_given_recent_password_session_when_reading_pages_then_last_seen_is_not_
         ),
         store=store,
     )
-    login: Response = client.post(
+    login: NativeResponse = client.post(
         "/api/auth/login",
         json={"username": "alice", "password": "correct sample battery staple"},
     )
@@ -256,8 +258,8 @@ def test_given_recent_password_session_when_reading_pages_then_last_seen_is_not_
             connection.execute("SELECT last_seen_at FROM sqltide_sessions").fetchone()[0]
         )
 
-    first: Response = client.get("/api/protected")
-    second: Response = client.get("/api/protected")
+    first: NativeResponse = client.get("/api/auth/me")
+    second: NativeResponse = client.get("/api/auth/me")
     with sqlite3.connect(database_path) as connection:
         after: str = str(
             connection.execute("SELECT last_seen_at FROM sqltide_sessions").fetchone()[0]
@@ -284,7 +286,7 @@ def test_given_password_mode_when_logging_in_then_session_cookie_is_secure_by_de
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -292,7 +294,7 @@ def test_given_password_mode_when_logging_in_then_session_cookie_is_secure_by_de
         store=store,
     )
 
-    response: Response = client.post(
+    response: NativeResponse = client.post(
         "/api/auth/login",
         json={"username": "alice", "password": "correct sample battery staple"},
     )
@@ -321,7 +323,7 @@ def test_given_username_variants_when_login_keeps_failing_then_shared_limit_appl
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -330,7 +332,7 @@ def test_given_username_variants_when_login_keeps_failing_then_shared_limit_appl
         store=store,
     )
 
-    attempts: list[Response] = [
+    attempts: list[NativeResponse] = [
         client.post(
             "/api/auth/login",
             json={"username": username, "password": "incorrect password"},
@@ -360,7 +362,7 @@ def test_given_ip_failures_when_one_login_succeeds_then_ip_limit_still_applies(
         password="correct sample battery staple",
         roles=("viewer",),
     )
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.PASSWORD,
             control_store_url="unused",
@@ -369,7 +371,7 @@ def test_given_ip_failures_when_one_login_succeeds_then_ip_limit_still_applies(
         store=store,
     )
     for index in range(19):
-        response: Response = client.post(
+        response: NativeResponse = client.post(
             "/api/auth/login",
             json={"username": f"unknown-{index}", "password": "incorrect password"},
         )
@@ -389,7 +391,7 @@ def test_given_ip_failures_when_one_login_succeeds_then_ip_limit_still_applies(
         == 401
     )
 
-    blocked: Response = client.post(
+    blocked: NativeResponse = client.post(
         "/api/auth/login",
         json={"username": "last-unknown", "password": "incorrect password"},
     )
@@ -426,7 +428,7 @@ def test_given_local_admin_when_managing_account_then_api_persists_and_audits(
     test_case: AuthTestCase, tmp_path: Path
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.DISABLED,
             control_store_url="unused",
@@ -434,7 +436,7 @@ def test_given_local_admin_when_managing_account_then_api_persists_and_audits(
         store=store,
     )
 
-    created: Response = client.post(
+    created: NativeResponse = client.post(
         "/api/admin/users",
         json={
             "username": "alice",
@@ -443,8 +445,8 @@ def test_given_local_admin_when_managing_account_then_api_persists_and_audits(
             "roles": ["viewer"],
         },
     )
-    users: Response = client.get("/api/admin/users")
-    audit: Response = client.get("/api/admin/audit")
+    users: NativeResponse = client.get("/api/admin/users")
+    audit: NativeResponse = client.get("/api/admin/audit")
 
     assert created.status_code == test_case.expected_result
     assert users.json()[0]["username"] == "alice"
@@ -462,7 +464,7 @@ def test_given_short_initial_password_when_creating_account_then_validation_is_r
     test_case: AuthTestCase, tmp_path: Path
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.DISABLED,
             control_store_url="unused",
@@ -470,7 +472,7 @@ def test_given_short_initial_password_when_creating_account_then_validation_is_r
         store=store,
     )
 
-    response: Response = client.post(
+    response: NativeResponse = client.post(
         "/api/admin/users",
         json={
             "username": "alice",
@@ -496,7 +498,7 @@ def test_given_local_admin_when_managing_project_roles_then_assignments_round_tr
 ) -> None:
     store: ControlStore = build_control_store(tmp_path=tmp_path)
     account: UserAccount = store.create_user(username="alice", roles=("viewer",))
-    client: TestClient = build_auth_client(
+    client: NativeTestClient = build_auth_client(
         settings=AuthSettings(
             mode=AuthenticationMode.DISABLED,
             control_store_url="unused",
@@ -504,20 +506,22 @@ def test_given_local_admin_when_managing_project_roles_then_assignments_round_tr
         store=store,
     )
 
-    granted: Response = client.post(
+    granted: NativeResponse = client.post(
         f"/api/admin/users/{account.user_id}/project-roles",
         json={"projectName": "analytics", "role": "operator", "targetName": "prod"},
     )
-    duplicate: Response = client.post(
+    duplicate: NativeResponse = client.post(
         f"/api/admin/users/{account.user_id}/project-roles",
         json={"projectName": "analytics", "role": "operator", "targetName": "prod"},
     )
-    listed: Response = client.get(
+    listed: NativeResponse = client.get(
         f"/api/admin/users/{account.user_id}/project-roles",
         params={"project": "analytics"},
     )
-    revoked: Response = client.delete(f"/api/admin/project-roles/{granted.json()['assignmentId']}")
-    after_revoke: Response = client.get(
+    revoked: NativeResponse = client.delete(
+        f"/api/admin/project-roles/{granted.json()['assignmentId']}"
+    )
+    after_revoke: NativeResponse = client.get(
         f"/api/admin/users/{account.user_id}/project-roles",
         params={"project": "analytics"},
     )

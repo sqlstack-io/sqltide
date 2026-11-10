@@ -16,8 +16,6 @@ SENSITIVE_SOURCE_SETTING_FRAGMENTS: tuple[str, ...] = (
     "secret",
     "token",
 )
-STATIC_ASSETS_DIRECTORY_NAME: str = "static"
-HTTP_RESPONSE_START_MESSAGE_TYPE: str = "http.response.start"
 CHECK_KIND_TEST: str = "test"
 CHECK_KIND_AUDIT: str = "audit"
 CANCEL_GRACE_SECONDS: float = 15.0

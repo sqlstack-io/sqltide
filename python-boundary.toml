@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 33730
+remaining_lines = 29500
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -173,14 +173,6 @@ note = "Rule 3: PollingSensorContext that user polling sensors receive, re-expor
 [[handled_native_errors]]
 location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"
 note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."
-
-[[handled_native_errors]]
-location = "dev_server/_helpers/server/destruction_routes.py::create_plan"
-note = "Plan request handling: a dependency block re-plans with the required pipelines and returns a blocked plan; other planning, selection and adapter failures become HTTP 400, 409 or 502 responses."
-
-[[handled_native_errors]]
-location = "dev_server/_helpers/server/destruction_routes.py::run"
-note = "Background execution worker: the request already returned, so a destruction failure is logged with its traceback and the plan's dispatch reservation is released; the recorded invocation carries the outcome."
 
 [[handled_native_errors]]
 location = "cli/promotion/main/_run_deployment_promotion.py::run_deployment_promotion"

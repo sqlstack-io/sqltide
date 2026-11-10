@@ -21,7 +21,6 @@ from sqltide.compiler.discovery.models import (
     ProjectDefaults,
 )
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.main.run_dev_server import run_dev_server
 from sqltide.dev_server.models import DevExecutionContext
 
 
@@ -77,7 +76,7 @@ def run_dev(
             adapter_profile=adapter_profile,
         )
 
-    return run_dev_server(
+    return _native.run_dev_server(
         run_compile=run_compile,
         connection=client,
         observation_connection=observation_client,

@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
-from sqltide.dev_server._helpers.server.static_assets import static_assets_present
+from sqltide._native import static_assets_present
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     SpaFallbackTestCase,
     StaticAssetsPresenceTestCase,
@@ -98,9 +100,9 @@ def test_given_built_assets_when_requesting_path_then_serves_expected_body(
     tmp_path: Path,
 ) -> None:
     write_static_assets_build(assets_root=tmp_path)
-    client: TestClient = build_static_test_client(assets_root=tmp_path)
+    client: NativeTestClient = build_static_test_client(assets_root=tmp_path)
 
-    response: Response = client.get(test_case.request_path)
+    response: NativeResponse = client.get(test_case.request_path)
 
     assert response.status_code == 200
     assert test_case.expected_body_fragment in response.text

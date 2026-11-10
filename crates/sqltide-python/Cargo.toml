@@ -16,6 +16,10 @@ default = []
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
+axum.workspace = true
+flate2.workspace = true
+md-5.workspace = true
+sha2.workspace = true
 polyglot-sql.workspace = true
 pyo3.workspace = true
 serde.workspace = true
@@ -30,6 +34,7 @@ sqltide-planner.workspace = true
 sqltide-rules.workspace = true
 sqltide-sqlanalysis.workspace = true
 sqltide-sqltext.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

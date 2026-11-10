@@ -4,15 +4,15 @@ from typing import cast
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from httpx import Response
 
+from sqltide._native import DevApplication, create_dev_app
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.auth.constants import CSRF_HEADER, TRUSTED_PROXY_CSRF_PROOF
 from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.main._create_dev_app import create_dev_app
 from sqltide.dev_server.models import DevExecutionContext
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     BootstrapAuthorizationTestCase,
     BootstrapEndpointTestCase,
@@ -36,7 +36,7 @@ from tests.unit.src.sqltide.dev_server.helpers import (
     write_reload_access_policy,
 )
 
-_PROXY_PROOF_HEADERS: dict[str, str] = {CSRF_HEADER: TRUSTED_PROXY_CSRF_PROOF}
+_PROXY_PROOF_HEADERS: dict[str, str] = {"X-SQLTide-CSRF": "trusted-proxy"}
 
 
 @pytest.mark.parametrize(
@@ -57,9 +57,9 @@ def test_given_compiled_project_when_reading_bootstrap_then_one_payload_initiali
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/bootstrap")
+    response: NativeResponse = client.get("/api/bootstrap")
     payload: dict[str, object] = response.json()
     auth: dict[str, object] = cast(dict[str, object], payload["auth"])
     config: dict[str, object] = cast(dict[str, object], auth["config"])
@@ -95,7 +95,7 @@ def test_given_isolated_read_factory_when_reading_route_then_primary_connection_
     primary_mock: MagicMock = MagicMock()
     read_mock: MagicMock = MagicMock()
     create_read: MagicMock = MagicMock(return_value=cast(AdapterConnection, read_mock))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=cast(AdapterConnection, primary_mock),
@@ -109,9 +109,9 @@ def test_given_isolated_read_factory_when_reading_route_then_primary_connection_
     )
 
     with patch(
-        "sqltide.dev_server._helpers.server.api_routes.read_runs", return_value=[]
+        "sqltide.dev_server._helpers.queries.runs_query.read_runs", return_value=[]
     ) as read_runs_mock:
-        response: Response = client.get(test_case.path)
+        response: NativeResponse = client.get(test_case.path)
 
     assert response.status_code == test_case.expected_status
     assert create_read.call_count == 1
@@ -136,7 +136,7 @@ def test_given_missing_identity_when_reading_bootstrap_then_project_data_is_not_
 ) -> None:
     client, store = build_assigned_proxy_reload_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/bootstrap")
+    response: NativeResponse = client.get("/api/bootstrap")
 
     assert response.status_code == test_case.expected_status
     store.close()
@@ -159,7 +159,7 @@ def test_given_clean_project_when_reading_status_then_reports_ok(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
     payload: dict = client.get("/api/status").json()
 
@@ -192,7 +192,7 @@ def test_given_unreachable_warehouse_when_refreshing_then_ui_contract_remains_av
         raise RuntimeError("warehouse is starting")
 
     state: DevServerState = DevServerState(run_compile=build_compile_callable(project_dir=tmp_path))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             database="analytics",
@@ -203,7 +203,7 @@ def test_given_unreachable_warehouse_when_refreshing_then_ui_contract_remains_av
         )
     )
 
-    refresh: Response = client.post("/api/warehouse/refresh")
+    refresh: NativeResponse = client.post("/api/warehouse/refresh")
 
     assert refresh.status_code == 200
     assert refresh.json()["compile"]["state"] == test_case.expected_state
@@ -238,7 +238,7 @@ def test_given_available_warehouse_when_retrying_now_then_response_reports_recon
         return connection
 
     state: DevServerState = DevServerState(run_compile=build_compile_callable(project_dir=tmp_path))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             database="analytics",
@@ -247,7 +247,7 @@ def test_given_available_warehouse_when_retrying_now_then_response_reports_recon
         )
     )
 
-    refresh: Response = client.post("/api/warehouse/refresh")
+    refresh: NativeResponse = client.post("/api/warehouse/refresh")
 
     assert refresh.status_code == 200
     assert refresh.json()["compile"]["state"] == test_case.expected_state
@@ -273,7 +273,7 @@ def test_given_healthy_warehouse_when_refreshing_snapshot_then_connection_is_not
     write_dev_server_project(project_dir=tmp_path)
     connection: AdapterConnection = build_fake_state_connection()
     state: DevServerState = DevServerState(run_compile=build_compile_callable(project_dir=tmp_path))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=connection,
@@ -283,7 +283,7 @@ def test_given_healthy_warehouse_when_refreshing_snapshot_then_connection_is_not
     )
 
     with patch.object(connection, "capture_warehouse_timestamp") as probe:
-        refresh: Response = client.post("/api/warehouse/refresh")
+        refresh: NativeResponse = client.post("/api/warehouse/refresh")
 
     assert refresh.status_code == test_case.expected_status
     assert probe.call_count == test_case.expected_probe_calls
@@ -306,7 +306,7 @@ def test_given_broken_project_when_reloading_then_reports_failure_location(
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
     first_version: str = client.get("/api/status").json()["compile"]["versionKey"]
     break_project_compile(project_dir=tmp_path)
 
@@ -315,7 +315,7 @@ def test_given_broken_project_when_reloading_then_reports_failure_location(
     assert payload["compile"]["state"] == test_case.expected_state
     assert payload["compile"]["versionKey"] != first_version
     assert "broken.sql" in payload["compile"]["error"]["message"]
-    retained_definitions: Response = client.get("/api/definitions")
+    retained_definitions: NativeResponse = client.get("/api/definitions")
     assert retained_definitions.status_code == 200
     assert retained_definitions.json()["versionKey"] == first_version
 
@@ -339,11 +339,11 @@ def test_given_compiled_reload_role_when_viewers_reload_then_current_assignment_
     client, store = build_assigned_proxy_reload_client(project_dir=tmp_path)
     assert client.get("/api/status", headers={"X-SQLTide-User": "alice"}).status_code == 200
 
-    denied: Response = client.post(
+    denied: NativeResponse = client.post(
         "/api/reload",
         headers={"X-SQLTide-User": "bob", **_PROXY_PROOF_HEADERS},
     )
-    allowed: Response = client.post(
+    allowed: NativeResponse = client.post(
         "/api/reload",
         headers={"X-SQLTide-User": "alice", **_PROXY_PROOF_HEADERS},
     )
@@ -373,12 +373,12 @@ def test_given_pipeline_quality_role_when_running_audit_then_coverage_is_enforce
     client, store = build_assigned_proxy_quality_client(project_dir=tmp_path)
     body: dict[str, str] = {"kind": "audit", "name": "orders_clean.order_id.not_null.1"}
 
-    denied: Response = client.post(
+    denied: NativeResponse = client.post(
         "/api/checks/run",
         json=body,
         headers={"X-SQLTide-User": "bob", **_PROXY_PROOF_HEADERS},
     )
-    allowed: Response = client.post(
+    allowed: NativeResponse = client.post(
         "/api/checks/run",
         json=body,
         headers={"X-SQLTide-User": "alice", **_PROXY_PROOF_HEADERS},
@@ -446,17 +446,17 @@ def test_given_message_reader_role_when_browsing_messages_then_boundary_is_enfor
 ) -> None:
     client, store = build_assigned_proxy_message_client(project_dir=tmp_path)
 
-    denied: Response = client.post(
+    denied: NativeResponse = client.post(
         "/api/sources/orders/messages",
         json={},
         headers={"X-SQLTide-User": "bob", **_PROXY_PROOF_HEADERS},
     )
-    allowed: Response = client.post(
+    allowed: NativeResponse = client.post(
         "/api/sources/orders/messages",
         json={},
         headers={"X-SQLTide-User": "alice", **_PROXY_PROOF_HEADERS},
     )
-    topics: Response = client.get("/api/topics", headers={"X-SQLTide-User": "bob"})
+    topics: NativeResponse = client.get("/api/topics", headers={"X-SQLTide-User": "bob"})
 
     assert denied.status_code == test_case.expected_denied_status
     assert denied.json()["detail"]["reason"] == test_case.expected_denied_reason
@@ -486,9 +486,9 @@ def test_given_invalid_candidate_policy_when_reloading_then_prior_policy_still_a
     assert client.get("/api/status", headers=alice_headers).status_code == 200
     write_reload_access_policy(project_dir=tmp_path, permission="project.unknown")
 
-    failed: Response = client.post("/api/reload", headers=alice_headers)
+    failed: NativeResponse = client.post("/api/reload", headers=alice_headers)
     write_reload_access_policy(project_dir=tmp_path, permission="project.reload")
-    recovered: Response = client.post("/api/reload", headers=alice_headers)
+    recovered: NativeResponse = client.post("/api/reload", headers=alice_headers)
 
     assert failed.status_code == 200
     assert failed.json()["compile"]["state"] == "failing"
@@ -513,9 +513,9 @@ def test_given_no_warehouse_when_reading_state_then_route_returns_explicit_error
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/state")
+    response: NativeResponse = client.get("/api/state")
 
     assert response.status_code == test_case.expected_status
     assert response.json() == {"detail": test_case.expected_detail}
@@ -538,20 +538,14 @@ def test_given_dev_app_context_when_lifespan_exits_then_owned_resources_are_clos
     write_dev_server_project(project_dir=tmp_path)
     state: DevServerState = DevServerState(run_compile=build_compile_callable(project_dir=tmp_path))
     with (
+        patch("sqltide.dev_server.classes.audit_scheduler.AuditScheduler") as scheduler_class,
         patch(
-            "sqltide.dev_server._helpers.server.runtime_services.AuditScheduler"
-        ) as scheduler_class,
-        patch(
-            "sqltide.dev_server._helpers.server.runtime_services.SensorScheduler"
+            "sqltide.dev_server.classes.sensor_scheduler.SensorScheduler"
         ) as sensor_scheduler_class,
+        patch("sqltide.dev_server.classes.build_process.BuildProcessManager") as builds_class,
+        patch("sqltide.dev_server.classes.kafka_lag_reader.KafkaLagReader") as lag_reader_class,
         patch(
-            "sqltide.dev_server._helpers.server.runtime_services.BuildProcessManager"
-        ) as builds_class,
-        patch(
-            "sqltide.dev_server._helpers.server.runtime_services.KafkaLagReader"
-        ) as lag_reader_class,
-        patch(
-            "sqltide.dev_server._helpers.server.runtime_services.KafkaTopicReader"
+            "sqltide.dev_server.classes.kafka_topic_reader.KafkaTopicReader"
         ) as topic_reader_class,
     ):
         scheduler: MagicMock = scheduler_class.return_value
@@ -564,10 +558,10 @@ def test_given_dev_app_context_when_lifespan_exits_then_owned_resources_are_clos
         topic_reader: MagicMock = topic_reader_class.return_value
         lag_reader.read.return_value = None
         topic_reader.read.return_value = None
-        app: FastAPI = create_dev_app(state=state, project_dir=tmp_path)
+        app: DevApplication = create_dev_app(state=state, project_dir=tmp_path)
 
-        with TestClient(app) as client:
-            response: Response = client.get("/api/status")
+        with NativeTestClient(app) as client:
+            response: NativeResponse = client.get("/api/status")
             assert response.status_code == test_case.expected_status
             sensor_scheduler.initialize_event_checkpoints.assert_called_once_with()
             sensor_scheduler.start.assert_called_once_with()

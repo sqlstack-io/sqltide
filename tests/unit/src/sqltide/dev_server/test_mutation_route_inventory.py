@@ -3,8 +3,8 @@
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 from tests.unit.src.sqltide.dev_server._test_types import DevRefactorTestCase
 from tests.unit.src.sqltide.dev_server.helpers import (
     build_test_client,
@@ -99,7 +99,7 @@ def test_given_registered_routes_when_inventorying_mutations_then_every_policy_i
     tmp_path: Path,
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
     registered: frozenset[tuple[str, str]] = registered_mutation_routes(client=client)
 

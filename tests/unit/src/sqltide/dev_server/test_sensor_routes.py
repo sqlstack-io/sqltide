@@ -6,14 +6,16 @@ from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-from httpx import Response
 
+from sqltide._native import create_dev_app
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.main._create_dev_app import create_dev_app
 from sqltide.dev_server.models import DevExecutionContext
 from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
+from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
+    NativeResponse,
+    NativeTestClient,
+)
 from tests.unit.src.sqltide.dev_server._test_types import (
     ReadConnectionRouteTestCase,
     SensorRouteErrorTestCase,
@@ -48,7 +50,7 @@ def test_given_isolated_read_factory_when_reading_sensors_then_primary_connectio
     primary_mock: MagicMock = MagicMock()
     read_mock: MagicMock = MagicMock()
     create_read: MagicMock = MagicMock(return_value=cast(AdapterConnection, read_mock))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=cast(AdapterConnection, primary_mock),
@@ -62,10 +64,10 @@ def test_given_isolated_read_factory_when_reading_sensors_then_primary_connectio
     )
 
     with patch(
-        "sqltide.dev_server._helpers.server.sensor_routes.build_sensors_payload",
+        "sqltide.dev_server._helpers.payloads.sensors_payload.build_sensors_payload",
         return_value={"sensors": [], "deadLetterCount": 0, "health": {}},
     ):
-        response: Response = client.get(test_case.path)
+        response: NativeResponse = client.get(test_case.path)
 
     assert response.status_code == test_case.expected_status
     assert create_read.call_count == 1
@@ -93,7 +95,7 @@ def test_given_isolated_connection_when_setting_sensor_status_then_primary_conne
     primary_mock: MagicMock = MagicMock()
     isolated_mock: MagicMock = MagicMock()
     create_isolated: MagicMock = MagicMock(return_value=cast(AdapterConnection, isolated_mock))
-    client: TestClient = TestClient(
+    client: NativeTestClient = NativeTestClient(
         create_dev_app(
             state=state,
             connection=cast(AdapterConnection, primary_mock),
@@ -112,7 +114,7 @@ def test_given_isolated_connection_when_setting_sensor_status_then_primary_conne
         patch.object(SensorStateRepository, "ensure_ready"),
         patch.object(SensorStateRepository, "record_override") as record_override,
     ):
-        response: Response = client.post(test_case.path, json={"status": "running"})
+        response: NativeResponse = client.post(test_case.path, json={"status": "running"})
 
     assert response.status_code == test_case.expected_status
     assert response.json() == {"sensorName": "quality_alerts", "status": "running"}
@@ -139,9 +141,9 @@ def test_given_authored_sensor_when_listing_then_definitions_are_served(
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
     write_sensor_file(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.get("/api/sensors")
+    response: NativeResponse = client.get("/api/sensors")
 
     assert response.status_code == 200
     payload: dict[str, object] = response.json()
@@ -213,9 +215,9 @@ def test_given_invalid_sensor_requests_when_calling_then_errors_are_structured(
 ) -> None:
     write_dev_server_project(project_dir=tmp_path)
     write_sensor_file(project_dir=tmp_path)
-    client: TestClient = build_test_client(project_dir=tmp_path)
+    client: NativeTestClient = build_test_client(project_dir=tmp_path)
 
-    response: Response = client.request(test_case.method, test_case.path, json=test_case.body)
+    response: NativeResponse = client.request(test_case.method, test_case.path, json=test_case.body)
 
     assert response.status_code == test_case.expected_status_code
     assert test_case.expected_detail_fragment in str(response.json()["detail"])
