@@ -736,7 +736,7 @@ fn source_object(object: &Value<'_>) -> PyResult<(String, String, Option<String>
 /// Passive managed sources and deferred landing attachment, without mutation.
 #[pyfunction]
 #[pyo3(signature = (*, desired_state, default_database, existing_relation_names))]
-fn plan_population_sources<'py>(
+pub(crate) fn plan_population_sources<'py>(
     py: Python<'py>,
     desired_state: &Value<'py>,
     default_database: &Value<'py>,

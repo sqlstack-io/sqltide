@@ -8,6 +8,7 @@ mod adopted_sources;
 mod analysis;
 mod artifacts;
 mod audit_discovery;
+mod backfill;
 mod clickhouse;
 mod clickhouse_adapter;
 mod clickhouse_catalog;
@@ -107,6 +108,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis::register(module)?;
     artifacts::register(module)?;
     audit_discovery::register(module)?;
+    backfill::register(module)?;
     clickhouse::register(module)?;
     clickhouse_adapter::register(module)?;
     clickhouse_catalog::register(module)?;
@@ -140,7 +142,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     project_analysis::register(module)?;
     project_discovery::register(module)?;
     realization::register(module)?;
-    population::register(module)?;
     population_planning::register(module)?;
     row_error_policy::register(module)?;
     rules::register(module)?;
@@ -149,6 +150,5 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     test_discovery::register(module)?;
     testing::register(module)?;
     timestamps::register(module)?;
-    toml::register(module)?;
-    workflow::register(module)
+    toml::register(module)
 }

@@ -43,21 +43,27 @@ const RECOVERY_WORKFLOW: &str = "sqltide.executor.workflow.main.execute_recovery
 const PAUSED_SOURCE_STEP_PREFIXES: [&str; 2] = ["pause_source_", "clear_staged_source_"];
 const RETRY_COMMAND: &str = "sqt build --changed";
 
-type Value<'py> = Bound<'py, PyAny>;
+pub(crate) type Value<'py> = Bound<'py, PyAny>;
+/// `(teardown as (relation name, is a view), realizations as (resource name, SQL))` of in-place
+/// row-error policy view swaps.
+pub(crate) type PolicyViewSteps = (Vec<(String, bool)>, Vec<(String, String)>);
 
-fn class<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<Value<'py>> {
+pub(crate) fn class<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<Value<'py>> {
     py.import(module)?.getattr(name)
 }
 
-fn is_a(value: &Value<'_>, module: &str, name: &str) -> PyResult<bool> {
+pub(crate) fn is_a(value: &Value<'_>, module: &str, name: &str) -> PyResult<bool> {
     value.is_instance(&class(value.py(), module, name)?)
 }
 
-fn items<'py>(value: &Value<'py>) -> PyResult<Vec<Value<'py>>> {
+pub(crate) fn items<'py>(value: &Value<'py>) -> PyResult<Vec<Value<'py>>> {
     value.try_iter()?.collect()
 }
 
-fn keywords<'py>(py: Python<'py>, pairs: &[(&str, Value<'py>)]) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn keywords<'py>(
+    py: Python<'py>,
+    pairs: &[(&str, Value<'py>)],
+) -> PyResult<Bound<'py, PyDict>> {
     let arguments: Bound<'py, PyDict> = PyDict::new(py);
     for (keyword, value) in pairs {
         arguments.set_item(keyword, value)?;
@@ -65,7 +71,7 @@ fn keywords<'py>(py: Python<'py>, pairs: &[(&str, Value<'py>)]) -> PyResult<Boun
     Ok(arguments)
 }
 
-fn build<'py>(
+pub(crate) fn build<'py>(
     py: Python<'py>,
     module: &str,
     name: &str,
@@ -74,7 +80,7 @@ fn build<'py>(
     class(py, module, name)?.call((), Some(&keywords(py, pairs)?))
 }
 
-fn call<'py>(
+pub(crate) fn call<'py>(
     py: Python<'py>,
     module: &str,
     name: &str,
@@ -83,7 +89,7 @@ fn call<'py>(
     build(py, module, name, pairs)
 }
 
-fn method<'py>(
+pub(crate) fn method<'py>(
     value: &Value<'py>,
     name: &str,
     pairs: &[(&str, Value<'py>)],
@@ -91,31 +97,34 @@ fn method<'py>(
     value.call_method(name, (), Some(&keywords(value.py(), pairs)?))
 }
 
-fn replace<'py>(value: &Value<'py>, pairs: &[(&str, Value<'py>)]) -> PyResult<Value<'py>> {
+pub(crate) fn replace<'py>(
+    value: &Value<'py>,
+    pairs: &[(&str, Value<'py>)],
+) -> PyResult<Value<'py>> {
     let py: Python<'py> = value.py();
     py.import("dataclasses")?
         .getattr("replace")?
         .call((value,), Some(&keywords(py, pairs)?))
 }
 
-fn tuple<'py>(py: Python<'py>, values: Vec<Value<'py>>) -> PyResult<Value<'py>> {
+pub(crate) fn tuple<'py>(py: Python<'py>, values: Vec<Value<'py>>) -> PyResult<Value<'py>> {
     Ok(PyTuple::new(py, values)?.into_any())
 }
 
-fn text<'py>(py: Python<'py>, value: &str) -> Value<'py> {
+pub(crate) fn text<'py>(py: Python<'py>, value: &str) -> Value<'py> {
     PyString::new(py, value).into_any()
 }
 
-fn boolean(py: Python<'_>, value: bool) -> PyResult<Value<'_>> {
+pub(crate) fn boolean(py: Python<'_>, value: bool) -> PyResult<Value<'_>> {
     Ok(value.into_pyobject(py)?.to_owned().into_any())
 }
 
-fn string(value: &Value<'_>, name: &str) -> PyResult<String> {
+pub(crate) fn string(value: &Value<'_>, name: &str) -> PyResult<String> {
     value.getattr(name)?.extract()
 }
 
 /// `value or default`.
-fn or<'py>(value: Value<'py>, default: &Value<'py>) -> PyResult<Value<'py>> {
+pub(crate) fn or<'py>(value: Value<'py>, default: &Value<'py>) -> PyResult<Value<'py>> {
     Ok(if value.is_truthy()? {
         value
     } else {
@@ -123,7 +132,7 @@ fn or<'py>(value: Value<'py>, default: &Value<'py>) -> PyResult<Value<'py>> {
     })
 }
 
-fn none(py: Python<'_>) -> Value<'_> {
+pub(crate) fn none(py: Python<'_>) -> Value<'_> {
     py.None().into_bound(py)
 }
 
@@ -178,7 +187,10 @@ fn reject_incapable_adapter(py: Python<'_>, client: &Value<'_>) -> PyResult<()> 
 
 /// The workflow statements of `(step ID, phase, intent, SQL, continue on error)` tuples,
 /// numbered from one.
-fn warehouse_statements<'py>(py: Python<'py>, statements: &[Value<'py>]) -> PyResult<Value<'py>> {
+pub(crate) fn warehouse_statements<'py>(
+    py: Python<'py>,
+    statements: &[Value<'py>],
+) -> PyResult<Value<'py>> {
     let phase: Value<'py> = class(py, WORKFLOW_TYPES, "WorkflowPhase")?;
     let intent: Value<'py> = class(py, WORKFLOW_TYPES, "StatementIntent")?;
     let mut built: Vec<Value<'py>> = Vec::with_capacity(statements.len());
@@ -207,7 +219,7 @@ fn warehouse_statements<'py>(py: Python<'py>, statements: &[Value<'py>]) -> PyRe
     tuple(py, built)
 }
 
-fn native_statements<'py>(
+pub(crate) fn native_statements<'py>(
     py: Python<'py>,
     statements: Vec<sqltide_executor::workflow::Statement>,
 ) -> PyResult<Vec<Value<'py>>> {
@@ -372,18 +384,17 @@ fn assemble_statements<'py>(
     let database_text: String = database.extract()?;
     // Looked up on the module at call time, as the Python workflow's import binding was, so a
     // test can substitute it to inject a failing policy view.
-    let (policy_teardown, policy_realizations): (Vec<(String, bool)>, Vec<(String, String)>) =
-        call(
-            py,
-            "sqltide._native",
-            "row_error_policy_view_steps",
-            &[
-                ("changes", changes.clone()),
-                ("database", database.clone()),
-                ("render_view", policy_view_renderer(py, request, client)?),
-            ],
-        )?
-        .extract()?;
+    let (policy_teardown, policy_realizations): PolicyViewSteps = call(
+        py,
+        "sqltide._native",
+        "row_error_policy_view_steps",
+        &[
+            ("changes", changes.clone()),
+            ("database", database.clone()),
+            ("render_view", policy_view_renderer(py, request, client)?),
+        ],
+    )?
+    .extract()?;
     realizations.extend(policy_realizations);
     let ensure_database_sql: String = client
         .call_method1("render_ensure_database", (&database,))?
@@ -1235,6 +1246,7 @@ struct Execution<'py> {
 }
 
 /// Execute one template statement, realizing its replay SQL and decoding its capture.
+#[allow(clippy::too_many_arguments)]
 fn execute_step<'py>(
     py: Python<'py>,
     workflow: &Value<'py>,

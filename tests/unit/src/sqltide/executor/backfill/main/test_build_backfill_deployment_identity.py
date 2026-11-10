@@ -1,9 +1,7 @@
 import pytest
 
+from sqltide._native import build_backfill_deployment_identity
 from sqltide.executor.backfill.exceptions import BackfillExecutionError
-from sqltide.executor.backfill.main.build_backfill_deployment_identity import (
-    build_backfill_deployment_identity,
-)
 from sqltide.executor.backfill.models import BackfillDeploymentIdentity
 from tests.unit.src.sqltide.executor.backfill.main._test_types import (
     DeploymentIdentityTestCase,

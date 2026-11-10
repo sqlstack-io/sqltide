@@ -94,7 +94,11 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import BoundedReplayFallback, PipelineMode
+from sqltide.compiler.discovery.types import (
+    BoundedReplayFallback,
+    PipelineMode,
+    ReplayLineageMode,
+)
 from sqltide.compiler.graph.models import ProjectGraph
 from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
@@ -137,6 +141,7 @@ from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
+    BackfillDeploymentIdentity,
     BackfillExecutionResult,
     RootBackfillReport,
 )
@@ -176,7 +181,11 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
-from sqltide.executor.workflow.models import WarehouseStatement, WorkflowExecutionResult
+from sqltide.executor.workflow.models import (
+    BuildWorkflow,
+    WarehouseStatement,
+    WorkflowExecutionResult,
+)
 from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
 
 type _Span = tuple[int, int, int, int, int, int]
@@ -609,12 +618,6 @@ def build_deployment_promotion_preview(
 def resolve_deployment_rollback(
     *, request: RollbackRequest, client: AdapterConnection
 ) -> RollbackPlan: ...
-def bounded_replay_outcome(
-    mode: str | None,
-    forced_start_time: bool,
-    live_columns: set[str] | None,
-    fallback_without_history: bool,
-) -> str: ...
 def render_plan_text(
     *,
     plan: DeploymentPlan,
@@ -820,44 +823,6 @@ def deployment_diff_count_sql(database: str, relation: str) -> str: ...
 type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
 
 def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
-
-type _WorkflowStatement = tuple[str, str, str, str, bool]
-
-def virtual_workflow_statements(
-    context: tuple[str, str, str, tuple[str, str, str, str, str], str | None, bool, bool],
-    rendered: tuple[
-        list[tuple[str, str | None]],
-        str,
-        list[str],
-        list[tuple[str, str]],
-        list[str],
-        list[tuple[str, str]],
-        list[tuple[str, str]],
-        float,
-    ],
-    roots: list[
-        tuple[str, AdapterReplayRequest, bool, tuple[str | None, str, str], bool, list[str]]
-    ],
-) -> list[_WorkflowStatement]: ...
-def direct_workflow_statements(
-    preparation: tuple[
-        str,
-        str,
-        list[tuple[str, str]],
-        list[tuple[str, str, str, str, str]],
-        list[str],
-        list[tuple[str, str]],
-        list[tuple[str, str]],
-    ],
-    execution: tuple[
-        float,
-        list[tuple[str, bool]],
-        list[tuple[str, str]],
-        list[tuple[str, str, str, str]],
-        list[tuple[str, str]],
-        int,
-    ],
-) -> tuple[list[_WorkflowStatement], list[_WorkflowStatement]]: ...
 def direct_fingerprint_record(
     identity: tuple[
         str,
@@ -1292,6 +1257,21 @@ def plan_preserved_managed_sources(
 def drifted_managed_sources(
     *, realized_project: RealizedProject, catalog: CatalogSnapshot
 ) -> tuple[DriftedManagedSource, ...]: ...
+def build_backfill_deployment_identity(
+    *, deployment_id: str | None
+) -> BackfillDeploymentIdentity: ...
+def resolve_unsupported_bounded_replay_behavior(
+    *,
+    catalog: CatalogSnapshot,
+    deployment_plan: DeploymentPlan,
+    desired_state: DesiredState,
+    default_database: str,
+    replay_lineage_mode: ReplayLineageMode,
+) -> DeploymentPlan: ...
+def assemble_virtual_build_workflow(
+    *, request: BackfillBootstrapRequest, client: AdapterConnection, plan_json: str
+) -> BuildWorkflow: ...
+def build_virtual_bootstrap_workflow(*, workflow: BuildWorkflow) -> BuildWorkflow: ...
 def assemble_direct_build_workflow(
     *,
     request: DirectBuildRequest,

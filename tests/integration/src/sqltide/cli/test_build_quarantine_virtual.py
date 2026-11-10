@@ -644,7 +644,7 @@ def test_given_virtual_switch_fails_when_building_then_old_view_keeps_consuming(
         )
         break_row_error_policy_view(
             monkeypatch=monkeypatch,
-            module_path="sqltide.executor.backfill._helpers.row_error_policy",
+            module_path="sqltide._native",
             broken_view=test_case.broken_view,
         )
         capsys.readouterr()

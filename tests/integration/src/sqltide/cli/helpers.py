@@ -15,6 +15,7 @@ import sqltide._native as _native
 from sqltide._native import (
     analyze_project,
     assemble_direct_build_workflow,
+    assemble_virtual_build_workflow,
     build_direct_execution_result,
     execute_direct_build_workflow,
     load_clickhouse_catalog,
@@ -74,9 +75,6 @@ from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
-from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
-    assemble_virtual_build_workflow,
-)
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.direct.models import (
     DirectBuildRequest,

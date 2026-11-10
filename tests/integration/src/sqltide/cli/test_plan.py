@@ -7,6 +7,7 @@ import sqltide._native as _native
 from sqltide._native import (
     analyze_project,
     load_planning_warehouse_snapshot,
+    resolve_unsupported_bounded_replay_behavior,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
@@ -35,9 +36,6 @@ from sqltide.compiler.planner.models import (
     DeploymentPlan,
     PlanningWarehouseSnapshot,
     RebuildSubtree,
-)
-from sqltide.executor.backfill.main.resolve_unsupported_bounded_replay_behavior import (
-    resolve_unsupported_bounded_replay_behavior,
 )
 from tests.integration.src.sqltide.cli._test_types import (
     CliBoundedPlanSnapshotIntegrationTestCase,

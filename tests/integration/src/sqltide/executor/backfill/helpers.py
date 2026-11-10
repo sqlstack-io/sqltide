@@ -13,11 +13,14 @@ from clickhouse_connect.driver.client import Client
 import sqltide._native as _native
 from sqltide._native import (
     SqlModelAnalyzer,
+    assemble_virtual_build_workflow,
     build_root_backfill_reports,
+    build_virtual_bootstrap_workflow,
     build_virtual_execution_result,
     load_planning_warehouse_snapshot,
     plan_deployment,
     realize_project,
+    resolve_unsupported_bounded_replay_behavior,
 )
 from sqltide._native import compile_pipeline as compile_pipeline_impl
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -67,15 +70,6 @@ from sqltide.compiler.planner.models import (
     PlanningWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import RebuildExecutionMode
-from sqltide.executor.backfill.main._build_virtual_bootstrap_workflow import (
-    build_virtual_bootstrap_workflow,
-)
-from sqltide.executor.backfill.main.assemble_virtual_build_workflow import (
-    assemble_virtual_build_workflow,
-)
-from sqltide.executor.backfill.main.resolve_unsupported_bounded_replay_behavior import (
-    resolve_unsupported_bounded_replay_behavior,
-)
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
     BackfillBootstrapResult,
