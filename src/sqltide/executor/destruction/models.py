@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from sqltide._native import RunEventSink
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.executor.destruction.exceptions import DestructionValidationError
 from sqltide.executor.destruction.types import (
@@ -13,7 +14,6 @@ from sqltide.executor.destruction.types import (
     DestructionOwnership,
     DestructionRelationKind,
 )
-from sqltide.executor.observability.classes.run_event_sink import RunEventSink
 from sqltide.executor.workflow.models import WarehouseStatement
 
 
@@ -114,18 +114,6 @@ class DestructionPlan:
     @property
     def estimated_bytes(self) -> int:
         return sum(relation.total_bytes or 0 for relation in self.relations)
-
-
-@dataclass(frozen=True)
-class RelationalStoredDestructionPlan:
-    """Validated database state associated with one immutable plan payload."""
-
-    plan: DestructionPlan
-    payload_json: str
-    payload_sha256: str
-    status: str
-    reviewed_at: datetime | None
-    consumed_at: datetime | None
 
 
 @dataclass(frozen=True)

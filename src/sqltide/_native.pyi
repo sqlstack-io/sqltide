@@ -4,7 +4,7 @@ import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Protocol, Self, final
+from typing import Any, Literal, Protocol, Self, TextIO, final
 from uuid import UUID
 
 from sqltide.adapter.classes.adapter import Adapter
@@ -13,12 +13,16 @@ from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
     AdapterAdoptedSourceRealizationRequest,
     AdapterBindingReplacementRequest,
+    AdapterCapabilities,
+    AdapterCapturedReplayRequest,
     AdapterConnectionConfig,
     AdapterCurrentQualityNode,
     AdapterDeploymentInventory,
+    AdapterDeploymentReplayRequest,
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
     AdapterIdentity,
+    AdapterInvocationRecord,
     AdapterManagedSource,
     AdapterManagedSourceRealizationRequest,
     AdapterManifest,
@@ -27,13 +31,17 @@ from sqltide.adapter.models import (
     AdapterMetadataState,
     AdapterModelRealization,
     AdapterModelRealizationRequest,
+    AdapterMutationResult,
+    AdapterNodeResultRecord,
     AdapterPhysicalRelationMapping,
     AdapterQueryCancellation,
+    AdapterQueryResult,
     AdapterReadinessRequest,
     AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
     AdapterReplayColumns,
+    AdapterReplayCoverageRequest,
     AdapterReplayOffsetFrontier,
     AdapterReplayOffsetProgressRequest,
     AdapterReplayQuery,
@@ -43,6 +51,7 @@ from sqltide.adapter.models import (
     AdapterSensorState,
     AdapterSensorStepRecord,
     AdapterSensorTickRecord,
+    AdapterSetDifferenceComparisonRequest,
     AdapterSourceRealization,
     AdapterStableView,
     AdapterStatementProgress,
@@ -57,6 +66,8 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
+from sqltide.adapters.clickhouse.types import RawClickHouseClient
 from sqltide.auth.models import (
     AccountAuditRecord,
     AuthSettings,
@@ -200,7 +211,7 @@ from sqltide.events.models import (
     NodeResultObservation,
     RunCompleted,
 )
-from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
+from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import QualityResultStatus
 from sqltide.executor.backfill.models import (
     BackfillBootstrapRequest,
@@ -208,7 +219,12 @@ from sqltide.executor.backfill.models import (
     BackfillExecutionResult,
     RootBackfillReport,
 )
-from sqltide.executor.deployment.models import DeploymentDiffResult
+from sqltide.executor.deployment.models import (
+    DeploymentDiffRequest,
+    DeploymentDiffResult,
+    DeploymentInventory,
+    DeploymentSummary,
+)
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,
@@ -216,7 +232,11 @@ from sqltide.executor.destruction.models import (
     DestructionRequest,
     InactivePipeline,
 )
-from sqltide.executor.destruction.types import DestructionPlanningConnection, DestructionPlanStore
+from sqltide.executor.destruction.types import (
+    DestructionClock,
+    DestructionPlanningConnection,
+    DestructionPlanStore,
+)
 from sqltide.executor.direct.models import (
     DirectBuildAudit,
     DirectBuildExecutionResult,
@@ -227,7 +247,19 @@ from sqltide.executor.direct.models import (
     DirectRuntimeExecution,
     DriftedManagedSource,
 )
-from sqltide.executor.observability.models import RunStartupTimings
+from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
+from sqltide.executor.janitor.models import (
+    JanitorApplyResult,
+    JanitorPreviewResult,
+    JanitorRequest,
+)
+from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
+from sqltide.executor.kafka_admin.types import KafkaAdminClientFactory
+from sqltide.executor.observability.models import (
+    QualityResultContext,
+    RunStartupTimings,
+    TerminalInvocation,
+)
 from sqltide.executor.population.models import (
     PopulationPlan,
     PopulationRealization,
@@ -237,6 +269,7 @@ from sqltide.executor.population.models import (
 )
 from sqltide.executor.promotion.models import (
     DeploymentPromotionPreview,
+    PublishRequest,
     PublishResult,
     RollbackPlan,
     RollbackRequest,
@@ -249,6 +282,8 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
+from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
+from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -356,11 +391,289 @@ def polling_sensor(
 def effective_sensor_status(
     *, sensor: LoadedSensor, overrides: Mapping[str, SensorOverrideStatus]
 ) -> SensorOverrideStatus: ...
+def start_invocation(*, invocation_id: str | None = None) -> tuple[str, str, int]: ...
+def logical_project_identity(*, project_dir: Path) -> str: ...
+def build_invocation_record(
+    *, started: tuple[str, str, int], terminal: TerminalInvocation
+) -> AdapterInvocationRecord: ...
+def build_node_result_record(
+    *,
+    invocation: AdapterInvocationRecord,
+    identity: QualityNodeIdentity,
+    context: QualityResultContext,
+    status: str,
+    severity: str | None,
+    failure_count: int,
+    payload: dict[str, object],
+    error_message: str | None,
+) -> AdapterNodeResultRecord: ...
+def persist_terminal_observations(
+    *,
+    client: AdapterConnection,
+    database: str,
+    invocation: AdapterInvocationRecord,
+    node_results: tuple[AdapterNodeResultRecord, ...],
+) -> str | None: ...
+def persist_run_events(
+    *, connection: AdapterConnection, database: str, events: tuple[AdapterRunEventRecord, ...]
+) -> None: ...
+
+@final
+class RunEventSink:
+    """Best-effort run narration: JSONL for pipes plus durable rows for readers."""
+
+    def __init__(
+        self,
+        *,
+        connection: AdapterConnection,
+        database: str,
+        invocation_id: str,
+        project_identity: str | None = None,
+        jsonl_stream: TextIO | None = None,
+        strict_persistence: bool = False,
+    ) -> None: ...
+    def set_operation_evidence(self, evidence: dict[str, object] | None) -> None: ...
+    def run_started(
+        self,
+        *,
+        command: str,
+        mode: str,
+        total_statements: int,
+        selected_node_count: int,
+        display_command: str | None = None,
+        selectors: tuple[str, ...] = (),
+        start_time: str | None = None,
+        executed_logical_ids: tuple[str, ...] = (),
+        context_logical_ids: tuple[str, ...] = (),
+        startup_timings: RunStartupTimings | None = None,
+    ) -> None: ...
+    def run_completed(self, *, outcome: str, exit_code: int, error_message: str | None) -> None: ...
+    def stop(self) -> None: ...
+    def statement_started(self, statement: WarehouseStatement) -> str: ...
+    def workflow_prepared(
+        self, *, statements: tuple[WarehouseStatement, ...], workflow_sha256: str
+    ) -> None: ...
+    def audit_started(self, *, name: str) -> None: ...
+    def audit_completed(
+        self, *, name: str, status: str, failure_count: int, error_message: str | None
+    ) -> None: ...
+    def statement_completed(
+        self,
+        *,
+        statement: WarehouseStatement,
+        error_message: str | None,
+        written_rows: int | None,
+        elapsed_ms: int,
+    ) -> None: ...
+
 def canonical_username(value: str) -> str: ...
 def default_control_store_url(*, project_dir: Path) -> str: ...
+def reset_fresh_landing_offsets(
+    *,
+    source_preparation: PopulationSourcePreparation,
+    client_factory: KafkaAdminClientFactory | None = None,
+) -> tuple[ConsumerGroupOffsetReset, ...]: ...
 def rename_streambuild_tables(*, url: str, sqlite_timeout_seconds: float | None = None) -> None: ...
 
 @final
+class RelationalDestructionPlanStore:
+    """SQLite/PostgreSQL store with durable review and atomic consumption state."""
+
+    def __init__(self, *, url: str, clock: DestructionClock | None = None) -> None: ...
+    def close(self) -> None: ...
+    def bootstrap(self) -> None: ...
+    def save(self, *, plan: DestructionPlan, actor: str) -> None: ...
+    def get(self, *, plan_id: str, actor: str) -> DestructionPlan: ...
+    def mark_reviewed(self, *, plan_id: str, actor: str) -> datetime: ...
+    def reviewed_at(self, *, plan_id: str, actor: str) -> datetime: ...
+    def consume(
+        self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
+    ) -> DestructionPlan: ...
+
+class ClickHouseConnectionCore:
+    """A neutral adapter connection backed by the ClickHouse driver."""
+
+    def __init__(self, raw_client: RawClickHouseClient) -> None: ...
+    @property
+    def adapter_identity(self) -> AdapterIdentity: ...
+    @property
+    def capabilities(self) -> AdapterCapabilities: ...
+    def load_catalog(self, database: str) -> CatalogSnapshot: ...
+    def load_relation_drop_size_limit(self) -> int | None: ...
+    def load_relation_drop_size_server_default(self) -> int | None: ...
+    def load_external_dependants(
+        self, *, database: str, relation_names: tuple[str, ...]
+    ) -> tuple[str, ...]: ...
+    def load_refresh_states(self, database: str) -> tuple[AdapterRefreshState, ...]: ...
+    def replay_anchor_has_repeated_offsets(
+        self, *, database: str, relation: str, partition_column: str, offset_column: str
+    ) -> bool: ...
+    def load_warehouse_health(
+        self,
+        *,
+        database: str,
+        managed_source_names: tuple[str, ...] = (),
+        include_dead_letters: bool = False,
+    ) -> AdapterWarehouseHealth: ...
+    def metadata_columns(self, *, database: str, table: str) -> frozenset[str]: ...
+    def inspect_managed_table_state(self, database: str) -> InspectedManagedTableState: ...
+    def query(self, statement: str) -> AdapterQueryResult: ...
+    def execute_workflow_query(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterQueryResult: ...
+    def _query(self, *, statement: str, query_id: str | None) -> AdapterQueryResult: ...
+    def execute_workflow_sql(self, statement: str) -> AdapterMutationResult: ...
+    def execute_workflow_mutation(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterMutationResult: ...
+    def _execute_workflow_sql(
+        self, *, statement: str, query_id: str | None
+    ) -> AdapterMutationResult: ...
+    def load_statement_progress(self, *, query_id: str) -> AdapterStatementProgress | None: ...
+    def cancel_workflow_query(self, *, query_id: str) -> AdapterQueryCancellation: ...
+    def load_replay_offset_frontiers(
+        self, *, query_id: str, request: AdapterReplayOffsetProgressRequest
+    ) -> tuple[AdapterReplayOffsetFrontier, ...]: ...
+    def capture_warehouse_timestamp(self) -> str: ...
+    def acquire_target_mutation_lock(
+        self, *, database: str, owner_id: str
+    ) -> AdapterTargetMutationLock: ...
+    def release_target_mutation_lock(self, lock: AdapterTargetMutationLock) -> None: ...
+    def render_ensure_database(self, database: str) -> str: ...
+    def database_exists(self, database: str) -> bool: ...
+    def render_resource(
+        self,
+        *,
+        resource: AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView,
+        database: str,
+        if_not_exists: bool = False,
+    ) -> str: ...
+    def rename_streambuild_metadata(self, database: str) -> None: ...
+    def render_migrate_metadata_state(self, database: str) -> tuple[str, ...]: ...
+    def render_persist_metadata_state(
+        self, *, database: str, state: AdapterMetadataState
+    ) -> tuple[str, ...]: ...
+    def render_terminal_observations(
+        self,
+        *,
+        database: str,
+        invocation: AdapterInvocationRecord,
+        node_results: tuple[AdapterNodeResultRecord, ...],
+    ) -> tuple[str, ...]: ...
+    def render_latest_node_status_query(
+        self,
+        *,
+        database: str,
+        project_identity: str,
+        target_identity: str,
+        nodes: tuple[AdapterCurrentQualityNode, ...],
+    ) -> str: ...
+    def validate_metadata_state(self, database: str) -> None: ...
+    def render_run_events(
+        self,
+        *,
+        database: str,
+        events: tuple[AdapterRunEventRecord, ...],
+        include_migration: bool = False,
+    ) -> tuple[str, ...]: ...
+    def render_run_statements(
+        self,
+        *,
+        database: str,
+        statements: tuple[AdapterRunStatementRecord, ...],
+        include_migration: bool = False,
+    ) -> tuple[str, ...]: ...
+    def render_sensor_state(
+        self, *, database: str, state: AdapterSensorState, include_migration: bool = False
+    ) -> tuple[str, ...]: ...
+    def render_sensor_retention_cleanup(
+        self, *, database: str, retention_days: int
+    ) -> tuple[str, ...]: ...
+    def load_direct_fingerprints(
+        self, *, database: str, logical_model_identities: tuple[str, ...]
+    ) -> AdapterDirectFingerprintSnapshot: ...
+    def render_direct_fingerprint_observations(
+        self, *, database: str, fingerprints: tuple[AdapterDirectFingerprintRecord, ...]
+    ) -> tuple[str, ...]: ...
+    def load_manifests(
+        self, *, database: str, project_identity: str, target_name: str, target_database: str
+    ) -> AdapterManifestSnapshot: ...
+    def render_manifest_publication(
+        self, *, database: str, manifest: AdapterManifest
+    ) -> tuple[str, ...]: ...
+    def catalog_resource_matches(
+        self,
+        *,
+        resource: AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView,
+        relation: CatalogRelation,
+        database: str,
+    ) -> bool: ...
+    def load_deployment_inventory(self, database: str) -> AdapterDeploymentInventory: ...
+    def render_replay_coverage_query(self, request: AdapterReplayCoverageRequest) -> str: ...
+    def render_replay_from_capture(self, request: AdapterCapturedReplayRequest) -> str: ...
+    def render_replay_from_deployment(
+        self, request: AdapterDeploymentReplayRequest
+    ) -> tuple[str, ...]: ...
+    def compare_readiness(
+        self, request: AdapterReadinessRequest
+    ) -> tuple[AdapterReadinessRootObservation, ...]: ...
+    def render_replace_stable_bindings(
+        self, request: AdapterBindingReplacementRequest
+    ) -> tuple[str, ...]: ...
+    def render_restore_materialized_view(self, definition_sql: str) -> str: ...
+    def render_cleanup_relations(
+        self, request: AdapterRelationCleanupRequest
+    ) -> tuple[str, ...]: ...
+    def close(self) -> None: ...
+
+class ClickHouseAdapterCore:
+    """The built-in ClickHouse adapter."""
+
+    @property
+    def identity(self) -> AdapterIdentity: ...
+    @property
+    def sql_analysis_dialect(self) -> str: ...
+    @property
+    def default_database(self) -> str: ...
+    @property
+    def default_schema(self) -> None: ...
+    def connect(self, config: AdapterConnectionConfig) -> ClickHouseConnection: ...
+    def build_connection_config(
+        self, *, values: Mapping[str, object], database: str | None
+    ) -> AdapterConnectionConfig: ...
+    def render_resource(
+        self,
+        *,
+        resource: AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView,
+        database: str,
+        if_not_exists: bool = False,
+    ) -> str: ...
+    def realize_source(
+        self,
+        *,
+        request: AdapterManagedSourceRealizationRequest | AdapterAdoptedSourceRealizationRequest,
+    ) -> AdapterSourceRealization: ...
+    def model_relation_name(self, *, logical_name: str) -> str: ...
+    def realize_model(
+        self, *, request: AdapterModelRealizationRequest | AdapterViewRealizationRequest
+    ) -> AdapterModelRealization: ...
+    def render_set_difference_comparison(
+        self, *, request: AdapterSetDifferenceComparisonRequest
+    ) -> str: ...
+    def _open_raw_client(self, config: AdapterConnectionConfig) -> RawClickHouseClient: ...
+
+def build_adapter_registry(adapters: tuple[Adapter, ...]) -> dict[str, Adapter]: ...
+def builtin_adapters() -> tuple[Adapter, ...]: ...
+def resolve_adapter(adapter_name: str) -> Adapter: ...
+
 class ControlStore:
     """Synchronous account repository shared by dev server worker threads and the CLI."""
 
@@ -918,6 +1231,12 @@ def build_audit_deployment_candidates(
 def build_publish_deployment_candidates(
     *, client: AdapterConnection, metadata_database: str, default_database: str
 ) -> tuple[AuditDeploymentCandidate, ...]: ...
+def execute_publish(
+    *,
+    request: PublishRequest,
+    client: AdapterConnection,
+    emitter: WorkflowEventEmitter | None = None,
+) -> PublishResult: ...
 def resolve_publish_deployment_id(
     *,
     client: AdapterConnection,
@@ -1134,50 +1453,80 @@ def infer_pipeline_sources(
     inputs_by_transform: dict[str, str],
     sources: set[str],
 ) -> tuple[list[str | None], str | None]: ...
-
-type _RetainedDeployment = tuple[str, str, bool, list[tuple[str | None, bool, str, str, str]]]
-type _RetainedPublication = tuple[str, tuple[int, str], int, list[str], list[tuple[str, str, str]]]
-
-def janitor_binding_activity(
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[_RetainedPublication],
-    active: list[tuple[str, str, str]],
-) -> tuple[set[str], list[tuple[str, str]]]: ...
-def janitor_preview(
-    deployments_argument: list[_RetainedDeployment],
-    publications: list[_RetainedPublication],
-    active: list[tuple[str, str, str]],
-    physical_relations: set[tuple[str, str]],
-    retention: tuple[str, int, int, int],
-) -> list[tuple[int, bool, str]]: ...
-
-type _ReconcileKey = tuple[str | None, str, str]
-type _ReconcileObject = tuple[
-    str,
-    _ReconcileKey,
-    tuple[str, list[str], str | None, list[tuple[str, str, str | None]]] | None,
-    tuple[str, str] | None,
-]
-
-def classify_reconcile_targets(
-    desired: list[_ReconcileObject],
-    actual: list[_ReconcileObject],
-    selected: list[_ReconcileKey],
-) -> list[tuple[_ReconcileKey, str, tuple[int, int | None] | None, list[str]]]: ...
-def parse_deployment_diff(comparison: str, identifiers: list[str]) -> tuple[str, str]: ...
-def deployment_diff_relations(
-    from_: str,
-    to: str,
-    deployments_argument: list[_RetainedDeployment],
-    active: list[tuple[str, str, str]],
+def execute_janitor(
+    *, request: JanitorRequest, client: AdapterConnection
+) -> JanitorPreviewResult | JanitorApplyResult: ...
+def execute_recovery_statements(
+    *,
+    statements: tuple[WarehouseStatement, ...],
+    connection: AdapterConnection,
+    emitter: WorkflowEventEmitter | None,
+    cause: BaseException,
+    start_sequence: int,
+    completed_step_ids: frozenset[str] | None,
+    retry_command: str,
+) -> tuple[WarehouseStatement, ...]: ...
+def execute_sql_audits(
+    *,
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+    resolver: Mapping[str, str],
+    client: AdapterConnection,
+    dialect: str,
+) -> SqlAuditRunResult: ...
+def load_model_anchors(
+    *,
+    client: AdapterConnection,
+    metadata_database: str,
+    target_database: str,
+    model_names: tuple[str, ...],
+    virtual_environments: bool,
+) -> dict[str, str]: ...
+def load_materialized_model_names(
+    *, client: AdapterConnection, database: str, relation_name_by_model: Mapping[str, str]
+) -> frozenset[str]: ...
+def deferred_audit_result(*, audit: LoadedSqlAudit, state: AuditWarmupState) -> SqlAuditResult: ...
+def execute_sql_tests(
+    *, test_cases: tuple[SqlTestCase, ...], client: AdapterConnection
+) -> tuple[SqlTestExecutionResult, ...]: ...
+def execute_doctor(*, request: DoctorRequest, client: AdapterConnection) -> DoctorResult: ...
+def execute_repair_active_view(
+    *, request: RepairActiveViewRequest, client: AdapterConnection
+) -> RepairActiveViewResult: ...
+def execute_reconcile(
+    *,
+    client: AdapterConnection,
+    target_database: str,
+    metadata_database: str,
+    desired_state: DesiredState,
+    actual_state: ActualState,
+    selected_model_keys: frozenset[ObjectKey],
+    apply: bool = False,
+) -> ReconcilePreview | ReconcileResult: ...
+def execute_direct_reconcile(
+    *,
+    client: AdapterConnection,
+    target_database: str,
+    metadata_database: str,
+    desired_state: DesiredState,
+    catalog: CatalogSnapshot,
+    models: tuple[CompiledModel, ...],
+    selected_model_keys: frozenset[ObjectKey],
+    tool_version: str,
+    apply: bool = False,
+) -> ReconcilePreview | ReconcileResult: ...
+def execute_deployment_diff(
+    *, request: DeploymentDiffRequest, client: AdapterConnection
+) -> DeploymentDiffResult: ...
+def load_deployments(
+    *, client: AdapterConnection, metadata_database: str, default_database: str
+) -> DeploymentInventory: ...
+def load_deployment(
+    *,
+    deployment_id: str,
+    client: AdapterConnection,
+    metadata_database: str,
     default_database: str,
-    /,
-) -> tuple[list[tuple[str, str, str | None, str | None]], list[str]]: ...
-def deployment_diff_count_sql(database: str, relation: str) -> str: ...
-
-type _DiffSide = tuple[bool, tuple[list[tuple[str, str, str | None]], int | None] | None]
-
-def deployment_diff_status(from_: _DiffSide, to: _DiffSide, /) -> str: ...
+) -> DeploymentSummary: ...
 def direct_fingerprint_record(
     identity: tuple[
         str,
@@ -1373,26 +1722,6 @@ class DirectModelFingerprint:
     def drift_reasons(
         *, model: CompiledModel, baseline: AdapterDirectFingerprintRecord | None
     ) -> tuple[str, ...]: ...
-
-def deployment_inventory_summaries(
-    records: list[tuple[str, str, str, list[str], list[tuple[str, str]]]],
-    physical_candidate_names: list[str],
-    active_bindings: list[tuple[str, str]],
-    publications: list[tuple[str, str]],
-    existing_names: list[str],
-) -> list[
-    tuple[
-        str,
-        str,
-        str | None,
-        str | None,
-        list[str],
-        list[str],
-        list[str],
-        list[str],
-        str | None,
-    ]
-]: ...
 
 class DesiredGraph:
     def __init__(self, desired_state: DesiredState) -> None: ...

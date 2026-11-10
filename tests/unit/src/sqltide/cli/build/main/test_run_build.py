@@ -313,7 +313,7 @@ def test_given_mixed_pipeline_modes_when_building_then_virtual_runs_before_direc
         (test_case.expected_virtual_reset_event, test_case.expected_direct_reset_event)
     )
     monkeypatch.setattr(
-        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
+        "sqltide._native.reset_fresh_landing_offsets",
         lambda **_kwargs: connection.operation_events.append(next(reset_events)) or (),
     )
 
@@ -565,7 +565,7 @@ def test_given_changed_scope_within_pipeline_limit_when_running_then_build_proce
         ),
     )
     monkeypatch.setattr(
-        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
+        "sqltide._native.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
 
@@ -641,7 +641,7 @@ def test_given_mixed_pipeline_modes_when_emitting_events_then_each_phase_has_exa
 ) -> None:
     write_mixed_scope_project(project_root=tmp_path)
     monkeypatch.setattr(
-        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
+        "sqltide._native.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
     monkeypatch.setenv(RUN_INVOCATION_ID_ENV_VAR, test_case.parent_invocation_id)
@@ -700,7 +700,7 @@ def test_given_mixed_pipeline_modes_when_building_json_then_it_emits_one_documen
     write_mixed_scope_project(project_root=tmp_path)
     connection: RecordingAdapterConnection = build_mixed_scope_project_connection()
     monkeypatch.setattr(
-        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
+        "sqltide._native.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
 

@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import execute_repair_active_view
 from sqltide.adapter.exceptions import AdapterCapabilityError
-from sqltide.executor.repair.main.execute_repair_active_view import execute_repair_active_view
 from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.repair.main._test_types import (

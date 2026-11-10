@@ -20,11 +20,10 @@ const CLI_STYLE: &str = "sqltide._native";
 const CLI_EXCEPTIONS: &str = "sqltide.cli.entry.exceptions";
 const OBSERVABILITY_MODELS: &str = "sqltide.executor.observability.models";
 const OBSERVABILITY_TYPES: &str = "sqltide.executor.observability.types";
-const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
-const NODE_RESULT_RECORD: &str = "sqltide.executor.observability.main.build_node_result_record";
-const TERMINAL_OBSERVATIONS: &str =
-    "sqltide.executor.observability.main.persist_terminal_observations";
-const EXECUTE_SQL_TESTS: &str = "sqltide.executor.testing.main.execute_sql_tests";
+const START_INVOCATION: &str = "sqltide._native";
+const NODE_RESULT_RECORD: &str = "sqltide._native";
+const TERMINAL_OBSERVATIONS: &str = "sqltide._native";
+const EXECUTE_SQL_TESTS: &str = "sqltide._native";
 const UPSTREAM_SELECTOR_PREFIX: &str = "+";
 const DOWNSTREAM_SELECTOR_SUFFIX: &str = "+";
 const SELECTOR_NAMESPACE_SEPARATOR: &str = ":";

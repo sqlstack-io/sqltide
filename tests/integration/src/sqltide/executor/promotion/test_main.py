@@ -3,12 +3,12 @@ from collections.abc import Sequence
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_publish
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.executor.backfill.models import BackfillExecutionResult
-from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishRequest, PublishResult
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     render_create_kafka_table_ddl,

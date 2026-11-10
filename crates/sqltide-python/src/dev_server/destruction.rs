@@ -525,7 +525,7 @@ fn recovery_request<'py>(
     }
     let expected_project = invoke(
         py,
-        "sqltide.executor.observability.main.logical_project_identity",
+        "sqltide._native",
         "logical_project_identity",
         py_kwargs!(py; project_dir = call.service(|services| &services.project_dir))?,
     )?;

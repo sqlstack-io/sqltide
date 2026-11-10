@@ -958,11 +958,11 @@ def test_given_unmaterialized_relation_when_reading_quality_then_missing_relatio
 
     with (
         patch(
-            "sqltide.executor.auditing.main._load_model_anchors.load_model_anchors",
+            "sqltide._native.load_model_anchors",
             return_value={},
         ),
         patch(
-            "sqltide.executor.auditing.main._load_materialized_model_names.load_materialized_model_names",
+            "sqltide._native.load_materialized_model_names",
             return_value=frozenset(),
         ),
     ):

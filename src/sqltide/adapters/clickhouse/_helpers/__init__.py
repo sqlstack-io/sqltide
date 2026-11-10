@@ -1,1 +1,0 @@
-"""Internal ClickHouse adapter helpers."""

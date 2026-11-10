@@ -116,7 +116,7 @@ fn load_model_anchors<'py>(
     let py: Python<'py> = analysis.py();
     call(
         py,
-        "sqltide.executor.auditing.main._load_model_anchors",
+        "sqltide._native",
         "load_model_anchors",
         py_kwargs!(py;
             client = connection,
@@ -136,29 +136,19 @@ fn load_materialized_model_names<'py>(
     let py: Python<'py> = connection.py();
     call(
         py,
-        "sqltide.executor.auditing.main._load_materialized_model_names",
+        "sqltide._native",
         "load_materialized_model_names",
         py_kwargs!(py; client = connection, database = database, relation_name_by_model = resolver)?,
     )
 }
 
 fn start_invocation(py: Python<'_>) -> PyResult<Any<'_>> {
-    attr(
-        py,
-        "sqltide.executor.observability.main.start_invocation",
-        "start_invocation",
-    )?
-    .call0()
+    attr(py, "sqltide._native", "start_invocation")?.call0()
 }
 
 fn node_result_record<'py>(fields: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
     let py: Python<'py> = fields.py();
-    call(
-        py,
-        "sqltide.executor.observability.main.build_node_result_record",
-        "build_node_result_record",
-        fields,
-    )
+    call(py, "sqltide._native", "build_node_result_record", fields)
 }
 
 /// The UI status word of one manual audit result.
@@ -281,7 +271,7 @@ pub(crate) fn run_audit_batch<'py>(
     } else {
         call(
             py,
-            "sqltide.executor.auditing.main.execute_sql_audits",
+            "sqltide._native",
             "execute_sql_audits",
             py_kwargs!(py;
                 loaded_audits = &eligible_tuple,
@@ -307,7 +297,7 @@ pub(crate) fn run_audit_batch<'py>(
         } else {
             call(
                 py,
-                "sqltide.executor.auditing.main._deferred_audit_result",
+                "sqltide._native",
                 "deferred_audit_result",
                 py_kwargs!(py; audit = audit, state = warmup_state.get_item(&name)?)?,
             )?
@@ -493,7 +483,7 @@ pub(crate) fn run_one_test<'py>(
     let started: Any<'py> = start_invocation(py)?;
     let results: Any<'py> = call(
         py,
-        "sqltide.executor.testing.main.execute_sql_tests",
+        "sqltide._native",
         "execute_sql_tests",
         py_kwargs!(py; test_cases = PyTuple::new(py, [&test_case])?, client = connection)?,
     )?;

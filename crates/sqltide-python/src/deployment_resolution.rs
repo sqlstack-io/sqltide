@@ -308,7 +308,7 @@ fn resolve_candidate<'py>(
 /// The deployment ID to publish, requiring an explicit choice when ambiguous.
 #[pyfunction]
 #[pyo3(signature = (*, client, metadata_database, default_database, deployment_id))]
-fn resolve_publish_deployment_id<'py>(
+pub(crate) fn resolve_publish_deployment_id<'py>(
     py: Python<'py>,
     client: &Value<'py>,
     metadata_database: &Value<'py>,
@@ -843,7 +843,7 @@ fn native_mappings(mappings: &Value<'_>) -> PyResult<Vec<MappingArgument>> {
 /// deployment.
 #[pyfunction]
 #[pyo3(signature = (*, client, metadata_database, default_database, deployment_id, inspected_state = None))]
-fn build_publish_binding_request<'py>(
+pub(crate) fn build_publish_binding_request<'py>(
     py: Python<'py>,
     client: &Value<'py>,
     metadata_database: &Value<'py>,

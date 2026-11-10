@@ -6,10 +6,8 @@ from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 from kafka.consumer.fetcher import ConsumerRecord
 from kafka.structs import OffsetAndMetadata
 
+from sqltide._native import reset_fresh_landing_offsets
 from sqltide.adapter.models import AdapterColumn, AdapterManagedSource
-from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
-    reset_fresh_landing_offsets,
-)
 from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
 from sqltide.executor.population.models import (
     PopulationManagedSource,

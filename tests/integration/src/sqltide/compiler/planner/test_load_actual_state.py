@@ -3,13 +3,12 @@ from typing import cast
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide._native import load_actual_state
+from sqltide._native import execute_publish, load_actual_state
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import CompiledPipeline, DesiredState
 from sqltide.compiler.planner.models import ActualMaterializedView, ActualState
-from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishRequest
 from sqltide.executor.reconcile.constants import RECONCILE_DEPLOYMENT_ID_PREFIX
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (

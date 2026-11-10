@@ -1,10 +1,10 @@
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_deployment_diff
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.executor.deployment.main.execute_deployment_diff import execute_deployment_diff
 from sqltide.executor.deployment.models import (
     DeploymentDiffRelation,
     DeploymentDiffRequest,

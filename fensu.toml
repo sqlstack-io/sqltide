@@ -96,6 +96,51 @@ reason = "Native bindings own the account control store: statements and schema, 
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/executor/deployment/__init__.py"
+reason = "Native bindings own deployment inventory, single-deployment lookup and deployment diff: lifecycle evidence, endpoint resolution, catalog comparison and row counts; this package only declares the request, summary and diff shapes, their status enums and the deployment errors."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/promotion/__init__.py"
+reason = "Native bindings own promotion and rollback: deployment resolution, binding validation, the publish workflow, publication records and previews; this package only declares the publish, preview and rollback shapes, their types and the promotion errors."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/reconcile/__init__.py"
+reason = "Native bindings own reconcile and direct reconcile: target classification, baseline records, the persistence workflow and the mutation lock; this package only declares the preview and result shapes, the reconcile ID prefix and the reconcile error."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/doctor/__init__.py"
+reason = "Native bindings inspect active-view health per managed table; this package only declares the doctor request and result shapes."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/repair/__init__.py"
+reason = "Native bindings rebind a stable view to a chosen deployment table under the target mutation lock; this package only declares the repair request and result shapes."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/testing/__init__.py"
+reason = "Native bindings execute SQL-native tests and decode their bag-comparison rows into per-target results; this package only declares the execution result shapes and the test execution error."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/auditing/__init__.py"
+reason = "Native bindings execute SQL audits, sample their failing rows, load warmup anchors and materialized models, and build deferred results; this package only declares the audit result and warmup shapes, the sample limit and the audit error."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/janitor/exceptions.py"
+reason = "Native bindings own janitor preview and apply: inventory evidence, retention decisions, the mutation lock and the teardown workflow; this package only declares the request and result shapes and the janitor error."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/observability/__init__.py"
+reason = "Native bindings own invocation observability: the run event sink and its heartbeat, invocation and node result records, and their persistence; this package only declares the observation shapes, types and limits."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/authorization/__init__.py"
 reason = "Native bindings evaluate operational authorization and effective capabilities; this package only declares the request, decision and capability shapes and the decision reasons."
 
@@ -196,6 +241,16 @@ reason = "Native bindings own project analysis and its phases; this package only
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/adapter/__init__.py"
+reason = "Native bindings own adapter registration and resolution; this package only declares the neutral adapter and connection contracts, their models, types, constants and errors."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/adapters/clickhouse/__init__.py"
+reason = "Native bindings own the ClickHouse adapter and connection behaviour; this package only binds the native cores to the neutral contracts and declares the ClickHouse driver types and constants."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/compiler/planner/__init__.py"
 reason = "Native bindings own deployment and direct planning, adapter resource requests, replay queries, metadata state, warehouse snapshot loading and fingerprints; this package only declares the planner models, types, constants and errors they build and raise."
 
@@ -203,6 +258,11 @@ reason = "Native bindings own deployment and direct planning, adapter resource r
 rule = "FFR309"
 path = "src/sqltide/compiler/rules/__init__.py"
 reason = "Native bindings own SQL Rule evaluation, ignore resolution, verified fixes and formatting; this package only declares the formatting result model and Rule errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/executor/kafka_admin/__init__.py"
+reason = "Native bindings own fresh-landing selection, admin client configuration, consumer group scoping and reset notices; this package only declares the reset result, the admin client protocols and the kafka-python glue that deletes one group."
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"

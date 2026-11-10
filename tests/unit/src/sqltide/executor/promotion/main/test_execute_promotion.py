@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import execute_publish
 from sqltide.adapter.exceptions import AdapterCapabilityError
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
@@ -11,7 +12,6 @@ from sqltide.adapter.models import (
     InspectedActiveTableBinding,
     InspectedManagedTableState,
 )
-from sqltide.executor.promotion.main.execute_deployment_promotion import execute_publish
 from sqltide.executor.promotion.models import PublishedView, PublishRequest, PublishResult
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.promotion.main._test_types import (
@@ -135,7 +135,7 @@ def test_given_staged_deployment_when_publishing_then_exact_workflow_sql_reaches
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "sqltide.executor.promotion._helpers.metadata.time_ns",
+        "time.time_ns",
         lambda: 1,
     )
     connection: PublishWorkflowAdapterConnection = PublishWorkflowAdapterConnection(

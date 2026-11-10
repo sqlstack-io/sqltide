@@ -8,9 +8,10 @@ from typing import cast
 
 import pytest
 
-from sqltide._native import deserialize_destruction_plan, serialize_destruction_plan
-from sqltide.executor.destruction.classes.relational_destruction_plan_store import (
+from sqltide._native import (
     RelationalDestructionPlanStore,
+    deserialize_destruction_plan,
+    serialize_destruction_plan,
 )
 from sqltide.executor.destruction.exceptions import (
     DestructionPlanCorruptError,

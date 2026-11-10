@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.adapter.models import AdapterInvocationRecord
-from sqltide.executor.observability.main.persist_terminal_observations import (
+from sqltide._native import (
     persist_terminal_observations,
 )
+from sqltide.adapter.models import AdapterInvocationRecord
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.observability.main._test_types import (
     ObservationArtifactTestCase,

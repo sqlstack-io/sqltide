@@ -99,7 +99,7 @@ fn run_doctor(py: Python<'_>, database: Any<'_>, client: Any<'_>) -> PyResult<i6
         )?;
         let result: Any<'_> = run(
             py,
-            "sqltide.executor.doctor.main.execute_doctor",
+            "sqltide._native",
             "execute_doctor",
             &[("request", request), ("client", client)],
         )?;
@@ -154,7 +154,7 @@ fn run_repair_active_view(
         )?;
         let result: Any<'_> = run(
             py,
-            "sqltide.executor.repair.main.execute_repair_active_view",
+            "sqltide._native",
             "execute_repair_active_view",
             &[("request", request), ("client", client)],
         )?;
@@ -291,7 +291,7 @@ fn run_janitor(
     )?;
     let result: Any<'_> = run(
         py,
-        "sqltide.executor.janitor.main.execute_janitor",
+        "sqltide._native",
         "execute_janitor",
         &[("request", request), ("client", client)],
     )?;
@@ -448,7 +448,7 @@ fn run_deployment_list(
 ) -> PyResult<i64> {
     let inventory: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main.load_deployments",
+        "sqltide._native",
         "load_deployments",
         &[
             ("client", client),
@@ -476,7 +476,7 @@ fn run_deployment_show(
 ) -> PyResult<i64> {
     let deployment: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main._load_deployment",
+        "sqltide._native",
         "load_deployment",
         &[
             ("deployment_id", deployment_id),
@@ -645,7 +645,7 @@ fn run_deployment_diff(
     )?;
     let result: Any<'_> = run(
         py,
-        "sqltide.executor.deployment.main.execute_deployment_diff",
+        "sqltide._native",
         "execute_deployment_diff",
         &[("request", request), ("client", client)],
     )?;
@@ -824,7 +824,7 @@ fn run_deployment_rollback(
     )?;
     let result: Any<'_> = run(
         py,
-        "sqltide.executor.promotion.main.execute_deployment_promotion",
+        "sqltide._native",
         "execute_publish",
         &[("request", request), ("client", client)],
     )?;
@@ -1006,10 +1006,7 @@ fn run_reconcile(
             Some(actual_state) => {
                 pairs.push(("actual_state", actual_state.clone()));
                 pairs.push(("selected_model_keys", selected.clone()));
-                (
-                    "sqltide.executor.reconcile.main.execute_reconcile",
-                    "execute_reconcile",
-                )
+                ("sqltide._native", "execute_reconcile")
             }
             None => {
                 pairs.push((
@@ -1028,10 +1025,7 @@ fn run_reconcile(
                     "tool_version",
                     attr(py, "sqltide.cli.build.constants", "SQLTIDE_TOOL_VERSION")?,
                 ));
-                (
-                    "sqltide.executor.reconcile.main.execute_direct_reconcile",
-                    "execute_direct_reconcile",
-                )
+                ("sqltide._native", "execute_direct_reconcile")
             }
         };
         if apply {

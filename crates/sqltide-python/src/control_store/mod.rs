@@ -2,7 +2,7 @@
 //! tokens, auditing and role rules run here; the Python driver glue only opens transactions and
 //! executes bound statements.
 
-mod sql;
+pub(crate) mod sql;
 
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};

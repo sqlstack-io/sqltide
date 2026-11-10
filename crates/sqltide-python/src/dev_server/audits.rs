@@ -61,12 +61,8 @@ pub(super) fn audit_name<'py>(audit: &Any<'py>) -> PyResult<Any<'py>> {
 
 pub(super) fn logical_project_identity<'py>(project_dir: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = project_dir.py();
-    attr(
-        py,
-        "sqltide.executor.observability.main.logical_project_identity",
-        "logical_project_identity",
-    )?
-    .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))
+    attr(py, "sqltide._native", "logical_project_identity")?
+        .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))
 }
 
 /// Whether one effective-configuration section of the compiled target is enabled.
@@ -144,7 +140,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
         }
     }
     let sorted_names: Any<'py> = attr(py, "builtins", "sorted")?.call1((model_names,))?;
-    let anchors: Any<'py> = attr(py, "sqltide.executor.auditing.main._load_model_anchors", "load_model_anchors")?.call(
+    let anchors: Any<'py> = attr(py, "sqltide._native", "load_model_anchors")?.call(
         (),
         Some(&py_kwargs!(py;
             client = connection,
@@ -168,7 +164,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     }
     let materialized: Any<'py> = attr(
         py,
-        "sqltide.executor.auditing.main._load_materialized_model_names",
+        "sqltide._native",
         "load_materialized_model_names",
     )?
     .call((), Some(&py_kwargs!(py; client = connection, database = database, relation_name_by_model = relation_name_by_model)?))?;
@@ -312,12 +308,7 @@ fn node_result<'py>(
         .call1((audit.getattr("quality_identity")?,))?;
     let kwargs = py_kwargs!(py; invocation = invocation, identity = identity, context = scheduled_context(audit, scheduled_for)?)?;
     kwargs.update(fields.as_mapping())?;
-    attr(
-        py,
-        "sqltide.executor.observability.main.build_node_result_record",
-        "build_node_result_record",
-    )?
-    .call((), Some(&kwargs))
+    attr(py, "sqltide._native", "build_node_result_record")?.call((), Some(&kwargs))
 }
 
 pub(super) fn terminal_invocation<'py>(
@@ -327,12 +318,7 @@ pub(super) fn terminal_invocation<'py>(
     let py: Python<'py> = started.py();
     let terminal: Any<'py> =
         attr(py, OBSERVABILITY_MODELS, "TerminalInvocation")?.call((), Some(&terminal))?;
-    attr(
-        py,
-        "sqltide.executor.observability.main.build_invocation_record",
-        "build_invocation_record",
-    )?
-    .call(
+    attr(py, "sqltide._native", "build_invocation_record")?.call(
         (),
         Some(&py_kwargs!(py; started = started, terminal = terminal)?),
     )
@@ -345,7 +331,7 @@ pub(super) fn persist<'py>(
     node_results: &Bound<'py, PyTuple>,
 ) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
-    attr(py, "sqltide.executor.observability.main.persist_terminal_observations", "persist_terminal_observations")?.call(
+    attr(py, "sqltide._native", "persist_terminal_observations")?.call(
         (),
         Some(&py_kwargs!(py; client = connection, database = database, invocation = invocation, node_results = node_results)?),
     )
@@ -391,31 +377,19 @@ pub(crate) fn execute_due_audits<'py>(
     }
     let count: usize = audits.len();
     let scheduled = member(py, OBSERVABILITY_TYPES, "QualityResultTrigger", "SCHEDULED")?;
-    let started: Any<'py> = attr(
-        py,
-        "sqltide.executor.observability.main.start_invocation",
-        "start_invocation",
-    )?
-    .call0()?;
+    let started: Any<'py> = attr(py, "sqltide._native", "start_invocation")?.call0()?;
     let event_sink: Option<Any<'py>> =
         match observation_connection.filter(|connection| !connection.is_none()) {
             None => None,
-            Some(observation) => Some(
-                attr(
-                    py,
-                    "sqltide.executor.observability.classes.run_event_sink",
-                    "RunEventSink",
-                )?
-                .call(
-                    (),
-                    Some(&py_kwargs!(py;
-                        connection = observation,
-                        database = database,
-                        invocation_id = started.get_item(0)?,
-                        project_identity = project_dir.getattr("name")?,
-                    )?),
-                )?,
-            ),
+            Some(observation) => Some(attr(py, "sqltide._native", "RunEventSink")?.call(
+                (),
+                Some(&py_kwargs!(py;
+                    connection = observation,
+                    database = database,
+                    invocation_id = started.get_item(0)?,
+                    project_identity = project_dir.getattr("name")?,
+                )?),
+            )?),
         };
     if let Some(sink) = &event_sink {
         sink.call_method(
@@ -453,7 +427,7 @@ pub(crate) fn execute_due_audits<'py>(
             }
             let audit_result: Any<'py> = attr(
                 py,
-                "sqltide.executor.auditing.main.execute_sql_audits",
+                "sqltide._native",
                 "execute_sql_audits",
             )?
             .call(

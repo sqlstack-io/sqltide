@@ -148,12 +148,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let started: Bound<'py, PyTuple> = start(py)?;
-    let sink: Any<'py> = attr(
-        py,
-        "sqltide.executor.observability.classes.run_event_sink",
-        "RunEventSink",
-    )?
-    .call(
+    let sink: Any<'py> = attr(py, "sqltide._native", "RunEventSink")?.call(
         (),
         Some(&py_kwargs!(py;
             connection = connection,
@@ -186,7 +181,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         )?;
         call(
             py,
-            "sqltide.executor.promotion.main.execute_deployment_promotion",
+            "sqltide._native",
             "execute_publish",
             py_kwargs!(py; request = request, client = connection, emitter = &sink)?,
         )
@@ -286,7 +281,7 @@ pub(crate) fn run_dev_deployment_cleanup<'py>(
     )?;
     let result: Any<'py> = call(
         py,
-        "sqltide.executor.janitor.main.execute_janitor",
+        "sqltide._native",
         "execute_janitor",
         py_kwargs!(py; request = request, client = connection)?,
     )?;
@@ -345,7 +340,7 @@ pub(crate) fn build_deployment_diff_payload<'py>(
     )?;
     let result: Any<'py> = call(
         py,
-        "sqltide.executor.deployment.main.execute_deployment_diff",
+        "sqltide._native",
         "execute_deployment_diff",
         py_kwargs!(py; request = request, client = connection)?,
     )?;

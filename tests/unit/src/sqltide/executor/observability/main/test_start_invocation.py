@@ -1,6 +1,6 @@
 import pytest
 
-from sqltide.executor.observability.main.start_invocation import start_invocation
+from sqltide._native import start_invocation
 from tests.unit.src.sqltide.executor.observability.main._test_types import (
     StartInvocationTestCase,
 )

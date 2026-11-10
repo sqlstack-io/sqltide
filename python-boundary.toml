@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 12240
+remaining_lines = 8111
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -29,6 +29,16 @@ note = "Rule 1: Data-only AdapterError hierarchy the ClickHouse driver connectio
 path = "adapter/types.py"
 rule = 1
 note = "Rule 1: Data-only enums and logic-free protocols the adapter contract and the ClickHouse connection consume."
+
+[[stays]]
+path = "adapters/clickhouse/classes/clickhouse_adapter.py"
+rule = 1
+note = "Rule 1: Binds the native ClickHouse adapter core to the Adapter contract so the built-in adapter keeps its import path, isinstance checks and inherited defaults; no methods."
+
+[[stays]]
+path = "adapters/clickhouse/classes/clickhouse_connection.py"
+rule = 1
+note = "Rule 1: Binds the native ClickHouse connection core to the AdapterConnection contract consumed by the executor runtime; subclasses override its methods; no methods."
 
 [[stays]]
 path = "adapters/clickhouse/types.py"
@@ -84,6 +94,11 @@ note = "Rule 3: Public sqltide.events facade that documented sensors import; re-
 path = "events/types.py"
 rule = 3
 note = "Rule 3: Public AuditTransition and ObservedCommand enums and the SensorEvent alias re-exported by sqltide.events; data only."
+
+[[stays]]
+path = "executor/kafka_admin/_helpers/offset_reset.py"
+rule = 4
+note = "Rule 4: kafka-python-ng glue: builds the admin client, deletes one consumer group and maps the library's NoError and GroupIdNotFoundError sentinels; selection, configuration and notices are native."
 
 [[stays]]
 path = "executor/kafka_admin/models.py"
@@ -185,6 +200,3 @@ path = "sensors/classes/polling_sensor_context.py"
 rule = 3
 note = "Rule 3: PollingSensorContext that user polling sensors receive, re-exported by sqltide.sensors; read-only properties."
 
-[[handled_native_errors]]
-location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"
-note = "Reports AdapterError and AuditExecutionError from the audit queries as a failed audit; a native rendering failure raises ValueError and propagates."

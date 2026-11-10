@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import load_deployments
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterDeploymentRecord,
@@ -11,7 +12,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
     InspectedPhysicalTableCandidate,
 )
-from sqltide.executor.deployment.main.load_deployments import load_deployments
 from sqltide.executor.deployment.models import DeploymentInventory
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.deployment._test_types import (

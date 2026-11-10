@@ -19,11 +19,10 @@ const BUILD_CONSTANTS: &str = "sqltide.cli.build.constants";
 const BUILD_EXCEPTIONS: &str = "sqltide.cli.build.exceptions";
 const OBSERVABILITY_MODELS: &str = "sqltide.executor.observability.models";
 const OBSERVABILITY_CONSTANTS: &str = "sqltide.executor.observability.constants";
-const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
+const START_INVOCATION: &str = "sqltide._native";
 const INITIALIZE_OBSERVABILITY: &str = "sqltide._native";
 const PUBLISH_MANIFEST: &str = "sqltide._native";
-const TERMINAL_OBSERVATIONS: &str =
-    "sqltide.executor.observability.main.persist_terminal_observations";
+const TERMINAL_OBSERVATIONS: &str = "sqltide._native";
 const PUBLISH_PLAN: &str = "sqltide._native";
 const SIGINT_EXIT_CODE: i64 = 130;
 

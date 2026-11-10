@@ -1,5 +1,6 @@
 import pytest
 
+from sqltide._native import execute_deployment_diff
 from sqltide.adapter.models import (
     AdapterDeploymentInventory,
     AdapterDeploymentRecord,
@@ -11,7 +12,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.executor.deployment.exceptions import DeploymentDiffError
-from sqltide.executor.deployment.main.execute_deployment_diff import execute_deployment_diff
 from sqltide.executor.deployment.models import (
     DeploymentDiffColumn,
     DeploymentDiffRelation,

@@ -3,9 +3,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import execute_sql_audits
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.executor.auditing.main.execute_sql_audits import execute_sql_audits
 from sqltide.executor.auditing.models import SqlAuditRunResult
 from tests.unit.src.sqltide.executor.auditing._test_types import ExecuteSqlAuditsTestCase
 from tests.unit.src.sqltide.executor.auditing.helpers import FakeAuditClickHouseClient

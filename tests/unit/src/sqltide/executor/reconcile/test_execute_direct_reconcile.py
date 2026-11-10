@@ -2,11 +2,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import execute_direct_reconcile
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.compile.models import CompiledModel, DesiredState, ObjectKey
-from sqltide.executor.reconcile.main.execute_direct_reconcile import (
-    execute_direct_reconcile,
-)
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
 from tests.unit.src.sqltide.compiler.graph.helpers import build_typed_graph_project
 from tests.unit.src.sqltide.executor.reconcile._test_types import DirectReconcileTestCase

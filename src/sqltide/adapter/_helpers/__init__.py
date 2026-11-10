@@ -1,1 +1,0 @@
-"""Internal adapter discovery helpers."""

@@ -29,11 +29,12 @@ use sqltide_planner::naming::{is_deployment_id, is_deployment_physical_name};
 pub(crate) type MappingArgument = (Option<String>, bool, String, String, String);
 
 /// `(deployment ID, created at, incomplete, mappings)`.
-type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);
+pub(crate) type DeploymentArgument = (String, String, bool, Vec<MappingArgument>);
 
 /// `(deployment ID, (rank microseconds, rank ID), published at microseconds, logical view
 /// names, bindings)`.
-type RetainedPublicationArgument = (String, (i64, String), i64, Vec<String>, Vec<Binding>);
+pub(crate) type RetainedPublicationArgument =
+    (String, (i64, String), i64, Vec<String>, Vec<Binding>);
 
 /// `(deployment ID, (rank microseconds, rank ID) | None, bindings)`.
 type PublicationArgument = (String, Option<(i64, String)>, Vec<Binding>);
@@ -200,8 +201,7 @@ fn retained_publications(arguments: Vec<RetainedPublicationArgument>) -> Vec<Ret
 
 /// The physical names active bindings protect, and the superseded `(database, logical name)`
 /// bindings to remove.
-#[pyfunction]
-fn janitor_binding_activity(
+pub(crate) fn janitor_binding_activity(
     deployments_argument: Vec<DeploymentArgument>,
     publications: Vec<RetainedPublicationArgument>,
     active: Vec<Binding>,
@@ -214,8 +214,7 @@ fn janitor_binding_activity(
 }
 
 /// `(deployment position, deletable, reason)` for every deployment, newest created first.
-#[pyfunction]
-fn janitor_preview(
+pub(crate) fn janitor_preview(
     deployments_argument: Vec<DeploymentArgument>,
     publications: Vec<RetainedPublicationArgument>,
     active: Vec<Binding>,
@@ -344,7 +343,8 @@ type TableArgument = (
 );
 
 /// `(object type, key, table, (transform source, transform target))`.
-type ReconcileObjectArgument = (String, Key, Option<TableArgument>, Option<(String, String)>);
+pub(crate) type ReconcileObjectArgument =
+    (String, Key, Option<TableArgument>, Option<(String, String)>);
 
 /// `(key, name, (table position, transform position) when eligible, rejection reasons)`.
 type ReconcileOutcomeResult = (
@@ -385,7 +385,7 @@ fn reconcile_object(argument: ReconcileObjectArgument) -> Object {
 /// A reconcile verdict per target. A type that cannot be normalized raises
 /// `ValueError(message)`.
 #[pyfunction]
-fn classify_reconcile_targets(
+pub(crate) fn classify_reconcile_targets(
     py: Python<'_>,
     desired: Vec<ReconcileObjectArgument>,
     actual: Vec<ReconcileObjectArgument>,
@@ -411,7 +411,10 @@ fn classify_reconcile_targets(
 /// `(from, to)` endpoints of a `DEPLOYMENT` or `FROM:TO` comparison, after checking the
 /// database identifiers. Raises `ValueError(message)`.
 #[pyfunction]
-fn parse_deployment_diff(comparison: &str, identifiers: Vec<String>) -> PyResult<(String, String)> {
+pub(crate) fn parse_deployment_diff(
+    comparison: &str,
+    identifiers: Vec<String>,
+) -> PyResult<(String, String)> {
     if let Some(error) = identifiers
         .iter()
         .find_map(|identifier| identifier_error(identifier))
@@ -430,7 +433,7 @@ type DiffPairsResult = (
 /// The relations a deployment diff compares, sorted, and the catalogs it reads. Raises
 /// `ValueError(message)` for an endpoint that cannot be resolved.
 #[pyfunction]
-fn deployment_diff_relations(
+pub(crate) fn deployment_diff_relations(
     from: &str,
     to: &str,
     deployments_argument: Vec<DeploymentArgument>,
@@ -464,7 +467,7 @@ fn deployment_diff_relations(
 /// The query counting the rows of `database.relation`. Raises `ValueError(message)` for an
 /// invalid identifier.
 #[pyfunction]
-fn deployment_diff_count_sql(database: &str, relation: &str) -> PyResult<String> {
+pub(crate) fn deployment_diff_count_sql(database: &str, relation: &str) -> PyResult<String> {
     count_sql(database, relation).map_err(PyValueError::new_err)
 }
 
@@ -476,7 +479,7 @@ type DiffSideArgument = (
 
 /// The status of one relation comparison.
 #[pyfunction]
-fn deployment_diff_status(from: DiffSideArgument, to: DiffSideArgument) -> &'static str {
+pub(crate) fn deployment_diff_status(from: DiffSideArgument, to: DiffSideArgument) -> &'static str {
     status(diff_side(&from), diff_side(&to)).as_str()
 }
 
@@ -492,7 +495,8 @@ fn diff_side(argument: &DiffSideArgument) -> Side<'_> {
 
 /// `(deployment ID, created at, status, selected root names, (logical name, physical name)
 /// mappings)`.
-type InventoryRecordArgument = (String, String, String, Vec<String>, Vec<(String, String)>);
+pub(crate) type InventoryRecordArgument =
+    (String, String, String, Vec<String>, Vec<(String, String)>);
 
 /// `(deployment ID, state, created at, persisted status, root names, physical relation names,
 /// missing physical relation names, active binding names, latest published at)`.
@@ -510,7 +514,7 @@ type DeploymentSummaryResult = (
 
 /// Every deployment's lifecycle summary, newest deployment ID first.
 #[pyfunction]
-fn deployment_inventory_summaries(
+pub(crate) fn deployment_inventory_summaries(
     records: Vec<InventoryRecordArgument>,
     physical_candidate_names: Vec<String>,
     active_bindings: Vec<(String, String)>,
@@ -554,14 +558,7 @@ fn deployment_inventory_summaries(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(janitor_binding_activity, module)?)?;
-    module.add_function(wrap_pyfunction!(janitor_preview, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
-    module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_deployment_diff, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_count_sql, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_diff_status, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_inventory_summaries, module)?)
+    Ok(())
 }

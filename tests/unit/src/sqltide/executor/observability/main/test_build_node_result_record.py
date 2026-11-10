@@ -2,12 +2,12 @@ import json
 
 import pytest
 
+from sqltide._native import (
+    build_node_result_record,
+)
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
 from sqltide.compiler.quality.models import QualityNodeIdentity
 from sqltide.executor.observability.constants import MAX_OBSERVATION_ERROR_LENGTH
-from sqltide.executor.observability.main.build_node_result_record import (
-    build_node_result_record,
-)
 from sqltide.executor.observability.models import QualityResultContext
 from sqltide.executor.observability.types import QualityResultTrigger
 from tests.unit.src.sqltide.executor.observability.main._test_types import (
