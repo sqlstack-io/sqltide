@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqltide._native as _native
 from sqltide._native import (
     DirectModelFingerprint,
+    build_protection_requirements,
     collect_reachable_keys,
     drifted_managed_sources,
     load_direct_warehouse_snapshot,
@@ -15,7 +16,6 @@ from sqltide._native import (
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
 from sqltide.adapter.types import AdapterOptionalStateStatus
-from sqltide.cli.build._helpers.confirmation import build_protection_requirements
 from sqltide.cli.build.models import DirectBuildPreviewContext, WorkflowPreparationOptions
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database

@@ -7,8 +7,8 @@ import json
 import sys
 from contextlib import redirect_stdout
 
+from sqltide._native import confirm_build
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.cli.build._helpers.confirmation import confirm_build
 from sqltide.cli.build._helpers.direct_command import execute_direct_build_command
 from sqltide.cli.build._helpers.virtual_command import execute_virtual_build_command
 from sqltide.cli.build.models import BuildCommandOptions, MixedWorkflowPreparation

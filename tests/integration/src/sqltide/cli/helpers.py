@@ -20,6 +20,7 @@ from sqltide._native import (
     execute_direct_build_workflow,
     load_clickhouse_catalog,
     persist_direct_fingerprints,
+    render_direct_execution_json,
     render_direct_plan_json,
     row_error_policy_view_steps,
 )
@@ -57,7 +58,6 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.build._helpers.execution_artifacts import render_direct_execution_json
 from sqltide.cli.build._helpers.virtual_preview import build_virtual_build_preview
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
 from sqltide.cli.build.main._run_build import run_build

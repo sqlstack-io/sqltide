@@ -7,12 +7,12 @@ import sqltide._native as _native
 from sqltide._native import (
     assemble_direct_build_workflow,
     assemble_virtual_build_workflow,
+    build_protection_requirements,
     normalize_cli_start_time,
+    prepare_direct_build_audits,
     resolve_selected_logical_model_keys,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.cli.build._helpers.audits import prepare_direct_build_audits
-from sqltide.cli.build._helpers.confirmation import build_protection_requirements
 from sqltide.cli.build._helpers.preview import build_direct_build_preview
 from sqltide.cli.build._helpers.virtual_preview import build_virtual_build_preview
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
