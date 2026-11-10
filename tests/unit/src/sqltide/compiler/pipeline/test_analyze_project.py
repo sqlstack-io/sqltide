@@ -913,7 +913,7 @@ def test_given_complete_project_when_expanding_macros_then_all_inputs_share_one_
 
     with (
         patch(
-            "sqltide.compiler.discovery._helpers.model_sql.expand_macro_calls",
+            "sqltide.compiler.macros.main._expand_macro_calls.expand_macro_calls",
             wraps=expand_macro_calls,
         ) as model_expansion,
         patch(

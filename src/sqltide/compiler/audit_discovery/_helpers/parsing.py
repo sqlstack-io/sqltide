@@ -11,7 +11,6 @@ from sqltide.compiler.audit_discovery.models import (
     LoadedGenericSqlAuditDefinition,
     LoadedSqlAudit,
 )
-from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.discovery.exceptions import ModelHeaderSyntaxError
 from sqltide.compiler.discovery.main._parse_sql_header import parse_sql_header
@@ -168,7 +167,9 @@ def _parse_concrete_audit_block(
     if not query:
         raise SqlAuditParseError(f"SQL audit '{file_path}' must define a query after AUDIT(...)")
     _validate_single_query(file_path=file_path, sql=query)
-    parsed_refs: tuple[ParsedRef, ...] = tuple(extract_refs(sql=query, source_path=file_path))
+    parsed_refs: tuple[ParsedRef, ...] = tuple(
+        _native.extract_refs(sql=query, source_path=file_path)
+    )
     if not parsed_refs:
         raise SqlAuditParseError(
             f"SQL audit '{file_path}' must reference at least one model with __ref(...)"

@@ -21,6 +21,7 @@ from sqltide.compiler.compile.models import (
     ExternalSourceReplayConfig,
     LogicalResourceKey,
     ObjectKey,
+    ParsedRef,
 )
 from sqltide.compiler.discovery.models import (
     AuditDefaults,
@@ -39,9 +40,12 @@ from sqltide.compiler.discovery.models import (
     PostgresRefreshSourceStep,
     ReplayOnChangePolicy,
     SourceFreshnessPolicy,
+    TransformStep,
+    ViewStep,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback
 from sqltide.compiler.graph.models import ProjectGraph
+from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.planner.models import (
     ActualState,
@@ -582,10 +586,6 @@ DEFAULT_POSTGRES_PORT: int
 DEFAULT_KAFKA_FORMAT: str
 DEFAULT_SQL_MODEL_ENGINE: str
 
-def check_model_header_keys(header: Mapping[str, object], file_path: str) -> None: ...
-def parse_model_spec(
-    header: Mapping[str, object], file_path: str, check_query: Callable[..., str | None]
-) -> tuple[str, dict[str, Any]]: ...
 def resolve_effective_project_configuration(
     *,
     loaded: LoadedProjectConfiguration,
@@ -927,6 +927,26 @@ def root_deployment_state(
     root_name: str,
 ) -> tuple[str, str | None]: ...
 def deployment_candidate_logical_name(physical_name: str) -> str | None: ...
+def extract_refs(
+    *, sql: str, source_path: Path | None = None, source_line: int = 1, source_column: int = 1
+) -> list[ParsedRef]: ...
+def infer_transform_source(
+    *, query: str, file_path: Path, source_line: int, source_column: int
+) -> str: ...
+def parse_model_sql(
+    *,
+    contents: str,
+    file_path: Path,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+) -> tuple[dict[str, Any], str]: ...
+def load_transform_from_sql_file(
+    *,
+    file_path: Path,
+    contents: str | None = None,
+    macro_registry: MacroRegistry | None = None,
+    macro_context: MacroContext | None = None,
+) -> TransformStep | ViewStep: ...
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
