@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from sqltide.cli.build._helpers.rendering import (
+from sqltide._native import (
     render_direct_build_json,
     render_direct_build_text,
 )

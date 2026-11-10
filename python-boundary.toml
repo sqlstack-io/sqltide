@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 39750
+remaining_lines = 39278
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -181,6 +181,14 @@ note = "Plan request handling: a dependency block re-plans with the required pip
 [[handled_native_errors]]
 location = "dev_server/_helpers/server/destruction_routes.py::run"
 note = "Background execution worker: the request already returned, so a destruction failure is logged with its traceback and the plan's dispatch reservation is released; the recorded invocation carries the outcome."
+
+[[handled_native_errors]]
+location = "cli/build/_helpers/direct_command.py::execute_direct_build_command"
+note = "Interrupted build: after the cancellation is recorded, printing the cancellation message is best effort because the terminal stream may already be closed; the command still exits 130."
+
+[[handled_native_errors]]
+location = "cli/build/_helpers/virtual_command.py::_cancel_virtual_build"
+note = "Interrupted build: after the cancellation is recorded, printing the cancellation message and the interrupt's notes is best effort because the terminal stream may already be closed; the command still exits 130."
 
 [[handled_native_errors]]
 location = "cli/build/_helpers/virtual_command.py::execute_virtual_build_command"

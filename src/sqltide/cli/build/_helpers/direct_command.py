@@ -4,17 +4,17 @@ import json
 import sys
 
 import sqltide._native as _native
-from sqltide._native import resolve_audit_warmup_states
-from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.exceptions import AdapterError
-from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
-from sqltide.cli.build._helpers.audits import select_direct_build_audits
-from sqltide.cli.build._helpers.execution import execute_confirmed_direct_build
-from sqltide.cli.build._helpers.rendering import (
+from sqltide._native import (
     render_direct_build_json,
     render_direct_build_text,
     render_interrupted_build_message,
+    resolve_audit_warmup_states,
+    select_direct_build_audits,
 )
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.exceptions import AdapterError
+from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
+from sqltide.cli.build._helpers.execution import execute_confirmed_direct_build
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     DirectBuildPreviewContext,

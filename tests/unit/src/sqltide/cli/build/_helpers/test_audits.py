@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.build._helpers.audits import select_direct_build_audits
+from sqltide._native import select_direct_build_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from tests.unit.src.sqltide.cli.build._helpers._test_types import (
     DirectBuildAuditSelectionTestCase,
