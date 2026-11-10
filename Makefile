@@ -1,4 +1,4 @@
-.PHONY: check-python-boundary dist rust-check rust-test test-browser test-e2e test-goldens test-integration ui-verify
+.PHONY: check-python-boundary check-shape-surface dist rust-check rust-test test-browser test-e2e test-goldens test-integration ui-verify
 
 NPM_VERSION := 11.6.2
 
@@ -111,7 +111,7 @@ ui-dev:
 	cd ui && npm run dev
 
 
-check-ci: check-python-boundary
+check-ci: check-python-boundary check-shape-surface
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run ty check src tests scripts
@@ -121,6 +121,10 @@ check-ci: check-python-boundary
 
 check-python-boundary:
 	uv run python -m scripts.check_python_boundary
+
+
+check-shape-surface:
+	uv run python -m scripts.check_shape_surface
 
 
 verify-ci:
