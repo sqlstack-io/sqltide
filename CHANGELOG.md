@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.14](https://github.com/sqlstack-io/sqltide/compare/v0.65.13...v0.65.14) (2026-11-10)
+
+
+### Refactoring
+
+* run the CLI, sensors, authorization and account control store natively ([#367](https://github.com/sqlstack-io/sqltide/issues/367)) ([d609cc4](https://github.com/sqlstack-io/sqltide/commit/d609cc46a64e3b6d326d951787dacf2ca43b4b83))
+
 ## [0.65.13](https://github.com/sqlstack-io/sqltide/compare/v0.65.12...v0.65.13) (2026-11-10)
 
 
