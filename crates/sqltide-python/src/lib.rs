@@ -37,6 +37,7 @@ mod model_analysis;
 mod model_sql;
 mod pipeline_load;
 mod plan_render;
+mod plan_warnings;
 mod planner;
 mod planner_support;
 mod polyglot;
@@ -145,6 +146,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     realization::register(module)?;
     population_planning::register(module)?;
     row_error_policy::register(module)?;
+    plan_warnings::register(module)?;
     rules::register(module)?;
     selection::register(module)?;
     sources::register(module)?;

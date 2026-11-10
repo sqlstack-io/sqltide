@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqltide._native as _native
 from sqltide._native import (
+    add_empty_replay_source_warnings,
     build_backfill_deployment_identity,
     build_root_backfill_reports,
     load_planning_warehouse_snapshot,
@@ -18,7 +19,6 @@ from sqltide.cli.build.models import (
 )
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
-from sqltide.cli.plan.main._warnings import add_empty_replay_source_warnings
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import DesiredState, LogicalResourceKey
 from sqltide.compiler.compile.types import LogicalResourceType
