@@ -42,3 +42,62 @@ fn chain_contains(exception: &Bound<'_, PyAny>, wanted: &Bound<'_, PyAny>) -> bo
     }
     true
 }
+
+/// `raise value from cause` inside an `except` block handling `handled`, as CPython chains it:
+/// `cause` becomes the explicit cause, `handled` the context, and a link back to `value` in the
+/// context chain of `handled` is cut so no cycle forms. Re-raising `handled` itself keeps its
+/// context.
+pub(crate) fn raise_from(
+    value: &Bound<'_, PyAny>,
+    handled: &Bound<'_, PyAny>,
+    cause: Option<&Bound<'_, PyAny>>,
+) -> PyResult<PyErr> {
+    match cause {
+        Some(cause) => value.setattr("__cause__", cause)?,
+        None => value.setattr("__cause__", value.py().None())?,
+    }
+    if !value.is(handled) {
+        let mut current: Bound<'_, PyAny> = handled.clone();
+        for _ in 0..256 {
+            let context: Bound<'_, PyAny> = current.getattr("__context__")?;
+            if context.is_none() {
+                break;
+            }
+            if context.is(value) {
+                current.setattr("__context__", value.py().None())?;
+                break;
+            }
+            current = context;
+        }
+        value.setattr("__context__", handled)?;
+    }
+    Ok(PyErr::from_value(value.clone()))
+}
+
+/// `with manager: body()`. `__exit__` receives the body's exception, and an exception raised by
+/// `__exit__` itself is chained to it. The managers used here never suppress an exception, so
+/// the body's exception always propagates.
+pub(crate) fn within<'py, T>(
+    manager: &Bound<'py, PyAny>,
+    body: impl FnOnce() -> PyResult<T>,
+) -> PyResult<T> {
+    let py: Python<'py> = manager.py();
+    let kind: Bound<'py, pyo3::types::PyType> = manager.get_type();
+    let enter: Bound<'py, PyAny> = kind.getattr("__enter__")?;
+    let exit: Bound<'py, PyAny> = kind.getattr("__exit__")?;
+    enter.call1((manager,))?;
+    match body() {
+        Ok(value) => {
+            exit.call1((manager, py.None(), py.None(), py.None()))?;
+            Ok(value)
+        }
+        Err(error) => {
+            let raised: Bound<'py, PyAny> = error.value(py).clone().into_any();
+            let traceback: Bound<'py, PyAny> = raised.getattr("__traceback__")?;
+            if let Err(exit_error) = exit.call1((manager, raised.get_type(), &raised, traceback)) {
+                return Err(while_handling(py, exit_error, &error));
+            }
+            Err(error)
+        }
+    }
+}

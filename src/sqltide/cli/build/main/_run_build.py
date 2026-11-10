@@ -6,16 +6,16 @@ from time import monotonic_ns
 
 from sqltide._native import (
     analyze_project,
+    execute_direct_build_command,
+    execute_mixed_build_command,
+    execute_virtual_build_command,
     prepare_validated_build,
     render_interrupted_build_message,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterInvocationRecord
-from sqltide.cli.build._helpers.direct_command import execute_direct_build_command
-from sqltide.cli.build._helpers.virtual_command import execute_virtual_build_command
 from sqltide.cli.build.exceptions import BuildPipelineLimitError
-from sqltide.cli.build.main._execute_mixed_build import execute_mixed_build_command
 from sqltide.cli.build.main._initialize_build_metadata import (
     initialize_build_metadata,
 )

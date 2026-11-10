@@ -10,6 +10,7 @@ mod artifacts;
 mod audit_discovery;
 mod backfill;
 mod build_cli;
+mod build_command;
 mod build_preview;
 mod build_workflow;
 mod clickhouse;
@@ -115,6 +116,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     audit_discovery::register(module)?;
     backfill::register(module)?;
     build_cli::register(module)?;
+    build_command::register(module)?;
     build_preview::register(module)?;
     build_workflow::register(module)?;
     clickhouse::register(module)?;

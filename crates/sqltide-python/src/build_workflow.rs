@@ -680,7 +680,7 @@ fn scope_keys<'py>(preparation: &Value<'py>) -> PyResult<(Vec<Value<'py>>, Vec<V
     Ok((writes, reads))
 }
 
-fn identity(key: &Value<'_>) -> PyResult<String> {
+pub(crate) fn identity(key: &Value<'_>) -> PyResult<String> {
     Ok(format!(
         "{}:{}",
         formatted(&key.getattr("resource_type")?)?,

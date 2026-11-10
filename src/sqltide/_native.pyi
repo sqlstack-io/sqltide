@@ -174,6 +174,7 @@ from sqltide.executor.direct.models import (
     DirectRuntimeExecution,
     DriftedManagedSource,
 )
+from sqltide.executor.observability.models import RunStartupTimings
 from sqltide.executor.population.models import (
     PopulationPlan,
     PopulationRealization,
@@ -1357,6 +1358,37 @@ def validate_expected_build_scope(
     preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
     analysis: CompileAnalysis,
 ) -> None: ...
+def execute_direct_build_command(
+    *,
+    preparation: DirectWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    confirmation_required: bool = True,
+    startup_timings: RunStartupTimings | None = None,
+    _acquire_target_mutation_lock: bool = True,
+) -> int: ...
+def execute_virtual_build_command(
+    *,
+    preparation: VirtualWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    confirmation_required: bool = True,
+    startup_timings: RunStartupTimings | None = None,
+    _acquire_target_mutation_lock: bool = True,
+) -> int: ...
+def execute_mixed_build_command(
+    *,
+    preparation: MixedWorkflowPreparation,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    started: tuple[str, str, int],
+    startup_timings: RunStartupTimings,
+) -> int: ...
 def add_empty_replay_source_warnings(
     *,
     client: AdapterConnection,

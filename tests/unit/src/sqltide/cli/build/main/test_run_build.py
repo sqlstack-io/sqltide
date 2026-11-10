@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
@@ -308,17 +309,12 @@ def test_given_mixed_pipeline_modes_when_building_then_virtual_runs_before_direc
 ) -> None:
     write_mixed_scope_project(project_root=tmp_path)
     connection: RecordingAdapterConnection = build_mixed_scope_project_connection()
-    monkeypatch.setattr(
-        "sqltide.cli.build._helpers.virtual_command.reset_fresh_landing_offsets",
-        lambda **_kwargs: (
-            connection.operation_events.append(test_case.expected_virtual_reset_event) or ()
-        ),
+    reset_events: Iterator[str] = iter(
+        (test_case.expected_virtual_reset_event, test_case.expected_direct_reset_event)
     )
     monkeypatch.setattr(
-        "sqltide.cli.build._helpers.execution.reset_fresh_landing_offsets",
-        lambda **_kwargs: (
-            connection.operation_events.append(test_case.expected_direct_reset_event) or ()
-        ),
+        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
+        lambda **_kwargs: connection.operation_events.append(next(reset_events)) or (),
     )
 
     exit_code: int = run_scope_project_build_with_connection(
@@ -379,11 +375,11 @@ def test_given_virtual_phase_failure_when_building_mixed_then_lock_releases_and_
     write_mixed_scope_project(project_root=tmp_path)
     connection: RecordingAdapterConnection = build_mixed_scope_project_connection()
     monkeypatch.setattr(
-        "sqltide.cli.build.main._execute_mixed_build.execute_virtual_build_command",
+        "sqltide._native.execute_virtual_build_command",
         record_failed_mixed_virtual_phase,
     )
     monkeypatch.setattr(
-        "sqltide.cli.build.main._execute_mixed_build.execute_direct_build_command",
+        "sqltide._native.execute_direct_build_command",
         record_unexpected_mixed_direct_phase,
     )
 
@@ -428,11 +424,11 @@ def test_given_direct_phase_failure_when_building_mixed_json_then_lock_releases(
     write_mixed_scope_project(project_root=tmp_path)
     connection: RecordingAdapterConnection = build_mixed_scope_project_connection()
     monkeypatch.setattr(
-        "sqltide.cli.build.main._execute_mixed_build.execute_virtual_build_command",
+        "sqltide._native.execute_virtual_build_command",
         record_successful_mixed_virtual_phase,
     )
     monkeypatch.setattr(
-        "sqltide.cli.build.main._execute_mixed_build.execute_direct_build_command",
+        "sqltide._native.execute_direct_build_command",
         record_failed_mixed_direct_phase,
     )
 
@@ -569,7 +565,7 @@ def test_given_changed_scope_within_pipeline_limit_when_running_then_build_proce
         ),
     )
     monkeypatch.setattr(
-        "sqltide.cli.build._helpers.execution.reset_fresh_landing_offsets",
+        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
 
@@ -645,7 +641,7 @@ def test_given_mixed_pipeline_modes_when_emitting_events_then_each_phase_has_exa
 ) -> None:
     write_mixed_scope_project(project_root=tmp_path)
     monkeypatch.setattr(
-        "sqltide.cli.build._helpers.virtual_command.reset_fresh_landing_offsets",
+        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
     monkeypatch.setenv(RUN_INVOCATION_ID_ENV_VAR, test_case.parent_invocation_id)
@@ -704,7 +700,7 @@ def test_given_mixed_pipeline_modes_when_building_json_then_it_emits_one_documen
     write_mixed_scope_project(project_root=tmp_path)
     connection: RecordingAdapterConnection = build_mixed_scope_project_connection()
     monkeypatch.setattr(
-        "sqltide.cli.build._helpers.virtual_command.reset_fresh_landing_offsets",
+        "sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets.reset_fresh_landing_offsets",
         lambda **_kwargs: (),
     )
 
