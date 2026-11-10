@@ -3,8 +3,8 @@ from typing import cast
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import read_model_activity
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.dev_server._helpers.payloads.activity_payload import read_model_activity
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import connect_clickhouse
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 from tests.integration.src.sqltide.dev_server._test_types import ActivityEvidenceTestCase

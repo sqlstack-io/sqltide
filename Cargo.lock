@@ -1017,6 +1017,7 @@ dependencies = [
  "md-5",
  "polyglot-sql",
  "pyo3",
+ "regex",
  "serde",
  "serde_json",
  "sha2",

@@ -3,12 +3,12 @@ from typing import cast
 
 import pytest
 
-from sqltide.adapter.models import AdapterQueryResult
-from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server._helpers.payloads.state_payload import (
+from sqltide._native import (
     build_relation_stats_query,
     build_topics_payload,
 )
+from sqltide.adapter.models import AdapterQueryResult
+from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.models import (
     KafkaLagSnapshot,
     KafkaPartitionLag,

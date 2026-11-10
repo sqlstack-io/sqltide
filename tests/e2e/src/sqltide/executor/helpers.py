@@ -14,7 +14,11 @@ from clickhouse_connect.driver.client import Client
 from kafka import KafkaProducer
 
 import sqltide._native as _native
-from sqltide._native import SqlModelAnalyzer, compile_pipeline
+from sqltide._native import (
+    SqlModelAnalyzer,
+    build_query_views_activity_query,
+    compile_pipeline,
+)
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,
@@ -30,9 +34,6 @@ from sqltide.compiler.discovery.models import (
 )
 from sqltide.compiler.discovery.types import ReplayLineageMode, ReplayOnChangeMode
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
-from sqltide.dev_server._helpers.payloads.activity_payload import (
-    build_query_views_activity_query,
-)
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from tests.e2e.src.sqltide.conftest import (
     E2EClickHouseConnectionSettings,

@@ -9,7 +9,7 @@ import pytest
 from tests.e2e.src.sqltide.dev_server._test_types import DevServerConcurrencyE2ETestCase
 from tests.e2e.src.sqltide.dev_server.helpers import (
     available_port,
-    start_slow_sensor_dev_server,
+    start_slow_reload_dev_server,
     timed_status,
     wait_for_auth_config_api,
 )
@@ -36,7 +36,7 @@ def test_given_slow_handler_when_requests_run_in_parallel_then_others_finish_and
     port: int = available_port()
     report_path: Path = tmp_path / "report.json"
     log_path: Path = tmp_path / "server.log"
-    process: subprocess.Popen[str] = start_slow_sensor_dev_server(
+    process: subprocess.Popen[str] = start_slow_reload_dev_server(
         repository_root=Path.cwd(),
         project_dir=tmp_path / "project",
         port=port,
@@ -48,7 +48,7 @@ def test_given_slow_handler_when_requests_run_in_parallel_then_others_finish_and
     base: str = f"http://127.0.0.1:{port}"
 
     with ThreadPoolExecutor(max_workers=test_case.fast_requests + 1) as pool:
-        slow: Future[tuple[int, float]] = pool.submit(timed_status, f"{base}/api/sensors")
+        slow: Future[tuple[int, float]] = pool.submit(timed_status, f"{base}/api/reload", "POST")
         fast: list[tuple[int, float]] = list(
             pool.map(timed_status, [f"{base}/api/auth/config"] * test_case.fast_requests)
         )

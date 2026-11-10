@@ -10,6 +10,14 @@ import sqltide._native as _native
 from sqltide._native import (
     DevApplication,
     analyze_project,
+    build_activity_capabilities_query,
+    build_extents_query,
+    build_partitions_query,
+    build_parts_activity_query,
+    build_parts_query,
+    build_relation_stats_query,
+    build_replay_count_query,
+    build_throughputs_query,
     create_dev_app,
     render_clickhouse_replay_coverage_query,
 )
@@ -61,18 +69,6 @@ from sqltide.compiler.planner.models import (
     DirectSourceDriftSelection,
     PlannerWarning,
     PreparedShadowObject,
-)
-from sqltide.dev_server._helpers.payloads.activity_payload import (
-    build_activity_capabilities_query,
-    build_parts_activity_query,
-)
-from sqltide.dev_server._helpers.payloads.plan_payload import build_replay_count_query
-from sqltide.dev_server._helpers.payloads.state_payload import (
-    build_extents_query,
-    build_partitions_query,
-    build_parts_query,
-    build_relation_stats_query,
-    build_throughputs_query,
 )
 from sqltide.dev_server._helpers.queries.message_query import (
     build_messages_sql,

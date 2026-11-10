@@ -709,7 +709,7 @@ def test_given_non_utc_warehouse_when_planning_then_replay_count_keeps_utc_start
         return {"orders_clean": 1}
 
     monkeypatch.setattr(
-        "sqltide.dev_server._helpers.payloads.plan_payload.count_replay_rows",
+        "sqltide._native.count_replay_rows",
         fake_count_replay_rows,
     )
     client: NativeTestClient = NativeTestClient(

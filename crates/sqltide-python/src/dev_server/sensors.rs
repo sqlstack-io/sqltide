@@ -10,7 +10,7 @@ use super::routes::{catching, invoke, locked, reading, servable};
 use super::support::{ADAPTER_ERROR, attr};
 use crate::py_kwargs;
 
-const SENSORS_PAYLOAD: &str = "sqltide.dev_server._helpers.payloads.sensors_payload";
+const SENSORS_PAYLOAD: &str = "sqltide._native";
 const SENSOR_ERROR: (&str, &str, u16) = ("sqltide.sensors.exceptions", "SensorError", 400);
 
 fn scheduler<'py>(call: &Call<'py, '_>) -> Bound<'py, PyAny> {

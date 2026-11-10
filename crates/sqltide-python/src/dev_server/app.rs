@@ -369,7 +369,7 @@ impl DevApp {
             }
             Err(error) => return Err(error),
         };
-        attr(py, "sqltide.dev_server._helpers.payloads.state_payload", "build_topics_payload")?.call(
+        attr(py, "sqltide._native", "build_topics_payload")?.call(
             (),
             Some(&crate::py_kwargs!(py;
                 analysis = analysis,

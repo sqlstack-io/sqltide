@@ -20,10 +20,8 @@ pub(crate) const DEV_EXCEPTIONS: &str = "sqltide.dev_server.exceptions";
 pub(crate) const VALUE_ERROR: (&str, &str, u16) = ("builtins", "ValueError", 400);
 const DEV_MODELS: &str = "sqltide.dev_server.models";
 const AUTH_MODELS: &str = "sqltide.auth.models";
-const STATE_PAYLOAD: &str = "sqltide.dev_server._helpers.payloads.state_payload";
-const DEFINITIONS_PAYLOAD: &str = "sqltide.dev_server._helpers.payloads.definitions_payload";
-const DEPLOYMENTS_PAYLOAD: &str = "sqltide.dev_server._helpers.payloads.deployments_payload";
-const PLAN_PAYLOAD: &str = "sqltide.dev_server._helpers.payloads.plan_payload";
+const DEFINITIONS_PAYLOAD: &str = NATIVE;
+const DEPLOYMENTS_PAYLOAD: &str = NATIVE;
 const MESSAGE_QUERY: &str = "sqltide.dev_server._helpers.queries.message_query";
 const RUNS_QUERY: &str = "sqltide.dev_server._helpers.queries.runs_query";
 const CHECKS: &str = "sqltide.dev_server._helpers.server.checks_execution";
@@ -283,7 +281,7 @@ fn read_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
                     let preview = direct.getattr("preview")?;
                     invoke(
                         py,
-                        PLAN_PAYLOAD,
+                        NATIVE,
                         "count_replay_rows",
                         py_kwargs!(py;
                             connection = client,
@@ -297,7 +295,7 @@ fn read_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             };
             let payload = invoke(
                 py,
-                PLAN_PAYLOAD,
+                NATIVE,
                 "build_mode_aware_plan_payload",
                 py_kwargs!(py;
                     preparation = &preparation,
@@ -379,7 +377,7 @@ fn read_topics(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            STATE_PAYLOAD,
+            NATIVE,
             "build_topics_payload",
             py_kwargs!(py;
                 analysis = &analysis,

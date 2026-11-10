@@ -430,3 +430,22 @@ pub(crate) fn validate_string_mapping<'py>(
         }
     }
 }
+
+/// `a, b, ... = value`: the items of an `count`-element unpacking, raising Python's `ValueError`
+/// for any other length.
+pub(crate) fn unpack<'py>(value: &Bound<'py, PyAny>, count: usize) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let mut items: Vec<Bound<'py, PyAny>> = Vec::with_capacity(count);
+    for item in value.try_iter()? {
+        if items.len() == count {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!("too many values to unpack (expected {count})")));
+        }
+        items.push(item?);
+    }
+    if items.len() < count {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "not enough values to unpack (expected {count}, got {})",
+            items.len()
+        )));
+    }
+    Ok(items)
+}

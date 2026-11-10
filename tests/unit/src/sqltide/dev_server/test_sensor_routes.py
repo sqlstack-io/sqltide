@@ -64,7 +64,7 @@ def test_given_isolated_read_factory_when_reading_sensors_then_primary_connectio
     )
 
     with patch(
-        "sqltide.dev_server._helpers.payloads.sensors_payload.build_sensors_payload",
+        "sqltide._native.build_sensors_payload",
         return_value={"sensors": [], "deadLetterCount": 0, "health": {}},
     ):
         response: NativeResponse = client.get(test_case.path)

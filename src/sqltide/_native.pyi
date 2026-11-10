@@ -29,6 +29,7 @@ from sqltide.adapter.models import (
     AdapterReadinessRootObservation,
     AdapterRefreshState,
     AdapterRelationCleanupRequest,
+    AdapterReplayColumns,
     AdapterReplayOffsetFrontier,
     AdapterReplayOffsetProgressRequest,
     AdapterReplayQuery,
@@ -153,6 +154,9 @@ from sqltide.compiler.sql_analysis.models import (
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.dev_server.classes.dev_server_state import DevServerState
+from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
+from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
+from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
 from sqltide.dev_server.models import DevExecutionContext
 from sqltide.dev_server.types import DevServerReporter
 from sqltide.diagnostics.models import CompilerDiagnostic
@@ -209,6 +213,7 @@ from sqltide.executor.workflow.models import (
     WorkflowExecutionResult,
 )
 from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
+from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -1627,3 +1632,86 @@ def run_dev_server(
     execution_context: DevExecutionContext | None = None,
     auth_settings: AuthSettings | None = None,
 ) -> int: ...
+def build_sensors_payload(
+    *,
+    analysis: CompileAnalysis,
+    repository: SensorStateRepository | None,
+    health: dict[str, object],
+) -> dict[str, object]: ...
+def build_sensor_ticks_payload(
+    *,
+    repository: SensorStateRepository | None,
+    sensor_name: str,
+    limit: int,
+    after: str | None = None,
+    before: str | None = None,
+) -> dict[str, object]: ...
+def build_dead_letters_payload(
+    *, repository: SensorStateRepository | None
+) -> dict[str, object]: ...
+def build_deployments_payload(
+    *, connection: AdapterConnection, database: str, metadata_database: str
+) -> dict[str, object]: ...
+def build_deployment_detail_payload(
+    *, connection: AdapterConnection, database: str, metadata_database: str, deployment_id: str
+) -> dict[str, object] | None: ...
+def build_definitions_payload(
+    *, analysis: CompileAnalysis, version_key: str
+) -> dict[str, object]: ...
+def build_mode_aware_plan_payload(
+    *,
+    preparation: DirectWorkflowPreparation | MixedWorkflowPreparation | VirtualWorkflowPreparation,
+    analysis: CompileAnalysis,
+    selectors: tuple[str, ...],
+    planned_at: str,
+    replay_row_counts: dict[str, int | None],
+    command: str,
+) -> dict[str, object]: ...
+def count_replay_rows(
+    *, connection: AdapterConnection, database: str, plan: DirectPlan, start_time: str | None
+) -> dict[str, int | None]: ...
+def replay_time_column(*, boundary_mode: str, columns: AdapterReplayColumns) -> str: ...
+def build_replay_count_query(
+    *, database: str, relation_name: str, time_column: str, start_time: str | None
+) -> str: ...
+def build_activity_capabilities_query() -> str: ...
+def build_query_views_activity_query(*, database: str, window_seconds: int) -> str: ...
+def build_part_log_activity_query(*, database: str, window_seconds: int) -> str: ...
+def build_parts_activity_query(*, database: str) -> str: ...
+def read_model_activity(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    relation_names: tuple[str, ...],
+    captured_at: str,
+    active_bindings: tuple[tuple[str, str], ...] = (),
+    window_seconds: int = 120,
+) -> dict[str, dict[str, object]]: ...
+def model_drift_payload(
+    *, analysis: CompileAnalysis, model: CompiledModel, catalog: CatalogSnapshot
+) -> dict[str, object]: ...
+def build_relation_stats_query(*, database: str) -> str: ...
+def build_parts_query(*, database: str) -> str: ...
+def build_extents_query(*, database: str, relation_names: tuple[str, ...]) -> str: ...
+def build_throughputs_query(*, database: str, windows: tuple[tuple[str, int, int], ...]) -> str: ...
+def build_partitions_query(*, database: str, relation_names: tuple[str, ...]) -> str: ...
+def choose_throughput_window(*, newest_age_seconds: float | None) -> tuple[int, int]: ...
+def apply_bound_relation_stats(
+    *, stats: dict[str, dict[str, int]], bindings: tuple[tuple[str, str], ...]
+) -> dict[str, dict[str, int]]: ...
+def build_state_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    kafka_lag_reader: KafkaLagReader | None = None,
+    warehouse_health_reader: WarehouseHealthReader | None = None,
+) -> dict[str, object]: ...
+def build_topics_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection | None,
+    database: str | None,
+    topic_reader: KafkaTopicReader,
+    kafka_lag_reader: KafkaLagReader,
+) -> dict[str, object]: ...

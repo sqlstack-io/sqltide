@@ -7,24 +7,22 @@ import subprocess
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 from shutil import copytree
 from typing import cast
-from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from clickhouse_connect.driver.client import Client
 from playwright.sync_api import Page
 
-import sqltide.dev_server._helpers.payloads.sensors_payload as sensors_payload
 from sqltide._native import DevApplication, create_dev_app
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import UserAccount
 from sqltide.auth.types import AuthenticationSource
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.sensors.classes.sensor_state_repository import SensorStateRepository
 from tests.unit.src.sqltide.dev_server.helpers import (
     build_compile_callable,
     write_dev_server_project,
@@ -712,30 +710,28 @@ def build_source_recreation_plan_payload(
     }
 
 
-def run_slow_sensor_dev_server(arguments: list[str]) -> None:
-    """Serve an offline dev app whose sensor route sleeps, then report a busy thread's progress.
+def run_slow_reload_dev_server(arguments: list[str]) -> None:
+    """Serve an offline dev app whose reloads compile slowly, then report a busy thread's progress.
 
-    Arguments: project directory, port, sensor delay in seconds, report path. The busy thread
-    counts iterations before serving and while serving; the server must leave it the
-    interpreter lock while it waits for connections and while a handler sleeps.
+    Arguments: project directory, port, reload delay in seconds, report path. The first compile
+    is immediate and every later one sleeps for the delay. The busy thread counts iterations
+    before serving and while serving; the server must leave it the interpreter lock while it
+    waits for connections and while a handler sleeps.
     """
 
     project_dir, port, delay, report_path = arguments
     write_dev_server_project(project_dir=Path(project_dir))
+    compile_project: Callable[[], CompileAnalysis] = build_compile_callable(
+        project_dir=Path(project_dir)
+    )
+    compiles: itertools.count[int] = itertools.count()
 
-    def slow_sensors_payload(
-        *,
-        analysis: CompileAnalysis,
-        repository: SensorStateRepository | None,
-        health: dict[str, object],
-    ) -> dict[str, object]:
-        del analysis, repository, health
-        time.sleep(float(delay))
-        return {"sensors": [], "slept": float(delay)}
+    def slow_compile() -> CompileAnalysis:
+        time.sleep(float(delay) * min(next(compiles), 1))
+        return compile_project()
 
     app: DevApplication = create_dev_app(
-        state=DevServerState(run_compile=build_compile_callable(project_dir=Path(project_dir))),
-        project_dir=Path(project_dir),
+        state=DevServerState(run_compile=slow_compile), project_dir=Path(project_dir)
     )
     ticks: itertools.count[int] = itertools.count()
     stop: threading.Event = threading.Event()
@@ -746,8 +742,7 @@ def run_slow_sensor_dev_server(arguments: list[str]) -> None:
     time.sleep(_BUSY_BASELINE_SECONDS)
     baseline: int = next(ticks)
     started: float = time.monotonic()
-    with patch(f"{sensors_payload.__name__}.build_sensors_payload", new=slow_sensors_payload):
-        app.serve("127.0.0.1", int(port))
+    app.serve("127.0.0.1", int(port))
     serving_seconds: float = time.monotonic() - started
     serving: int = next(ticks) - baseline
     stop.set()
@@ -763,7 +758,7 @@ def run_slow_sensor_dev_server(arguments: list[str]) -> None:
     )
 
 
-def start_slow_sensor_dev_server(
+def start_slow_reload_dev_server(
     *,
     repository_root: Path,
     project_dir: Path,
@@ -778,7 +773,7 @@ def start_slow_sensor_dev_server(
                 str(repository_root / ".venv" / "bin" / "python"),
                 "-c",
                 "import sys; from tests.e2e.src.sqltide.dev_server.helpers import "
-                "run_slow_sensor_dev_server; run_slow_sensor_dev_server(sys.argv[1:])",
+                "run_slow_reload_dev_server; run_slow_reload_dev_server(sys.argv[1:])",
                 str(project_dir),
                 str(port),
                 str(delay_seconds),
@@ -793,11 +788,14 @@ def start_slow_sensor_dev_server(
         )
 
 
-def timed_status(url: str) -> tuple[int, float]:
-    """The status of one GET and how long it took."""
+def timed_status(url: str, method: str = "GET") -> tuple[int, float]:
+    """The status of one request and how long it took."""
 
+    request: Request = Request(  # noqa: S310 - loopback test server only
+        url, method=method, headers={"X-SQLTide-CSRF": "trusted-proxy"}
+    )
     started: float = time.monotonic()
-    with urlopen(url, timeout=30) as response:  # noqa: S310 - loopback test server only
+    with urlopen(request, timeout=30) as response:  # noqa: S310 - loopback test server only
         response.read()
         return int(response.status), time.monotonic() - started
 

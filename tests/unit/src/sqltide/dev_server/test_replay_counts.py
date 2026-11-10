@@ -1,10 +1,10 @@
 import pytest
 
-from sqltide.adapter.models import AdapterReplayColumns
-from sqltide.dev_server._helpers.payloads.plan_payload import (
+from sqltide._native import (
     build_replay_count_query,
     replay_time_column,
 )
+from sqltide.adapter.models import AdapterReplayColumns
 from tests.unit.src.sqltide.dev_server._test_types import (
     ReplayCountQueryTestCase,
     ReplayTimeColumnTestCase,

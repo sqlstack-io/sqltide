@@ -27,7 +27,7 @@ import sqltide._native as _native
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide._native import analyze_project
-from sqltide.dev_server._helpers.payloads.definitions_payload import build_definitions_payload
+from sqltide._native import build_definitions_payload
 project_dir = Path(sys.argv[1])
 analysis = analyze_project(
     pipelines_root=project_dir / "pipelines",

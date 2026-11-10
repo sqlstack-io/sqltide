@@ -602,7 +602,7 @@ def test_given_resolved_dev_context_when_reloading_then_compilation_reuses_it(
         fake_load_project_input_for_path,
     )
     monkeypatch.setattr("sqltide.cli.dev.main._run_dev.analyze_project", fake_analyze_project)
-    monkeypatch.setattr("sqltide.cli.dev.main._run_dev.run_dev_server", fake_run_dev_server)
+    monkeypatch.setattr("sqltide._native.run_dev_server", fake_run_dev_server)
     environment: dict[str, str] = {"SQLTIDE_ENV": "dev"}
 
     exit_code: int = run_dev(

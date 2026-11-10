@@ -1,6 +1,6 @@
 import pytest
 
-from sqltide.dev_server._helpers.payloads.state_payload import apply_bound_relation_stats
+from sqltide._native import apply_bound_relation_stats
 from tests.unit.src.sqltide.dev_server._test_types import BoundRelationStatsTestCase
 
 _STAGED: str = "tbl__orders__20260410T005500Z_cd34ef"

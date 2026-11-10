@@ -15,7 +15,8 @@ use crate::py_kwargs;
 
 const CLASSES: &str = "sqltide.dev_server.classes";
 const LOCALHOST_NAME: &str = "localhost";
-const SQLITE_MEMORY_URLS: [&str; 2] = ["sqlite://", "sqlite:///:memory:"];
+/// Control-store URLs that name a private in-memory SQLite database.
+pub(crate) const SQLITE_MEMORY_URLS: [&str; 2] = ["sqlite://", "sqlite:///:memory:"];
 
 fn class<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<Bound<'py, PyAny>> {
     attr(py, &format!("{CLASSES}.{module}"), name)
@@ -89,7 +90,7 @@ fn state_snapshot<'py>(
         }
         let lock = state.bind(py).getattr("query_lock")?;
         crate::handling::within(&lock, || {
-            Ok(attr(py, "sqltide.dev_server._helpers.payloads.state_payload", "build_state_payload")?
+            Ok(attr(py, "sqltide._native", "build_state_payload")?
                 .call(
                     (),
                     Some(&py_kwargs!(py;
@@ -392,5 +393,10 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(create_dev_app, module)?)?;
     module.add_function(wrap_pyfunction!(static_assets_root, module)?)?;
     module.add_function(wrap_pyfunction!(static_assets_present, module)?)?;
-    module.add_function(wrap_pyfunction!(run_dev_server, module)?)
+    module.add_function(wrap_pyfunction!(run_dev_server, module)?)?;
+    super::payloads::register(module)?;
+    super::plan::register(module)?;
+    super::activity::register(module)?;
+    super::drift::register(module)?;
+    super::state::register(module)
 }

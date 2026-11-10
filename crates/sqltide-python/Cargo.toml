@@ -22,6 +22,7 @@ md-5.workspace = true
 sha2.workspace = true
 polyglot-sql.workspace = true
 pyo3.workspace = true
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqltide-clickhouse.workspace = true

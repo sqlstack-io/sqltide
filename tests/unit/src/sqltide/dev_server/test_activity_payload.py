@@ -1,17 +1,17 @@
 import pytest
 
-from sqltide.adapter.models import (
-    AdapterIdentity,
-    AdapterQueryResult,
-    CatalogIdentity,
-    CatalogSnapshot,
-)
-from sqltide.dev_server._helpers.payloads.activity_payload import (
+from sqltide._native import (
     build_activity_capabilities_query,
     build_part_log_activity_query,
     build_parts_activity_query,
     build_query_views_activity_query,
     read_model_activity,
+)
+from sqltide.adapter.models import (
+    AdapterIdentity,
+    AdapterQueryResult,
+    CatalogIdentity,
+    CatalogSnapshot,
 )
 from sqltide.dev_server.constants import ACTIVITY_WINDOW_SECONDS
 from tests.unit.src.sqltide.dev_server._test_types import ActivityPayloadTestCase

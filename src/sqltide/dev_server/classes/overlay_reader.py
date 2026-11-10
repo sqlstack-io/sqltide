@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from sqltide._native import build_state_payload
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server._helpers.payloads.state_payload import build_state_payload
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
 from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
 
