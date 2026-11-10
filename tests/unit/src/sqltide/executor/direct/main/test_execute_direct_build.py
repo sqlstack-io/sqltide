@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from sqltide._native import render_direct_plan_json
+from sqltide._native import (
+    assemble_direct_build_workflow,
+    execute_direct_build_workflow,
+    persist_direct_fingerprints,
+    render_direct_plan_json,
+)
 from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
@@ -15,15 +20,6 @@ from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_
 from sqltide.compiler.compile.models import CompiledModel, CompiledTableModel
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.executor.direct.exceptions import DirectBuildError, DirectWorkflowExecutionError
-from sqltide.executor.direct.main.assemble_direct_build_workflow import (
-    assemble_direct_build_workflow,
-)
-from sqltide.executor.direct.main.execute_direct_build_workflow import (
-    execute_direct_build_workflow,
-)
-from sqltide.executor.direct.main.persist_direct_fingerprints import (
-    persist_direct_fingerprints,
-)
 from sqltide.executor.direct.models import (
     DirectBuildRequest,
     DirectBuildWorkflow,

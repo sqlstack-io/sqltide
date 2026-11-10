@@ -23,6 +23,7 @@ mod config;
 mod deployment_resolution;
 mod destruction;
 mod destruction_planning;
+mod direct_build;
 mod direct_plan;
 mod discovery;
 mod execution_results;
@@ -125,6 +126,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     deployment_resolution::register(module)?;
     destruction::register(module)?;
     destruction_planning::register(module)?;
+    direct_build::register(module)?;
     direct_plan::register(module)?;
     execution_results::register(module)?;
     executor::register(module)?;

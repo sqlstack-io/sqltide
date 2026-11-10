@@ -1,6 +1,7 @@
 """Direct-mode reconcile execution entrypoint."""
 
 import sqltide._native as _native
+from sqltide._native import persist_reconciled_direct_fingerprints
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.compiler.compile.constants import RAW_TABLE_NAME_PREFIX
@@ -11,9 +12,6 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.planner.models import ActualState
-from sqltide.executor.direct.main._persist_reconciled_direct_fingerprints import (
-    persist_reconciled_direct_fingerprints,
-)
 from sqltide.executor.reconcile._helpers.preview import build_reconcile_preview
 from sqltide.executor.reconcile.exceptions import ReconcileError
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult

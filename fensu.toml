@@ -67,6 +67,11 @@ reason = "The runnable orders-demo producer lives outside the installable packag
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/executor/direct/__init__.py"
+reason = "Native bindings own direct workflow assembly, replay capture realization, runtime execution, managed source preparation and SQL baselines; this package only declares the direct build models and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/compiler/discovery/__init__.py"
 reason = "Native bindings own project discovery, configuration, source registries and pipeline loading; this package only declares the discovery models, types, constants and errors they build and raise."
 
