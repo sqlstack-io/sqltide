@@ -22,7 +22,6 @@ from sqltide.compiler.compile.models import (
     CompilerAdapterProfile,
     DesiredTable,
 )
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.main._discover_project_inputs import (
     discover_project_inputs,
@@ -583,7 +582,7 @@ def test_given_managed_source_ttl_when_analyzing_then_applies_source_over_projec
         source_ttl_declaration=test_case.source_ttl_declaration,
     )
     loaded_project: LoadedProject | None = load_project_input_for_path(path=project_dir)
-    loaded_pipeline: LoadedPipeline = load_pipeline_directory(
+    loaded_pipeline: LoadedPipeline = _native.load_pipeline_directory(
         project_dir / "pipelines" / "pl__orders"
     )
 
@@ -913,7 +912,7 @@ def test_given_complete_project_when_expanding_macros_then_all_inputs_share_one_
 
     with (
         patch(
-            "sqltide.compiler.discovery._helpers.model_sql.expand_macro_calls",
+            "sqltide.compiler.macros.main._expand_macro_calls.expand_macro_calls",
             wraps=expand_macro_calls,
         ) as model_expansion,
         patch(

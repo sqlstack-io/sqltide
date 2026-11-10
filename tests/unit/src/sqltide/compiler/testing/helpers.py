@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
@@ -10,7 +11,6 @@ from sqltide.compiler.compile.models import (
     LogicalResourceKey,
 )
 from sqltide.compiler.compile.types import LogicalResourceType
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.models import (
     KafkaLandingStep,
     KafkaSettings,
@@ -137,7 +137,7 @@ def build_compiled_pipeline_with_tests(
         tmp_path=tmp_path, test_file_contents=test_file_contents
     )
     compiled_pipeline: CompiledPipeline = compile_pipeline(
-        loaded_pipeline=load_pipeline_directory(pipeline_dir),
+        loaded_pipeline=_native.load_pipeline_directory(pipeline_dir),
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),
     )
     loaded_test: LoadedSqlTest = discover_sql_tests(root=tmp_path / "tests")[0]
@@ -298,7 +298,7 @@ def build_cyclic_sql_test_case(*, tmp_path: Path, test_file_contents: str) -> Sq
         write_pipeline_file(pipeline_dir / f"{model_name}.sql", model_sql)
     write_sql_test_file(tmp_path / "tests" / "order_events" / "test_case.sql", test_file_contents)
     compiled_pipeline: CompiledPipeline = compile_pipeline(
-        loaded_pipeline=load_pipeline_directory(pipeline_dir),
+        loaded_pipeline=_native.load_pipeline_directory(pipeline_dir),
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),
     )
     loaded_test: LoadedSqlTest = discover_sql_tests(root=tmp_path / "tests")[0]

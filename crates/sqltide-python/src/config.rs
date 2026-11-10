@@ -732,7 +732,7 @@ fn parse_freshness_policy<'py>(
 
 /// Check `pipeline.toml`'s keys and return its mode, `default_mode` when unset.
 #[pyfunction]
-fn parse_pipeline_mode(
+pub(crate) fn parse_pipeline_mode(
     py: Python<'_>,
     payload: &Bound<'_, PyAny>,
     file_path: &str,
@@ -747,7 +747,7 @@ fn parse_pipeline_mode(
 /// `pipeline.toml`'s other settings: `(replay_on_change, bounded_replay_fallback, naming,
 /// protection, audit_defaults, execution_settings, model_retention, model_on_row_error)`.
 #[pyfunction]
-fn parse_pipeline_settings<'py>(
+pub(crate) fn parse_pipeline_settings<'py>(
     py: Python<'py>,
     payload: &Bound<'py, PyAny>,
     file_path: &str,
@@ -1180,8 +1180,7 @@ impl<'py> Document<'py> {
 }
 
 /// Reject `MODEL(...)` header keys outside the model schema.
-#[pyfunction]
-fn check_model_header_keys(
+pub(crate) fn check_model_header_keys(
     py: Python<'_>,
     header: &Bound<'_, PyAny>,
     file_path: &str,
@@ -1192,28 +1191,22 @@ fn check_model_header_keys(
 }
 
 /// Validate a parsed `MODEL(...)` header into `(kind, fields)`, the keyword arguments of a
-/// `ViewStep` or `TransformStep` besides its name, query, and position. `check_query(kind=)`
+/// `ViewStep` or `TransformStep` besides its name, query, and position. `check_query(kind)`
 /// validates a view's references or returns a table's driving input.
-#[pyfunction]
-fn parse_model_spec<'py>(
+pub(crate) fn parse_model_spec<'py>(
     py: Python<'py>,
     header: &Bound<'py, PyAny>,
     file_path: &str,
-    check_query: &Bound<'py, PyAny>,
+    check_query: &mut dyn FnMut(&str) -> PyResult<Option<String>>,
 ) -> PyResult<(String, Bound<'py, PyDict>)> {
     let mut document: Document<'py> = Document::new(py)?;
     let header: Value = document.value(header)?;
     let callback_error: RefCell<Option<PyErr>> = RefCell::new(None);
     let mut check = |kind: &str| -> Result<Option<String>, SpecError> {
-        let kwargs: Bound<'py, PyDict> = PyDict::new(py);
-        kwargs
-            .set_item("kind", kind)
-            .and_then(|()| check_query.call((), Some(&kwargs)))
-            .and_then(|result| result.extract::<Option<String>>())
-            .map_err(|failure| {
-                callback_error.replace(Some(failure));
-                SpecError::new(ErrorKind::PipelineDiscovery, String::new())
-            })
+        check_query(kind).map_err(|failure| {
+            callback_error.replace(Some(failure));
+            SpecError::new(ErrorKind::PipelineDiscovery, String::new())
+        })
     };
     let spec = model_spec::model_spec(&header, file_path, &mut check);
     if let Some(failure) = callback_error.take() {
@@ -1386,7 +1379,7 @@ fn sql_test_blocks(contents: &str) -> PyResult<Vec<SqlTestBlockResult>> {
 /// `(header, sql, query line, query column)` of a model file's leading `MODEL(...);` header,
 /// or `None`.
 #[pyfunction]
-fn model_header_block(contents: &str) -> Option<(String, String, usize, usize)> {
+pub(crate) fn model_header_block(contents: &str) -> Option<(String, String, usize, usize)> {
     test_blocks::model_header_block(contents)
 }
 
@@ -1607,8 +1600,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "DEFAULT_SQL_MODEL_ENGINE",
         model_spec::DEFAULT_SQL_MODEL_ENGINE,
     )?;
-    module.add_function(wrap_pyfunction!(check_model_header_keys, module)?)?;
-    module.add_function(wrap_pyfunction!(parse_model_spec, module)?)?;
     module.add_function(wrap_pyfunction!(
         resolve_effective_project_configuration,
         module

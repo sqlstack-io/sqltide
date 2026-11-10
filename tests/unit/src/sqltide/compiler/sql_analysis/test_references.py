@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.compile.exceptions import PipelineCompileError
-from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
     SqlReferenceRewriter,
@@ -272,7 +272,7 @@ def test_given_reference_corpus_when_crossing_compile_seam_then_preserves_analys
     test_case: ReferenceParityTestCase,
 ) -> None:
     analysis_references: tuple[SqlReference, ...] = extract_references(test_case.sql)
-    compile_references: list[ParsedRef] = extract_refs(sql=test_case.sql)
+    compile_references: list[ParsedRef] = _native.extract_refs(sql=test_case.sql)
 
     assert len(compile_references) == test_case.expected_reference_count
     assert tuple(
@@ -303,7 +303,7 @@ def test_given_located_model_sql_when_scanning_fails_then_phase_diagnostic_uses_
     test_case: CompilerReferenceDiagnosticTestCase,
 ) -> None:
     with pytest.raises(PipelineCompileError) as raised:
-        extract_refs(
+        _native.extract_refs(
             sql=test_case.sql,
             source_path=Path(test_case.source_path),
             source_line=test_case.source_line,

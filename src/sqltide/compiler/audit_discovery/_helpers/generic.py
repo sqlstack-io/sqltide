@@ -23,7 +23,6 @@ from sqltide.compiler.audit_discovery.types import (
     AuditAttachmentKind,
     NativeGenericAuditInstance,
 )
-from sqltide.compiler.compile.main._extract_refs import extract_refs
 from sqltide.compiler.compile.models import ParsedRef
 from sqltide.compiler.discovery.models import ModelColumnSpec, TransformStep, ViewStep
 from sqltide.compiler.discovery.types import SqlRelationType
@@ -129,7 +128,7 @@ def render_generic_sql_audits(
             file_path=instance.file_path,
         )
         parsed_refs: tuple[ParsedRef, ...] = tuple(
-            extract_refs(sql=rendered_query, source_path=instance.file_path)
+            _native.extract_refs(sql=rendered_query, source_path=instance.file_path)
         )
         if not parsed_refs:
             raise SqlAuditParseError(

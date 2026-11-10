@@ -3,7 +3,7 @@
 from collections.abc import Mapping
 from pathlib import Path
 
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directories
+import sqltide._native as _native
 from sqltide.compiler.discovery.constants import PIPELINE_CONFIG_FILE_NAME
 from sqltide.compiler.discovery.models import (
     DiscoveredPipelineDirectory,
@@ -83,7 +83,7 @@ def load_discovered_pipelines(
     model_contents_by_path: dict[Path, str] = {
         model_file.file_path: model_file.contents for model_file in model_files
     }
-    pipelines: tuple[Pipeline, ...] = load_pipeline_directories(
+    pipelines: tuple[Pipeline, ...] = _native.load_pipeline_directories(
         pipeline_directories=pipeline_directories,
         model_contents_by_path=model_contents_by_path,
         macro_registry=macro_registry,

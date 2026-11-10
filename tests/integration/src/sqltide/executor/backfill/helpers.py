@@ -35,7 +35,6 @@ from sqltide.compiler.compile.models import (
     DesiredTable,
     ObjectKey,
 )
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
@@ -276,7 +275,7 @@ def build_backfill_bootstrap_request(
     created_at: str,
 ) -> BackfillBootstrapRequest:
     desired_state: DesiredState = build_desired_state(
-        (compile_pipeline(load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)),)
+        (compile_pipeline(_native.load_pipeline_directory(EXAMPLE_PIPELINE_DIRECTORY)),)
     )
     return BackfillBootstrapRequest(
         desired_state=desired_state,

@@ -91,7 +91,7 @@ pub(crate) fn python_document<'py>(
 
 /// `tomllib.loads(text)`, raising `tomllib.TOMLDecodeError` for an invalid document.
 #[pyfunction]
-fn load_toml<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn load_toml<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     let document: ConfigValue = load_document(text).map_err(|error| decode_error(py, &error))?;
     python_document(py, document)
 }

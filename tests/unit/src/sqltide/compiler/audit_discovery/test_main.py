@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.compiler.audit_discovery.main._build_model_audit_instances import (
     build_model_audit_instances,
 )
 from sqltide.compiler.audit_discovery.main._discover_sql_audits import discover_sql_audits
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.discovery._helpers.model_sql import load_transform_from_sql_file
 from sqltide.compiler.discovery.models import TransformStep, ViewStep
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from tests.unit.src.sqltide.compiler.audit_discovery._test_types import (
@@ -384,7 +384,7 @@ def test_given_generic_sql_audits_when_discovering_then_it_renders_concrete_audi
     )
     model_path: Path = pipeline_dir / "order_items.sql"
     write_model_sql_file(model_path, test_case.model_file_contents)
-    model: TransformStep | ViewStep = load_transform_from_sql_file(file_path=model_path)
+    model: TransformStep | ViewStep = _native.load_transform_from_sql_file(file_path=model_path)
 
     loaded_audits: list[LoadedSqlAudit] = discover_sql_audits(
         root=audits_root,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directories
+import sqltide._native as _native
 from sqltide.compiler.discovery._helpers.project_inputs import (
     discover_pipeline_directories,
 )
@@ -38,7 +38,7 @@ def discover_pipelines(root: Path) -> list[LoadedPipeline]:
         pipelines_root=root,
         project_dir=root.parent,
     )
-    pipelines: tuple[Pipeline, ...] = load_pipeline_directories(
+    pipelines: tuple[Pipeline, ...] = _native.load_pipeline_directories(
         pipeline_directories=pipeline_directories,
         macro_registry=loaded_project.macro_registry,
         sources_by_name=sources_by_name,
