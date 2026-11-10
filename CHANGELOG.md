@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.11](https://github.com/sqlstack-io/sqltide/compare/v0.65.10...v0.65.11) (2026-11-10)
+
+
+### Refactoring
+
+* move build and plan command support to Rust ([#361](https://github.com/sqlstack-io/sqltide/issues/361)) ([2c077a0](https://github.com/sqlstack-io/sqltide/commit/2c077a0b13d9af06c376ea0aaf131cc40bafd294))
+
 ## [0.65.10](https://github.com/sqlstack-io/sqltide/compare/v0.65.9...v0.65.10) (2026-11-10)
 
 
