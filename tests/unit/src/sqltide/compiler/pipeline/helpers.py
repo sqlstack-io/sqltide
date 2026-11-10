@@ -1,4 +1,4 @@
-import ast
+import re
 from collections.abc import Callable
 from pathlib import Path
 from textwrap import dedent
@@ -276,11 +276,12 @@ def write_policy_validation_project(
 
 
 def has_compilation_service_import(file_path: Path) -> bool:
-    return any(
-        isinstance(node, ast.ImportFrom)
-        and node.module == "sqltide._native"
-        and any(alias.name == "analyze_project" for alias in node.names)
-        for node in ast.walk(ast.parse(file_path.read_text(encoding="utf-8")))
+    return (
+        re.search(
+            r"from sqltide\._native import (?:\([^)]*|[^\n]*)\banalyze_project\b",
+            file_path.read_text(encoding="utf-8"),
+        )
+        is not None
     )
 
 
