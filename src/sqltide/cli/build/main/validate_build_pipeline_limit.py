@@ -1,12 +1,12 @@
 """Absolute build-scope validation resolved from committed project configuration."""
 
+from sqltide._native import resolve_selection
 from sqltide.cli.build.exceptions import BuildPipelineLimitError
 from sqltide.cli.build.models import (
     DirectWorkflowPreparation,
     MixedWorkflowPreparation,
     VirtualWorkflowPreparation,
 )
-from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.compiler.compile.models import LogicalResourceKey
 from sqltide.compiler.discovery.models import EffectiveProjectConfiguration, LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis

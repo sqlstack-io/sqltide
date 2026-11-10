@@ -47,6 +47,7 @@ mod project_discovery;
 mod realization;
 mod row_error_policy;
 mod rules;
+mod selection;
 mod sources;
 mod sql_scan;
 mod test_discovery;
@@ -145,6 +146,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     population_planning::register(module)?;
     row_error_policy::register(module)?;
     rules::register(module)?;
+    selection::register(module)?;
     sources::register(module)?;
     sql_scan::register(module)?;
     test_discovery::register(module)?;

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from sqltide._native import analyze_project, load_actual_state
+from sqltide._native import analyze_project, load_actual_state, resolve_selection
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
@@ -14,7 +14,6 @@ from sqltide.cli.reconcile._helpers.rendering import (
     render_reconcile_preview,
     render_reconcile_result,
 )
-from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import (
     CompilerAdapterProfile,

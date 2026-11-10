@@ -10,6 +10,7 @@ from sqltide._native import (
     load_direct_warehouse_snapshot,
     plan_direct_build,
     plan_row_error_policy_changes,
+    resolve_selection,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
@@ -18,7 +19,6 @@ from sqltide.cli.build._helpers.confirmation import build_protection_requirement
 from sqltide.cli.build.models import DirectBuildPreviewContext, WorkflowPreparationOptions
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
-from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import CompiledTableModel, LogicalResourceKey
 from sqltide.compiler.discovery.models import PostgresRefreshSourceStep

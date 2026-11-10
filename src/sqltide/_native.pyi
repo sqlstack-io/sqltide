@@ -50,6 +50,7 @@ from sqltide.adapter.models import (
     InspectedManagedTableState,
 )
 from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
@@ -1257,6 +1258,12 @@ def plan_preserved_managed_sources(
 def drifted_managed_sources(
     *, realized_project: RealizedProject, catalog: CatalogSnapshot
 ) -> tuple[DriftedManagedSource, ...]: ...
+def resolve_selected_logical_model_keys(
+    *, compiled_pipelines: tuple[CompiledPipeline, ...], selectors: tuple[str, ...]
+) -> frozenset[LogicalResourceKey]: ...
+def resolve_selection(
+    *, realized_project: RealizedProject, graph: ProjectGraph, selectors: tuple[str, ...]
+) -> SelectionResolution: ...
 def build_backfill_deployment_identity(
     *, deployment_id: str | None
 ) -> BackfillDeploymentIdentity: ...
