@@ -11,7 +11,10 @@ use sha2::{Digest, Sha256};
 use sqltide_json::JsonValue;
 
 use super::app::Call;
-use super::http::{Failure, HttpReply, HttpRequest, Outcome, now_seconds, http_date, object, py_json, set_cookie, text};
+use super::http::{
+    Failure, HttpReply, HttpRequest, Outcome, http_date, now_seconds, object, py_json, set_cookie,
+    text,
+};
 use super::support::{attr, is_instance, message};
 use crate::py_kwargs;
 
@@ -102,12 +105,13 @@ impl AuthService {
         py: Python<'py>,
         request: &HttpRequest,
     ) -> PyResult<Result<Bound<'py, PyAny>, Refusal>> {
-        let outcome: PyResult<Bound<'py, PyAny>> = self.resolve(py, request).and_then(|authenticated| {
-            if UNSAFE_HTTP_METHODS.contains(&request.method.as_str()) {
-                self.require_csrf(py, &authenticated, request.header(CSRF_HEADER))?;
-            }
-            Ok(authenticated)
-        });
+        let outcome: PyResult<Bound<'py, PyAny>> =
+            self.resolve(py, request).and_then(|authenticated| {
+                if UNSAFE_HTTP_METHODS.contains(&request.method.as_str()) {
+                    self.require_csrf(py, &authenticated, request.header(CSRF_HEADER))?;
+                }
+                Ok(authenticated)
+            });
         match outcome {
             Ok(authenticated) => Ok(Ok(authenticated)),
             Err(error) => match Refusal::classify(py, &error)? {
@@ -125,7 +129,12 @@ impl AuthService {
         }
     }
 
-    fn require_csrf(&self, py: Python<'_>, authenticated: &Bound<'_, PyAny>, supplied: Option<&str>) -> PyResult<()> {
+    fn require_csrf(
+        &self,
+        py: Python<'_>,
+        authenticated: &Bound<'_, PyAny>,
+        supplied: Option<&str>,
+    ) -> PyResult<()> {
         let source: String = authenticated
             .getattr("principal")?
             .getattr("authentication_source")?
@@ -136,22 +145,36 @@ impl AuthService {
         }
         if source == "trusted_proxy" {
             if supplied != Some(TRUSTED_PROXY_CSRF_PROOF) {
-                return Err(raise(py, "AuthorizationError", "Missing trusted-proxy request proof"));
+                return Err(raise(
+                    py,
+                    "AuthorizationError",
+                    "Missing trusted-proxy request proof",
+                ));
             }
             return Ok(());
         }
         let expected: Option<String> = authenticated.getattr("csrf_token")?.extract()?;
         let matches: bool = match (expected, supplied) {
-            (Some(expected), Some(supplied)) => constant_time_equal(expected.as_bytes(), supplied.as_bytes()),
+            (Some(expected), Some(supplied)) => {
+                constant_time_equal(expected.as_bytes(), supplied.as_bytes())
+            }
             _ => false,
         };
         if !matches {
-            return Err(raise(py, "AuthorizationError", "Missing or invalid CSRF token"));
+            return Err(raise(
+                py,
+                "AuthorizationError",
+                "Missing or invalid CSRF token",
+            ));
         }
         Ok(())
     }
 
-    fn authenticate_proxy<'py>(&self, py: Python<'py>, request: &HttpRequest) -> PyResult<Bound<'py, PyAny>> {
+    fn authenticate_proxy<'py>(
+        &self,
+        py: Python<'py>,
+        request: &HttpRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let header_name: String = self.setting(py, "username_header")?.extract()?;
         let raw: Option<&str> = request.header(&header_name);
         let Some(raw) = raw.filter(|raw| !python_strip(raw).is_empty()) else {
@@ -161,10 +184,19 @@ impl AuthService {
                 &format!("Trusted proxy did not provide required header '{header_name}'"),
             ));
         };
-        let username: String = match attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?.call1((raw,)) {
+        let username: String = match attr(
+            py,
+            "sqltide.auth._helpers.usernames",
+            "canonical_username",
+        )?
+        .call1((raw,))
+        {
             Ok(username) => username.extract()?,
             Err(error) => {
-                if error.value(py).is_instance_of::<pyo3::exceptions::PyValueError>() {
+                if error
+                    .value(py)
+                    .is_instance_of::<pyo3::exceptions::PyValueError>()
+                {
                     return Err(raise(py, "AuthenticationError", &message(py, &error)?));
                 }
                 return Err(error);
@@ -175,7 +207,8 @@ impl AuthService {
             return Ok(cached);
         }
         let store: &Bound<'py, PyAny> = self.store.bind(py);
-        let source = attr(py, "sqltide.auth.types", "AuthenticationSource")?.getattr("TRUSTED_PROXY")?;
+        let source =
+            attr(py, "sqltide.auth.types", "AuthenticationSource")?.getattr("TRUSTED_PROXY")?;
         let mut account: Bound<'py, PyAny> = store.call_method(
             "resolve_external_identity",
             (),
@@ -190,7 +223,8 @@ impl AuthService {
                     &format!("Authenticated proxy user '{username}' is not provisioned in SQLTide"),
                 ));
             }
-            let display_name: Option<String> = self.optional_header(py, request, "display_name_header")?;
+            let display_name: Option<String> =
+                self.optional_header(py, request, "display_name_header")?;
             let email: Option<String> = self.optional_header(py, request, "email_header")?;
             account = store.call_method(
                 "provision_proxy_user",
@@ -217,14 +251,27 @@ impl AuthService {
         Ok(authenticated)
     }
 
-    fn optional_header(&self, py: Python<'_>, request: &HttpRequest, setting: &str) -> PyResult<Option<String>> {
+    fn optional_header(
+        &self,
+        py: Python<'_>,
+        request: &HttpRequest,
+        setting: &str,
+    ) -> PyResult<Option<String>> {
         let name: Option<String> = self.setting(py, setting)?.extract()?;
         Ok(name
-            .and_then(|name| request.header(&name).map(|value| python_strip(value).to_owned()))
+            .and_then(|name| {
+                request
+                    .header(&name)
+                    .map(|value| python_strip(value).to_owned())
+            })
             .filter(|value| !value.is_empty()))
     }
 
-    fn authenticate_session<'py>(&self, py: Python<'py>, request: &HttpRequest) -> PyResult<Bound<'py, PyAny>> {
+    fn authenticate_session<'py>(
+        &self,
+        py: Python<'py>,
+        request: &HttpRequest,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let cookie_name: String = self.setting(py, "session_cookie_name")?.extract()?;
         let Some(token) = request.cookie(&cookie_name) else {
             return Err(raise(py, "AuthenticationError", "Authentication required"));
@@ -237,12 +284,17 @@ impl AuthService {
         if let Some(cached) = self.cached(py, &cache_key)? {
             return Ok(cached);
         }
-        let resolved: Bound<'py, PyAny> = self
-            .store
-            .bind(py)
-            .call_method("resolve_session", (), Some(&py_kwargs!(py; token = token.as_str())?))?;
+        let resolved: Bound<'py, PyAny> = self.store.bind(py).call_method(
+            "resolve_session",
+            (),
+            Some(&py_kwargs!(py; token = token.as_str())?),
+        )?;
         if resolved.is_none() {
-            return Err(raise(py, "AuthenticationError", "Session is invalid or expired"));
+            return Err(raise(
+                py,
+                "AuthenticationError",
+                "Session is invalid or expired",
+            ));
         }
         let authenticated: Bound<'py, PyAny> = authenticated_request(
             py,
@@ -255,13 +307,19 @@ impl AuthService {
     }
 
     fn revision(&self, py: Python<'_>) -> PyResult<i64> {
-        self.store.bind(py).getattr("authentication_revision")?.extract()
+        self.store
+            .bind(py)
+            .getattr("authentication_revision")?
+            .extract()
     }
 
     fn cached<'py>(&self, py: Python<'py>, cache_key: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
         let now: Instant = Instant::now();
         let revision: i64 = self.revision(py)?;
-        let mut cache = self.cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some((expires_at, cached_revision, authenticated)) = cache.get(cache_key) else {
             return Ok(None);
         };
@@ -272,14 +330,25 @@ impl AuthService {
         Ok(Some(authenticated.bind(py).clone()))
     }
 
-    fn remember(&self, py: Python<'_>, cache_key: &str, authenticated: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn remember(
+        &self,
+        py: Python<'_>,
+        cache_key: &str,
+        authenticated: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
         let now: Instant = Instant::now();
         let revision: i64 = self.revision(py)?;
-        let mut cache = self.cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if cache.len() >= CACHE_MAX_ENTRIES {
             cache.retain(|_, (expires_at, _, _)| *expires_at > now);
         }
-        cache.insert(cache_key.to_owned(), (now + CACHE_TTL, revision, authenticated.clone().unbind()));
+        cache.insert(
+            cache_key.to_owned(),
+            (now + CACHE_TTL, revision, authenticated.clone().unbind()),
+        );
         Ok(())
     }
 
@@ -289,19 +358,29 @@ impl AuthService {
         Ok(object(vec![
             ("mode", text(self.mode.clone())),
             ("loginRequired", JsonValue::Bool(self.mode == "password")),
-            ("proxyLogoutUrl", proxy_logout_url.map_or(JsonValue::Null, JsonValue::String)),
+            (
+                "proxyLogoutUrl",
+                proxy_logout_url.map_or(JsonValue::Null, JsonValue::String),
+            ),
         ]))
     }
 
     /// The configuration and current session the browser bootstraps from.
-    pub(crate) fn browser_payload(&self, py: Python<'_>, authenticated: &Bound<'_, PyAny>) -> PyResult<Vec<(&'static str, JsonValue)>> {
+    pub(crate) fn browser_payload(
+        &self,
+        py: Python<'_>,
+        authenticated: &Bound<'_, PyAny>,
+    ) -> PyResult<Vec<(&'static str, JsonValue)>> {
         Ok(vec![
             ("config", self.config_payload(py)?),
             ("session", self.authenticated_payload(authenticated)?),
         ])
     }
 
-    pub(crate) fn authenticated_payload(&self, authenticated: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
+    pub(crate) fn authenticated_payload(
+        &self,
+        authenticated: &Bound<'_, PyAny>,
+    ) -> PyResult<JsonValue> {
         let principal: Bound<'_, PyAny> = authenticated.getattr("principal")?;
         Ok(object(vec![
             ("mode", text(self.mode.clone())),
@@ -312,7 +391,10 @@ impl AuthService {
                     ("username", py_json(&principal.getattr("username")?)?),
                     ("displayName", py_json(&principal.getattr("display_name")?)?),
                     ("email", py_json(&principal.getattr("email")?)?),
-                    ("authenticationSource", py_json(&principal.getattr("authentication_source")?)?),
+                    (
+                        "authenticationSource",
+                        py_json(&principal.getattr("authentication_source")?)?,
+                    ),
                 ]),
             ),
             ("roles", py_json(&authenticated.getattr("roles")?)?),
@@ -329,7 +411,10 @@ fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
     }
-    left.iter().zip(right).fold(0_u8, |acc, (a, b)| acc | (a ^ b)) == 0
+    left.iter()
+        .zip(right)
+        .fold(0_u8, |acc, (a, b)| acc | (a ^ b))
+        == 0
 }
 
 /// A new `sqltide.auth.exceptions.<name>(detail)`.
@@ -352,7 +437,11 @@ fn authenticated_request<'py>(
     )
 }
 
-fn principal<'py>(py: Python<'py>, account: &Bound<'py, PyAny>, source: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn principal<'py>(
+    py: Python<'py>,
+    account: &Bound<'py, PyAny>,
+    source: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     attr(py, AUTH_MODULE, "Principal")?.call(
         (),
         Some(&py_kwargs!(py;
@@ -378,7 +467,12 @@ fn local_request(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
             authentication_source = source,
         )?),
     )?;
-    authenticated_request(py, principal, PyTuple::new(py, [ADMIN_ROLE])?.into_any(), None)
+    authenticated_request(
+        py,
+        principal,
+        PyTuple::new(py, [ADMIN_ROLE])?.into_any(),
+        None,
+    )
 }
 
 /// Throttles password verification per user and per client inside one server process.
@@ -389,7 +483,10 @@ pub(crate) struct LoginLimiter {
 
 impl LoginLimiter {
     fn check(&self, ip_key: &str, user_key: &str) -> Outcome<()> {
-        let mut attempts = self.attempts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut attempts = self
+            .attempts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let keys: Vec<String> = attempts.keys().cloned().collect();
         for key in keys {
             if active(&mut attempts, &key) == 0 {
@@ -408,16 +505,28 @@ impl LoginLimiter {
     }
 
     fn failed(&self, ip_key: &str, user_key: &str) {
-        let mut attempts = self.attempts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut attempts = self
+            .attempts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now: Instant = Instant::now();
         active(&mut attempts, ip_key);
-        attempts.entry(ip_key.to_owned()).or_default().push_back(now);
+        attempts
+            .entry(ip_key.to_owned())
+            .or_default()
+            .push_back(now);
         active(&mut attempts, user_key);
-        attempts.entry(user_key.to_owned()).or_default().push_back(now);
+        attempts
+            .entry(user_key.to_owned())
+            .or_default()
+            .push_back(now);
     }
 
     fn succeeded(&self, user_key: &str) {
-        let mut attempts = self.attempts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut attempts = self
+            .attempts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         attempts.remove(user_key);
     }
 }
@@ -484,11 +593,19 @@ pub(crate) fn login(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let body = call.body()?;
     let username: String = body.getattr("username")?.extract()?;
     let password: String = body.getattr("password")?.extract()?;
-    let client_host: String = call.request.client_host.clone().unwrap_or_else(|| "unknown".to_owned());
+    let client_host: String = call
+        .request
+        .client_host
+        .clone()
+        .unwrap_or_else(|| "unknown".to_owned());
     let limiter_username: String =
-        match attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?.call1((username.as_str(),)) {
+        match attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?
+            .call1((username.as_str(),))
+        {
             Ok(canonical) => canonical.extract()?,
-            Err(error) if is_instance(py, &error, EXCEPTIONS_MODULE, "AccountValidationError")? => "<invalid>".to_owned(),
+            Err(error) if is_instance(py, &error, EXCEPTIONS_MODULE, "AccountValidationError")? => {
+                "<invalid>".to_owned()
+            }
             Err(error) => return Err(error.into()),
         };
     let ip_key: String = format!("ip:{client_host}");
@@ -514,7 +631,8 @@ pub(crate) fn login(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         account.getattr("roles")?,
         Some(credentials.getattr("csrf_token")?),
     )?;
-    let mut reply: HttpReply = HttpReply::json(200, &service.authenticated_payload(&authenticated)?)?;
+    let mut reply: HttpReply =
+        HttpReply::json(200, &service.authenticated_payload(&authenticated)?)?;
     let cookie_name: String = service.setting(py, "session_cookie_name")?.extract()?;
     let token: String = credentials.getattr("token")?.extract()?;
     let secure: bool = service.setting(py, "session_cookie_secure")?.is_truthy()?;
@@ -534,13 +652,22 @@ pub(crate) fn logout(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         service.store.bind(py).call_method(
             "revoke_session",
             (),
-            Some(&py_kwargs!(py; token = token.as_str(), actor_user_id = user_id(&authenticated)?)?),
+            Some(
+                &py_kwargs!(py; token = token.as_str(), actor_user_id = user_id(&authenticated)?)?,
+            ),
         )?;
     }
     let mut reply: HttpReply = HttpReply::json(200, &object(vec![("status", text("ok"))]))?;
     reply.headers.push((
         "set-cookie".to_owned(),
-        set_cookie(&cookie_name, "", 0, Some(http_date(now_seconds())), false, false),
+        set_cookie(
+            &cookie_name,
+            "",
+            0,
+            Some(http_date(now_seconds())),
+            false,
+            false,
+        ),
     ));
     Ok(reply)
 }
@@ -559,9 +686,18 @@ fn user_payload(account: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
         ("email", py_json(&account.getattr("email")?)?),
         ("active", py_json(&account.getattr("is_active")?)?),
         ("roles", py_json(&account.getattr("roles")?)?),
-        ("authenticationSources", py_json(&account.getattr("authentication_sources")?)?),
-        ("createdAt", py_json(&account.getattr("created_at")?.call_method0("isoformat")?)?),
-        ("updatedAt", py_json(&account.getattr("updated_at")?.call_method0("isoformat")?)?),
+        (
+            "authenticationSources",
+            py_json(&account.getattr("authentication_sources")?)?,
+        ),
+        (
+            "createdAt",
+            py_json(&account.getattr("created_at")?.call_method0("isoformat")?)?,
+        ),
+        (
+            "updatedAt",
+            py_json(&account.getattr("updated_at")?.call_method0("isoformat")?)?,
+        ),
     ]))
 }
 
@@ -582,24 +718,58 @@ fn optional_iso(value: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
 fn audit_payload(record: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     Ok(object(vec![
         ("operation", py_json(&record.getattr("operation")?)?),
-        ("actorUserId", optional_uuid_text(&record.getattr("actor_user_id")?)?),
-        ("affectedUserId", optional_uuid_text(&record.getattr("affected_user_id")?)?),
-        ("occurredAt", py_json(&record.getattr("occurred_at")?.call_method0("isoformat")?)?),
+        (
+            "actorUserId",
+            optional_uuid_text(&record.getattr("actor_user_id")?)?,
+        ),
+        (
+            "affectedUserId",
+            optional_uuid_text(&record.getattr("affected_user_id")?)?,
+        ),
+        (
+            "occurredAt",
+            py_json(&record.getattr("occurred_at")?.call_method0("isoformat")?)?,
+        ),
         ("details", py_json(&record.getattr("details")?)?),
     ]))
 }
 
 fn assignment_payload(assignment: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     Ok(object(vec![
-        ("assignmentId", text(assignment.getattr("assignment_id")?.str()?.to_string())),
-        ("userId", text(assignment.getattr("user_id")?.str()?.to_string())),
-        ("projectName", py_json(&assignment.getattr("project_name")?)?),
+        (
+            "assignmentId",
+            text(assignment.getattr("assignment_id")?.str()?.to_string()),
+        ),
+        (
+            "userId",
+            text(assignment.getattr("user_id")?.str()?.to_string()),
+        ),
+        (
+            "projectName",
+            py_json(&assignment.getattr("project_name")?)?,
+        ),
         ("role", py_json(&assignment.getattr("role_name")?)?),
         ("targetName", py_json(&assignment.getattr("target_name")?)?),
-        ("assignedBy", optional_uuid_text(&assignment.getattr("assigned_by")?)?),
-        ("assignedAt", py_json(&assignment.getattr("assigned_at")?.call_method0("isoformat")?)?),
-        ("revokedBy", optional_uuid_text(&assignment.getattr("revoked_by")?)?),
-        ("revokedAt", optional_iso(&assignment.getattr("revoked_at")?)?),
+        (
+            "assignedBy",
+            optional_uuid_text(&assignment.getattr("assigned_by")?)?,
+        ),
+        (
+            "assignedAt",
+            py_json(
+                &assignment
+                    .getattr("assigned_at")?
+                    .call_method0("isoformat")?,
+            )?,
+        ),
+        (
+            "revokedBy",
+            optional_uuid_text(&assignment.getattr("revoked_by")?)?,
+        ),
+        (
+            "revokedAt",
+            optional_iso(&assignment.getattr("revoked_at")?)?,
+        ),
     ]))
 }
 
@@ -625,24 +795,36 @@ pub(crate) fn create_user(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
     let actor = require_admin(call)?;
     let body = call.body()?;
-    let source = attr(py, "sqltide.auth.types", "AuthenticationSource")?.call1((body.getattr("authenticationSource")?,))?;
+    let source = attr(py, "sqltide.auth.types", "AuthenticationSource")?
+        .call1((body.getattr("authenticationSource")?,))?;
     let source_text: String = source.str()?.to_string();
     let password = body.getattr("password")?;
     if source_text == "password" && password.is_none() {
         return Err(Failure::status(400, "Password account requires a password"));
     }
     if source_text == "trusted_proxy" && !password.is_none() {
-        return Err(Failure::status(400, "Proxy account must not include a password"));
+        return Err(Failure::status(
+            400,
+            "Proxy account must not include a password",
+        ));
     }
     let username = body.getattr("username")?;
     let result: PyResult<Bound<'_, PyAny>> = (|| {
         let proxy: bool = source_text == "trusted_proxy";
         let external_subject: Option<Bound<'_, PyAny>> = if proxy {
-            Some(attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?.call1((&username,))?)
+            Some(
+                attr(py, "sqltide.auth._helpers.usernames", "canonical_username")?
+                    .call1((&username,))?,
+            )
         } else {
             None
         };
-        let roles = PyTuple::new(py, body.getattr("roles")?.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+        let roles = PyTuple::new(
+            py,
+            body.getattr("roles")?
+                .try_iter()?
+                .collect::<PyResult<Vec<_>>>()?,
+        )?;
         store(call).call_method(
             "create_user",
             (),
@@ -683,7 +865,11 @@ pub(crate) fn update_user(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let body = call.body()?;
     let user_id_value = path_uuid(call, 0)?;
     let result: PyResult<Bound<'_, PyAny>> = (|| {
-        let account = store(call).call_method("get_user_by_id", (), Some(&py_kwargs!(py; user_id = &user_id_value)?))?;
+        let account = store(call).call_method(
+            "get_user_by_id",
+            (),
+            Some(&py_kwargs!(py; user_id = &user_id_value)?),
+        )?;
         if account.is_none() {
             return Err(PyErr::from_value(
                 attr(py, EXCEPTIONS_MODULE, "AccountNotFoundError")?
@@ -702,7 +888,11 @@ pub(crate) fn update_user(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             account.getattr("email")?
         };
         let active = body.getattr("active")?;
-        let is_active = if active.is_none() { account.getattr("is_active")? } else { active };
+        let is_active = if active.is_none() {
+            account.getattr("is_active")?
+        } else {
+            active
+        };
         store(call).call_method(
             "update_account",
             (),
@@ -717,7 +907,11 @@ pub(crate) fn update_user(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     })();
     match result {
         Ok(account) => call.payload_json(&user_payload(&account)?),
-        Err(error) => Err(account_errors(py, error, &[("AccountNotFoundError", 404), ("AccountConflictError", 409)])),
+        Err(error) => Err(account_errors(
+            py,
+            error,
+            &[("AccountNotFoundError", 404), ("AccountConflictError", 409)],
+        )),
     }
 }
 
@@ -735,7 +929,14 @@ pub(crate) fn reset_password(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             actor_user_id = user_id(&actor)?,
         )?),
     ) {
-        return Err(account_errors(py, error, &[("AccountNotFoundError", 404), ("PasswordValidationError", 400)]));
+        return Err(account_errors(
+            py,
+            error,
+            &[
+                ("AccountNotFoundError", 404),
+                ("PasswordValidationError", 400),
+            ],
+        ));
     }
     call.payload_json(&object(vec![("status", text("ok"))]))
 }
@@ -755,7 +956,11 @@ pub(crate) fn grant_role(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     );
     match result {
         Ok(account) => call.payload_json(&user_payload(&account)?),
-        Err(error) => Err(account_errors(py, error, &[("AccountNotFoundError", 404), ("AccountConflictError", 409)])),
+        Err(error) => Err(account_errors(
+            py,
+            error,
+            &[("AccountNotFoundError", 404), ("AccountConflictError", 409)],
+        )),
     }
 }
 
@@ -773,7 +978,11 @@ pub(crate) fn revoke_role(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     );
     match result {
         Ok(account) => call.payload_json(&user_payload(&account)?),
-        Err(error) => Err(account_errors(py, error, &[("AccountNotFoundError", 404), ("AccountConflictError", 409)])),
+        Err(error) => Err(account_errors(
+            py,
+            error,
+            &[("AccountNotFoundError", 404), ("AccountConflictError", 409)],
+        )),
     }
 }
 
@@ -823,7 +1032,14 @@ pub(crate) fn grant_project_role(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     );
     match result {
         Ok(assignment) => call.payload_json(&assignment_payload(&assignment)?),
-        Err(error) => Err(account_errors(py, error, &[("AccountValidationError", 400), ("AccountConflictError", 409)])),
+        Err(error) => Err(account_errors(
+            py,
+            error,
+            &[
+                ("AccountValidationError", 400),
+                ("AccountConflictError", 409),
+            ],
+        )),
     }
 }
 
@@ -833,7 +1049,9 @@ pub(crate) fn revoke_project_role(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = store(call).call_method(
         "revoke_project_role",
         (),
-        Some(&py_kwargs!(py; assignment_id = path_uuid(call, 0)?, actor_user_id = user_id(&actor)?)?),
+        Some(
+            &py_kwargs!(py; assignment_id = path_uuid(call, 0)?, actor_user_id = user_id(&actor)?)?,
+        ),
     );
     match result {
         Ok(assignment) => call.payload_json(&assignment_payload(&assignment)?),

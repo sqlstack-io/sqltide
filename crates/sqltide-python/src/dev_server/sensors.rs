@@ -18,7 +18,10 @@ fn scheduler<'py>(call: &Call<'py, '_>) -> Bound<'py, PyAny> {
 }
 
 /// The compiled sensor registry, empty when the project declares no sensors.
-fn registry<'py>(call: &Call<'py, '_>, analysis: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn registry<'py>(
+    call: &Call<'py, '_>,
+    analysis: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let sensors = analysis.getattr("sensors")?;
     if sensors.is_none() {
         return attr(call.py, "sqltide.sensors.models", "SensorRegistry")?.call0();
@@ -26,7 +29,10 @@ fn registry<'py>(call: &Call<'py, '_>, analysis: &Bound<'py, PyAny>) -> PyResult
     sensors.getattr("registry")
 }
 
-fn repository<'py>(call: &Call<'py, '_>, connection: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn repository<'py>(
+    call: &Call<'py, '_>,
+    connection: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = call.py;
     invoke(
         py,
@@ -49,9 +55,19 @@ fn with_read_repository<'py, T>(
     reading(call, |connection| body(repository(call, connection)?))
 }
 
-fn require_sensor(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>, sensor_name: &str) -> Outcome<()> {
-    if !registry(call, analysis)?.getattr("sensors")?.contains(sensor_name)? {
-        return Err(Failure::status(404, format!("Unknown sensor '{sensor_name}'")));
+fn require_sensor(
+    call: &Call<'_, '_>,
+    analysis: &Bound<'_, PyAny>,
+    sensor_name: &str,
+) -> Outcome<()> {
+    if !registry(call, analysis)?
+        .getattr("sensors")?
+        .contains(sensor_name)?
+    {
+        return Err(Failure::status(
+            404,
+            format!("Unknown sensor '{sensor_name}'"),
+        ));
     }
     Ok(())
 }
@@ -87,7 +103,10 @@ fn window_bound(py: Python<'_>, name: &str, value: Option<String>) -> Outcome<Op
         if !error.is_instance_of::<pyo3::exceptions::PyValueError>(py) {
             return Err(error.into());
         }
-        return Err(Failure::status(400, format!("{name} must be an ISO timestamp, received '{value}'")));
+        return Err(Failure::status(
+            400,
+            format!("{name} must be an ISO timestamp, received '{value}'"),
+        ));
     }
     Ok(Some(value))
 }
@@ -120,7 +139,12 @@ pub(crate) fn read_dead_letters(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
     let analysis = servable(call)?;
     let result = with_read_repository(call, &analysis, |repository| {
-        Ok(invoke(py, SENSORS_PAYLOAD, "build_dead_letters_payload", py_kwargs!(py; repository = repository)?)?)
+        Ok(invoke(
+            py,
+            SENSORS_PAYLOAD,
+            "build_dead_letters_payload",
+            py_kwargs!(py; repository = repository)?,
+        )?)
     });
     call.payload(&catching(py, result, &[ADAPTER_ERROR])?)
 }
@@ -131,13 +155,17 @@ pub(crate) fn set_sensor_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let analysis = servable(call)?;
     require_sensor(call, &analysis, sensor_name)?;
     let requested = call.body()?.getattr("status")?;
-    let status = match attr(py, "sqltide.sensors.types", "SensorOverrideStatus")?.call1((&requested,)) {
-        Ok(status) => status,
-        Err(error) if error.is_instance_of::<pyo3::exceptions::PyValueError>(py) => {
-            return Err(Failure::status(400, format!("Unknown sensor status '{}'", requested.str()?)));
-        }
-        Err(error) => return Err(error.into()),
-    };
+    let status =
+        match attr(py, "sqltide.sensors.types", "SensorOverrideStatus")?.call1((&requested,)) {
+            Ok(status) => status,
+            Err(error) if error.is_instance_of::<pyo3::exceptions::PyValueError>(py) => {
+                return Err(Failure::status(
+                    400,
+                    format!("Unknown sensor status '{}'", requested.str()?),
+                ));
+            }
+            Err(error) => return Err(error.into()),
+        };
     authz::require_automation(call, Some(&analysis))?;
     let result: Outcome<()> = (|| {
         required_repository(call)?;
@@ -147,7 +175,9 @@ pub(crate) fn set_sensor_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         reading(call, |connection| {
             let repository = repository(call, connection)?;
             repository.call_method0("ensure_ready")?;
-            let actor = authenticated(call)?.getattr("principal")?.getattr("username")?;
+            let actor = authenticated(call)?
+                .getattr("principal")?
+                .getattr("username")?;
             repository.call_method(
                 "record_override",
                 (),
@@ -164,9 +194,16 @@ pub(crate) fn set_sensor_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
 }
 
 /// The dispatcher for dead-letter actions, or 503 without a warehouse.
-fn dispatcher<'py>(call: &Call<'py, '_>, analysis: &Bound<'py, PyAny>) -> Outcome<Bound<'py, PyAny>> {
+fn dispatcher<'py>(
+    call: &Call<'py, '_>,
+    analysis: &Bound<'py, PyAny>,
+) -> Outcome<Bound<'py, PyAny>> {
     let py: Python<'py> = call.py;
-    let dispatcher = scheduler(call).call_method("build_dispatcher", (), Some(&py_kwargs!(py; analysis = analysis)?))?;
+    let dispatcher = scheduler(call).call_method(
+        "build_dispatcher",
+        (),
+        Some(&py_kwargs!(py; analysis = analysis)?),
+    )?;
     if dispatcher.is_none() {
         required_repository(call)?;
         return Err(Failure::status(503, "no warehouse connection"));
@@ -216,7 +253,10 @@ pub(crate) fn skip_dead_letter(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         String::new()
     };
     if reason.is_empty() {
-        return Err(Failure::status(400, "Skipping a dead letter requires a reason"));
+        return Err(Failure::status(
+            400,
+            "Skipping a dead letter requires a reason",
+        ));
     }
     authz::require_automation(call, Some(&analysis))?;
     let dispatcher = dispatcher(call, &analysis)?;

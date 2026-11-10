@@ -29,7 +29,12 @@ struct Observation<'py> {
 
 impl<'py> Observation<'py> {
     fn empty(py: Python<'py>) -> PyResult<Self> {
-        Ok(Self { last_triggered_at: None, last_write_at: None, rows_written: 0_i64.into_pyobject(py)?.into_any(), latest_status: None })
+        Ok(Self {
+            last_triggered_at: None,
+            last_write_at: None,
+            rows_written: 0_i64.into_pyobject(py)?.into_any(),
+            latest_status: None,
+        })
     }
 }
 
@@ -108,7 +113,11 @@ pub(crate) fn build_parts_activity_query(database: &str) -> String {
 }
 
 fn rows<'py>(connection: &Any<'py>, query: String) -> PyResult<Vec<Any<'py>>> {
-    connection.call_method1("query", (query,))?.getattr("rows")?.try_iter()?.collect()
+    connection
+        .call_method1("query", (query,))?
+        .getattr("rows")?
+        .try_iter()?
+        .collect()
 }
 
 fn unqualified_relation(value: &str) -> String {
@@ -119,10 +128,17 @@ fn unqualified_relation(value: &str) -> String {
     }
 }
 
-fn query_view_observations<'py>(connection: &Any<'py>, database: &str, window_seconds: i64) -> PyResult<Observations<'py>> {
+fn query_view_observations<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    window_seconds: i64,
+) -> PyResult<Observations<'py>> {
     let py: Python<'py> = connection.py();
     let mut observations: Observations<'py> = Observations::default();
-    for row in rows(connection, build_query_views_activity_query(database, window_seconds))? {
+    for row in rows(
+        connection,
+        build_query_views_activity_query(database, window_seconds),
+    )? {
         let event_time: String = text(&row.get_item(0)?)?;
         let relation_name: String = unqualified_relation(&text(&row.get_item(1)?)?);
         let written_rows: Any<'py> = int(&row.get_item(2)?)?;
@@ -135,8 +151,16 @@ fn query_view_observations<'py>(connection: &Any<'py>, database: &str, window_se
         let wrote: bool = written_rows.gt(0)?;
         let observation = Observation {
             last_triggered_at: Some(event_time.clone()),
-            last_write_at: if succeeded && wrote { Some(event_time) } else { previous.last_write_at },
-            rows_written: if succeeded { previous.rows_written.add(&written_rows)? } else { previous.rows_written },
+            last_write_at: if succeeded && wrote {
+                Some(event_time)
+            } else {
+                previous.last_write_at
+            },
+            rows_written: if succeeded {
+                previous.rows_written.add(&written_rows)?
+            } else {
+                previous.rows_written
+            },
             latest_status: Some(status),
         };
         observations.insert(relation_name, observation);
@@ -144,10 +168,17 @@ fn query_view_observations<'py>(connection: &Any<'py>, database: &str, window_se
     Ok(observations)
 }
 
-fn part_log_observations<'py>(connection: &Any<'py>, database: &str, window_seconds: i64) -> PyResult<Observations<'py>> {
+fn part_log_observations<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    window_seconds: i64,
+) -> PyResult<Observations<'py>> {
     let py: Python<'py> = connection.py();
     let mut observations: Observations<'py> = Observations::default();
-    for row in rows(connection, build_part_log_activity_query(database, window_seconds))? {
+    for row in rows(
+        connection,
+        build_part_log_activity_query(database, window_seconds),
+    )? {
         let event_time: String = text(&row.get_item(0)?)?;
         let relation_name: String = text(&row.get_item(1)?)?;
         let written_rows: Any<'py> = int(&row.get_item(2)?)?;
@@ -157,7 +188,11 @@ fn part_log_observations<'py>(connection: &Any<'py>, database: &str, window_seco
         };
         let observation = Observation {
             last_triggered_at: Some(event_time.clone()),
-            last_write_at: if written_rows.gt(0)? { Some(event_time) } else { previous.last_write_at },
+            last_write_at: if written_rows.gt(0)? {
+                Some(event_time)
+            } else {
+                previous.last_write_at
+            },
             rows_written: previous.rows_written.add(&written_rows)?,
             latest_status: Some(SUCCESS_STATUS.to_owned()),
         };
@@ -216,15 +251,35 @@ fn write_activity_payload<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let moving: bool = observation.rows_written.gt(0)?;
     let detail: String = if moving {
-        format!("{} rows were written in the last {window_seconds}s.", observation.rows_written.str()?)
+        format!(
+            "{} rows were written in the last {window_seconds}s.",
+            observation.rows_written.str()?
+        )
     } else {
         format!("The model was triggered but wrote no rows in the last {window_seconds}s.")
     };
-    activity_payload(py, if moving { "moving" } else { "idle" }, source, true, false, window_seconds, detail, Some(observation))
+    activity_payload(
+        py,
+        if moving { "moving" } else { "idle" },
+        source,
+        true,
+        false,
+        window_seconds,
+        detail,
+        Some(observation),
+    )
 }
 
-fn view_activity_payload<'py>(py: Python<'py>, observation: &Observation<'py>, window_seconds: i64) -> PyResult<Bound<'py, PyDict>> {
-    if observation.latest_status.as_deref().is_some_and(|status| FAILURE_STATUSES.contains(&status)) {
+fn view_activity_payload<'py>(
+    py: Python<'py>,
+    observation: &Observation<'py>,
+    window_seconds: i64,
+) -> PyResult<Bound<'py, PyDict>> {
+    if observation
+        .latest_status
+        .as_deref()
+        .is_some_and(|status| FAILURE_STATUSES.contains(&status))
+    {
         return activity_payload(
             py,
             "stalled",
@@ -241,7 +296,10 @@ fn view_activity_payload<'py>(py: Python<'py>, observation: &Observation<'py>, w
 
 /// `datetime.fromisoformat` of a warehouse timestamp with its space separator replaced; `None`
 /// when it does not parse.
-pub(crate) fn parse_warehouse_timestamp<'py>(py: Python<'py>, value: &str) -> PyResult<Option<Any<'py>>> {
+pub(crate) fn parse_warehouse_timestamp<'py>(
+    py: Python<'py>,
+    value: &str,
+) -> PyResult<Option<Any<'py>>> {
     let datetime = attr(py, "datetime", "datetime")?;
     match datetime.call_method1("fromisoformat", (value.replace(' ', "T"),)) {
         Ok(parsed) => Ok(Some(parsed)),
@@ -250,7 +308,11 @@ pub(crate) fn parse_warehouse_timestamp<'py>(py: Python<'py>, value: &str) -> Py
     }
 }
 
-fn age_seconds(py: Python<'_>, timestamp: Option<&str>, captured_at: &str) -> PyResult<Option<f64>> {
+fn age_seconds(
+    py: Python<'_>,
+    timestamp: Option<&str>,
+    captured_at: &str,
+) -> PyResult<Option<f64>> {
     let Some(timestamp) = timestamp else {
         return Ok(None);
     };
@@ -260,7 +322,10 @@ fn age_seconds(py: Python<'_>, timestamp: Option<&str>, captured_at: &str) -> Py
     let Some(now_at) = parse_warehouse_timestamp(py, captured_at)? else {
         return Ok(None);
     };
-    let seconds: f64 = now_at.sub(&observed_at)?.call_method0("total_seconds")?.extract()?;
+    let seconds: f64 = now_at
+        .sub(&observed_at)?
+        .call_method0("total_seconds")?
+        .extract()?;
     Ok(Some(if 0.0 > seconds { 0.0 } else { seconds }))
 }
 
@@ -277,12 +342,30 @@ fn approximate_activity_payload<'py>(
     } else {
         "No recent table-part modification was observed."
     };
-    activity_payload(py, if moving { "moving" } else { "idle" }, "system_parts", true, true, window_seconds, detail.to_owned(), Some(observation))
+    activity_payload(
+        py,
+        if moving { "moving" } else { "idle" },
+        "system_parts",
+        true,
+        true,
+        window_seconds,
+        detail.to_owned(),
+        Some(observation),
+    )
 }
 
-type Evidence<'py> = (Vec<String>, Observations<'py>, Observations<'py>, Observations<'py>);
+type Evidence<'py> = (
+    Vec<String>,
+    Observations<'py>,
+    Observations<'py>,
+    Observations<'py>,
+);
 
-fn collect_evidence<'py>(connection: &Any<'py>, database: &str, window_seconds: i64) -> PyResult<Evidence<'py>> {
+fn collect_evidence<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    window_seconds: i64,
+) -> PyResult<Evidence<'py>> {
     let mut capabilities: Vec<String> = Vec::new();
     for row in rows(connection, build_activity_capabilities_query().to_owned())? {
         let name: String = text(&row.get_item(0)?)?;
@@ -291,12 +374,21 @@ fn collect_evidence<'py>(connection: &Any<'py>, database: &str, window_seconds: 
         }
     }
     let has = |name: &str| capabilities.iter().any(|item| item == name);
-    let views: Observations<'py> =
-        if has(QUERY_VIEWS_LOG) { query_view_observations(connection, database, window_seconds)? } else { Observations::default() };
-    let parts: Observations<'py> =
-        if has(PART_LOG) { part_log_observations(connection, database, window_seconds)? } else { Observations::default() };
-    let approximate: Observations<'py> =
-        if capabilities.is_empty() { parts_observations(connection, database)? } else { Observations::default() };
+    let views: Observations<'py> = if has(QUERY_VIEWS_LOG) {
+        query_view_observations(connection, database, window_seconds)?
+    } else {
+        Observations::default()
+    };
+    let parts: Observations<'py> = if has(PART_LOG) {
+        part_log_observations(connection, database, window_seconds)?
+    } else {
+        Observations::default()
+    };
+    let approximate: Observations<'py> = if capabilities.is_empty() {
+        parts_observations(connection, database)?
+    } else {
+        Observations::default()
+    };
     Ok((capabilities, views, parts, approximate))
 }
 
@@ -328,21 +420,27 @@ pub(crate) fn read_model_activity<'py>(
             )?,
         )?;
     }
-    let (capabilities, views, parts, approximate) = match collect_evidence(&connection, database, window_seconds) {
-        Ok(evidence) => evidence,
-        Err(error)
-            if error.is_instance_of::<PyKeyError>(py)
-                || error.is_instance_of::<PyTypeError>(py)
-                || error.is_instance_of::<PyValueError>(py)
-                || error.is_instance(py, &attr(py, "sqltide.adapter.exceptions", "AdapterError")?) =>
-        {
-            return Ok(unknown);
-        }
-        Err(error) => return Err(error),
-    };
+    let (capabilities, views, parts, approximate) =
+        match collect_evidence(&connection, database, window_seconds) {
+            Ok(evidence) => evidence,
+            Err(error)
+                if error.is_instance_of::<PyKeyError>(py)
+                    || error.is_instance_of::<PyTypeError>(py)
+                    || error.is_instance_of::<PyValueError>(py)
+                    || error.is_instance(
+                        py,
+                        &attr(py, "sqltide.adapter.exceptions", "AdapterError")?,
+                    ) =>
+            {
+                return Ok(unknown);
+            }
+            Err(error) => return Err(error),
+        };
     let physical_by_logical: Bound<'py, PyDict> = match active_bindings {
         None => PyDict::new(py),
-        Some(bindings) => attr(py, "builtins", "dict")?.call1((bindings,))?.cast_into::<PyDict>()?,
+        Some(bindings) => attr(py, "builtins", "dict")?
+            .call1((bindings,))?
+            .cast_into::<PyDict>()?,
     };
     let payloads: Bound<'py, PyDict> = PyDict::new(py);
     for relation_name in &relation_names {
@@ -352,7 +450,11 @@ pub(crate) fn read_model_activity<'py>(
             Some(physical) => physical.extract().ok(),
         };
         let find = |observations: &Observations<'py>| -> Option<Observation<'py>> {
-            evidence.as_deref().and_then(|name| observations.get(name)).or_else(|| observations.get(relation_name)).cloned()
+            evidence
+                .as_deref()
+                .and_then(|name| observations.get(name))
+                .or_else(|| observations.get(relation_name))
+                .cloned()
         };
         let payload: Bound<'py, PyDict> = if let Some(observation) = find(&views) {
             view_activity_payload(py, &observation, window_seconds)?
@@ -361,7 +463,11 @@ pub(crate) fn read_model_activity<'py>(
         } else if let Some(observation) = find(&approximate) {
             approximate_activity_payload(py, &observation, captured_at, window_seconds)?
         } else if !capabilities.is_empty() {
-            let source: &str = if capabilities.iter().any(|item| item == QUERY_VIEWS_LOG) { QUERY_VIEWS_LOG } else { PART_LOG };
+            let source: &str = if capabilities.iter().any(|item| item == QUERY_VIEWS_LOG) {
+                QUERY_VIEWS_LOG
+            } else {
+                PART_LOG
+            };
             activity_payload(
                 py,
                 "idle",
@@ -373,7 +479,10 @@ pub(crate) fn read_model_activity<'py>(
                 None,
             )?
         } else {
-            unknown.get_item(relation_name)?.expect("every relation has an unknown payload").cast_into::<PyDict>()?
+            unknown
+                .get_item(relation_name)?
+                .expect("every relation has an unknown payload")
+                .cast_into::<PyDict>()?
         };
         payloads.set_item(relation_name, payload)?;
     }

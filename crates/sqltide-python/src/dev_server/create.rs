@@ -18,13 +18,23 @@ const LOCALHOST_NAME: &str = "localhost";
 /// Control-store URLs that name a private in-memory SQLite database.
 pub(crate) const SQLITE_MEMORY_URLS: [&str; 2] = ["sqlite://", "sqlite:///:memory:"];
 
-fn default_control_store_url(py: Python<'_>, project_dir: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-    Ok(attr(py, "sqltide.auth.main.default_control_store_url", "default_control_store_url")?
-        .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))?
-        .unbind())
+fn default_control_store_url(
+    py: Python<'_>,
+    project_dir: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    Ok(attr(
+        py,
+        "sqltide.auth.main.default_control_store_url",
+        "default_control_store_url",
+    )?
+    .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))?
+    .unbind())
 }
 
-fn disabled_settings<'py>(py: Python<'py>, project_dir: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn disabled_settings<'py>(
+    py: Python<'py>,
+    project_dir: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let mode = attr(py, "sqltide.auth.types", "AuthenticationMode")?.getattr("DISABLED")?;
     attr(py, "sqltide.auth.models", "AuthSettings")?.call(
         (),
@@ -64,49 +74,69 @@ fn state_snapshot<'py>(
     let state: Py<PyAny> = attr(py, "weakref", "ref")?.call1((state,))?.unbind();
     let warehouse: Py<PyAny> = warehouse.clone().unbind();
     let lag_reader: Py<PyAny> = kafka_lag_reader.clone().unbind();
-    let build = PyCFunction::new_closure(py, None, None, move |args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>| -> PyResult<Py<PyAny>> {
-        let py: Python<'_> = args.py();
-        let not_compiled = |detail: &str| -> PyErr {
-            match attr(py, "sqltide.dev_server.exceptions", "ProjectNotCompiledError").and_then(|class| class.call1((detail,))) {
-                Ok(value) => PyErr::from_value(value),
-                Err(error) => error,
+    let build = PyCFunction::new_closure(
+        py,
+        None,
+        None,
+        move |args: &Bound<'_, PyTuple>,
+              _kwargs: Option<&Bound<'_, PyDict>>|
+              -> PyResult<Py<PyAny>> {
+            let py: Python<'_> = args.py();
+            let not_compiled = |detail: &str| -> PyErr {
+                match attr(
+                    py,
+                    "sqltide.dev_server.exceptions",
+                    "ProjectNotCompiledError",
+                )
+                .and_then(|class| class.call1((detail,)))
+                {
+                    Ok(value) => PyErr::from_value(value),
+                    Err(error) => error,
+                }
+            };
+            let Some(database) = database.clone() else {
+                return Err(not_compiled("no warehouse connection"));
+            };
+            let state = state.bind(py).call0()?;
+            if state.is_none() {
+                return Err(not_compiled("the dev server state was closed"));
             }
-        };
-        let Some(database) = database.clone() else {
-            return Err(not_compiled("no warehouse connection"));
-        };
-        let state = state.bind(py).call0()?;
-        if state.is_none() {
-            return Err(not_compiled("the dev server state was closed"));
-        }
-        let analysis = state.call_method0("current_analysis")?;
-        if let Some(reader) = &reader {
-            return Ok(reader
-                .bind(py)
-                .call_method("read", (), Some(&py_kwargs!(py; analysis = analysis, database = database.as_str())?))?
-                .unbind());
-        }
-        let connection = warehouse.bind(py).getattr("connection")?;
-        if connection.is_none() {
-            return Err(not_compiled("no warehouse connection"));
-        }
-        let lock = state.getattr("query_lock")?;
-        crate::handling::within(&lock, || {
-            Ok(attr(py, NATIVE, "build_state_payload")?
-                .call(
-                    (),
-                    Some(&py_kwargs!(py;
-                        analysis = &analysis,
-                        connection = &connection,
-                        database = database.as_str(),
-                        kafka_lag_reader = lag_reader.bind(py),
-                        warehouse_health_reader = health_reader.bind(py),
-                    )?),
-                )?
-                .unbind())
-        })
-    })?;
-    attr(py, NATIVE, "StateSnapshot")?.call((), Some(&py_kwargs!(py; build = build, on_close = on_close)?))
+            let analysis = state.call_method0("current_analysis")?;
+            if let Some(reader) = &reader {
+                return Ok(reader
+                    .bind(py)
+                    .call_method(
+                        "read",
+                        (),
+                        Some(&py_kwargs!(py; analysis = analysis, database = database.as_str())?),
+                    )?
+                    .unbind());
+            }
+            let connection = warehouse.bind(py).getattr("connection")?;
+            if connection.is_none() {
+                return Err(not_compiled("no warehouse connection"));
+            }
+            let lock = state.getattr("query_lock")?;
+            crate::handling::within(&lock, || {
+                Ok(attr(py, NATIVE, "build_state_payload")?
+                    .call(
+                        (),
+                        Some(&py_kwargs!(py;
+                            analysis = &analysis,
+                            connection = &connection,
+                            database = database.as_str(),
+                            kafka_lag_reader = lag_reader.bind(py),
+                            warehouse_health_reader = health_reader.bind(py),
+                        )?),
+                    )?
+                    .unbind())
+            })
+        },
+    )?;
+    attr(py, NATIVE, "StateSnapshot")?.call(
+        (),
+        Some(&py_kwargs!(py; build = build, on_close = on_close)?),
+    )
 }
 
 /// Assemble one application over the shared long-running server state.
@@ -136,14 +166,18 @@ pub(crate) fn create_dev_app(
     };
     let held: Option<String> = context.getattr("database")?.extract()?;
     if let (Some(requested), Some(held)) = (&database, &held)
-        && requested != held {
-            let error = attr(py, "sqltide.dev_server.exceptions", "DevConfigurationError")?.call1((format!(
+        && requested != held
+    {
+        let error = attr(py, "sqltide.dev_server.exceptions", "DevConfigurationError")?.call1((format!(
                 "Dev server database does not match its retained execution context: '{requested}' != '{held}'"
             ),))?;
-            return Err(PyErr::from_value(error));
-        }
+        return Err(PyErr::from_value(error));
+    }
     if held.is_none() {
-        context = attr(py, "dataclasses", "replace")?.call((&context,), Some(&py_kwargs!(py; database = database.clone())?))?;
+        context = attr(py, "dataclasses", "replace")?.call(
+            (&context,),
+            Some(&py_kwargs!(py; database = database.clone())?),
+        )?;
     }
     let effective_database: Option<String> = context.getattr("database")?.extract()?;
     let project_dir = match project_dir {
@@ -157,10 +191,13 @@ pub(crate) fn create_dev_app(
     let owns_accounts: bool = control_store.is_none();
     let accounts = match control_store {
         Some(store) => store,
-        None => attr(py, "sqltide.auth.classes.control_store", "ControlStore")?
-            .call((), Some(&py_kwargs!(py; url = settings.getattr("control_store_url")?)?))?,
+        None => attr(py, "sqltide.auth.classes.control_store", "ControlStore")?.call(
+            (),
+            Some(&py_kwargs!(py; url = settings.getattr("control_store_url")?)?),
+        )?,
     };
-    let auth: AuthService = AuthService::new(py, settings.clone().unbind(), accounts.clone().unbind())?;
+    let auth: AuthService =
+        AuthService::new(py, settings.clone().unbind(), accounts.clone().unbind())?;
     if let (Some(connection), Some(database)) = (&connection, &effective_database) {
         connection.call_method1("validate_metadata_state", (database.as_str(),))?;
     }
@@ -176,8 +213,10 @@ pub(crate) fn create_dev_app(
             query_lock = lock,
         )?),
     )?;
-    let cancellation = attr(py, NATIVE, "BuildCancellationCoordinator")?
-        .call((), Some(&py_kwargs!(py; warehouse = &warehouse, database = effective_database.clone())?))?;
+    let cancellation = attr(py, NATIVE, "BuildCancellationCoordinator")?.call(
+        (),
+        Some(&py_kwargs!(py; warehouse = &warehouse, database = effective_database.clone())?),
+    )?;
     let builds = attr(py, NATIVE, "BuildProcessManager")?.call(
         (),
         Some(&py_kwargs!(py;
@@ -220,15 +259,18 @@ pub(crate) fn create_dev_app(
     } else {
         accounts.getattr("url")?
     };
-    let plans = attr(py, "sqltide.executor.destruction.classes.relational_destruction_plan_store", "RelationalDestructionPlanStore")?
-        .call((), Some(&py_kwargs!(py; url = plans_url)?));
+    let plans = attr(
+        py,
+        "sqltide.executor.destruction.classes.relational_destruction_plan_store",
+        "RelationalDestructionPlanStore",
+    )?
+    .call((), Some(&py_kwargs!(py; url = plans_url)?));
     let plans = match plans {
         Ok(plans) => plans,
         Err(error) => {
-            if owns_accounts
-                && let Err(closing) = accounts.call_method0("close") {
-                    return Err(while_handling(py, closing, &error));
-                }
+            if owns_accounts && let Err(closing) = accounts.call_method0("close") {
+                return Err(while_handling(py, closing, &error));
+            }
             return Err(error);
         }
     };
@@ -273,7 +315,8 @@ pub(crate) fn create_dev_app(
 /// The packaged UI build directory; it may not exist in dev checkouts.
 #[pyfunction]
 pub(crate) fn static_assets_root(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-    let package = attr(py, "pathlib", "Path")?.call1((py.import("sqltide")?.getattr("__file__")?,))?;
+    let package =
+        attr(py, "pathlib", "Path")?.call1((py.import("sqltide")?.getattr("__file__")?,))?;
     package
         .call_method0("resolve")?
         .getattr("parent")?
@@ -297,15 +340,22 @@ fn is_loopback_bind(host: &str) -> bool {
         return !zone.is_empty()
             && !zone.contains('%')
             && address.parse::<std::net::Ipv6Addr>().is_ok_and(|address| {
-                address.is_loopback() || address.to_ipv4_mapped().is_some_and(|mapped| mapped.is_loopback())
+                address.is_loopback()
+                    || address
+                        .to_ipv4_mapped()
+                        .is_some_and(|mapped| mapped.is_loopback())
             });
     }
-    host.parse::<std::net::IpAddr>().is_ok_and(|address| match address {
-        std::net::IpAddr::V4(address) => address.is_loopback(),
-        std::net::IpAddr::V6(address) => {
-            address.is_loopback() || address.to_ipv4_mapped().is_some_and(|mapped| mapped.is_loopback())
-        }
-    })
+    host.parse::<std::net::IpAddr>()
+        .is_ok_and(|address| match address {
+            std::net::IpAddr::V4(address) => address.is_loopback(),
+            std::net::IpAddr::V6(address) => {
+                address.is_loopback()
+                    || address
+                        .to_ipv4_mapped()
+                        .is_some_and(|mapped| mapped.is_loopback())
+            }
+        })
 }
 
 fn eprint(py: Python<'_>, text: &str) -> PyResult<()> {
@@ -337,10 +387,19 @@ pub(crate) fn run_dev_server(
     };
     let mode: String = settings.getattr("mode")?.str()?.to_string();
     if mode == "disabled" {
-        eprint(py, "sqt dev: authentication disabled; all clients have administrator access.")?;
+        eprint(
+            py,
+            "sqt dev: authentication disabled; all clients have administrator access.",
+        )?;
     }
-    if mode == "password" && !settings.getattr("session_cookie_secure")?.is_truthy()? && !is_loopback_bind(&host) {
-        eprint(py, "sqt dev: insecure password cookies may only be used on a loopback address.")?;
+    if mode == "password"
+        && !settings.getattr("session_cookie_secure")?.is_truthy()?
+        && !is_loopback_bind(&host)
+    {
+        eprint(
+            py,
+            "sqt dev: insecure password cookies may only be used on a loopback address.",
+        )?;
         return Ok(1);
     }
     let native = py.import("sqltide._native")?;
@@ -352,11 +411,15 @@ pub(crate) fn run_dev_server(
     {
         eprint(
             py,
-            &format!("sqt dev: built UI not found at {}; run `make ui-build` to build and package it.", assets_root.str()?),
+            &format!(
+                "sqt dev: built UI not found at {}; run `make ui-build` to build and package it.",
+                assets_root.str()?
+            ),
         )?;
         return Ok(1);
     }
-    let state = attr(py, NATIVE, "DevServerState")?.call((), Some(&py_kwargs!(py; run_compile = run_compile)?))?;
+    let state = attr(py, NATIVE, "DevServerState")?
+        .call((), Some(&py_kwargs!(py; run_compile = run_compile)?))?;
     let outcome = state.call_method0("current")?;
     let application = native.getattr("create_dev_app")?.call(
         (),

@@ -508,20 +508,19 @@ fn run_authorized_destruction<'py>(
     )?;
     let plan: Value<'py> = plan_destruction(&request, analysis, client)?;
     let control_store_url: Value<'py> = options.getattr("control_store_url")?;
-    let plan_store_url: Value<'py> =
-        if control_store_url
-            .extract::<String>()
-            .is_ok_and(|url| crate::dev_server::create::SQLITE_MEMORY_URLS.contains(&url.as_str()))
-        {
-            call(
-                py,
-                DEFAULT_CONTROL_STORE_URL,
-                "default_control_store_url",
-                &[("project_dir", options.getattr("project_dir")?)],
-            )?
-        } else {
-            control_store_url
-        };
+    let plan_store_url: Value<'py> = if control_store_url
+        .extract::<String>()
+        .is_ok_and(|url| crate::dev_server::create::SQLITE_MEMORY_URLS.contains(&url.as_str()))
+    {
+        call(
+            py,
+            DEFAULT_CONTROL_STORE_URL,
+            "default_control_store_url",
+            &[("project_dir", options.getattr("project_dir")?)],
+        )?
+    } else {
+        control_store_url
+    };
     let store: Value<'py> = build(
         py,
         PLAN_STORE,

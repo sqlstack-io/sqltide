@@ -41,11 +41,24 @@ impl StaticAssets {
     pub(crate) fn serve(&self, py: Python<'_>, request: &HttpRequest) -> Option<HttpReply> {
         let immutable: PathBuf = self.root.join("_app").join("immutable");
         if immutable.is_dir()
-            && let Some(rest) = mount_rest(&request.path, "/_app/immutable") {
-                return Some(mounted(py, request, &immutable, rest, IMMUTABLE_CACHE_CONTROL));
-            }
+            && let Some(rest) = mount_rest(&request.path, "/_app/immutable")
+        {
+            return Some(mounted(
+                py,
+                request,
+                &immutable,
+                rest,
+                IMMUTABLE_CACHE_CONTROL,
+            ));
+        }
         if let Some(rest) = mount_rest(&request.path, "/_app") {
-            return Some(mounted(py, request, &self.root.join("_app"), rest, REVALIDATE_CACHE_CONTROL));
+            return Some(mounted(
+                py,
+                request,
+                &self.root.join("_app"),
+                rest,
+                REVALIDATE_CACHE_CONTROL,
+            ));
         }
         if request.method != "GET" {
             return None;
@@ -61,7 +74,13 @@ impl StaticAssets {
             self.root.join(INDEX_FILE_NAME)
         };
         Some(match fs::metadata(&chosen) {
-            Ok(metadata) => file_reply(py, request, &chosen, &metadata, Some(REVALIDATE_CACHE_CONTROL)),
+            Ok(metadata) => file_reply(
+                py,
+                request,
+                &chosen,
+                &metadata,
+                Some(REVALIDATE_CACHE_CONTROL),
+            ),
             Err(_) => not_found(),
         })
     }
@@ -82,7 +101,13 @@ fn reply_or_empty(reply: pyo3::PyResult<HttpReply>, status: u16) -> HttpReply {
 }
 
 /// `StaticFiles(directory)` behind a middleware that sets `Cache-Control` on what it sends.
-fn mounted(py: Python<'_>, request: &HttpRequest, directory: &Path, rest: &str, cache_control: &str) -> HttpReply {
+fn mounted(
+    py: Python<'_>,
+    request: &HttpRequest,
+    directory: &Path,
+    rest: &str,
+    cache_control: &str,
+) -> HttpReply {
     if request.method != "GET" && request.method != "HEAD" {
         return reply_or_empty(
             Failure::reply(
@@ -174,7 +199,10 @@ fn lookup(directory: &Path, relative: &str) -> Option<(PathBuf, fs::Metadata)> {
 
 /// `StaticFiles.is_not_modified`.
 fn not_modified(request: &HttpRequest, reply: &HttpReply) -> bool {
-    if let Some(tags) = request.header("if-none-match").filter(|tags| !tags.is_empty()) {
+    if let Some(tags) = request
+        .header("if-none-match")
+        .filter(|tags| !tags.is_empty())
+    {
         if tags.trim() == "*" {
             return true;
         }
@@ -183,7 +211,9 @@ fn not_modified(request: &HttpRequest, reply: &HttpReply) -> bool {
             .split(',')
             .any(|tag| tag.trim().strip_prefix("W/").unwrap_or(tag.trim()) == etag);
     }
-    let since: Option<i64> = request.header("if-modified-since").and_then(parse_http_date);
+    let since: Option<i64> = request
+        .header("if-modified-since")
+        .and_then(parse_http_date);
     let modified: Option<i64> = reply.header("last-modified").and_then(parse_http_date);
     matches!((since, modified), (Some(since), Some(modified)) if since >= modified)
 }
@@ -203,7 +233,13 @@ fn parse_http_date(value: &str) -> Option<i64> {
         return None;
     };
     let day: i64 = day.parse().ok()?;
-    let month: i64 = i64::try_from(MONTHS.iter().position(|name| month.eq_ignore_ascii_case(name))?).ok()? + 1;
+    let month: i64 = i64::try_from(
+        MONTHS
+            .iter()
+            .position(|name| month.eq_ignore_ascii_case(name))?,
+    )
+    .ok()?
+        + 1;
     let mut year: i64 = year.parse().ok()?;
     if year < 100 {
         year += if year > 68 { 1900 } else { 2000 };
@@ -252,18 +288,28 @@ fn file_reply(
         body: Vec::new(),
     };
     if let Some(cache_control) = cache_control {
-        reply.headers.push(("cache-control".to_owned(), cache_control.to_owned()));
+        reply
+            .headers
+            .push(("cache-control".to_owned(), cache_control.to_owned()));
     }
-    reply.headers.push(("content-type".to_owned(), media.clone()));
-    reply.headers.push(("accept-ranges".to_owned(), "bytes".to_owned()));
-    reply.headers.push(("content-length".to_owned(), size.to_string()));
-    reply.headers.push(("last-modified".to_owned(), last_modified.clone()));
+    reply
+        .headers
+        .push(("content-type".to_owned(), media.clone()));
+    reply
+        .headers
+        .push(("accept-ranges".to_owned(), "bytes".to_owned()));
+    reply
+        .headers
+        .push(("content-length".to_owned(), size.to_string()));
+    reply
+        .headers
+        .push(("last-modified".to_owned(), last_modified.clone()));
     reply.headers.push(("etag".to_owned(), etag.clone()));
     let head: bool = request.method == "HEAD";
     let use_range: bool = request.header("range").is_some()
-        && request
-            .header("if-range")
-            .is_none_or(|if_range| !if_range.starts_with("W/") && (if_range == last_modified || if_range == etag));
+        && request.header("if-range").is_none_or(|if_range| {
+            !if_range.starts_with("W/") && (if_range == last_modified || if_range == etag)
+        });
     let Ok(body) = fs::read(path) else {
         return not_found();
     };
@@ -278,7 +324,10 @@ fn file_reply(
         }
         Err(RangeError::NotSatisfiable) => {
             let mut reply: HttpReply = HttpReply::new(416, "text/plain; charset=utf-8", Vec::new());
-            reply.headers.insert(0, ("content-range".to_owned(), format!("bytes */{file_size}")));
+            reply.headers.insert(
+                0,
+                ("content-range".to_owned(), format!("bytes */{file_size}")),
+            );
             reply
         }
         Ok(ranges) if ranges.is_empty() => {
@@ -288,12 +337,16 @@ fn file_reply(
         Ok(ranges) if ranges.len() == 1 => {
             let (start, end) = ranges[0];
             reply.status = 206;
-            reply.set_header("content-range", format!("bytes {start}-{}/{file_size}", end - 1));
+            reply.set_header(
+                "content-range",
+                format!("bytes {start}-{}/{file_size}", end - 1),
+            );
             reply.set_header("content-length", (end - start).to_string());
             reply.body = if head {
                 Vec::new()
             } else {
-                body[usize::try_from(start).unwrap_or(0)..usize::try_from(end).unwrap_or(0)].to_vec()
+                body[usize::try_from(start).unwrap_or(0)..usize::try_from(end).unwrap_or(0)]
+                    .to_vec()
             };
             reply
         }
@@ -315,7 +368,10 @@ fn file_reply(
             }
             payload.extend_from_slice(format!("--{boundary}--").as_bytes());
             reply.status = 206;
-            reply.set_header("content-type", format!("multipart/byteranges; boundary={boundary}"));
+            reply.set_header(
+                "content-type",
+                format!("multipart/byteranges; boundary={boundary}"),
+            );
             reply.set_header("content-length", payload.len().to_string());
             reply.body = if head { Vec::new() } else { payload };
             reply
@@ -379,13 +435,17 @@ fn parse_range_header(header: &str, file_size: u64) -> Result<Vec<(u64, u64)>, R
         }
     }
     if ranges.is_empty() {
-        return Err(RangeError::Malformed("Range header: range must be requested".to_owned()));
+        return Err(RangeError::Malformed(
+            "Range header: range must be requested".to_owned(),
+        ));
     }
     if ranges.iter().any(|(start, _)| *start >= file_size) {
         return Err(RangeError::NotSatisfiable);
     }
     if ranges.iter().any(|(start, end)| start >= end) {
-        return Err(RangeError::Malformed("Range header: start must be less than end".to_owned()));
+        return Err(RangeError::Malformed(
+            "Range header: start must be less than end".to_owned(),
+        ));
     }
     if ranges.len() == 1 {
         return Ok(ranges);

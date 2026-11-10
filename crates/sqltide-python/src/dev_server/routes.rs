@@ -10,8 +10,8 @@ use super::app::{BodySpec, Call, Endpoint, QueryParam};
 use super::auth;
 use super::authz;
 use super::destruction;
-use super::lifecycle::DevServerState;
 use super::http::{Failure, HttpReply, Outcome, Route, object, py_json};
+use super::lifecycle::DevServerState;
 use super::sensors;
 use super::support::{ADAPTER_ERROR, Scalar, attr, is_instance, translate};
 use crate::handling::while_handling;
@@ -28,15 +28,30 @@ const COMPILE_RUNNER: &str = NATIVE;
 const NATIVE: &str = "sqltide._native";
 
 const TEXT: Scalar = Scalar::Text { min_length: None };
-const NON_NEGATIVE: Scalar = Scalar::Integer { ge: Some(0), le: None };
+const NON_NEGATIVE: Scalar = Scalar::Integer {
+    ge: Some(0),
+    le: None,
+};
 const INTEGER: Scalar = Scalar::Integer { ge: None, le: None };
 
 /// The failures the build and plan routes answer with 400.
 const PLANNING_ERRORS: [(&str, &str, u16); 5] = [
-    ("sqltide.executor.backfill.exceptions", "BackfillExecutionError", 400),
+    (
+        "sqltide.executor.backfill.exceptions",
+        "BackfillExecutionError",
+        400,
+    ),
     ("sqltide.cli.entry.exceptions", "CliUserError", 400),
-    ("sqltide.executor.direct.exceptions", "DirectBuildError", 400),
-    ("sqltide.compiler.planner.exceptions", "DirectPlanError", 400),
+    (
+        "sqltide.executor.direct.exceptions",
+        "DirectBuildError",
+        400,
+    ),
+    (
+        "sqltide.compiler.planner.exceptions",
+        "DirectPlanError",
+        400,
+    ),
     VALUE_ERROR,
 ];
 
@@ -55,7 +70,12 @@ pub(crate) fn warehouse<'py>(call: &Call<'py, '_>) -> Bound<'py, PyAny> {
 }
 
 /// Call `module.name(**kwargs)`, looked up when called.
-pub(crate) fn invoke<'py>(py: Python<'py>, module: &str, name: &str, kwargs: Bound<'py, PyDict>) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn invoke<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+    kwargs: Bound<'py, PyDict>,
+) -> PyResult<Bound<'py, PyAny>> {
     attr(py, module, name)?.call((), Some(&kwargs))
 }
 
@@ -63,7 +83,11 @@ pub(crate) fn invoke<'py>(py: Python<'py>, module: &str, name: &str, kwargs: Bou
 pub(crate) fn servable<'py>(call: &Call<'py, '_>) -> Outcome<Bound<'py, PyAny>> {
     match state(call).call_method0("current_analysis") {
         Ok(analysis) => Ok(analysis),
-        Err(error) => Err(translate(call.py, error, &[(DEV_EXCEPTIONS, "ProjectNotCompiledError", 409)])),
+        Err(error) => Err(translate(
+            call.py,
+            error,
+            &[(DEV_EXCEPTIONS, "ProjectNotCompiledError", 409)],
+        )),
     }
 }
 
@@ -120,12 +144,18 @@ pub(crate) fn within<'py, T>(
 }
 
 /// Run `body` holding the shared warehouse query lock.
-pub(crate) fn locked<'py, T>(call: &Call<'py, '_>, body: impl FnOnce() -> Outcome<T>) -> Outcome<T> {
+pub(crate) fn locked<'py, T>(
+    call: &Call<'py, '_>,
+    body: impl FnOnce() -> Outcome<T>,
+) -> Outcome<T> {
     within(&state(call).getattr("query_lock")?, |_| body())
 }
 
 /// Run `body` on an isolated bounded read connection, or 503 without one.
-pub(crate) fn reading<'py, T>(call: &Call<'py, '_>, body: impl FnOnce(&Bound<'py, PyAny>) -> Outcome<T>) -> Outcome<T> {
+pub(crate) fn reading<'py, T>(
+    call: &Call<'py, '_>,
+    body: impl FnOnce(&Bound<'py, PyAny>) -> Outcome<T>,
+) -> Outcome<T> {
     let manager = warehouse(call).call_method0("read_connection")?;
     let has_database: bool = call.app.services.database.is_some();
     within(&manager, |connection| {
@@ -137,17 +167,29 @@ pub(crate) fn reading<'py, T>(call: &Call<'py, '_>, body: impl FnOnce(&Bound<'py
 }
 
 /// Map Python failures of `result` through ordered `except` clauses.
-pub(crate) fn catching<T>(py: Python<'_>, result: Outcome<T>, clauses: &[(&str, &str, u16)]) -> Outcome<T> {
+pub(crate) fn catching<T>(
+    py: Python<'_>,
+    result: Outcome<T>,
+    clauses: &[(&str, &str, u16)],
+) -> Outcome<T> {
     match result {
         Err(Failure::Python(error)) => Err(translate(py, error, clauses)),
         other => other,
     }
 }
 
-fn status_payload<'py>(call: &Call<'py, '_>, outcome: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn status_payload<'py>(
+    call: &Call<'py, '_>,
+    outcome: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = call.py;
     let warehouse_status = warehouse(call).call_method0("status")?;
-    invoke(py, COMPILE_RUNNER, "build_status_payload", py_kwargs!(py; outcome = outcome, warehouse_status = warehouse_status)?)
+    invoke(
+        py,
+        COMPILE_RUNNER,
+        "build_status_payload",
+        py_kwargs!(py; outcome = outcome, warehouse_status = warehouse_status)?,
+    )
 }
 
 // Status, state and project routes.
@@ -156,7 +198,12 @@ fn read_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
     let warehouse_status = warehouse(call).call_method0("status")?;
     let outcome = state(call).call_method0("current")?;
-    let payload = invoke(py, COMPILE_RUNNER, "build_status_payload", py_kwargs!(py; outcome = outcome, warehouse_status = warehouse_status)?)?;
+    let payload = invoke(
+        py,
+        COMPILE_RUNNER,
+        "build_status_payload",
+        py_kwargs!(py; outcome = outcome, warehouse_status = warehouse_status)?,
+    )?;
     call.payload(&payload)
 }
 
@@ -165,7 +212,9 @@ fn refresh_warehouse(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     if runtime.getattr("connection")?.is_none() {
         runtime.call_method0("connect_now")?;
     }
-    state(call).getattr("snapshot")?.call_method0("invalidate")?;
+    state(call)
+        .getattr("snapshot")?
+        .call_method0("invalidate")?;
     read_status(call)
 }
 
@@ -177,7 +226,14 @@ fn read_state(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         .getattr("snapshot")
         .and_then(|snapshot| snapshot.call_method0("current"))
         .map_err(Failure::from);
-    let payload = catching(call.py, result, &[(DEV_EXCEPTIONS, "ProjectNotCompiledError", 409), ADAPTER_ERROR])?;
+    let payload = catching(
+        call.py,
+        result,
+        &[
+            (DEV_EXCEPTIONS, "ProjectNotCompiledError", 409),
+            ADAPTER_ERROR,
+        ],
+    )?;
     call.payload(&payload)
 }
 
@@ -215,11 +271,22 @@ fn preparation_options<'py>(
 
 fn resolved_deployment_id<'py>(preparation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = preparation.py();
-    if preparation.is_instance(&attr(py, "sqltide.cli.build.models", "VirtualWorkflowPreparation")?)? {
+    if preparation.is_instance(&attr(
+        py,
+        "sqltide.cli.build.models",
+        "VirtualWorkflowPreparation",
+    )?)? {
         return preparation.getattr("preview")?.getattr("deployment_id");
     }
-    if preparation.is_instance(&attr(py, "sqltide.cli.build.models", "MixedWorkflowPreparation")?)? {
-        return preparation.getattr("virtual")?.getattr("preview")?.getattr("deployment_id");
+    if preparation.is_instance(&attr(
+        py,
+        "sqltide.cli.build.models",
+        "MixedWorkflowPreparation",
+    )?)? {
+        return preparation
+            .getattr("virtual")?
+            .getattr("preview")?
+            .getattr("deployment_id");
     }
     Ok(py.None().into_bound(py))
 }
@@ -236,7 +303,10 @@ fn read_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let include_missing_upstream: bool = call.query_flag(5);
     let result: Outcome<Bound<'_, PyAny>> = (|| {
         if start.is_some() && select.is_empty() && !changed {
-            return Err(Failure::status(400, "--start-time requires --changed or at least one --select"));
+            return Err(Failure::status(
+                400,
+                "--start-time requires --changed or at least one --select",
+            ));
         }
         reading(call, |client| {
             let acquired: Instant = Instant::now();
@@ -256,7 +326,12 @@ fn read_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
                 "prepare_build_workflow",
                 py_kwargs!(py; analysis = &analysis, options = options, client = client, adapter_profile = analysis.getattr("adapter_profile")?)?,
             )?;
-            invoke(py, NATIVE, "validate_build_pipeline_limit", py_kwargs!(py; analysis = &analysis, preparation = &preparation)?)?;
+            invoke(
+                py,
+                NATIVE,
+                "validate_build_pipeline_limit",
+                py_kwargs!(py; analysis = &analysis, preparation = &preparation)?,
+            )?;
             let direct = authz::direct_part(&preparation)?;
             let invocation = invoke(
                 py,
@@ -329,8 +404,11 @@ fn reload_project(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         authz::require_reload(call, held.as_ref())?;
         Ok(native.reload_locked(py)?)
     })?;
-    call.service(|services| &services.reporter)
-        .call_method("report_reload", (), Some(&py_kwargs!(py; outcome = &outcome)?))?;
+    call.service(|services| &services.reporter).call_method(
+        "report_reload",
+        (),
+        Some(&py_kwargs!(py; outcome = &outcome)?),
+    )?;
     call.payload(&status_payload(call, &outcome)?)
 }
 
@@ -352,7 +430,13 @@ fn read_definitions(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         let analysis = state.call_method0("current_analysis")?;
         Ok((outcome, analysis))
     })();
-    let (outcome, analysis) = resolved.map_err(|error| translate(py, error, &[(DEV_EXCEPTIONS, "ProjectNotCompiledError", 409)]))?;
+    let (outcome, analysis) = resolved.map_err(|error| {
+        translate(
+            py,
+            error,
+            &[(DEV_EXCEPTIONS, "ProjectNotCompiledError", 409)],
+        )
+    })?;
     let version_key = outcome.getattr("version_key")?;
     let etag: String = format!("\"{}\"", version_key.str()?);
     if call.request.header("if-none-match") == Some(etag.as_str()) {
@@ -362,7 +446,12 @@ fn read_definitions(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             body: Vec::new(),
         });
     }
-    let payload = invoke(py, DEFINITIONS_PAYLOAD, "build_definitions_payload", py_kwargs!(py; analysis = analysis, version_key = version_key)?)?;
+    let payload = invoke(
+        py,
+        DEFINITIONS_PAYLOAD,
+        "build_definitions_payload",
+        py_kwargs!(py; analysis = analysis, version_key = version_key)?,
+    )?;
     let mut reply: HttpReply = HttpReply::json(200, &py_json(&payload)?)?;
     reply.headers.insert(0, ("etag".to_owned(), etag));
     Ok(reply)
@@ -423,7 +512,10 @@ fn read_one_deployment(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     });
     let payload = catching(py, result, &[ADAPTER_ERROR, VALUE_ERROR])?;
     if payload.is_none() {
-        return Err(Failure::status(404, format!("deployment '{deployment_id}' was not found")));
+        return Err(Failure::status(
+            404,
+            format!("deployment '{deployment_id}' was not found"),
+        ));
     }
     call.payload(&payload)
 }
@@ -516,14 +608,20 @@ const MESSAGE_ERRORS: [(&str, &str, u16); 3] = [
 ];
 
 /// The authorized analysis, the shared client and the landing relation of a Kafka source.
-fn message_source<'py>(call: &Call<'py, '_>) -> Outcome<(Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+fn message_source<'py>(
+    call: &Call<'py, '_>,
+) -> Outcome<(Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let py: Python<'py> = call.py;
     let analysis = servable(call)?;
     authz::require_message_read(call, &analysis)?;
     let client = required_connection(call)?;
     let name: &str = call.path[0].text();
     let mut found: Option<Bound<'py, PyAny>> = None;
-    for candidate in analysis.getattr("compiled_project")?.getattr("sources")?.try_iter()? {
+    for candidate in analysis
+        .getattr("compiled_project")?
+        .getattr("sources")?
+        .try_iter()?
+    {
         let candidate = candidate?;
         if candidate.getattr("key")?.getattr("name")?.eq(name)? {
             found = Some(candidate);
@@ -535,7 +633,10 @@ fn message_source<'py>(call: &Call<'py, '_>) -> Outcome<(Bound<'py, PyAny>, Boun
     };
     let landing = attr(py, "sqltide.compiler.discovery.models", "KafkaLandingStep")?;
     if !source.getattr("source")?.is_instance(&landing)? {
-        return Err(Failure::status(400, format!("source '{name}' is not a managed Kafka source")));
+        return Err(Failure::status(
+            400,
+            format!("source '{name}' is not a managed Kafka source"),
+        ));
     }
     let relation = analysis
         .getattr("realized_project")?
@@ -544,7 +645,11 @@ fn message_source<'py>(call: &Call<'py, '_>) -> Outcome<(Bound<'py, PyAny>, Boun
     Ok((analysis, client, relation))
 }
 
-fn ensure_headers(call: &Call<'_, '_>, client: &Bound<'_, PyAny>, relation: &Bound<'_, PyAny>) -> PyResult<()> {
+fn ensure_headers(
+    call: &Call<'_, '_>,
+    client: &Bound<'_, PyAny>,
+    relation: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     let py: Python<'_> = call.py;
     invoke(
         py,
@@ -617,7 +722,8 @@ fn read_message_record(call: &Call<'_, '_>) -> Outcome<HttpReply> {
 
 // Check, audit and run-history routes.
 
-const CHECK_ERRORS: [(&str, &str, u16); 2] = [(DEV_EXCEPTIONS, "DevServerError", 400), ADAPTER_ERROR];
+const CHECK_ERRORS: [(&str, &str, u16); 2] =
+    [(DEV_EXCEPTIONS, "DevServerError", 400), ADAPTER_ERROR];
 
 fn run_check(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
@@ -720,13 +826,18 @@ fn read_checks_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
 fn read_audit_scheduler(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
     let client = required_connection(call)?;
-    let health = call.service(|services| &services.audit_scheduler).call_method0("health")?;
+    let health = call
+        .service(|services| &services.audit_scheduler)
+        .call_method0("health")?;
     let health_state: String = health.get_item("state")?.str()?.to_string();
     if health_state == "running" || health_state == "backing_off" {
         return call.payload_json(&object(vec![
             ("enabled", JsonValue::Bool(true)),
             ("state", py_json(&health.get_item("state")?)?),
-            ("warehouseNow", py_json(&health.get_item("lastSuccessfulTick")?)?),
+            (
+                "warehouseNow",
+                py_json(&health.get_item("lastSuccessfulTick")?)?,
+            ),
             ("dueCount", py_json(&health.get_item("runningAuditCount")?)?),
             ("audits", JsonValue::Array(Vec::new())),
             ("health", py_json(&health)?),
@@ -812,7 +923,9 @@ fn read_one_run_statement(call: &Call<'_, '_>) -> Outcome<HttpReply> {
 // Build routes.
 
 /// `None` unless `value` is a list of strings.
-fn logical_id_scope(value: &Bound<'_, PyAny>) -> PyResult<Option<std::collections::HashSet<String>>> {
+fn logical_id_scope(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<Option<std::collections::HashSet<String>>> {
     if !value.is_instance_of::<PyList>() {
         return Ok(None);
     }
@@ -828,7 +941,10 @@ fn logical_id_scope(value: &Bound<'_, PyAny>) -> PyResult<Option<std::collection
 }
 
 fn string_set(value: &Bound<'_, PyAny>) -> PyResult<std::collections::HashSet<String>> {
-    value.try_iter()?.map(|item| item?.extract::<String>()).collect()
+    value
+        .try_iter()?
+        .map(|item| item?.extract::<String>())
+        .collect()
 }
 
 /// Conservatively detect read/write conflicts between an active run and the requested build.
@@ -842,15 +958,23 @@ fn overlaps(
     let (Some(active_writes), Some(active_reads)) = (active_writes, active_reads) else {
         return Ok(true);
     };
-    Ok(!active_writes.is_disjoint(writes) || !active_writes.is_disjoint(reads) || !active_reads.is_disjoint(writes))
+    Ok(!active_writes.is_disjoint(writes)
+        || !active_writes.is_disjoint(reads)
+        || !active_reads.is_disjoint(writes))
 }
 
-fn blocking_run_message(run: &Bound<'_, PyAny>, presumed_failed_after_seconds: i64) -> PyResult<String> {
+fn blocking_run_message(
+    run: &Bound<'_, PyAny>,
+    presumed_failed_after_seconds: i64,
+) -> PyResult<String> {
     let py: Python<'_> = run.py();
     let invocation_id: String = run.get_item("invocationId")?.str()?.to_string();
     let status = run.get_item("status")?;
     let age_text = run.get_item("lastSignalAgeSeconds")?.str()?;
-    let signal_age_seconds: i64 = py.get_type::<pyo3::types::PyInt>().call1((age_text,))?.extract()?;
+    let signal_age_seconds: i64 = py
+        .get_type::<pyo3::types::PyInt>()
+        .call1((age_text,))?
+        .extract()?;
     let status_text: String = status.str()?.to_string();
     if status_text == "unresponsive" {
         let retry_seconds: i64 = (presumed_failed_after_seconds - signal_age_seconds).max(0);
@@ -868,7 +992,10 @@ fn blocking_run_message(run: &Bound<'_, PyAny>, presumed_failed_after_seconds: i
     ))
 }
 
-fn read_active_runs<'py>(call: &Call<'py, '_>, client: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn read_active_runs<'py>(
+    call: &Call<'py, '_>,
+    client: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = call.py;
     invoke(
         py,
@@ -890,11 +1017,23 @@ fn start_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         let analysis = servable(call)?;
         let needs_authorization: bool = !authz::is_system_admin(call)?;
         let changed: bool = request.getattr("changed")?.is_truthy()?;
-        let include_missing_upstream: bool = request.getattr("includeMissingUpstream")?.is_truthy()?;
+        let include_missing_upstream: bool =
+            request.getattr("includeMissingUpstream")?.is_truthy()?;
         let dynamic_selection: bool = changed || include_missing_upstream;
-        let selectors = PyTuple::new(py, request.getattr("selectors")?.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+        let selectors = PyTuple::new(
+            py,
+            request
+                .getattr("selectors")?
+                .try_iter()?
+                .collect::<PyResult<Vec<_>>>()?,
+        )?;
         if !dynamic_selection {
-            invoke(py, NATIVE, "validate_build_pipeline_limit", py_kwargs!(py; analysis = &analysis, selectors = &selectors)?)?;
+            invoke(
+                py,
+                NATIVE,
+                "validate_build_pipeline_limit",
+                py_kwargs!(py; analysis = &analysis, selectors = &selectors)?,
+            )?;
         }
         let mut active_runs: Vec<Bound<'_, PyAny>> = Vec::new();
         for run in read_active_runs(call, &client)?.try_iter()? {
@@ -922,7 +1061,12 @@ fn start_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             )?);
         }
         if let (true, Some(preparation)) = (dynamic_selection, &preparation) {
-            invoke(py, NATIVE, "validate_build_pipeline_limit", py_kwargs!(py; analysis = &analysis, preparation = preparation)?)?;
+            invoke(
+                py,
+                NATIVE,
+                "validate_build_pipeline_limit",
+                py_kwargs!(py; analysis = &analysis, preparation = preparation)?,
+            )?;
         }
         if let (true, Some(preparation)) = (needs_authorization, &preparation) {
             authz::require_prepared_build(call, &analysis, preparation)?;
@@ -933,20 +1077,36 @@ fn start_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             let reads = string_set(&scopes.get_item(1)?)?;
             for run in &active_runs {
                 if overlaps(run, &writes, &reads)? {
-                    return Err(Failure::status(409, blocking_run_message(run, presumed_failed_after(call))?));
+                    return Err(Failure::status(
+                        409,
+                        blocking_run_message(run, presumed_failed_after(call))?,
+                    ));
                 }
             }
         }
         let none = || py.None().into_bound(py);
-        let (expected_write_scope, expected_read_scope, expected_pipeline_scope) = match &preparation {
-            Some(preparation) => {
-                let scopes = attr(py, NATIVE, "resolve_prepared_build_scope")?.call1((preparation,))?;
-                let pipelines = invoke(py, NATIVE, "prepared_pipeline_scope", py_kwargs!(py; preparation = preparation, analysis = &analysis)?)?;
-                (scopes.get_item(0)?, scopes.get_item(1)?, pipelines)
-            }
-            None => (none(), none(), none()),
-        };
-        let confirmations = PyTuple::new(py, request.getattr("confirmations")?.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+        let (expected_write_scope, expected_read_scope, expected_pipeline_scope) =
+            match &preparation {
+                Some(preparation) => {
+                    let scopes =
+                        attr(py, NATIVE, "resolve_prepared_build_scope")?.call1((preparation,))?;
+                    let pipelines = invoke(
+                        py,
+                        NATIVE,
+                        "prepared_pipeline_scope",
+                        py_kwargs!(py; preparation = preparation, analysis = &analysis)?,
+                    )?;
+                    (scopes.get_item(0)?, scopes.get_item(1)?, pipelines)
+                }
+                None => (none(), none(), none()),
+            };
+        let confirmations = PyTuple::new(
+            py,
+            request
+                .getattr("confirmations")?
+                .try_iter()?
+                .collect::<PyResult<Vec<_>>>()?,
+        )?;
         Ok(call.service(|services| &services.builds).call_method(
             "start",
             (),
@@ -975,14 +1135,18 @@ fn start_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
 
 fn read_build_feed(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
-    let feed = call
-        .service(|services| &services.builds)
-        .call_method("feed", (), Some(&py_kwargs!(py; after = call.query_int(0, 0))?))?;
+    let feed = call.service(|services| &services.builds).call_method(
+        "feed",
+        (),
+        Some(&py_kwargs!(py; after = call.query_int(0, 0))?),
+    )?;
     call.payload(&feed)
 }
 
 fn invocation_id_of(call: &Call<'_, '_>) -> PyResult<String> {
-    call.body()?.call_method1("get", ("invocationId", ""))?.extract()
+    call.body()?
+        .call_method1("get", ("invocationId", ""))?
+        .extract()
 }
 
 fn cancel_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
@@ -996,9 +1160,17 @@ fn cancel_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     }
     let result = call
         .service(|services| &services.builds)
-        .call_method("cancel", (), Some(&py_kwargs!(py; invocation_id = invocation_id.as_str())?))
+        .call_method(
+            "cancel",
+            (),
+            Some(&py_kwargs!(py; invocation_id = invocation_id.as_str())?),
+        )
         .map_err(Failure::from);
-    call.payload(&catching(py, result, &[(DEV_EXCEPTIONS, "BuildInProgressError", 409)])?)
+    call.payload(&catching(
+        py,
+        result,
+        &[(DEV_EXCEPTIONS, "BuildInProgressError", 409)],
+    )?)
 }
 
 fn kill_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
@@ -1008,9 +1180,17 @@ fn kill_build(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let invocation_id: String = invocation_id_of(call)?;
     let result = call
         .service(|services| &services.builds)
-        .call_method("kill", (), Some(&py_kwargs!(py; invocation_id = invocation_id.as_str())?))
+        .call_method(
+            "kill",
+            (),
+            Some(&py_kwargs!(py; invocation_id = invocation_id.as_str())?),
+        )
         .map_err(Failure::from);
-    call.payload(&catching(py, result, &[(DEV_EXCEPTIONS, "BuildInProgressError", 409)])?)
+    call.payload(&catching(
+        py,
+        result,
+        &[(DEV_EXCEPTIONS, "BuildInProgressError", 409)],
+    )?)
 }
 
 // Bootstrap.
@@ -1032,12 +1212,18 @@ fn read_bootstrap(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     })();
     let (analysis, definitions): (Option<Bound<'_, PyAny>>, JsonValue) = match resolved {
         Ok((analysis, definitions)) => (Some(analysis), py_json(&definitions)?),
-        Err(error) if is_instance(py, &error, DEV_EXCEPTIONS, "ProjectNotCompiledError")? => (None, JsonValue::Null),
+        Err(error) if is_instance(py, &error, DEV_EXCEPTIONS, "ProjectNotCompiledError")? => {
+            (None, JsonValue::Null)
+        }
         Err(error) => return Err(error.into()),
     };
     let authenticated = auth::authenticated(call)?;
-    let mut auth_payload: Vec<(&str, JsonValue)> = call.app.auth.browser_payload(py, &authenticated)?;
-    auth_payload.push(("capabilities", authz::capabilities_payload(call, analysis.as_ref())?));
+    let mut auth_payload: Vec<(&str, JsonValue)> =
+        call.app.auth.browser_payload(py, &authenticated)?;
+    auth_payload.push((
+        "capabilities",
+        authz::capabilities_payload(call, analysis.as_ref())?,
+    ));
     let status = status_payload(call, &outcome)?;
     let held = state.getattr("snapshot")?.call_method0("held")?;
     call.payload_json(&object(vec![
@@ -1064,33 +1250,41 @@ pub(crate) fn merged(payload: JsonValue, updates: Vec<(&str, JsonValue)>) -> Jso
 }
 
 const ROLE_QUERY: &[QueryParam] = &[
-                QueryParam {
-                    name: "project",
-                    scalar: Scalar::Text { min_length: Some(1) },
-                    required: true,
-                    many: false,
-                },
-                QueryParam::optional("includeRevoked", Scalar::Boolean),
-            ];
+    QueryParam {
+        name: "project",
+        scalar: Scalar::Text {
+            min_length: Some(1),
+        },
+        required: true,
+        many: false,
+    },
+    QueryParam::optional("includeRevoked", Scalar::Boolean),
+];
 const PLAN_QUERY: &[QueryParam] = &[
-                QueryParam {
-                    name: "select",
-                    scalar: TEXT,
-                    required: false,
-                    many: true,
-                },
-                QueryParam::optional("start", TEXT),
-                QueryParam::optional("deployment", TEXT),
-                QueryParam::optional("counts", Scalar::Boolean),
-                QueryParam::optional("changed", Scalar::Boolean),
-                QueryParam::optional("include_missing_upstream", Scalar::Boolean),
-            ];
+    QueryParam {
+        name: "select",
+        scalar: TEXT,
+        required: false,
+        many: true,
+    },
+    QueryParam::optional("start", TEXT),
+    QueryParam::optional("deployment", TEXT),
+    QueryParam::optional("counts", Scalar::Boolean),
+    QueryParam::optional("changed", Scalar::Boolean),
+    QueryParam::optional("include_missing_upstream", Scalar::Boolean),
+];
 const DIFF_QUERY: &[QueryParam] = &[QueryParam::optional("against", TEXT)];
 const TICKS_QUERY: &[QueryParam] = &[
-                QueryParam::optional("limit", Scalar::Integer { ge: Some(1), le: Some(500) }),
-                QueryParam::optional("after", TEXT),
-                QueryParam::optional("before", TEXT),
-            ];
+    QueryParam::optional(
+        "limit",
+        Scalar::Integer {
+            ge: Some(1),
+            le: Some(500),
+        },
+    ),
+    QueryParam::optional("after", TEXT),
+    QueryParam::optional("before", TEXT),
+];
 const EVENTS_QUERY: &[QueryParam] = &[QueryParam::optional("after", NON_NEGATIVE)];
 const FEED_QUERY: &[QueryParam] = &[QueryParam::optional("after", NON_NEGATIVE)];
 
@@ -1104,26 +1298,44 @@ pub(crate) fn routes() -> Vec<Route<Endpoint>> {
     let model = |module: &'static str, name: &'static str| BodySpec::Model(module, name);
     vec![
         // Authentication and account administration.
-        Route::new(GET, "/api/auth/config", Endpoint::new(auth::read_auth_config)),
+        Route::new(
+            GET,
+            "/api/auth/config",
+            Endpoint::new(auth::read_auth_config),
+        ),
         Route::new(GET, "/api/auth/me", Endpoint::new(auth::read_current_user)),
-        Route::new(POST, "/api/auth/login", Endpoint::new(auth::login).body(model(AUTH_MODELS, "LoginRequest"))),
+        Route::new(
+            POST,
+            "/api/auth/login",
+            Endpoint::new(auth::login).body(model(AUTH_MODELS, "LoginRequest")),
+        ),
         Route::new(POST, "/api/auth/logout", Endpoint::new(auth::logout)),
         Route::new(GET, "/api/admin/users", Endpoint::new(auth::list_users)),
-        Route::new(POST, "/api/admin/users", Endpoint::new(auth::create_user).body(model(AUTH_MODELS, "CreateUserRequest"))),
+        Route::new(
+            POST,
+            "/api/admin/users",
+            Endpoint::new(auth::create_user).body(model(AUTH_MODELS, "CreateUserRequest")),
+        ),
         Route::new(
             PATCH,
             "/api/admin/users/{user_id}",
-            Endpoint::new(auth::update_user).path(&[UUID]).body(model(AUTH_MODELS, "UpdateUserRequest")),
+            Endpoint::new(auth::update_user)
+                .path(&[UUID])
+                .body(model(AUTH_MODELS, "UpdateUserRequest")),
         ),
         Route::new(
             POST,
             "/api/admin/users/{user_id}/password",
-            Endpoint::new(auth::reset_password).path(&[UUID]).body(model(AUTH_MODELS, "PasswordResetRequest")),
+            Endpoint::new(auth::reset_password)
+                .path(&[UUID])
+                .body(model(AUTH_MODELS, "PasswordResetRequest")),
         ),
         Route::new(
             POST,
             "/api/admin/users/{user_id}/roles",
-            Endpoint::new(auth::grant_role).path(&[UUID]).body(model(AUTH_MODELS, "RoleRequest")),
+            Endpoint::new(auth::grant_role)
+                .path(&[UUID])
+                .body(model(AUTH_MODELS, "RoleRequest")),
         ),
         Route::new(
             DELETE,
@@ -1133,56 +1345,91 @@ pub(crate) fn routes() -> Vec<Route<Endpoint>> {
         Route::new(
             GET,
             "/api/admin/users/{user_id}/project-roles",
-            Endpoint::new(auth::list_project_roles).path(&[UUID]).query(ROLE_QUERY),
+            Endpoint::new(auth::list_project_roles)
+                .path(&[UUID])
+                .query(ROLE_QUERY),
         ),
         Route::new(
             POST,
             "/api/admin/users/{user_id}/project-roles",
-            Endpoint::new(auth::grant_project_role).path(&[UUID]).body(model(AUTH_MODELS, "ProjectRoleRequest")),
+            Endpoint::new(auth::grant_project_role)
+                .path(&[UUID])
+                .body(model(AUTH_MODELS, "ProjectRoleRequest")),
         ),
         Route::new(
             DELETE,
             "/api/admin/project-roles/{assignment_id}",
             Endpoint::new(auth::revoke_project_role).path(&[UUID]),
         ),
-        Route::new(GET, "/api/admin/audit", Endpoint::new(auth::read_account_audit)),
-        // Status, state and project.
-        Route::new(GET, "/api/status", Endpoint::new(read_status)),
-        Route::new(POST, "/api/warehouse/refresh", Endpoint::new(refresh_warehouse)),
-        Route::new(GET, "/api/state", Endpoint::new(read_state)),
         Route::new(
             GET,
-            "/api/plan",
-            Endpoint::new(read_plan).query(PLAN_QUERY),
+            "/api/admin/audit",
+            Endpoint::new(auth::read_account_audit),
         ),
+        // Status, state and project.
+        Route::new(GET, "/api/status", Endpoint::new(read_status)),
+        Route::new(
+            POST,
+            "/api/warehouse/refresh",
+            Endpoint::new(refresh_warehouse),
+        ),
+        Route::new(GET, "/api/state", Endpoint::new(read_state)),
+        Route::new(GET, "/api/plan", Endpoint::new(read_plan).query(PLAN_QUERY)),
         Route::new(POST, "/api/reload", Endpoint::new(reload_project)),
-        Route::new(GET, "/api/auth/capabilities", Endpoint::new(read_capabilities)),
+        Route::new(
+            GET,
+            "/api/auth/capabilities",
+            Endpoint::new(read_capabilities),
+        ),
         Route::new(GET, "/api/access-policy", Endpoint::new(read_access_policy)),
         Route::new(GET, "/api/definitions", Endpoint::new(read_definitions)),
         Route::new(GET, "/api/topics", Endpoint::new(read_topics)),
         // Deployments.
         Route::new(GET, "/api/deployments", Endpoint::new(read_deployments)),
-        Route::new(GET, "/api/deployments/{deployment_id}", Endpoint::new(read_one_deployment).path(&[TEXT])),
+        Route::new(
+            GET,
+            "/api/deployments/{deployment_id}",
+            Endpoint::new(read_one_deployment).path(&[TEXT]),
+        ),
         Route::new(
             GET,
             "/api/deployments/{deployment_id}/diff",
-            Endpoint::new(read_deployment_diff).path(&[TEXT]).query(DIFF_QUERY),
+            Endpoint::new(read_deployment_diff)
+                .path(&[TEXT])
+                .query(DIFF_QUERY),
         ),
-        Route::new(POST, "/api/deployments/{deployment_id}/promote", Endpoint::new(promote_deployment).path(&[TEXT])),
+        Route::new(
+            POST,
+            "/api/deployments/{deployment_id}/promote",
+            Endpoint::new(promote_deployment).path(&[TEXT]),
+        ),
         Route::new(
             POST,
             "/api/deployments/cleanup",
             Endpoint::new(cleanup_deployments).body(model(DEV_MODELS, "DeploymentCleanupRequest")),
         ),
         // Destruction.
-        Route::new(GET, "/api/destruction/pipelines/inactive", Endpoint::new(destruction::read_inactive_pipelines)),
+        Route::new(
+            GET,
+            "/api/destruction/pipelines/inactive",
+            Endpoint::new(destruction::read_inactive_pipelines),
+        ),
         Route::new(
             POST,
             "/api/destruction/plans",
-            Endpoint::new(destruction::create_plan).body(model(DEV_MODELS, "DestructionPlanRequest")),
+            Endpoint::new(destruction::create_plan)
+                .body(model(DEV_MODELS, "DestructionPlanRequest")),
         ),
-        Route::new(GET, "/api/destruction/plans/{plan_id}", Endpoint::new(destruction::read_plan).path(&[TEXT])),
-        Route::new(POST, "/api/destruction/plans/{plan_id}/review", Endpoint::new(destruction::review_plan).path(&[TEXT])),
+        Route::new(
+            GET,
+            "/api/destruction/plans/{plan_id}",
+            Endpoint::new(destruction::read_plan).path(&[TEXT]),
+        ),
+        Route::new(
+            POST,
+            "/api/destruction/plans/{plan_id}/review",
+            Endpoint::new(destruction::review_plan).path(&[TEXT]),
+        ),
         Route::new(
             POST,
             "/api/runs/{invocation_id}/recovery-plan",
@@ -1200,51 +1447,81 @@ pub(crate) fn routes() -> Vec<Route<Endpoint>> {
         Route::new(
             POST,
             "/api/sources/{name}/messages",
-            Endpoint::new(read_messages).path(&[TEXT]).body(model(DEV_MODELS, "MessagesQueryRequest")),
+            Endpoint::new(read_messages)
+                .path(&[TEXT])
+                .body(model(DEV_MODELS, "MessagesQueryRequest")),
         ),
         Route::new(
             POST,
             "/api/sources/{name}/messages/record",
-            Endpoint::new(read_message_record).path(&[TEXT]).body(model(DEV_MODELS, "MessageRecordRequest")),
+            Endpoint::new(read_message_record)
+                .path(&[TEXT])
+                .body(model(DEV_MODELS, "MessageRecordRequest")),
         ),
         Route::new(
             POST,
             "/api/sources/{name}/messages/facets",
-            Endpoint::new(read_message_facets).path(&[TEXT]).body(model(DEV_MODELS, "MessageFacetsRequest")),
+            Endpoint::new(read_message_facets)
+                .path(&[TEXT])
+                .body(model(DEV_MODELS, "MessageFacetsRequest")),
         ),
         // Sensors.
         Route::new(GET, "/api/sensors", Endpoint::new(sensors::read_sensors)),
-        Route::new(GET, "/api/sensors/dead-letters", Endpoint::new(sensors::read_dead_letters)),
+        Route::new(
+            GET,
+            "/api/sensors/dead-letters",
+            Endpoint::new(sensors::read_dead_letters),
+        ),
         Route::new(
             GET,
             "/api/sensors/{sensor_name}/ticks",
-            Endpoint::new(sensors::read_sensor_ticks).path(&[TEXT]).query(TICKS_QUERY),
+            Endpoint::new(sensors::read_sensor_ticks)
+                .path(&[TEXT])
+                .query(TICKS_QUERY),
         ),
         Route::new(
             POST,
             "/api/sensors/{sensor_name}/status",
-            Endpoint::new(sensors::set_sensor_status).path(&[TEXT]).body(model(DEV_MODELS, "SensorStatusRequest")),
+            Endpoint::new(sensors::set_sensor_status)
+                .path(&[TEXT])
+                .body(model(DEV_MODELS, "SensorStatusRequest")),
         ),
         Route::new(
             POST,
             "/api/sensors/dead-letters/retry",
-            Endpoint::new(sensors::retry_dead_letter).body(model(DEV_MODELS, "SensorDeadLetterActionRequest")),
+            Endpoint::new(sensors::retry_dead_letter)
+                .body(model(DEV_MODELS, "SensorDeadLetterActionRequest")),
         ),
         Route::new(
             POST,
             "/api/sensors/dead-letters/skip",
-            Endpoint::new(sensors::skip_dead_letter).body(model(DEV_MODELS, "SensorDeadLetterActionRequest")),
+            Endpoint::new(sensors::skip_dead_letter)
+                .body(model(DEV_MODELS, "SensorDeadLetterActionRequest")),
         ),
         // Checks, audits and run history.
-        Route::new(POST, "/api/checks/run", Endpoint::new(run_check).body(model(DEV_MODELS, "ChecksRunRequest"))),
-        Route::new(POST, "/api/audits/run", Endpoint::new(run_audits).body(model(DEV_MODELS, "AuditBatchRunRequest"))),
+        Route::new(
+            POST,
+            "/api/checks/run",
+            Endpoint::new(run_check).body(model(DEV_MODELS, "ChecksRunRequest")),
+        ),
+        Route::new(
+            POST,
+            "/api/audits/run",
+            Endpoint::new(run_audits).body(model(DEV_MODELS, "AuditBatchRunRequest")),
+        ),
         Route::new(GET, "/api/checks/status", Endpoint::new(read_checks_status)),
-        Route::new(GET, "/api/audit-scheduler", Endpoint::new(read_audit_scheduler)),
+        Route::new(
+            GET,
+            "/api/audit-scheduler",
+            Endpoint::new(read_audit_scheduler),
+        ),
         Route::new(GET, "/api/runs", Endpoint::new(read_run_history)),
         Route::new(
             GET,
             "/api/runs/{invocation_id}/events",
-            Endpoint::new(read_one_run_events).path(&[TEXT]).query(EVENTS_QUERY),
+            Endpoint::new(read_one_run_events)
+                .path(&[TEXT])
+                .query(EVENTS_QUERY),
         ),
         Route::new(
             GET,
@@ -1252,14 +1529,26 @@ pub(crate) fn routes() -> Vec<Route<Endpoint>> {
             Endpoint::new(read_one_run_statement).path(&[TEXT, INTEGER]),
         ),
         // Builds.
-        Route::new(POST, "/api/build", Endpoint::new(start_build).body(model(DEV_MODELS, "BuildRunRequest"))),
+        Route::new(
+            POST,
+            "/api/build",
+            Endpoint::new(start_build).body(model(DEV_MODELS, "BuildRunRequest")),
+        ),
         Route::new(
             GET,
             "/api/build/current",
             Endpoint::new(read_build_feed).query(FEED_QUERY),
         ),
-        Route::new(POST, "/api/build/cancel", Endpoint::new(cancel_build).body(BodySpec::StringMapping)),
-        Route::new(POST, "/api/build/kill", Endpoint::new(kill_build).body(BodySpec::StringMapping)),
+        Route::new(
+            POST,
+            "/api/build/cancel",
+            Endpoint::new(cancel_build).body(BodySpec::StringMapping),
+        ),
+        Route::new(
+            POST,
+            "/api/build/kill",
+            Endpoint::new(kill_build).body(BodySpec::StringMapping),
+        ),
         Route::new(GET, "/api/bootstrap", Endpoint::new(read_bootstrap)),
     ]
 }

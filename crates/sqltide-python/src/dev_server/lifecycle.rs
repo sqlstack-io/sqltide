@@ -27,7 +27,9 @@ fn bound<'py>(py: Python<'py>, value: &Option<Py<PyAny>>) -> Option<Any<'py>> {
 }
 
 fn not_compiled(py: Python<'_>, message: &str) -> PyResult<PyErr> {
-    Ok(PyErr::from_value(attr(py, DEV_EXCEPTIONS, "ProjectNotCompiledError")?.call1((message,))?))
+    Ok(PyErr::from_value(
+        attr(py, DEV_EXCEPTIONS, "ProjectNotCompiledError")?.call1((message,))?,
+    ))
 }
 
 fn python_lock(py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -42,11 +44,16 @@ pub(crate) fn build_compile_outcome<'py>(run_compile: &Any<'py>) -> PyResult<Any
     let utc: Any<'py> = attr(py, "datetime", "UTC")?;
     let compiled_at: Any<'py> = attr(py, "datetime", "datetime")?
         .call_method("now", (), Some(&py_kwargs!(py; tz = utc)?))?
-        .call_method("isoformat", (), Some(&py_kwargs!(py; timespec = "seconds")?))?;
+        .call_method(
+            "isoformat",
+            (),
+            Some(&py_kwargs!(py; timespec = "seconds")?),
+        )?;
     let nanoseconds: Any<'py> = attr(py, "time", "monotonic_ns")?.call0()?;
     let version_key: Any<'py> = attr(py, "builtins", "format")?.call1((nanoseconds, "x"))?;
     let outcome: Any<'py> = attr(py, DEV_MODELS, "CompileOutcome")?;
-    let state = |name: &str| attr(py, "sqltide.dev_server.types", "CompileStateKind")?.getattr(name);
+    let state =
+        |name: &str| attr(py, "sqltide.dev_server.types", "CompileStateKind")?.getattr(name);
     match run_compile.call0() {
         Ok(analysis) => outcome.call(
             (),
@@ -77,13 +84,21 @@ pub(crate) fn build_compile_outcome<'py>(run_compile: &Any<'py>) -> PyResult<Any
 pub(crate) fn describe_compile_error<'py>(error: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = error.py();
     let info: Any<'py> = attr(py, DEV_MODELS, "CompileErrorInfo")?;
-    let diagnostic: Any<'py> = attr(py, "builtins", "getattr")?.call1((error, "diagnostic", py.None()))?;
-    if !diagnostic.is_instance(&attr(py, "sqltide.diagnostics.models", "CompilerDiagnostic")?)? {
+    let diagnostic: Any<'py> =
+        attr(py, "builtins", "getattr")?.call1((error, "diagnostic", py.None()))?;
+    if !diagnostic.is_instance(&attr(
+        py,
+        "sqltide.diagnostics.models",
+        "CompilerDiagnostic",
+    )?)? {
         return info.call((), Some(&py_kwargs!(py; message = error.str()?)?));
     }
     let location: Any<'py> = diagnostic.getattr("location")?;
     if location.is_none() {
-        return info.call((), Some(&py_kwargs!(py; message = diagnostic.getattr("message")?)?));
+        return info.call(
+            (),
+            Some(&py_kwargs!(py; message = diagnostic.getattr("message")?)?),
+        );
     }
     info.call(
         (),
@@ -101,10 +116,16 @@ pub(crate) fn describe_compile_error<'py>(error: &Any<'py>) -> PyResult<Any<'py>
 /// Build the cheap polled status payload.
 #[pyfunction]
 #[pyo3(signature = (*, outcome, warehouse_status))]
-pub(crate) fn build_status_payload<'py>(outcome: &Any<'py>, warehouse_status: &Any<'py>) -> PyResult<Bound<'py, PyDict>> {
+pub(crate) fn build_status_payload<'py>(
+    outcome: &Any<'py>,
+    warehouse_status: &Any<'py>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = outcome.py();
     let payload: Bound<'py, PyDict> = PyDict::new(py);
-    payload.set_item("toolVersion", attr(py, "importlib.metadata", "version")?.call1(("sqltide",))?)?;
+    payload.set_item(
+        "toolVersion",
+        attr(py, "importlib.metadata", "version")?.call1(("sqltide",))?,
+    )?;
     let compile: Bound<'py, PyDict> = PyDict::new(py);
     compile.set_item("state", outcome.getattr("state")?.str()?)?;
     compile.set_item("versionKey", outcome.getattr("version_key")?)?;
@@ -158,7 +179,9 @@ impl StateSnapshot {
     }
 
     fn build_now<'py>(&self, py: Python<'py>) -> PyResult<Any<'py>> {
-        within(self.build_lock.bind(py), || Ok(self.store(self.build.bind(py).call0()?)))
+        within(self.build_lock.bind(py), || {
+            Ok(self.store(self.build.bind(py).call0()?))
+        })
     }
 }
 
@@ -166,12 +189,18 @@ impl StateSnapshot {
 impl StateSnapshot {
     #[new]
     #[pyo3(signature = (*, build, refresh_seconds = None, on_close = None))]
-    fn new(py: Python<'_>, build: Any<'_>, refresh_seconds: Option<Any<'_>>, on_close: Option<Any<'_>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'_>,
+        build: Any<'_>,
+        refresh_seconds: Option<Any<'_>>,
+        on_close: Option<Any<'_>>,
+    ) -> PyResult<Self> {
         let refresh_seconds: Any<'_> = match refresh_seconds {
             Some(seconds) => seconds,
             None => REFRESH_SECONDS.into_pyobject(py)?.into_any(),
         };
-        let event = || -> PyResult<Py<PyAny>> { Ok(attr(py, "threading", "Event")?.call0()?.unbind()) };
+        let event =
+            || -> PyResult<Py<PyAny>> { Ok(attr(py, "threading", "Event")?.call0()?.unbind()) };
         Ok(Self {
             build: build.unbind(),
             refresh_seconds: refresh_seconds.unbind(),
@@ -247,14 +276,19 @@ impl StateSnapshot {
         let stop: &Bound<'_, PyAny> = self.stop.bind(py);
         let refresh_now: &Bound<'_, PyAny> = self.refresh_now.bind(py);
         while !stop.call_method0("is_set")?.is_truthy()? {
-            refresh_now.call_method("wait", (), Some(&py_kwargs!(py; timeout = &self.refresh_seconds)?))?;
+            refresh_now.call_method(
+                "wait",
+                (),
+                Some(&py_kwargs!(py; timeout = &self.refresh_seconds)?),
+            )?;
             refresh_now.call_method0("clear")?;
             if stop.call_method0("is_set")?.is_truthy()? {
                 return Ok(());
             }
             if let Err(error) = self.build_now(py) {
-                let expected: bool = is_instance(py, &error, "sqltide.adapter.exceptions", "AdapterError")?
-                    || is_instance(py, &error, DEV_EXCEPTIONS, "ProjectNotCompiledError")?;
+                let expected: bool =
+                    is_instance(py, &error, "sqltide.adapter.exceptions", "AdapterError")?
+                        || is_instance(py, &error, DEV_EXCEPTIONS, "ProjectNotCompiledError")?;
                 if !expected {
                     return Err(error);
                 }
@@ -287,7 +321,8 @@ impl DevServerState {
     fn hold(&self, outcome: &Any<'_>) -> PyResult<()> {
         let analysis: Any<'_> = outcome.getattr("analysis")?;
         let mut held = guard(&self.held);
-        let mut released: Vec<Option<Py<PyAny>>> = vec![held.outcome.replace(outcome.clone().unbind())];
+        let mut released: Vec<Option<Py<PyAny>>> =
+            vec![held.outcome.replace(outcome.clone().unbind())];
         if !analysis.is_none() {
             released.push(held.authorization_analysis.replace(analysis.unbind()));
             released.push(held.servable_outcome.replace(outcome.clone().unbind()));
@@ -337,7 +372,10 @@ impl DevServerState {
     fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Any<'py>> {
         match bound(py, &guard(&self.held).snapshot) {
             Some(snapshot) => Ok(snapshot),
-            None => Err(not_compiled(py, "The warehouse overlay snapshot is not attached")?),
+            None => Err(not_compiled(
+                py,
+                "The warehouse overlay snapshot is not attached",
+            )?),
         }
     }
 
@@ -362,7 +400,8 @@ impl DevServerState {
     #[pyo3(signature = (*, guard))]
     fn reload_guarded<'py>(&self, py: Python<'py>, guard: Any<'py>) -> PyResult<Any<'py>> {
         within(self.compile_lock.bind(py), || {
-            let analysis: Option<Any<'py>> = bound(py, &self::guard(&self.held).authorization_analysis);
+            let analysis: Option<Any<'py>> =
+                bound(py, &self::guard(&self.held).authorization_analysis);
             guard.call((), Some(&py_kwargs!(py; analysis = analysis)?))?;
             self.reload_locked(py)
         })
@@ -385,7 +424,9 @@ impl DevServerState {
         self.current(py)?;
         let servable: Option<Any<'py>> = bound(py, &guard(&self.held).servable_outcome);
         let analysis: Option<Any<'py>> = match servable {
-            Some(outcome) => Some(outcome.getattr("analysis")?).filter(|analysis| !analysis.is_none()),
+            Some(outcome) => {
+                Some(outcome.getattr("analysis")?).filter(|analysis| !analysis.is_none())
+            }
             None => None,
         };
         analysis.ok_or_else(|| not_compiled(py, NOT_COMPILED).unwrap_or_else(|error| error))

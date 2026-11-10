@@ -24,7 +24,9 @@ fn tone<'py>(py: Python<'py>, name: &str) -> PyResult<Any<'py>> {
 
 fn compile_ok(outcome: &Any<'_>) -> PyResult<bool> {
     let py: Python<'_> = outcome.py();
-    outcome.getattr("state")?.eq(attr(py, DEV_TYPES, "CompileStateKind")?.getattr("OK")?)
+    outcome
+        .getattr("state")?
+        .eq(attr(py, DEV_TYPES, "CompileStateKind")?.getattr("OK")?)
 }
 
 fn styled<'py>(style: &Any<'py>, method: &str, text: Any<'py>) -> PyResult<Any<'py>> {
@@ -38,13 +40,21 @@ fn ljust<'py>(text: &Any<'py>, width: usize) -> PyResult<Any<'py>> {
 /// `f"  {style.label(label.ljust(9))}  {value}"`, with `value` already evaluated.
 fn fact_line<'py>(style: &Any<'py>, label: &str, value: Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = style.py();
-    let label: Any<'py> = styled(style, "label", ljust(&literal(py, label), FACT_LABEL_WIDTH)?)?;
+    let label: Any<'py> = styled(
+        style,
+        "label",
+        ljust(&literal(py, label), FACT_LABEL_WIDTH)?,
+    )?;
     fstring(py, &[literal(py, "  "), label, literal(py, "  "), value])
 }
 
 /// `f"{count} {noun}"`, pluralised unless `count == 1`.
 fn counted(count: usize, noun: &str) -> String {
-    if count == 1 { format!("{count} {noun}") } else { format!("{count} {noun}s") }
+    if count == 1 {
+        format!("{count} {noun}")
+    } else {
+        format!("{count} {noun}s")
+    }
 }
 
 /// Model and source counts plus total compile time, or `""` without an analysis.
@@ -63,23 +73,39 @@ fn compile_counts<'py>(outcome: &Any<'py>) -> PyResult<Any<'py>> {
         return Ok(counts);
     }
     let mut total: Any<'py> = timings.getattr("discovery_ms")?;
-    for field in ["compile_inputs_ms", "assembly_ms", "graph_ms", "realization_ms"] {
+    for field in [
+        "compile_inputs_ms",
+        "assembly_ms",
+        "graph_ms",
+        "realization_ms",
+    ] {
         total = total.add(timings.getattr(field)?)?;
     }
-    fstring(py, &[counts, literal(py, SEPARATOR), total, literal(py, "ms")])
+    fstring(
+        py,
+        &[counts, literal(py, SEPARATOR), total, literal(py, "ms")],
+    )
 }
 
 fn compile_value<'py>(style: &Any<'py>, outcome: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = style.py();
     let outcome_word = |text: &str, passed: bool| {
-        style.call_method("outcome", (), Some(&py_kwargs!(py; text = text, passed = passed)?))
+        style.call_method(
+            "outcome",
+            (),
+            Some(&py_kwargs!(py; text = text, passed = passed)?),
+        )
     };
     if !compile_ok(outcome)? {
         return outcome_word("failing", false);
     }
     let ok_text: Any<'py> = outcome_word("ok", true)?;
     let counts: Any<'py> = compile_counts(outcome)?;
-    if counts.is_truthy()? { fstring(py, &[ok_text, literal(py, SEPARATOR), counts]) } else { Ok(ok_text) }
+    if counts.is_truthy()? {
+        fstring(py, &[ok_text, literal(py, SEPARATOR), counts])
+    } else {
+        Ok(ok_text)
+    }
 }
 
 fn compile_error_lines<'py>(style: &Any<'py>, outcome: &Any<'py>) -> PyResult<Vec<Any<'py>>> {
@@ -93,18 +119,35 @@ fn compile_error_lines<'py>(style: &Any<'py>, outcome: &Any<'py>) -> PyResult<Ve
     if !path.is_none() {
         location = fstring(
             py,
-            &[path, literal(py, ":"), error.getattr("line")?, literal(py, ":"), error.getattr("column")?],
+            &[
+                path,
+                literal(py, ":"),
+                error.getattr("line")?,
+                literal(py, ":"),
+                error.getattr("column")?,
+            ],
         )?;
     }
     let prefix: Any<'py> = if location.is_truthy()? {
-        fstring(py, &[literal(py, FACT_VALUE_INDENT), styled(style, "muted", location)?, literal(py, "  ")])?
+        fstring(
+            py,
+            &[
+                literal(py, FACT_VALUE_INDENT),
+                styled(style, "muted", location)?,
+                literal(py, "  "),
+            ],
+        )?
     } else {
         literal(py, FACT_VALUE_INDENT)
     };
     Ok(vec![fstring(py, &[prefix, error.getattr("message")?])?])
 }
 
-fn warehouse_value<'py>(style: &Any<'py>, database: &Any<'py>, connected: bool) -> PyResult<Any<'py>> {
+fn warehouse_value<'py>(
+    style: &Any<'py>,
+    database: &Any<'py>,
+    connected: bool,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = style.py();
     if database.is_none() {
         return styled(style, "warning", literal(py, "not connected"));
@@ -132,10 +175,21 @@ pub(crate) fn startup_lines<'py>(
     tool_version: &Any<'py>,
 ) -> PyResult<Bound<'py, PyTuple>> {
     let py: Python<'py> = style.py();
-    let base_url: Any<'py> = fstring(py, &[literal(py, "http://"), host.clone(), literal(py, ":"), port.clone()])?;
+    let base_url: Any<'py> = fstring(
+        py,
+        &[
+            literal(py, "http://"),
+            host.clone(),
+            literal(py, ":"),
+            port.clone(),
+        ],
+    )?;
     let title: Any<'py> = styled(style, "title", literal(py, "SQLTide dev server"))?;
     let version: Any<'py> = styled(style, "muted", literal(py, "v").add(tool_version)?)?;
-    let mut lines: Vec<Any<'py>> = vec![fstring(py, &[title, literal(py, " "), version])?, literal(py, "")];
+    let mut lines: Vec<Any<'py>> = vec![
+        fstring(py, &[title, literal(py, " "), version])?,
+        literal(py, ""),
+    ];
     lines.push(fact_line(style, "project", project_dir.getattr("name")?)?);
     let value: Any<'py> = compile_value(style, outcome)?;
     lines.push(fact_line(style, "compile", value)?);
@@ -144,7 +198,11 @@ pub(crate) fn startup_lines<'py>(
     lines.push(fact_line(style, "warehouse", value)?);
     lines.push(literal(py, ""));
     lines.push(fact_line(style, "ui", base_url.clone())?);
-    lines.push(fact_line(style, "api", fstring(py, &[base_url, literal(py, "/api")])?)?);
+    lines.push(fact_line(
+        style,
+        "api",
+        fstring(py, &[base_url, literal(py, "/api")])?,
+    )?);
     lines.push(literal(py, ""));
     let stop: Any<'py> = styled(style, "muted", literal(py, "ctrl+c to stop"))?;
     lines.push(fstring(py, &[literal(py, "  "), stop])?);
@@ -158,10 +216,21 @@ pub(crate) fn startup_lines<'py>(
 pub(crate) fn reload_summary<'py>(outcome: &Any<'py>) -> PyResult<Bound<'py, PyTuple>> {
     let py: Python<'py> = outcome.py();
     if compile_ok(outcome)? {
-        return PyTuple::new(py, [literal(py, "ok"), tone(py, "GOOD")?, compile_counts(outcome)?]);
+        return PyTuple::new(
+            py,
+            [
+                literal(py, "ok"),
+                tone(py, "GOOD")?,
+                compile_counts(outcome)?,
+            ],
+        );
     }
     let error: Any<'py> = outcome.getattr("error")?;
-    let message: Any<'py> = if error.is_none() { literal(py, "compile failed") } else { error.getattr("message")? };
+    let message: Any<'py> = if error.is_none() {
+        literal(py, "compile failed")
+    } else {
+        error.getattr("message")?
+    };
     PyTuple::new(py, [literal(py, "failing"), tone(py, "BAD")?, message])
 }
 
@@ -177,7 +246,8 @@ pub(crate) fn activity_line<'py>(
     detail: &Any<'py>,
 ) -> PyResult<Any<'py>> {
     let py: Python<'py> = style.py();
-    let category_text: Any<'py> = styled(style, "subsection", ljust(category, CATEGORY_COLUMN_WIDTH)?)?;
+    let category_text: Any<'py> =
+        styled(style, "subsection", ljust(category, CATEGORY_COLUMN_WIDTH)?)?;
     let padded: Any<'py> = ljust(status, STATUS_COLUMN_WIDTH)?;
     let tones = attr(py, DEV_TYPES, "ActivityTone")?;
     let status_text: Any<'py> = if tone.eq(tones.getattr("GOOD")?)? {
@@ -226,7 +296,10 @@ impl DevTerminalReporter {
     #[new]
     #[pyo3(signature = (*, style))]
     fn new(py: Python<'_>, style: Any<'_>) -> PyResult<Self> {
-        Ok(Self { style: style.unbind(), lock: attr(py, "threading", "Lock")?.call0()?.unbind() })
+        Ok(Self {
+            style: style.unbind(),
+            lock: attr(py, "threading", "Lock")?.call0()?.unbind(),
+        })
     }
 
     /// Print the startup banner for one compiled (or failing) project.
@@ -242,7 +315,8 @@ impl DevTerminalReporter {
         host: Any<'_>,
         port: Any<'_>,
     ) -> PyResult<()> {
-        let tool_version: Any<'_> = attr(py, "importlib.metadata", "version")?.call1(("sqltide",))?;
+        let tool_version: Any<'_> =
+            attr(py, "importlib.metadata", "version")?.call1(("sqltide",))?;
         let lines: Bound<'_, PyTuple> = startup_lines(
             self.style.bind(py),
             &outcome,
@@ -260,21 +334,46 @@ impl DevTerminalReporter {
     #[pyo3(signature = (*, outcome))]
     fn report_reload(&self, py: Python<'_>, outcome: Any<'_>) -> PyResult<()> {
         let summary: Bound<'_, PyTuple> = reload_summary(&outcome)?;
-        self.report_activity(py, literal(py, "reload"), summary.get_item(0)?, summary.get_item(1)?, summary.get_item(2)?)
+        self.report_activity(
+            py,
+            literal(py, "reload"),
+            summary.get_item(0)?,
+            summary.get_item(1)?,
+            summary.get_item(2)?,
+        )
     }
 
     /// Print one timestamped activity line.
     #[pyo3(signature = (*, category, status, tone, detail))]
-    fn report_activity(&self, py: Python<'_>, category: Any<'_>, status: Any<'_>, tone: Any<'_>, detail: Any<'_>) -> PyResult<()> {
-        let timestamp: Any<'_> =
-            attr(py, "datetime", "datetime")?.call_method0("now")?.call_method1("strftime", ("%H:%M:%S",))?;
-        let line: Any<'_> = activity_line(self.style.bind(py), &timestamp, &category, &status, &tone, &detail)?;
+    fn report_activity(
+        &self,
+        py: Python<'_>,
+        category: Any<'_>,
+        status: Any<'_>,
+        tone: Any<'_>,
+        detail: Any<'_>,
+    ) -> PyResult<()> {
+        let timestamp: Any<'_> = attr(py, "datetime", "datetime")?
+            .call_method0("now")?
+            .call_method1("strftime", ("%H:%M:%S",))?;
+        let line: Any<'_> = activity_line(
+            self.style.bind(py),
+            &timestamp,
+            &category,
+            &status,
+            &tone,
+            &detail,
+        )?;
         self.print(py, line)
     }
 
     /// Print the shutdown line after the server stops.
     fn report_shutdown(&self, py: Python<'_>) -> PyResult<()> {
-        let line: Any<'_> = styled(self.style.bind(py), "muted", literal(py, "dev server stopped"))?;
+        let line: Any<'_> = styled(
+            self.style.bind(py),
+            "muted",
+            literal(py, "dev server stopped"),
+        )?;
         self.print(py, line)
     }
 }
@@ -303,8 +402,11 @@ pub(crate) fn run_dev<'py>(
     adapter_profile: Any<'py>,
 ) -> PyResult<Any<'py>> {
     let project_dir: Any<'py> = options.getattr("pipelines_root")?.getattr("parent")?;
-    let configuration: Any<'py> =
-        attr(py, "builtins", "getattr")?.call1((&loaded_project, "effective_configuration", py.None()))?;
+    let configuration: Any<'py> = attr(py, "builtins", "getattr")?.call1((
+        &loaded_project,
+        "effective_configuration",
+        py.None(),
+    ))?;
     let defaults: Any<'py> = if configuration.is_none() {
         attr(py, "sqltide.compiler.discovery.models", "ProjectDefaults")?.call0()?
     } else {
@@ -333,14 +435,23 @@ pub(crate) fn run_dev<'py>(
         options.getattr("pipelines_root")?.unbind(),
         adapter_profile.unbind(),
     ];
-    let run_compile = move |arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>| -> PyResult<Py<PyAny>> {
+    let run_compile = move |arguments: &Bound<'_, PyTuple>,
+                            _keywords: Option<&Bound<'_, PyDict>>|
+          -> PyResult<Py<PyAny>> {
         let py: Python<'_> = arguments.py();
-        let [project_dir, context, loaded_project, pipelines_root, adapter_profile] = &compile_inputs;
+        let [
+            project_dir,
+            context,
+            loaded_project,
+            pipelines_root,
+            adapter_profile,
+        ] = &compile_inputs;
         let context: &Any<'_> = context.bind(py);
         let reloaded: Any<'_> = if loaded_project.is_none(py) {
             py.None().into_bound(py)
         } else {
-            let cli_variables: Any<'_> = attr(py, "builtins", "dict")?.call1((context.getattr("cli_variables")?,))?;
+            let cli_variables: Any<'_> =
+                attr(py, "builtins", "dict")?.call1((context.getattr("cli_variables")?,))?;
             attr(py, NATIVE, "load_project_input_for_path")?.call(
                 (),
                 Some(&py_kwargs!(py;
@@ -363,15 +474,20 @@ pub(crate) fn run_dev<'py>(
             .unbind())
     };
     let run_compile: Any<'py> = PyCFunction::new_closure(py, None, None, run_compile)?.into_any();
-    let style: Any<'py> = attr(py, "sqltide.cli.presentation.main._cli_style", "cli_style")?.call0()?;
-    let reporter: Any<'py> = attr(py, NATIVE, "DevTerminalReporter")?.call((), Some(&py_kwargs!(py; style = style)?))?;
+    let style: Any<'py> =
+        attr(py, "sqltide.cli.presentation.main._cli_style", "cli_style")?.call0()?;
+    let reporter: Any<'py> =
+        attr(py, NATIVE, "DevTerminalReporter")?.call((), Some(&py_kwargs!(py; style = style)?))?;
     let configured: Any<'py> = options.getattr("auth_settings")?;
     let auth_settings: Any<'py> = if configured.is_truthy()? {
         configured
     } else {
-        let control_store_url: Any<'py> =
-            attr(py, "sqltide.auth.main.default_control_store_url", "default_control_store_url")?
-                .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
+        let control_store_url: Any<'py> = attr(
+            py,
+            "sqltide.auth.main.default_control_store_url",
+            "default_control_store_url",
+        )?
+        .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
         attr(py, "sqltide.auth.models", "AuthSettings")?.call(
             (),
             Some(&py_kwargs!(py;

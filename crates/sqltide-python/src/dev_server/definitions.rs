@@ -9,8 +9,14 @@ use crate::py_kwargs;
 
 const REDACTED_SECRET_PLACEHOLDER: &str = "<redacted>";
 const BROKER_USERINFO_SEPARATOR: &str = "@";
-const SENSITIVE_SOURCE_SETTING_FRAGMENTS: [&str; 6] =
-    ["credential", "password", "private_key", "sasl", "secret", "token"];
+const SENSITIVE_SOURCE_SETTING_FRAGMENTS: [&str; 6] = [
+    "credential",
+    "password",
+    "private_key",
+    "sasl",
+    "secret",
+    "token",
+];
 const CONNECTION_SECRET_KEYS: [&str; 1] = ["password"];
 const FALLBACK_RENDER_DATABASE: &str = "default";
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
@@ -56,10 +62,13 @@ fn dict_of<'py>(value: &Any<'py>) -> PyResult<Any<'py>> {
 /// `resources_by_logical_key.get(key, ())`.
 fn resources<'py>(analysis: &Any<'py>, key: &Any<'py>) -> PyResult<Vec<Any<'py>>> {
     let empty = PyTuple::empty(analysis.py());
-    get(&get(analysis, "realized_project")?, "resources_by_logical_key")?
-        .call_method1("get", (key, empty))?
-        .try_iter()?
-        .collect()
+    get(
+        &get(analysis, "realized_project")?,
+        "resources_by_logical_key",
+    )?
+    .call_method1("get", (key, empty))?
+    .try_iter()?
+    .collect()
 }
 
 fn redacted_broker_list(broker_list: &str) -> String {
@@ -77,7 +86,10 @@ fn redacted_source_settings<'py>(settings: &Any<'py>) -> PyResult<Any<'py>> {
     for item in settings.call_method0("items")?.try_iter()? {
         let (key, value): (Any<'py>, Any<'py>) = item?.extract()?;
         let lowered: String = key.call_method0("lower")?.extract()?;
-        if SENSITIVE_SOURCE_SETTING_FRAGMENTS.iter().any(|fragment| lowered.contains(fragment)) {
+        if SENSITIVE_SOURCE_SETTING_FRAGMENTS
+            .iter()
+            .any(|fragment| lowered.contains(fragment))
+        {
             redacted.set_item(key, REDACTED_SECRET_PLACEHOLDER)?;
         } else {
             redacted.set_item(key, value)?;
@@ -87,15 +99,25 @@ fn redacted_source_settings<'py>(settings: &Any<'py>) -> PyResult<Any<'py>> {
 }
 
 fn render_database(analysis: &Any<'_>) -> PyResult<String> {
-    let configured: Option<String> =
-        get(&get(&get(analysis, "compile_inputs")?, "effective_target")?, "default_database")?.extract()?;
-    Ok(configured.filter(|name| !name.is_empty()).unwrap_or_else(|| FALLBACK_RENDER_DATABASE.to_owned()))
+    let configured: Option<String> = get(
+        &get(&get(analysis, "compile_inputs")?, "effective_target")?,
+        "default_database",
+    )?
+    .extract()?;
+    Ok(configured
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| FALLBACK_RENDER_DATABASE.to_owned()))
 }
 
 fn allowed_cross_pipeline_references<'py>(analysis: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     let mut items: Vec<Any<'py>> = Vec::new();
-    for reference in get(&get(analysis, "compiled_project")?, "allowed_cross_pipeline_references")?.try_iter()? {
+    for reference in get(
+        &get(analysis, "compiled_project")?,
+        "allowed_cross_pipeline_references",
+    )?
+    .try_iter()?
+    {
         let reference = reference?;
         items.push(
             py_kwargs!(py;
@@ -129,8 +151,10 @@ fn serializable_connection_value<'py>(value: &Any<'py>) -> PyResult<Any<'py>> {
         return Ok(nested.into_any());
     }
     if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
-        let items: Vec<Any<'py>> =
-            value.try_iter()?.map(|item| serializable_connection_value(&item?)).collect::<PyResult<_>>()?;
+        let items: Vec<Any<'py>> = value
+            .try_iter()?
+            .map(|item| serializable_connection_value(&item?))
+            .collect::<PyResult<_>>()?;
         return list(py, items);
     }
     Ok(value.clone())
@@ -166,7 +190,11 @@ fn model_retention_payload<'py>(retention: &Any<'py>) -> PyResult<Any<'py>> {
 }
 
 fn optional_str<'py>(value: Any<'py>) -> PyResult<Any<'py>> {
-    if value.is_none() { Ok(value) } else { str_of(&value) }
+    if value.is_none() {
+        Ok(value)
+    } else {
+        str_of(&value)
+    }
 }
 
 fn kafka_retention_payload<'py>(retention: &Any<'py>) -> PyResult<Any<'py>> {
@@ -189,7 +217,11 @@ fn kafka_retention_payload<'py>(retention: &Any<'py>) -> PyResult<Any<'py>> {
 fn project_payload<'py>(analysis: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     let loaded = get(&get(analysis, "discovered_inputs")?, "loaded_project")?;
-    let effective = if loaded.is_none() { loaded } else { get(&loaded, "effective_configuration")? };
+    let effective = if loaded.is_none() {
+        loaded
+    } else {
+        get(&loaded, "effective_configuration")?
+    };
     if effective.is_none() {
         return Ok(py_kwargs!(py;
             name = none(py),
@@ -213,7 +245,9 @@ fn project_payload<'py>(analysis: &Any<'py>) -> PyResult<Any<'py>> {
     let broker_payload: Any<'py> = if broker_list.is_none() {
         none(py)
     } else {
-        redacted_broker_list(&broker_list.extract::<String>()?).into_pyobject(py)?.into_any()
+        redacted_broker_list(&broker_list.extract::<String>()?)
+            .into_pyobject(py)?
+            .into_any()
     };
     let connection: Bound<'py, PyDict> = PyDict::new(py);
     for item in get(&get(&effective, "connection")?, "values")?.try_iter()? {
@@ -261,13 +295,24 @@ fn project_payload<'py>(analysis: &Any<'py>) -> PyResult<Any<'py>> {
     .into_any())
 }
 
-fn render_resource<'py>(analysis: &Any<'py>, resource: &Any<'py>, database: &str) -> PyResult<Any<'py>> {
+fn render_resource<'py>(
+    analysis: &Any<'py>,
+    resource: &Any<'py>,
+    database: &str,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
-    get(analysis, "adapter_profile")?
-        .call_method("render_resource", (), Some(&py_kwargs!(py; resource = resource, database = database)?))
+    get(analysis, "adapter_profile")?.call_method(
+        "render_resource",
+        (),
+        Some(&py_kwargs!(py; resource = resource, database = database)?),
+    )
 }
 
-fn managed_relation_payload<'py>(analysis: &Any<'py>, resource: &Any<'py>, database: &str) -> PyResult<Any<'py>> {
+fn managed_relation_payload<'py>(
+    analysis: &Any<'py>,
+    resource: &Any<'py>,
+    database: &str,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     let exact = resource.get_type();
     let kind: &str = if exact.is(&class(py, ADAPTER_MODELS, "AdapterManagedSource")?) {
@@ -282,10 +327,16 @@ fn managed_relation_payload<'py>(analysis: &Any<'py>, resource: &Any<'py>, datab
     let renderable: bool = is(resource, ADAPTER_MODELS, "AdapterManagedSource")?
         || is(resource, ADAPTER_MODELS, "AdapterTable")?
         || is(resource, ADAPTER_MODELS, "AdapterMaterializedView")?;
-    let ddl: Any<'py> = if renderable { render_resource(analysis, resource, database)? } else { none(py) };
+    let ddl: Any<'py> = if renderable {
+        render_resource(analysis, resource, database)?
+    } else {
+        none(py)
+    };
     let name: Any<'py> = match resource.getattr("name") {
         Ok(name) => name,
-        Err(error) if error.is_instance_of::<pyo3::exceptions::PyAttributeError>(py) => "".into_pyobject(py)?.into_any(),
+        Err(error) if error.is_instance_of::<pyo3::exceptions::PyAttributeError>(py) => {
+            "".into_pyobject(py)?.into_any()
+        }
         Err(error) => return Err(error),
     };
     Ok(py_kwargs!(py; kind = kind, name = name, ddl = ddl)?.into_any())
@@ -296,7 +347,9 @@ fn get_or_none<'py>(value: &Any<'py>, name: &str) -> PyResult<Any<'py>> {
     let py: Python<'py> = value.py();
     match value.getattr(name) {
         Ok(found) => Ok(found),
-        Err(error) if error.is_instance_of::<pyo3::exceptions::PyAttributeError>(py) => Ok(none(py)),
+        Err(error) if error.is_instance_of::<pyo3::exceptions::PyAttributeError>(py) => {
+            Ok(none(py))
+        }
         Err(error) => Err(error),
     }
 }
@@ -314,14 +367,22 @@ fn boundary_columns_payload<'py>(boundary: &Any<'py>) -> PyResult<Any<'py>> {
             mapping.set_item(role, value)?;
         }
     }
-    if mapping.is_empty() { Ok(none(py)) } else { Ok(mapping.into_any()) }
+    if mapping.is_empty() {
+        Ok(none(py))
+    } else {
+        Ok(mapping.into_any())
+    }
 }
 
 fn source_payload<'py>(analysis: &Any<'py>, source: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     let step = get(source, "source")?;
     let key = get(source, "key")?;
-    let relation_name = get(&get(analysis, "realized_project")?, "relation_name_by_logical_key")?.get_item(&key)?;
+    let relation_name = get(
+        &get(analysis, "realized_project")?,
+        "relation_name_by_logical_key",
+    )?
+    .get_item(&key)?;
     let database: String = render_database(analysis)?;
     let mut managed: Vec<Any<'py>> = Vec::new();
     let mut kafka: Any<'py> = none(py);
@@ -330,7 +391,11 @@ fn source_payload<'py>(analysis: &Any<'py>, source: &Any<'py>) -> PyResult<Any<'
         managed.push(managed_relation_payload(analysis, &resource, &database)?);
         if is(&resource, ADAPTER_MODELS, "AdapterManagedSource")? {
             let settings = dict_of(&get(&resource, "settings")?)?;
-            let settings = if settings.is_truthy()? { settings } else { none(py) };
+            let settings = if settings.is_truthy()? {
+                settings
+            } else {
+                none(py)
+            };
             let consumer_group = class(py, "sqltide._native", "database_scoped_consumer_group")?.call(
                 (),
                 Some(&py_kwargs!(py; consumer_group = get(&resource, "consumer_group")?, database = database.as_str())?),
@@ -350,10 +415,23 @@ fn source_payload<'py>(analysis: &Any<'py>, source: &Any<'py>) -> PyResult<Any<'
     }
     let is_kafka: bool = is(&step, DISCOVERY_MODELS, "KafkaLandingStep")?;
     let is_postgres: bool = is(&step, DISCOVERY_MODELS, "PostgresRefreshSourceStep")?;
-    let boundary: Any<'py> = if is_postgres { none(py) } else { get(&step, "replay_boundary")? };
+    let boundary: Any<'py> = if is_postgres {
+        none(py)
+    } else {
+        get(&step, "replay_boundary")?
+    };
     let source_kind = class(py, DISCOVERY_TYPES, "SourceKind")?;
     let kind = get(
-        &get(&source_kind, if is_kafka { "KAFKA" } else if is_postgres { "POSTGRES" } else { "STREAM_TABLE" })?,
+        &get(
+            &source_kind,
+            if is_kafka {
+                "KAFKA"
+            } else if is_postgres {
+                "POSTGRES"
+            } else {
+                "STREAM_TABLE"
+            },
+        )?,
         "value",
     )?;
     Ok(py_kwargs!(py;
@@ -470,7 +548,10 @@ fn column_payloads<'py>(model: &Any<'py>) -> PyResult<Any<'py>> {
         let column = column?;
         let name = get(&column, "name")?;
         let description = described.get_item(&name)?.unwrap_or_else(|| none(py));
-        columns.push(py_kwargs!(py; name = name, type = get(&column, "type")?, description = description)?.into_any());
+        columns.push(
+            py_kwargs!(py; name = name, type = get(&column, "type")?, description = description)?
+                .into_any(),
+        );
     }
     list(py, columns)
 }
@@ -497,9 +578,10 @@ fn anchor_reason<'py>(model: &Any<'py>) -> PyResult<Any<'py>> {
     let reasons = class(py, ANCHOR_REASON, "ReplayAnchorReason")?;
     let reason: &str = if !is(model, COMPILE_MODELS, "CompiledTableModel")? {
         "VIEW"
-    } else if get(&get(model, "transform")?, "replay_anchor")?
-        .eq(get(&class(py, DISCOVERY_TYPES, "ReplayAnchorMode")?, "NEVER")?)?
-    {
+    } else if get(&get(model, "transform")?, "replay_anchor")?.eq(get(
+        &class(py, DISCOVERY_TYPES, "ReplayAnchorMode")?,
+        "NEVER",
+    )?)? {
         "NEVER"
     } else if get(model, "has_mutable_refs")?.is_truthy()? {
         "MUTABLE_REF"
@@ -519,7 +601,9 @@ fn sql_payload<'py>(analysis: &Any<'py>, model: &Any<'py>, database: &str) -> Py
     if let Some(declared) = table_or_view(model)? {
         let source_path = get(&declared, "source_file_path")?;
         if !source_path.is_none() {
-            for discovered in get(&get(analysis, "discovered_inputs")?, "model_files")?.try_iter()? {
+            for discovered in
+                get(&get(analysis, "discovered_inputs")?, "model_files")?.try_iter()?
+            {
                 let discovered = discovered?;
                 if get(&discovered, "file_path")?.eq(&source_path)? {
                     authored = get(&discovered, "contents")?;
@@ -528,9 +612,13 @@ fn sql_payload<'py>(analysis: &Any<'py>, model: &Any<'py>, database: &str) -> Py
             }
         }
     }
-    let ddl: Bound<'py, PyDict> = py_kwargs!(py; table = none(py), materializedView = none(py), view = none(py))?;
-    let fields: [(&str, &str); 3] =
-        [("AdapterTable", "table"), ("AdapterMaterializedView", "materializedView"), ("AdapterView", "view")];
+    let ddl: Bound<'py, PyDict> =
+        py_kwargs!(py; table = none(py), materializedView = none(py), view = none(py))?;
+    let fields: [(&str, &str); 3] = [
+        ("AdapterTable", "table"),
+        ("AdapterMaterializedView", "materializedView"),
+        ("AdapterView", "view"),
+    ];
     let key = get(model, "key")?;
     for resource in resources(analysis, &key)? {
         let exact = resource.get_type();
@@ -540,7 +628,11 @@ fn sql_payload<'py>(analysis: &Any<'py>, model: &Any<'py>, database: &str) -> Py
             }
         }
     }
-    let compiled = get(&get(analysis, "realized_project")?, "resolved_query_by_model_key")?.call_method1("get", (&key,))?;
+    let compiled = get(
+        &get(analysis, "realized_project")?,
+        "resolved_query_by_model_key",
+    )?
+    .call_method1("get", (&key,))?;
     Ok(py_kwargs!(py; authored = authored, compiled = compiled, ddl = ddl)?.into_any())
 }
 
@@ -551,8 +643,14 @@ fn model_payload<'py>(analysis: &Any<'py>, model: &Any<'py>, database: &str) -> 
         .call_method1("get", (&key, PyTuple::empty(py)))?
         .try_iter()?
         .collect::<PyResult<_>>()?;
-    let source_type = get(&class(py, "sqltide.compiler.compile.types", "LogicalResourceType")?, "SOURCE")?;
-    let driving_type = get(&class(py, "sqltide.compiler.graph.types", "DependencyEdgeType")?, "DRIVING_INPUT")?;
+    let source_type = get(
+        &class(py, "sqltide.compiler.compile.types", "LogicalResourceType")?,
+        "SOURCE",
+    )?;
+    let driving_type = get(
+        &class(py, "sqltide.compiler.graph.types", "DependencyEdgeType")?,
+        "DRIVING_INPUT",
+    )?;
     let mut refs: Vec<Any<'py>> = Vec::new();
     let mut driving: Any<'py> = none(py);
     for edge in &edges {
@@ -617,7 +715,11 @@ fn identity_payload<'py>(identity: &Any<'py>) -> PyResult<Any<'py>> {
 
 /// `value or fallback`.
 fn or<'py>(value: Any<'py>, fallback: impl FnOnce() -> PyResult<Any<'py>>) -> PyResult<Any<'py>> {
-    if value.is_truthy()? { Ok(value) } else { fallback() }
+    if value.is_truthy()? {
+        Ok(value)
+    } else {
+        fallback()
+    }
 }
 
 fn audit_payload<'py>(audit: &Any<'py>) -> PyResult<Any<'py>> {
@@ -660,7 +762,10 @@ fn test_payload<'py>(test_case: &Any<'py>) -> PyResult<Any<'py>> {
 
 fn macro_payloads<'py>(analysis: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
-    let macros = get(&get(&get(analysis, "compiled_project")?, "macro_registry")?, "macros")?;
+    let macros = get(
+        &get(&get(analysis, "compiled_project")?, "macro_registry")?,
+        "macros",
+    )?;
     let ordered = class(py, "builtins", "sorted")?.call1((macros.call_method0("items")?,))?;
     let mut payloads: Vec<Any<'py>> = Vec::new();
     for item in ordered.try_iter()? {
@@ -692,16 +797,22 @@ pub(crate) fn build_definitions_payload<'py>(
         .try_iter()?
         .map(|source| source_payload(&analysis, &source?))
         .collect::<PyResult<_>>()?;
-    let pipelines: Vec<Any<'py>> =
-        get(&compiled, "pipelines")?.try_iter()?.map(|pipeline| pipeline_payload(&pipeline?)).collect::<PyResult<_>>()?;
+    let pipelines: Vec<Any<'py>> = get(&compiled, "pipelines")?
+        .try_iter()?
+        .map(|pipeline| pipeline_payload(&pipeline?))
+        .collect::<PyResult<_>>()?;
     let models: Vec<Any<'py>> = get(&compiled, "models")?
         .try_iter()?
         .map(|model| model_payload(&analysis, &model?, &database))
         .collect::<PyResult<_>>()?;
-    let audits: Vec<Any<'py>> =
-        get(&compiled, "audits")?.try_iter()?.map(|audit| audit_payload(&audit?)).collect::<PyResult<_>>()?;
-    let tests: Vec<Any<'py>> =
-        get(&compiled, "test_cases")?.try_iter()?.map(|test_case| test_payload(&test_case?)).collect::<PyResult<_>>()?;
+    let audits: Vec<Any<'py>> = get(&compiled, "audits")?
+        .try_iter()?
+        .map(|audit| audit_payload(&audit?))
+        .collect::<PyResult<_>>()?;
+    let tests: Vec<Any<'py>> = get(&compiled, "test_cases")?
+        .try_iter()?
+        .map(|test_case| test_payload(&test_case?))
+        .collect::<PyResult<_>>()?;
     Ok(py_kwargs!(py;
         versionKey = version_key,
         project = project_payload(&analysis)?,

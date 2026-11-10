@@ -19,12 +19,14 @@ use tokio::sync::{Notify, Semaphore};
 
 use super::auth::{AuthService, LoginLimiter, Refusal, protects};
 use super::http::{
-    Failure, HttpReply, HttpRequest, Outcome, Route, Routed, bodiless, gzip, http_date, method_not_allowed,
-    now_seconds, object, percent_decode, py_json, route,
+    Failure, HttpReply, HttpRequest, Outcome, Route, Routed, bodiless, gzip, http_date,
+    method_not_allowed, now_seconds, object, percent_decode, py_json, route,
 };
 use super::routes::routes;
 use super::static_files::StaticAssets;
-use super::support::{Body, Scalar, Value, attr, parse_scalar, read_body, validate_body, validate_string_mapping};
+use super::support::{
+    Body, Scalar, Value, attr, parse_scalar, read_body, validate_body, validate_string_mapping,
+};
 
 /// Synchronous handlers run on at most this many worker threads at once, the limit the earlier
 /// thread pool applied.
@@ -171,7 +173,9 @@ impl<'py, 'a> Call<'py, 'a> {
     }
 
     pub(crate) fn query_text(&self, index: usize) -> Option<String> {
-        self.query[index].as_ref().map(|value| value.text().to_owned())
+        self.query[index]
+            .as_ref()
+            .map(|value| value.text().to_owned())
     }
 
     pub(crate) fn query_flag(&self, index: usize) -> bool {
@@ -206,7 +210,11 @@ impl<'py, 'a> Call<'py, 'a> {
 
 impl DevApp {
     /// Answer one request; a Python exception no handler mapped propagates.
-    pub(crate) fn handle(self: &Arc<Self>, py: Python<'_>, request: &HttpRequest) -> PyResult<HttpReply> {
+    pub(crate) fn handle(
+        self: &Arc<Self>,
+        py: Python<'_>,
+        request: &HttpRequest,
+    ) -> PyResult<HttpReply> {
         let mut authenticated: Option<Bound<'_, PyAny>> = None;
         if protects(&request.path) {
             match self.auth.authenticate(py, request)? {
@@ -218,7 +226,11 @@ impl DevApp {
             Routed::Matched(endpoint, parameters) => {
                 match self.dispatch(py, request, endpoint, &parameters, authenticated) {
                     Ok(reply) => reply,
-                    Err(Failure::Http { status, detail, headers }) => Failure::reply(status, &detail, &headers)?,
+                    Err(Failure::Http {
+                        status,
+                        detail,
+                        headers,
+                    }) => Failure::reply(status, &detail, &headers)?,
                     Err(Failure::Validation(errors)) => {
                         HttpReply::json(422, &object(vec![("detail", JsonValue::Array(errors))]))?
                     }
@@ -226,9 +238,10 @@ impl DevApp {
                         // The authentication middleware also maps these when a private route
                         // raises them.
                         if protects(&request.path)
-                            && let Some(refusal) = Refusal::classify(py, &error)? {
-                                return finish(refusal.reply()?);
-                            }
+                            && let Some(refusal) = Refusal::classify(py, &error)?
+                        {
+                            return finish(refusal.reply()?);
+                        }
                         return Err(error);
                     }
                 }
@@ -236,15 +249,20 @@ impl DevApp {
             unmatched => {
                 // The asset mounts and the SPA catch-all come after every API route; a full
                 // match there wins over an API route that only matched the path.
-                let assets: Option<StaticAssets> = self.assets.lock().ok().and_then(|assets| assets.clone());
-                let served: Option<HttpReply> = assets.as_ref().and_then(|assets| assets.serve(py, request));
+                let assets: Option<StaticAssets> =
+                    self.assets.lock().ok().and_then(|assets| assets.clone());
+                let served: Option<HttpReply> =
+                    assets.as_ref().and_then(|assets| assets.serve(py, request));
                 match (served, unmatched, assets.is_some()) {
                     (Some(reply), _, _) => reply,
                     (None, Routed::MethodNotAllowed(methods), _) => method_not_allowed(&methods),
                     (None, _, true) => method_not_allowed(&["GET"]),
                     (None, Routed::Redirect(location), false) => HttpReply {
                         status: 307,
-                        headers: vec![("content-length".to_owned(), "0".to_owned()), ("location".to_owned(), location)],
+                        headers: vec![
+                            ("content-length".to_owned(), "0".to_owned()),
+                            ("location".to_owned(), location),
+                        ],
                         body: Vec::new(),
                     },
                     (None, _, false) => Failure::reply(404, &super::http::text("Not Found"), &[])?,
@@ -265,7 +283,12 @@ impl DevApp {
         let mut errors: Vec<JsonValue> = Vec::new();
         let mut path: Vec<Value> = Vec::new();
         for ((name, raw), scalar) in parameters.iter().zip(endpoint.path) {
-            match parse_scalar(py, *scalar, raw, vec![super::http::text("path"), super::http::text(name.clone())])? {
+            match parse_scalar(
+                py,
+                *scalar,
+                raw,
+                vec![super::http::text("path"), super::http::text(name.clone())],
+            )? {
                 Ok(value) => path.push(value),
                 Err(error) => {
                     errors.push(error);
@@ -282,14 +305,20 @@ impl DevApp {
                 .map(|(_, value)| value)
                 .collect();
             if parameter.many {
-                query.push((!values.is_empty()).then(|| Value::List(values.into_iter().cloned().collect())));
+                query.push(
+                    (!values.is_empty())
+                        .then(|| Value::List(values.into_iter().cloned().collect())),
+                );
                 continue;
             }
             let Some(raw) = values.last() else {
                 if parameter.required {
                     errors.push(super::support::validation_error(
                         "missing",
-                        vec![super::http::text("query"), super::http::text(parameter.name)],
+                        vec![
+                            super::http::text("query"),
+                            super::http::text(parameter.name),
+                        ],
                         "Field required",
                         JsonValue::Null,
                         None,
@@ -302,7 +331,10 @@ impl DevApp {
                 py,
                 parameter.scalar,
                 raw,
-                vec![super::http::text("query"), super::http::text(parameter.name)],
+                vec![
+                    super::http::text("query"),
+                    super::http::text(parameter.name),
+                ],
             )? {
                 Ok(value) => query.push(Some(value)),
                 Err(error) => {
@@ -348,7 +380,11 @@ impl DevApp {
             sensors.call_method0("initialize_event_checkpoints")?;
             sensors.call_method0("start")?;
             services.audit_scheduler.bind(py).call_method0("start")?;
-            services.state.bind(py).getattr("snapshot")?.call_method0("start")?;
+            services
+                .state
+                .bind(py)
+                .getattr("snapshot")?
+                .call_method0("start")?;
             self.warm_broker_caches(py)
         })();
         if let Err(error) = started {
@@ -364,7 +400,14 @@ impl DevApp {
         let services: &Services = &self.services;
         let analysis = match services.state.bind(py).call_method0("current_analysis") {
             Ok(analysis) => analysis,
-            Err(error) if super::support::is_instance(py, &error, "sqltide.dev_server.exceptions", "ProjectNotCompiledError")? => {
+            Err(error)
+                if super::support::is_instance(
+                    py,
+                    &error,
+                    "sqltide.dev_server.exceptions",
+                    "ProjectNotCompiledError",
+                )? =>
+            {
                 return Ok(());
             }
             Err(error) => return Err(error),
@@ -386,14 +429,51 @@ impl DevApp {
     pub(crate) fn shutdown(&self, py: Python<'_>) -> PyResult<()> {
         let services: &Services = &self.services;
         let steps: [Box<dyn Fn() -> PyResult<()> + '_>; 8] = [
-            Box::new(|| services.state.bind(py).getattr("snapshot")?.call_method0("close").map(drop)),
-            Box::new(|| services.sensor_scheduler.bind(py).call_method0("close").map(drop)),
-            Box::new(|| services.audit_scheduler.bind(py).call_method0("close").map(drop)),
-            Box::new(|| services.kafka_lag_reader.bind(py).call_method0("close").map(drop)),
-            Box::new(|| services.kafka_topic_reader.bind(py).call_method0("close").map(drop)),
+            Box::new(|| {
+                services
+                    .state
+                    .bind(py)
+                    .getattr("snapshot")?
+                    .call_method0("close")
+                    .map(drop)
+            }),
+            Box::new(|| {
+                services
+                    .sensor_scheduler
+                    .bind(py)
+                    .call_method0("close")
+                    .map(drop)
+            }),
+            Box::new(|| {
+                services
+                    .audit_scheduler
+                    .bind(py)
+                    .call_method0("close")
+                    .map(drop)
+            }),
+            Box::new(|| {
+                services
+                    .kafka_lag_reader
+                    .bind(py)
+                    .call_method0("close")
+                    .map(drop)
+            }),
+            Box::new(|| {
+                services
+                    .kafka_topic_reader
+                    .bind(py)
+                    .call_method0("close")
+                    .map(drop)
+            }),
             Box::new(|| services.builds.bind(py).call_method0("close").map(drop)),
             Box::new(|| services.warehouse.bind(py).call_method0("close").map(drop)),
-            Box::new(|| services.control_stores.bind(py).call_method0("close").map(drop)),
+            Box::new(|| {
+                services
+                    .control_stores
+                    .bind(py)
+                    .call_method0("close")
+                    .map(drop)
+            }),
         ];
         // The earlier lifespan closed these in sequence without guarding each step, so the
         // first failure stops the rest.
@@ -408,7 +488,9 @@ impl DevApp {
 /// the ASGI app sent it; the HTTP server drops it on the wire.
 fn finish(mut reply: HttpReply) -> PyResult<HttpReply> {
     if !bodiless(reply.status) && reply.header("content-length").is_none() {
-        reply.headers.push(("content-length".to_owned(), reply.body.len().to_string()));
+        reply
+            .headers
+            .push(("content-length".to_owned(), reply.body.len().to_string()));
     }
     Ok(reply)
 }
@@ -474,9 +556,10 @@ impl DevApplication {
     /// Serve the packaged UI build under every path the API does not take.
     fn mount_static_assets(&self, assets_root: PathBuf) {
         if StaticAssets::present(&assets_root)
-            && let Ok(mut assets) = self.app.assets.lock() {
-                *assets = Some(StaticAssets { root: assets_root });
-            }
+            && let Ok(mut assets) = self.app.assets.lock()
+        {
+            *assets = Some(StaticAssets { root: assets_root });
+        }
     }
 
     /// Run the startup half of the lifecycle.
@@ -526,7 +609,11 @@ fn serve(py: Python<'_>, app: &Arc<DevApp>, host: &str, port: u16) -> PyResult<(
             let reason: String = match error.raw_os_error() {
                 Some(code) => format!(
                     "[Errno {code}] error while attempting to bind on address ('{host}', {port}): {}",
-                    attr(py, "os", "strerror")?.call1((code,))?.str()?.to_string().to_lowercase()
+                    attr(py, "os", "strerror")?
+                        .call1((code,))?
+                        .str()?
+                        .to_string()
+                        .to_lowercase()
                 ),
                 None => error.to_string(),
             };
@@ -548,9 +635,12 @@ fn serve(py: Python<'_>, app: &Arc<DevApp>, host: &str, port: u16) -> PyResult<(
         });
         let stop: Arc<Notify> = Arc::clone(&stop);
         servers.push(runtime.spawn(async move {
-            axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-                .with_graceful_shutdown(async move { stop.notified().await })
-                .await
+            axum::serve(
+                listener,
+                router.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(async move { stop.notified().await })
+            .await
         }));
     }
     let terminated: Arc<Notify> = Arc::new(Notify::new());
@@ -559,11 +649,13 @@ fn serve(py: Python<'_>, app: &Arc<DevApp>, host: &str, port: u16) -> PyResult<(
         let terminated: Arc<Notify> = Arc::clone(&terminated);
         let stop: Arc<Notify> = Arc::clone(&stop);
         runtime.spawn(async move {
-            if let Ok(mut signal) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                && signal.recv().await.is_some() {
-                    stop.notify_waiters();
-                    terminated.notify_one();
-                }
+            if let Ok(mut signal) =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                && signal.recv().await.is_some()
+            {
+                stop.notify_waiters();
+                terminated.notify_one();
+            }
         });
     }
     let mut stopping: bool = false;
@@ -629,7 +721,12 @@ async fn bind_all(address: &str) -> std::io::Result<Vec<tokio::net::TcpListener>
 
 /// Run one request on a blocking worker that attaches to Python; tokio workers never hold
 /// the interpreter lock.
-async fn answer(app: Arc<DevApp>, workers: Arc<Semaphore>, peer: SocketAddr, request: Request) -> Response {
+async fn answer(
+    app: Arc<DevApp>,
+    workers: Arc<Semaphore>,
+    peer: SocketAddr,
+    request: Request,
+) -> Response {
     let (parts, body) = request.into_parts();
     let Ok(bytes) = axum::body::to_bytes(body, usize::MAX).await else {
         return plain(400, "Bad Request");
@@ -645,7 +742,11 @@ async fn answer(app: Arc<DevApp>, workers: Arc<Semaphore>, peer: SocketAddr, req
             .map(|(name, value)| {
                 (
                     name.as_str().to_ascii_lowercase(),
-                    value.as_bytes().iter().map(|byte| char::from(*byte)).collect(),
+                    value
+                        .as_bytes()
+                        .iter()
+                        .map(|byte| char::from(*byte))
+                        .collect(),
                 )
             })
             .collect(),
@@ -662,7 +763,11 @@ async fn answer(app: Arc<DevApp>, workers: Arc<Semaphore>, peer: SocketAddr, req
             Err(error) => {
                 eprintln!("ERROR:    Exception in ASGI application");
                 error.print(py);
-                HttpReply::new(500, "text/plain; charset=utf-8", b"Internal Server Error".to_vec())
+                HttpReply::new(
+                    500,
+                    "text/plain; charset=utf-8",
+                    b"Internal Server Error".to_vec(),
+                )
             }
         })
     })
@@ -675,7 +780,10 @@ async fn answer(app: Arc<DevApp>, workers: Arc<Semaphore>, peer: SocketAddr, req
         .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
     let headers = response.headers_mut();
     for (name, value) in reply.headers {
-        let bytes: Vec<u8> = value.chars().map(|character| u8::try_from(u32::from(character)).unwrap_or(b'?')).collect();
+        let bytes: Vec<u8> = value
+            .chars()
+            .map(|character| u8::try_from(u32::from(character)).unwrap_or(b'?'))
+            .collect();
         if let (Ok(name), Ok(value)) = (
             axum::http::HeaderName::from_bytes(name.as_bytes()),
             axum::http::HeaderValue::from_bytes(&bytes),
@@ -691,7 +799,8 @@ async fn answer(app: Arc<DevApp>, workers: Arc<Semaphore>, peer: SocketAddr, req
 
 fn plain(status: u16, text: &'static str) -> Response {
     let mut response: Response = Response::new(AxumBody::from(text));
-    *response.status_mut() = axum::http::StatusCode::from_u16(status).unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    *response.status_mut() = axum::http::StatusCode::from_u16(status)
+        .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
     response
 }
 

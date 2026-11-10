@@ -23,7 +23,11 @@ fn optional<'py>(
     value: Bound<'py, PyAny>,
     map: impl FnOnce(&Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    if value.is_none() { Ok(value) } else { map(&value) }
+    if value.is_none() {
+        Ok(value)
+    } else {
+        map(&value)
+    }
 }
 
 // Sensors.
@@ -49,8 +53,10 @@ fn tick_payload<'py>(tick: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
 }
 
 fn ticks_payload<'py>(py: Python<'py>, ticks: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let items: Vec<Bound<'py, PyAny>> =
-        ticks.try_iter()?.map(|tick| tick_payload(&tick?)).collect::<PyResult<_>>()?;
+    let items: Vec<Bound<'py, PyAny>> = ticks
+        .try_iter()?
+        .map(|tick| tick_payload(&tick?))
+        .collect::<PyResult<_>>()?;
     list_of(py, items)
 }
 
@@ -70,17 +76,30 @@ fn sensor_payload<'py>(
             Some(&py_kwargs!(py; sensor_name = sensor.getattr("name")?, limit = 1)?),
         )?;
         let count: usize = ticks.len()?;
-        if count == 0 { None } else { Some(ticks.get_item(count - 1)?) }
+        if count == 0 {
+            None
+        } else {
+            Some(ticks.get_item(count - 1)?)
+        }
     };
-    let effective = attr(py, "sqltide.sensors._helpers.dispatch", "effective_sensor_status")?
-        .call((), Some(&py_kwargs!(py; sensor = sensor, overrides = overrides)?))?;
+    let effective = attr(
+        py,
+        "sqltide.sensors._helpers.dispatch",
+        "effective_sensor_status",
+    )?
+    .call(
+        (),
+        Some(&py_kwargs!(py; sensor = sensor, overrides = overrides)?),
+    )?;
     let override_value = overrides.call_method1("get", (sensor.getattr("name")?,))?;
-    let declared_in_code = attr(py, "sqltide.sensors.types", "SensorOverrideStatus")?.getattr("DECLARED_IN_CODE")?;
-    let override_payload: Option<String> = if override_value.is_none() || override_value.is(&declared_in_code) {
-        None
-    } else {
-        Some(override_value.str()?.to_string())
-    };
+    let declared_in_code =
+        attr(py, "sqltide.sensors.types", "SensorOverrideStatus")?.getattr("DECLARED_IN_CODE")?;
+    let override_payload: Option<String> =
+        if override_value.is_none() || override_value.is(&declared_in_code) {
+            None
+        } else {
+            Some(override_value.str()?.to_string())
+        };
     let retry = sensor.getattr("retry_policy")?;
     let payload: Bound<'py, PyDict> = py_kwargs!(py;
         name = sensor.getattr("name")?,
@@ -103,12 +122,24 @@ fn sensor_payload<'py>(
     )?;
     let models: &str = "sqltide.sensors.models";
     if declaration.is_instance(&attr(py, models, "EventSensorDeclaration")?)? {
-        payload.set_item("eventType", declaration.getattr("event_type")?.getattr("__name__")?)?;
-        payload.set_item("targets", optional(declaration.getattr("targets")?, sorted)?)?;
-        payload.set_item("triggers", optional(declaration.getattr("triggers")?, sorted)?)?;
+        payload.set_item(
+            "eventType",
+            declaration.getattr("event_type")?.getattr("__name__")?,
+        )?;
+        payload.set_item(
+            "targets",
+            optional(declaration.getattr("targets")?, sorted)?,
+        )?;
+        payload.set_item(
+            "triggers",
+            optional(declaration.getattr("triggers")?, sorted)?,
+        )?;
     }
     if declaration.is_instance(&attr(py, models, "PollingSensorDeclaration")?)? {
-        payload.set_item("minimumIntervalSeconds", declaration.getattr("minimum_interval_seconds")?)?;
+        payload.set_item(
+            "minimumIntervalSeconds",
+            declaration.getattr("minimum_interval_seconds")?,
+        )?;
     }
     Ok(payload.into_any())
 }
@@ -126,7 +157,11 @@ pub(crate) fn build_sensors_payload<'py>(
     let sensors: Vec<Bound<'py, PyAny>> = if compiled.is_none() {
         Vec::new()
     } else {
-        compiled.getattr("registry")?.call_method0("ordered")?.try_iter()?.collect::<PyResult<_>>()?
+        compiled
+            .getattr("registry")?
+            .call_method0("ordered")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?
     };
     let mut overrides: Bound<'py, PyAny> = PyDict::new(py).into_any();
     let mut dead_letter_count: usize = 0;
@@ -198,8 +233,12 @@ fn storage_int(value: &Bound<'_, PyAny>) -> PyResult<i128> {
     if value.is_instance_of::<pyo3::types::PyBool>() {
         return Ok(0);
     }
-    if value.is_instance_of::<pyo3::types::PyInt>() || value.is_instance_of::<pyo3::types::PyFloat>() {
-        return attr(value.py(), "builtins", "int")?.call1((value,))?.extract();
+    if value.is_instance_of::<pyo3::types::PyInt>()
+        || value.is_instance_of::<pyo3::types::PyFloat>()
+    {
+        return attr(value.py(), "builtins", "int")?
+            .call1((value,))?
+            .extract();
     }
     Ok(0)
 }
@@ -209,7 +248,9 @@ fn relation_storage<'py>(
     database: &str,
 ) -> PyResult<Vec<(String, Storage)>> {
     let query: String = super::state::build_relation_stats_query(database);
-    let rows = connection.call_method1("query", (query,))?.call_method0("named_rows")?;
+    let rows = connection
+        .call_method1("query", (query,))?
+        .call_method0("named_rows")?;
     let mut storage: Vec<(String, Storage)> = Vec::new();
     for row in rows.try_iter()? {
         let row = row?;
@@ -228,17 +269,23 @@ fn relation_storage<'py>(
 }
 
 fn storage_of(storage: &[(String, Storage)], name: &str) -> Storage {
-    storage.iter().find(|(existing, _)| existing == name).map(|(_, entry)| *entry).unwrap_or_default()
+    storage
+        .iter()
+        .find(|(existing, _)| existing == name)
+        .map(|(_, entry)| *entry)
+        .unwrap_or_default()
 }
 
 fn storage_total(relation_names: &[String], storage: &[(String, Storage)]) -> Storage {
-    relation_names.iter().fold(Storage::default(), |total, name| {
-        let entry: Storage = storage_of(storage, name);
-        Storage {
-            rows: total.rows + entry.rows,
-            bytes: total.bytes + entry.bytes,
-        }
-    })
+    relation_names
+        .iter()
+        .fold(Storage::default(), |total, name| {
+            let entry: Storage = storage_of(storage, name);
+            Storage {
+                rows: total.rows + entry.rows,
+                bytes: total.bytes + entry.bytes,
+            }
+        })
 }
 
 fn strings(value: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
@@ -247,7 +294,12 @@ fn strings(value: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 
 /// Deployment relations that receive a stable view; landing views are excluded.
 fn model_relation_names(py: Python<'_>, relation_names: &[String]) -> PyResult<Vec<String>> {
-    let prefix: String = attr(py, "sqltide.compiler.compile.constants", "MATERIALIZED_VIEW_NAME_PREFIX")?.extract()?;
+    let prefix: String = attr(
+        py,
+        "sqltide.compiler.compile.constants",
+        "MATERIALIZED_VIEW_NAME_PREFIX",
+    )?
+    .extract()?;
     Ok(relation_names
         .iter()
         .filter(|name| !logical_name_from_physical_name(name).starts_with(&prefix))
@@ -320,7 +372,10 @@ fn deployment_id_or_none(physical_name: Option<&str>) -> PyResult<Option<String>
     }
 }
 
-fn promotion_preview_payload<'py>(py: Python<'py>, preview: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyAny>> {
+fn promotion_preview_payload<'py>(
+    py: Python<'py>,
+    preview: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let Some(preview) = preview else {
         return Ok(py.None().into_bound(py));
     };
@@ -399,7 +454,10 @@ pub(crate) fn build_deployment_detail_payload<'py>(
         let binding = binding?;
         let logical: String = binding.getattr("logical_name")?.extract()?;
         let physical: String = binding.getattr("physical_name")?.extract()?;
-        match live_by_logical.iter_mut().find(|(existing, _)| *existing == logical) {
+        match live_by_logical
+            .iter_mut()
+            .find(|(existing, _)| *existing == logical)
+        {
             Some(slot) => slot.1 = physical,
             None => live_by_logical.push((logical, physical)),
         }
@@ -408,10 +466,14 @@ pub(crate) fn build_deployment_detail_payload<'py>(
     let mut models: Vec<Bound<'py, PyAny>> = Vec::new();
     for staged_relation in model_relation_names(py, &relation_names)? {
         let logical_name: String = logical_name_from_physical_name(&staged_relation);
-        let live_relation: Option<String> =
-            live_by_logical.iter().find(|(logical, _)| *logical == logical_name).map(|(_, physical)| physical.clone());
+        let live_relation: Option<String> = live_by_logical
+            .iter()
+            .find(|(logical, _)| *logical == logical_name)
+            .map(|(_, physical)| physical.clone());
         let staged: Storage = storage_of(&storage, &staged_relation);
-        let live_rows: Option<i128> = live_relation.as_deref().map(|name| storage_of(&storage, name).rows);
+        let live_rows: Option<i128> = live_relation
+            .as_deref()
+            .map(|name| storage_of(&storage, name).rows);
         models.push(
             py_kwargs!(py;
                 logicalName = logical_name.as_str(),
@@ -427,7 +489,11 @@ pub(crate) fn build_deployment_detail_payload<'py>(
             .into_any(),
         );
     }
-    let lifecycle = attr(py, "sqltide.executor.deployment.types", "DeploymentLifecycleState")?;
+    let lifecycle = attr(
+        py,
+        "sqltide.executor.deployment.types",
+        "DeploymentLifecycleState",
+    )?;
     let state = deployment.getattr("state")?;
     let staged_state = lifecycle.getattr("STAGED")?;
     let mut promotion_preview: Option<Bound<'py, PyAny>> = None;
@@ -463,7 +529,10 @@ pub(crate) fn build_deployment_detail_payload<'py>(
         payload.set_item(key, value)?;
     }
     payload.set_item("models", list_of(py, models)?)?;
-    payload.set_item("promotionPreview", promotion_preview_payload(py, promotion_preview.as_ref())?)?;
+    payload.set_item(
+        "promotionPreview",
+        promotion_preview_payload(py, promotion_preview.as_ref())?,
+    )?;
     payload.set_item(
         "wouldOrphan",
         py_kwargs!(py;
@@ -481,5 +550,8 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(build_dead_letters_payload, module)?)?;
     module.add_function(wrap_pyfunction!(build_deployments_payload, module)?)?;
     module.add_function(wrap_pyfunction!(build_deployment_detail_payload, module)?)?;
-    module.add_function(wrap_pyfunction!(super::definitions::build_definitions_payload, module)?)
+    module.add_function(wrap_pyfunction!(
+        super::definitions::build_definitions_payload,
+        module
+    )?)
 }

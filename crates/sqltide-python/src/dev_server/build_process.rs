@@ -49,18 +49,27 @@ fn held<'py>(py: Python<'py>, value: &Option<Py<PyAny>>) -> Any<'py> {
 }
 
 fn some(value: Any<'_>) -> Option<Py<PyAny>> {
-    if value.is_none() { None } else { Some(value.unbind()) }
+    if value.is_none() {
+        None
+    } else {
+        Some(value.unbind())
+    }
 }
 
 fn build_error(py: Python<'_>, class: &str, message: &Any<'_>) -> PyResult<PyErr> {
-    Ok(PyErr::from_value(attr(py, DEV_EXCEPTIONS, class)?.call1((message,))?))
+    Ok(PyErr::from_value(
+        attr(py, DEV_EXCEPTIONS, class)?.call1((message,))?,
+    ))
 }
 
 fn not_owned(py: Python<'_>) -> PyResult<PyErr> {
     build_error(
         py,
         "BuildInProgressError",
-        &literal(py, "this server does not own that running process; it cannot deliver a cancellation signal"),
+        &literal(
+            py,
+            "this server does not own that running process; it cannot deliver a cancellation signal",
+        ),
     )
 }
 
@@ -78,7 +87,18 @@ fn monotonic(py: Python<'_>) -> PyResult<f64> {
 
 /// Python's `str.splitlines()` line boundaries.
 fn is_line_break(character: char) -> bool {
-    matches!(character, '\n' | '\r' | '\x0b' | '\x0c' | '\x1c' | '\x1d' | '\x1e' | '\u{85}' | '\u{2028}' | '\u{2029}')
+    matches!(
+        character,
+        '\n' | '\r'
+            | '\x0b'
+            | '\x0c'
+            | '\x1c'
+            | '\x1d'
+            | '\x1e'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
 }
 
 /// `str.splitlines()`: lines without their breaks, `\r\n` counting as one break.
@@ -156,7 +176,9 @@ fn shell_joined<'py>(py: Python<'py>, arguments: &[Any<'py>]) -> PyResult<Any<'p
         if index > 0 {
             joined.push(b' ');
         }
-        let encoded: Any<'py> = argument.downcast::<PyString>()?.call_method1("encode", ("utf-8", "surrogatepass"))?;
+        let encoded: Any<'py> = argument
+            .downcast::<PyString>()?
+            .call_method1("encode", ("utf-8", "surrogatepass"))?;
         joined.extend(shell_quoted(encoded.downcast::<PyBytes>()?.as_bytes()));
     }
     PyBytes::new(py, &joined).call_method1("decode", ("utf-8", "surrogatepass"))
@@ -186,7 +208,10 @@ pub(crate) fn build_invocation<'py>(
     confirmations: Option<Any<'py>>,
 ) -> PyResult<Bound<'py, PyTuple>> {
     let executable: Any<'py> = attr(py, "sys", "executable")?;
-    let sqt_path: Any<'py> = attr(py, "pathlib", "Path")?.call1((executable,))?.getattr("parent")?.div("sqt")?;
+    let sqt_path: Any<'py> = attr(py, "pathlib", "Path")?
+        .call1((executable,))?
+        .getattr("parent")?
+        .div("sqt")?;
     let mut argv: Vec<Any<'py>> = vec![sqt_path.str()?.into_any(), literal(py, "build")];
     let mut display: Vec<Any<'py>> = vec![literal(py, "sqt"), literal(py, "build")];
     if !execution_context.is_none() {
@@ -266,19 +291,33 @@ pub(crate) fn build_child_environment<'py>(
         Some(environment) => environment,
         None => attr(py, "os", "environ")?,
     };
-    let environment: Bound<'py, PyDict> = attr(py, "builtins", "dict")?.call1((source,))?.downcast_into()?;
+    let environment: Bound<'py, PyDict> = attr(py, "builtins", "dict")?
+        .call1((source,))?
+        .downcast_into()?;
     if let Some(command) = display_command {
-        environment.set_item(attr(py, OBSERVABILITY_CONSTANTS, "RUN_DISPLAY_COMMAND_ENV_VAR")?, command)?;
+        environment.set_item(
+            attr(py, OBSERVABILITY_CONSTANTS, "RUN_DISPLAY_COMMAND_ENV_VAR")?,
+            command,
+        )?;
     }
     if let Some(invocation_id) = invocation_id {
-        environment.set_item(attr(py, OBSERVABILITY_CONSTANTS, "RUN_INVOCATION_ID_ENV_VAR")?, invocation_id)?;
+        environment.set_item(
+            attr(py, OBSERVABILITY_CONSTANTS, "RUN_INVOCATION_ID_ENV_VAR")?,
+            invocation_id,
+        )?;
     }
-    let scope_names: Vec<Any<'py>> =
-        SCOPE_ENV_VARS.iter().map(|name| attr(py, BUILD_CONSTANTS, name)).collect::<PyResult<_>>()?;
+    let scope_names: Vec<Any<'py>> = SCOPE_ENV_VARS
+        .iter()
+        .map(|name| attr(py, BUILD_CONSTANTS, name))
+        .collect::<PyResult<_>>()?;
     for name in &scope_names {
         environment.call_method1("pop", (name, py.None()))?;
     }
-    for (name, scope) in scope_names.iter().zip([expected_write_scope, expected_read_scope, expected_pipeline_scope]) {
+    for (name, scope) in scope_names.iter().zip([
+        expected_write_scope,
+        expected_read_scope,
+        expected_pipeline_scope,
+    ]) {
         if let Some(scope) = scope {
             environment.set_item(name, scope_json(&scope)?)?;
         }
@@ -291,8 +330,15 @@ pub(crate) fn build_child_environment<'py>(
         let variables: Any<'py> = attr(py, "builtins", "dict")?.call1((cli_variables,))?;
         let separators: Bound<'py, PyTuple> = PyTuple::new(py, [",", ":"])?;
         environment.set_item(
-            attr(py, "sqltide.cli.entry.constants", "DEV_CLI_VARIABLES_ENV_VAR")?,
-            attr(py, "json", "dumps")?.call((variables,), Some(&py_kwargs!(py; sort_keys = true, separators = separators)?))?,
+            attr(
+                py,
+                "sqltide.cli.entry.constants",
+                "DEV_CLI_VARIABLES_ENV_VAR",
+            )?,
+            attr(py, "json", "dumps")?.call(
+                (variables,),
+                Some(&py_kwargs!(py; sort_keys = true, separators = separators)?),
+            )?,
         )?;
     }
     for (name, field) in CONNECTION_OVERRIDES {
@@ -349,18 +395,36 @@ impl BuildProcessManager {
     }
 
     /// Whether `process` is still the current child launched as `invocation_id`.
-    fn current(&self, py: Python<'_>, process: &Any<'_>, invocation_id: &Any<'_>) -> PyResult<bool> {
+    fn current(
+        &self,
+        py: Python<'_>,
+        process: &Any<'_>,
+        invocation_id: &Any<'_>,
+    ) -> PyResult<bool> {
         let (same_process, owned_id) = {
             let state = guard(&self.state);
-            (state.process.as_ref().is_some_and(|current| current.bind(py).is(process)), held(py, &state.invocation_id))
+            (
+                state
+                    .process
+                    .as_ref()
+                    .is_some_and(|current| current.bind(py).is(process)),
+                held(py, &state.invocation_id),
+            )
         };
         Ok(same_process && owned_id.eq(invocation_id)?)
     }
 
-    fn owned_process_locked<'py>(&self, py: Python<'py>, invocation_id: &Any<'py>) -> PyResult<Any<'py>> {
+    fn owned_process_locked<'py>(
+        &self,
+        py: Python<'py>,
+        invocation_id: &Any<'py>,
+    ) -> PyResult<Any<'py>> {
         let (owned_id, process) = {
             let state = guard(&self.state);
-            (held(py, &state.invocation_id), state.process.as_ref().map(|process| process.clone_ref(py)))
+            (
+                held(py, &state.invocation_id),
+                state.process.as_ref().map(|process| process.clone_ref(py)),
+            )
         };
         if owned_id.ne(invocation_id)? || process.is_none() || !running(py, &process)? {
             return Err(not_owned(py)?);
@@ -372,7 +436,14 @@ impl BuildProcessManager {
         let state = guard(&self.state);
         let status: Any<'py> = held(py, &state.cancellation_status);
         let payload: Bound<'py, PyDict> = PyDict::new(py);
-        payload.set_item("status", if status.is_truthy()? { status } else { literal(py, "cancelling") })?;
+        payload.set_item(
+            "status",
+            if status.is_truthy()? {
+                status
+            } else {
+                literal(py, "cancelling")
+            },
+        )?;
         payload.set_item("forceAvailable", state.force_available)?;
         payload.set_item("queryId", held(py, &state.cancellation_query_id))?;
         payload.set_item("errorMessage", held(py, &state.cancellation_error))?;
@@ -382,15 +453,39 @@ impl BuildProcessManager {
         Ok(payload)
     }
 
-    fn report_finished(&self, py: Python<'_>, exit_code: &Any<'_>, elapsed_seconds: f64, statement_count: u64) -> PyResult<()> {
+    fn report_finished(
+        &self,
+        py: Python<'_>,
+        exit_code: &Any<'_>,
+        elapsed_seconds: f64,
+        statement_count: u64,
+    ) -> PyResult<()> {
         let succeeded: bool = exit_code.eq(0)?;
         let elapsed: Any<'_> = attr(py, "builtins", "format")?.call1((elapsed_seconds, ".1f"))?;
         let detail: Any<'_> = if succeeded {
-            fstring(py, &[statement_count.into_pyobject(py)?.into_any(), literal(py, " statements in "), elapsed, literal(py, "s")])?
+            fstring(
+                py,
+                &[
+                    statement_count.into_pyobject(py)?.into_any(),
+                    literal(py, " statements in "),
+                    elapsed,
+                    literal(py, "s"),
+                ],
+            )?
         } else {
-            fstring(py, &[literal(py, "exit "), exit_code.clone(), literal(py, " after "), elapsed, literal(py, "s")])?
+            fstring(
+                py,
+                &[
+                    literal(py, "exit "),
+                    exit_code.clone(),
+                    literal(py, " after "),
+                    elapsed,
+                    literal(py, "s"),
+                ],
+            )?
         };
-        let tone: Any<'_> = attr(py, "sqltide.dev_server.types", "ActivityTone")?.getattr(if succeeded { "GOOD" } else { "BAD" })?;
+        let tone: Any<'_> = attr(py, "sqltide.dev_server.types", "ActivityTone")?
+            .getattr(if succeeded { "GOOD" } else { "BAD" })?;
         self.reporter.bind(py).call_method(
             "report_activity",
             (),
@@ -406,14 +501,18 @@ impl BuildProcessManager {
 }
 
 /// Whether a cancellation leaves the warehouse query unconfirmed.
-fn warehouse_unconfirmed(cancellation: &Option<Any<'_>>, cancellation_error: &Option<Any<'_>>) -> PyResult<bool> {
+fn warehouse_unconfirmed(
+    cancellation: &Option<Any<'_>>,
+    cancellation_error: &Option<Any<'_>>,
+) -> PyResult<bool> {
     if cancellation_error.is_some() {
         return Ok(true);
     }
     let Some(cancellation) = cancellation else {
         return Ok(true);
     };
-    Ok(!cancellation.getattr("supported")?.is_truthy()? || !cancellation.getattr("termination_confirmed")?.is_truthy()?)
+    Ok(!cancellation.getattr("supported")?.is_truthy()?
+        || !cancellation.getattr("termination_confirmed")?.is_truthy()?)
 }
 
 /// `process.wait(timeout=...)`, or `None` when the wait times out.
@@ -572,11 +671,13 @@ impl BuildProcessManager {
             stderr_file.call_method0("close")?;
             Ok(process)
         })?;
-        let kwargs: Bound<'py, PyDict> = py_kwargs!(py; process = &process, launch_invocation_id = &launch_invocation_id)?;
+        let kwargs: Bound<'py, PyDict> =
+            py_kwargs!(py; process = &process, launch_invocation_id = &launch_invocation_id)?;
         attr(py, "threading", "Thread")?
             .call((), Some(&py_kwargs!(py; target = slf.getattr("_consume_stdout")?, kwargs = kwargs, daemon = true)?))?
             .call_method0("start")?;
-        let neutral: Any<'py> = attr(py, "sqltide.dev_server.types", "ActivityTone")?.getattr("NEUTRAL")?;
+        let neutral: Any<'py> =
+            attr(py, "sqltide.dev_server.types", "ActivityTone")?.getattr("NEUTRAL")?;
         this.reporter.bind(py).call_method(
             "report_activity",
             (),
@@ -594,18 +695,27 @@ impl BuildProcessManager {
     fn feed<'py>(&self, py: Python<'py>, after: Any<'py>) -> PyResult<Bound<'py, PyDict>> {
         drop(after);
         self.locked(py, || {
-            let process = guard(&self.state).process.as_ref().map(|process| process.clone_ref(py));
+            let process = guard(&self.state)
+                .process
+                .as_ref()
+                .map(|process| process.clone_ref(py));
             let is_running: bool = running(py, &process)?;
             let stderr_path: Option<PathBuf> = guard(&self.state).stderr_path.clone();
             let state = guard(&self.state);
             let payload: Bound<'py, PyDict> = PyDict::new(py);
             payload.set_item("running", is_running)?;
             payload.set_item("invocationId", held(py, &state.invocation_id))?;
-            payload.set_item("currentInvocationId", held(py, &state.current_invocation_id))?;
-            payload.set_item("command", match &state.command {
-                Some(command) => command.bind(py).clone(),
-                None => literal(py, ""),
-            })?;
+            payload.set_item(
+                "currentInvocationId",
+                held(py, &state.current_invocation_id),
+            )?;
+            payload.set_item(
+                "command",
+                match &state.command {
+                    Some(command) => command.bind(py).clone(),
+                    None => literal(py, ""),
+                },
+            )?;
             payload.set_item("exitCode", held(py, &state.exit_code))?;
             payload.set_item("events", PyList::empty(py))?;
             payload.set_item("stderr", stderr_tail(&stderr_path)?)?;
@@ -613,14 +723,20 @@ impl BuildProcessManager {
             payload.set_item("activeQueryId", held(py, &state.active_query_id))?;
             payload.set_item("cancellationStatus", held(py, &state.cancellation_status))?;
             payload.set_item("cancellationError", held(py, &state.cancellation_error))?;
-            payload.set_item("cancellationQueryId", held(py, &state.cancellation_query_id))?;
+            payload.set_item(
+                "cancellationQueryId",
+                held(py, &state.cancellation_query_id),
+            )?;
             Ok(payload)
         })
     }
 
     /// Request graceful cancellation of the server-owned child.
     #[pyo3(signature = (*, invocation_id))]
-    fn cancel<'py>(slf: &Bound<'py, Self>, invocation_id: Any<'py>) -> PyResult<Bound<'py, PyDict>> {
+    fn cancel<'py>(
+        slf: &Bound<'py, Self>,
+        invocation_id: Any<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
         let py: Python<'py> = slf.py();
         let this: &Self = slf.get();
         let requested = this.locked(py, || {
@@ -636,9 +752,16 @@ impl BuildProcessManager {
                 state.cancellation_error = None;
                 state.cancellation_query_id = some(query_id.clone());
             }
-            let now: Any<'py> = attr(py, "datetime", "datetime")?
-                .call_method("now", (), Some(&py_kwargs!(py; tz = attr(py, "datetime", "UTC")?)?))?;
-            let requested_at: Any<'py> = now.call_method("isoformat", (), Some(&py_kwargs!(py; timespec = "milliseconds")?))?;
+            let now: Any<'py> = attr(py, "datetime", "datetime")?.call_method(
+                "now",
+                (),
+                Some(&py_kwargs!(py; tz = attr(py, "datetime", "UTC")?)?),
+            )?;
+            let requested_at: Any<'py> = now.call_method(
+                "isoformat",
+                (),
+                Some(&py_kwargs!(py; timespec = "milliseconds")?),
+            )?;
             Ok(Ok((process, query_id, requested_at)))
         })?;
         let (process, query_id, requested_at) = match requested {
@@ -677,61 +800,81 @@ impl BuildProcessManager {
         let mut cancellation_error: Option<Any<'_>> = None;
         if !query_id.is_none() {
             match &self.query_canceller {
-                None => cancellation_error = Some(literal(py, "Warehouse query cancellation is unavailable")),
+                None => {
+                    cancellation_error =
+                        Some(literal(py, "Warehouse query cancellation is unavailable"))
+                }
                 Some(canceller) => match canceller.bind(py).call1((&query_id,)) {
                     Ok(result) => cancellation = Some(result),
                     Err(error) if error.is_instance_of::<PyException>(py) => {
-                        cancellation_error =
-                            Some(error.value(py).str().map_err(|raised| while_handling(py, raised, &error))?.into_any());
+                        cancellation_error = Some(
+                            error
+                                .value(py)
+                                .str()
+                                .map_err(|raised| while_handling(py, raised, &error))?
+                                .into_any(),
+                        );
                     }
                     Err(error) => return Err(error),
                 },
             }
         }
         let has_query: bool = !query_id.is_none();
-        let exit_code: Any<'_> = match wait_within(&process, &attr(py, DEV_CONSTANTS, "CANCEL_GRACE_SECONDS")?)? {
-            Ok(exit_code) => exit_code,
-            Err(timeout) => {
-                let terminated: PyResult<Any<'_>> = (|| {
-                    process.call_method0("terminate")?;
-                    match wait_within(&process, &attr(py, DEV_CONSTANTS, "TERMINATE_GRACE_SECONDS")?)? {
-                        Ok(exit_code) => Ok(Some(exit_code)),
-                        Err(second_timeout) => {
-                            let waited: PyResult<Option<Any<'_>>> = (|| {
-                                let interim_status: &str =
-                                    if has_query && warehouse_unconfirmed(&cancellation, &cancellation_error)? {
+        let exit_code: Any<'_> =
+            match wait_within(&process, &attr(py, DEV_CONSTANTS, "CANCEL_GRACE_SECONDS")?)? {
+                Ok(exit_code) => exit_code,
+                Err(timeout) => {
+                    let terminated: PyResult<Any<'_>> = (|| {
+                        process.call_method0("terminate")?;
+                        match wait_within(
+                            &process,
+                            &attr(py, DEV_CONSTANTS, "TERMINATE_GRACE_SECONDS")?,
+                        )? {
+                            Ok(exit_code) => Ok(Some(exit_code)),
+                            Err(second_timeout) => {
+                                let waited: PyResult<Option<Any<'_>>> = (|| {
+                                    let interim_status: &str = if has_query
+                                        && warehouse_unconfirmed(
+                                            &cancellation,
+                                            &cancellation_error,
+                                        )? {
                                         "cancellation_failed"
                                     } else {
                                         "cancelling"
                                     };
-                                let current: bool = self.locked(py, || {
-                                    if !self.current(py, &process, &invocation_id)? {
-                                        return Ok(false);
+                                    let current: bool = self.locked(py, || {
+                                        if !self.current(py, &process, &invocation_id)? {
+                                            return Ok(false);
+                                        }
+                                        let mut state = guard(&self.state);
+                                        state.force_available = true;
+                                        state.cancellation_status =
+                                            Some(literal(py, interim_status).unbind());
+                                        state.cancellation_error =
+                                            cancellation_error.clone().map(Bound::unbind);
+                                        Ok(true)
+                                    })?;
+                                    if !current {
+                                        return Ok(None);
                                     }
-                                    let mut state = guard(&self.state);
-                                    state.force_available = true;
-                                    state.cancellation_status = Some(literal(py, interim_status).unbind());
-                                    state.cancellation_error = cancellation_error.clone().map(Bound::unbind);
-                                    Ok(true)
-                                })?;
-                                if !current {
-                                    return Ok(None);
-                                }
-                                Ok(Some(process.call_method0("wait")?))
-                            })();
-                            waited.map_err(|raised| while_handling(py, raised, &second_timeout))
+                                    Ok(Some(process.call_method0("wait")?))
+                                })(
+                                );
+                                waited.map_err(|raised| while_handling(py, raised, &second_timeout))
+                            }
                         }
+                        .map(|exit_code| exit_code.unwrap_or_else(|| py.None().into_bound(py)))
+                    })();
+                    let exit_code: Any<'_> =
+                        terminated.map_err(|raised| while_handling(py, raised, &timeout))?;
+                    if exit_code.is_none() {
+                        return Ok(());
                     }
-                    .map(|exit_code| exit_code.unwrap_or_else(|| py.None().into_bound(py)))
-                })();
-                let exit_code: Any<'_> = terminated.map_err(|raised| while_handling(py, raised, &timeout))?;
-                if exit_code.is_none() {
-                    return Ok(());
+                    exit_code
                 }
-                exit_code
-            }
-        };
-        let warehouse_failed: bool = has_query && warehouse_unconfirmed(&cancellation, &cancellation_error)?;
+            };
+        let warehouse_failed: bool =
+            has_query && warehouse_unconfirmed(&cancellation, &cancellation_error)?;
         if warehouse_failed
             && cancellation_error.is_none()
             && let Some(cancellation) = &cancellation
@@ -743,7 +886,11 @@ impl BuildProcessManager {
                 literal(py, "Warehouse query cancellation was not confirmed")
             });
         }
-        let status: &str = if warehouse_failed { "cancellation_failed" } else { "cancelled" };
+        let status: &str = if warehouse_failed {
+            "cancellation_failed"
+        } else {
+            "cancelled"
+        };
         let current: bool = self.locked(py, || {
             if !self.current(py, &process, &invocation_id)? {
                 return Ok(false);
@@ -764,7 +911,8 @@ impl BuildProcessManager {
                 Some(cancellation) => cancellation.getattr(field),
             }
         };
-        let outcome: Any<'_> = attr(py, "sqltide.dev_server.models", "BuildCancellationOutcome")?.call(
+        let outcome: Any<'_> = attr(py, "sqltide.dev_server.models", "BuildCancellationOutcome")?
+            .call(
             (),
             Some(&py_kwargs!(py;
                 invocation_id = &invocation_id,
@@ -785,11 +933,15 @@ impl BuildProcessManager {
                     let recorded: PyResult<()> = (|| {
                         let message: Any<'_> = fstring(
                             py,
-                            &[literal(py, "Cancellation outcome persistence failed: "), error.value(py).clone().into_any()],
+                            &[
+                                literal(py, "Cancellation outcome persistence failed: "),
+                                error.value(py).clone().into_any(),
+                            ],
                         )?;
                         self.locked(py, || {
                             let mut state = guard(&self.state);
-                            state.cancellation_status = Some(literal(py, "cancellation_failed").unbind());
+                            state.cancellation_status =
+                                Some(literal(py, "cancellation_failed").unbind());
                             state.cancellation_error = Some(message.unbind());
                             Ok(())
                         })
@@ -802,7 +954,11 @@ impl BuildProcessManager {
         let current_thread: Any<'_> = attr(py, "threading", "current_thread")?.call0()?;
         self.locked(py, || {
             let mut state = guard(&self.state);
-            if state.cancellation_thread.as_ref().is_some_and(|thread| thread.bind(py).is(&current_thread)) {
+            if state
+                .cancellation_thread
+                .as_ref()
+                .is_some_and(|thread| thread.bind(py).is(&current_thread))
+            {
                 state.cancellation_thread = None;
             }
             Ok(())
@@ -812,7 +968,8 @@ impl BuildProcessManager {
     /// Force-kill the server-owned child without fabricating terminal facts.
     #[pyo3(signature = (*, invocation_id))]
     fn kill<'py>(&self, py: Python<'py>, invocation_id: Any<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let process: Any<'py> = self.locked(py, || self.owned_process_locked(py, &invocation_id))?;
+        let process: Any<'py> =
+            self.locked(py, || self.owned_process_locked(py, &invocation_id))?;
         process.call_method0("kill")?;
         self.locked(py, || {
             guard(&self.state).force_available = false;
@@ -825,7 +982,12 @@ impl BuildProcessManager {
 
     /// The stdout reader: follow the child's event stream, then record its exit.
     #[pyo3(signature = (*, process, launch_invocation_id))]
-    fn _consume_stdout(&self, py: Python<'_>, process: Any<'_>, launch_invocation_id: Any<'_>) -> PyResult<()> {
+    fn _consume_stdout(
+        &self,
+        py: Python<'_>,
+        process: Any<'_>,
+        launch_invocation_id: Any<'_>,
+    ) -> PyResult<()> {
         let stdout: Any<'_> = process.getattr("stdout")?;
         if stdout.is_none() {
             return Ok(());
@@ -835,24 +997,41 @@ impl BuildProcessManager {
             let event: Any<'_> = match loads.call1((line?,)) {
                 Ok(event) if event.is_instance_of::<PyDict>() => event,
                 Ok(_) => continue,
-                Err(error) if error.is_instance_of::<pyo3::exceptions::PyValueError>(py) => continue,
+                Err(error) if error.is_instance_of::<pyo3::exceptions::PyValueError>(py) => {
+                    continue;
+                }
                 Err(error) => return Err(error),
             };
             self.locked(py, || {
                 if !self.current(py, &process, &launch_invocation_id)? {
                     return Ok(());
                 }
-                if event.call_method1("get", ("event",))?.eq(RUN_STARTED_KIND)? {
-                    let invocation_id: Any<'_> = event.call_method1("get", ("invocationId",))?.str()?.into_any();
+                if event
+                    .call_method1("get", ("event",))?
+                    .eq(RUN_STARTED_KIND)?
+                {
+                    let invocation_id: Any<'_> = event
+                        .call_method1("get", ("invocationId",))?
+                        .str()?
+                        .into_any();
                     guard(&self.state).current_invocation_id = Some(invocation_id.unbind());
                 }
-                if event.call_method1("get", ("event",))?.eq(STATEMENT_STARTED_KIND)? {
+                if event
+                    .call_method1("get", ("event",))?
+                    .eq(STATEMENT_STARTED_KIND)?
+                {
                     let query_id: Any<'_> = event.call_method1("get", ("queryId",))?;
-                    let active: Option<Py<PyAny>> =
-                        if query_id.is_none() { None } else { Some(query_id.str()?.into_any().unbind()) };
+                    let active: Option<Py<PyAny>> = if query_id.is_none() {
+                        None
+                    } else {
+                        Some(query_id.str()?.into_any().unbind())
+                    };
                     guard(&self.state).active_query_id = active;
                 }
-                if event.call_method1("get", ("event",))?.eq(STATEMENT_COMPLETED_KIND)? {
+                if event
+                    .call_method1("get", ("event",))?
+                    .eq(STATEMENT_COMPLETED_KIND)?
+                {
                     let mut state = guard(&self.state);
                     state.statement_count += 1;
                     state.active_query_id = None;
@@ -872,7 +1051,9 @@ impl BuildProcessManager {
             Ok(Some((now - state.started_monotonic, state.statement_count)))
         })?;
         match finished {
-            Some((elapsed_seconds, statement_count)) => self.report_finished(py, &exit_code, elapsed_seconds, statement_count),
+            Some((elapsed_seconds, statement_count)) => {
+                self.report_finished(py, &exit_code, elapsed_seconds, statement_count)
+            }
             None => Ok(()),
         }
     }
@@ -898,7 +1079,10 @@ mod tests {
 
     #[test]
     fn split_lines_matches_python_boundaries() {
-        assert_eq!(split_lines("a\r\nb\rc\nd\u{2028}e\x0cf\n"), vec!["a", "b", "c", "d", "e", "f"]);
+        assert_eq!(
+            split_lines("a\r\nb\rc\nd\u{2028}e\x0cf\n"),
+            vec!["a", "b", "c", "d", "e", "f"]
+        );
         assert_eq!(split_lines("\n\n"), vec!["", ""]);
         assert_eq!(split_lines(""), Vec::<&str>::new());
     }

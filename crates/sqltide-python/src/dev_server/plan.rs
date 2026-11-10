@@ -54,7 +54,10 @@ fn replay_window<'py>(py: Python<'py>, start_time: &Any<'py>) -> PyResult<Any<'p
     Ok(py_kwargs!(py; mode = "from", startTime = start_time)?.into_any())
 }
 
-fn entry_payload<'py>(entry: &Any<'py>, pipeline_by_model: &Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+fn entry_payload<'py>(
+    entry: &Any<'py>,
+    pipeline_by_model: &Bound<'py, PyDict>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = entry.py();
     let model_name = name_of(entry, "model_key")?;
     let driving = get(entry, "driving_input_key")?;
@@ -130,7 +133,8 @@ fn replay_root_payload<'py>(item: &Any<'py>, rows_to_replay: Any<'py>) -> PyResu
 
 fn protection_payloads<'py>(plan: &Any<'py>, analysis: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = plan.py();
-    let execution_keys = attr(py, "builtins", "frozenset")?.call1((get(plan, "execution_scope")?,))?;
+    let execution_keys =
+        attr(py, "builtins", "frozenset")?.call1((get(plan, "execution_scope")?,))?;
     let mut payloads: Vec<Any<'py>> = Vec::new();
     for pipeline in get(&get(analysis, "compiled_project")?, "pipelines")?.try_iter()? {
         let pipeline = pipeline?;
@@ -182,7 +186,10 @@ fn plan_payload<'py>(
         replay_root_payload(item, rows)
     })?;
     let warnings: Vec<Any<'py>> = map_items(&get(plan, "warnings")?, |item| {
-        Ok(py_kwargs!(py; code = get(item, "warning_code")?, message = get(item, "message")?)?.into_any())
+        Ok(
+            py_kwargs!(py; code = get(item, "warning_code")?, message = get(item, "message")?)?
+                .into_any(),
+        )
     })?;
     py_kwargs!(py;
         database = get(plan, "database")?,
@@ -226,11 +233,18 @@ fn empty_plan_payload<'py>(
 }
 
 fn recreation_notice<'py>(recreation: &Any<'py>) -> PyResult<Any<'py>> {
-    attr(recreation.py(), "sqltide._native", "render_source_recreation_notice")?.call1((recreation,))
+    attr(
+        recreation.py(),
+        "sqltide._native",
+        "render_source_recreation_notice",
+    )?
+    .call1((recreation,))
 }
 
 fn source_name<'py>(names: &Bound<'py, PyDict>, relation_name: &Any<'py>) -> PyResult<Any<'py>> {
-    Ok(names.get_item(relation_name)?.unwrap_or_else(|| relation_name.clone()))
+    Ok(names
+        .get_item(relation_name)?
+        .unwrap_or_else(|| relation_name.clone()))
 }
 
 fn source_recreation_payload<'py>(
@@ -239,7 +253,10 @@ fn source_recreation_payload<'py>(
     drift_selection_by_source: &Bound<'py, PyDict>,
 ) -> PyResult<Any<'py>> {
     let py: Python<'py> = recreation.py();
-    let relation_name = get(&get(&get(recreation, "managed_source")?, "resource")?, "name")?;
+    let relation_name = get(
+        &get(&get(recreation, "managed_source")?, "resource")?,
+        "name",
+    )?;
     let source = source_name(names, &relation_name)?;
     let selection = drift_selection_by_source.get_item(&source)?;
     let (selected, others): (Any<'py>, Any<'py>) = match selection {
@@ -271,21 +288,35 @@ fn source_recreation_payload<'py>(
     .into_any())
 }
 
-fn direct_phase_payload<'py>(preparation: &Any<'py>, names: &Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+fn direct_phase_payload<'py>(
+    preparation: &Any<'py>,
+    names: &Bound<'py, PyDict>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = preparation.py();
     let preview = get(preparation, "preview")?;
     let plan = get(&preview, "plan")?;
     let mut relation_names: Vec<Any<'py>> = Vec::new();
     for entry in get(&plan, "entries")?.try_iter()? {
-        relation_names.extend(get(&entry?, "relation_names")?.try_iter()?.collect::<PyResult<Vec<_>>>()?);
+        relation_names.extend(
+            get(&entry?, "relation_names")?
+                .try_iter()?
+                .collect::<PyResult<Vec<_>>>()?,
+        );
     }
     let mut actions: Vec<Any<'py>> = Vec::new();
     for recreation in get(&get(preparation, "workflow")?, "recreated_sources")?.try_iter()? {
         let recreation = recreation?;
-        let relation_name = get(&get(&get(&recreation, "managed_source")?, "resource")?, "name")?;
+        let relation_name = get(
+            &get(&get(&recreation, "managed_source")?, "resource")?,
+            "name",
+        )?;
         let source = source_name(names, &relation_name)?;
         let staged = get(&recreation, "staged_relation_name")?;
-        for (action, physical) in [("stage", &staged), ("swap", &relation_name), ("retire", &staged)] {
+        for (action, physical) in [
+            ("stage", &staged),
+            ("swap", &relation_name),
+            ("retire", &staged),
+        ] {
             actions.push(
                 py_kwargs!(py;
                     phase = "preparation",
@@ -297,7 +328,10 @@ fn direct_phase_payload<'py>(preparation: &Any<'py>, names: &Bound<'py, PyDict>)
             );
         }
     }
-    for (phase, operations) in [("teardown", "teardown_operations"), ("creation", "creation_operations")] {
+    for (phase, operations) in [
+        ("teardown", "teardown_operations"),
+        ("creation", "creation_operations"),
+    ] {
         for operation in get(&plan, operations)?.try_iter()? {
             let operation = operation?;
             actions.push(
@@ -328,7 +362,10 @@ fn model_name_by_object<'py>(plan: &Any<'py>) -> PyResult<Bound<'py, PyDict>> {
     let names: Bound<'py, PyDict> = PyDict::new(plan.py());
     for prepared in get(plan, "prepared_shadow_objects")?.try_iter()? {
         let prepared = prepared?;
-        names.set_item(get(&prepared, "logical_key")?, get(&prepared, "logical_model_name")?)?;
+        names.set_item(
+            get(&prepared, "logical_key")?,
+            get(&prepared, "logical_model_name")?,
+        )?;
     }
     Ok(names)
 }
@@ -336,7 +373,11 @@ fn model_name_by_object<'py>(plan: &Any<'py>) -> PyResult<Bound<'py, PyDict>> {
 /// `step.target_key or step.root_key`, and the model name it maps to or the key's own name.
 fn affected_name<'py>(item: &Any<'py>, names: &Bound<'py, PyDict>) -> PyResult<Any<'py>> {
     let target = get(item, "target_key")?;
-    let affected = if target.is_truthy()? { target } else { get(item, "root_key")? };
+    let affected = if target.is_truthy()? {
+        target
+    } else {
+        get(item, "root_key")?
+    };
     match names.get_item(&affected)? {
         Some(name) => Ok(name),
         None => get(&affected, "name"),
@@ -437,16 +478,29 @@ pub(crate) fn build_mode_aware_plan_payload<'py>(
         }
         (None, Some(virtual_phase)) => {
             let preview = get(virtual_phase, "preview")?;
-            empty_plan_payload(&get(&preview, "database")?, &selectors, &get(&preview, "start_time")?, &planned_at, &command)?
+            empty_plan_payload(
+                &get(&preview, "database")?,
+                &selectors,
+                &get(&preview, "start_time")?,
+                &planned_at,
+                &command,
+            )?
         }
         (None, None) => {
-            let error = attr(py, "sqltide.dev_server.exceptions", "DevServerError")?
-                .call1(("Cannot serialize a workflow preparation without a direct or virtual phase",))?;
+            let error = attr(py, "sqltide.dev_server.exceptions", "DevServerError")?.call1((
+                "Cannot serialize a workflow preparation without a direct or virtual phase",
+            ))?;
             return Err(PyErr::from_value(error));
         }
     };
     let names: Bound<'py, PyDict> = PyDict::new(py);
-    for item in get(&get(&analysis, "realized_project")?, "resources_by_logical_key")?.call_method0("items")?.try_iter()? {
+    for item in get(
+        &get(&analysis, "realized_project")?,
+        "resources_by_logical_key",
+    )?
+    .call_method0("items")?
+    .try_iter()?
+    {
         let (key, resources): (Any<'py>, Any<'py>) = item?.extract()?;
         let key_name = get(&key, "name")?;
         for resource in resources.try_iter()? {
@@ -456,8 +510,15 @@ pub(crate) fn build_mode_aware_plan_payload<'py>(
     let drift_selection_by_source: Bound<'py, PyDict> = PyDict::new(py);
     let mut recreations: Vec<Any<'py>> = Vec::new();
     if let Some(direct) = &direct {
-        recreations = get(&get(direct, "workflow")?, "recreated_sources")?.try_iter()?.collect::<PyResult<_>>()?;
-        for selection in get(&get(&get(direct, "preview")?, "plan")?, "source_drift_selections")?.try_iter()? {
+        recreations = get(&get(direct, "workflow")?, "recreated_sources")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        for selection in get(
+            &get(&get(direct, "preview")?, "plan")?,
+            "source_drift_selections",
+        )?
+        .try_iter()?
+        {
             let selection = selection?;
             drift_selection_by_source.set_item(name_of(&selection, "source_key")?, &selection)?;
         }
@@ -469,19 +530,28 @@ pub(crate) fn build_mode_aware_plan_payload<'py>(
     if let Some(direct) = &direct {
         phases.push(direct_phase_payload(direct, &names)?);
     }
-    let mode: &str = if mixed { "mixed" } else if is_virtual { "virtual" } else { "direct" };
+    let mode: &str = if mixed {
+        "mixed"
+    } else if is_virtual {
+        "virtual"
+    } else {
+        "direct"
+    };
     let order: Vec<Any<'py>> = phases
         .iter()
         .map(|phase| Ok(phase.get_item("mode")?.str()?.into_any()))
         .collect::<PyResult<_>>()?;
-    let protections: Vec<Any<'py>> = map_items(&get(&preparation, "protection_requirements")?, |requirement| {
-        Ok(py_kwargs!(py;
-            pipelineName = get(requirement, "pipeline_name")?,
-            warning = get(requirement, "warning")?,
-            confirmation = get(requirement, "confirmation")?,
-        )?
-        .into_any())
-    })?;
+    let protections: Vec<Any<'py>> = map_items(
+        &get(&preparation, "protection_requirements")?,
+        |requirement| {
+            Ok(py_kwargs!(py;
+                pipelineName = get(requirement, "pipeline_name")?,
+                warning = get(requirement, "warning")?,
+                confirmation = get(requirement, "confirmation")?,
+            )?
+            .into_any())
+        },
+    )?;
     let recreation_payloads: Vec<Any<'py>> = recreations
         .iter()
         .map(|recreation| source_recreation_payload(recreation, &names, &drift_selection_by_source))
@@ -497,7 +567,10 @@ pub(crate) fn build_mode_aware_plan_payload<'py>(
         },
     )?;
     payload.set_item("protections", list(py, protections)?)?;
-    payload.set_item("upperBoundary", py_kwargs!(py; mode = "captured_at_execution", continuesLive = true)?)?;
+    payload.set_item(
+        "upperBoundary",
+        py_kwargs!(py; mode = "captured_at_execution", continuesLive = true)?,
+    )?;
     payload.set_item("sourceRecreations", list(py, recreation_payloads)?)?;
     if direct.is_some() && !recreations.is_empty() {
         let mut warnings: Vec<Any<'py>> = existing_warnings(&payload)?;
@@ -543,7 +616,11 @@ fn time_column_for<'py>(boundary_mode: &Any<'py>, columns: &Any<'py>) -> PyResul
     }
     if mode.is(&get(&modes, "OFFSETS")?) {
         let landed = get(columns, "landed_at")?;
-        return if landed.is_truthy()? { Ok(landed) } else { get(columns, "timestamp") };
+        return if landed.is_truthy()? {
+            Ok(landed)
+        } else {
+            get(columns, "timestamp")
+        };
     }
     get(columns, "landed_at")
 }
@@ -551,7 +628,10 @@ fn time_column_for<'py>(boundary_mode: &Any<'py>, columns: &Any<'py>) -> PyResul
 /// The column the executor compares a forced start time against for this mode.
 #[pyfunction]
 #[pyo3(signature = (*, boundary_mode, columns))]
-pub(crate) fn replay_time_column<'py>(boundary_mode: Any<'py>, columns: Any<'py>) -> PyResult<Any<'py>> {
+pub(crate) fn replay_time_column<'py>(
+    boundary_mode: Any<'py>,
+    columns: Any<'py>,
+) -> PyResult<Any<'py>> {
     time_column_for(&boundary_mode, &columns)
 }
 
@@ -600,13 +680,25 @@ pub(crate) fn count_replay_rows<'py>(
         )?
         .str()?
         .extract()?;
-        let relation_name: String = get(&root, "driving_input_relation_name")?.str()?.extract()?;
-        let query: String = build_replay_count_query(&database, &relation_name, &time_column, start_time.as_deref());
-        let count: Any<'py> = match connection.call_method1("query", (query,)).and_then(|result| get(&result, "rows")) {
+        let relation_name: String = get(&root, "driving_input_relation_name")?
+            .str()?
+            .extract()?;
+        let query: String = build_replay_count_query(
+            &database,
+            &relation_name,
+            &time_column,
+            start_time.as_deref(),
+        );
+        let count: Any<'py> = match connection
+            .call_method1("query", (query,))
+            .and_then(|result| get(&result, "rows"))
+        {
             Err(error) if error.is_instance(py, &adapter_error) => none(py),
             Err(error) => return Err(error),
             Ok(rows) if !rows.is_truthy()? => none(py),
-            Ok(rows) => attr(py, "builtins", "int")?.call1((rows.get_item(0)?.get_item(0)?.str()?,))?,
+            Ok(rows) => {
+                attr(py, "builtins", "int")?.call1((rows.get_item(0)?.get_item(0)?.str()?,))?
+            }
         };
         counts.set_item(name_of(&root, "model_key")?, count)?;
     }

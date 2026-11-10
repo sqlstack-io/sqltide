@@ -36,12 +36,24 @@ fn bound<'py>(py: Python<'py>, value: &Option<Py<PyAny>>) -> Option<Any<'py>> {
 
 /// `datetime.now(tz=UTC).isoformat(timespec="seconds")`, optionally `seconds` later.
 fn iso_now(py: Python<'_>, seconds: Option<f64>) -> PyResult<Py<PyAny>> {
-    let mut now: Any<'_> =
-        attr(py, "datetime", "datetime")?.call_method("now", (), Some(&py_kwargs!(py; tz = attr(py, "datetime", "UTC")?)?))?;
+    let mut now: Any<'_> = attr(py, "datetime", "datetime")?.call_method(
+        "now",
+        (),
+        Some(&py_kwargs!(py; tz = attr(py, "datetime", "UTC")?)?),
+    )?;
     if let Some(seconds) = seconds {
-        now = now.add(attr(py, "datetime", "timedelta")?.call((), Some(&py_kwargs!(py; seconds = seconds)?))?)?;
+        now = now.add(
+            attr(py, "datetime", "timedelta")?
+                .call((), Some(&py_kwargs!(py; seconds = seconds)?))?,
+        )?;
     }
-    Ok(now.call_method("isoformat", (), Some(&py_kwargs!(py; timespec = "seconds")?))?.unbind())
+    Ok(now
+        .call_method(
+            "isoformat",
+            (),
+            Some(&py_kwargs!(py; timespec = "seconds")?),
+        )?
+        .unbind())
 }
 
 fn monotonic(py: Python<'_>) -> PyResult<f64> {
@@ -51,7 +63,9 @@ fn monotonic(py: Python<'_>) -> PyResult<f64> {
 /// `str(error)`, or `f"observation connection: {error}"`.
 fn error_text(py: Python<'_>, error: &PyErr, prefix: &str) -> PyResult<Py<PyAny>> {
     let text: String = error.value(py).str()?.to_str()?.to_owned();
-    Ok(PyString::new(py, &format!("{prefix}{text}")).into_any().unbind())
+    Ok(PyString::new(py, &format!("{prefix}{text}"))
+        .into_any()
+        .unbind())
 }
 
 #[derive(Default)]
@@ -95,7 +109,8 @@ impl WarehouseRuntime {
     fn connections_missing(&self) -> bool {
         let held = guard(&self.held);
         (held.connection.is_none() && self.connection_factory.is_some())
-            || (held.observation_connection.is_none() && self.observation_connection_factory.is_some())
+            || (held.observation_connection.is_none()
+                && self.observation_connection_factory.is_some())
     }
 
     fn probe_connection(&self, py: Python<'_>) -> PyResult<()> {
@@ -103,7 +118,10 @@ impl WarehouseRuntime {
             return Ok(());
         };
         let probed: PyResult<()> = within(self.query_lock.bind(py), || {
-            connection.bind(py).call_method0("capture_warehouse_timestamp").map(drop)
+            connection
+                .bind(py)
+                .call_method0("capture_warehouse_timestamp")
+                .map(drop)
         });
         match probed {
             Err(error) if error.is_instance_of::<PyException>(py) => {
@@ -132,7 +150,10 @@ impl WarehouseRuntime {
             return Ok(());
         };
         let probed: PyResult<()> = within(self.query_lock.bind(py), || {
-            observation.bind(py).call_method0("capture_warehouse_timestamp").map(drop)
+            observation
+                .bind(py)
+                .call_method0("capture_warehouse_timestamp")
+                .map(drop)
         });
         match probed {
             Err(error) if error.is_instance_of::<PyException>(py) => {
@@ -245,7 +266,8 @@ impl WarehouseRuntime {
             Some(lock) => lock,
             None => attr(py, "threading", "RLock")?.call0()?,
         };
-        let event = || -> PyResult<Py<PyAny>> { Ok(attr(py, "threading", "Event")?.call0()?.unbind()) };
+        let event =
+            || -> PyResult<Py<PyAny>> { Ok(attr(py, "threading", "Event")?.call0()?.unbind()) };
         let held = Connections {
             primary_healthy: connection.is_some(),
             observation_healthy: observation_connection.is_some(),
@@ -260,7 +282,9 @@ impl WarehouseRuntime {
             database: database.map(Bound::unbind),
             query_lock: query_lock.unbind(),
             attempt_lock: attr(py, "threading", "Lock")?.call0()?.unbind(),
-            read_semaphore: attr(py, "threading", "BoundedSemaphore")?.call1((READ_CONNECTION_LIMIT,))?.unbind(),
+            read_semaphore: attr(py, "threading", "BoundedSemaphore")?
+                .call1((READ_CONNECTION_LIMIT,))?
+                .unbind(),
             stop: event()?,
             retry_now: event()?,
             thread: Mutex::new(None),
@@ -272,14 +296,22 @@ impl WarehouseRuntime {
     #[getter]
     fn connection(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         let held = guard(&self.held);
-        if held.primary_healthy { cloned(py, &held.connection) } else { None }
+        if held.primary_healthy {
+            cloned(py, &held.connection)
+        } else {
+            None
+        }
     }
 
     /// Return the current observation connection, if available.
     #[getter]
     fn observation_connection(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         let held = guard(&self.held);
-        if held.observation_healthy { cloned(py, &held.observation_connection) } else { None }
+        if held.observation_healthy {
+            cloned(py, &held.observation_connection)
+        } else {
+            None
+        }
     }
 
     /// Start background recovery once; an existing connection remains authoritative.
@@ -308,7 +340,10 @@ impl WarehouseRuntime {
         let connections = {
             let mut held = guard(&self.held);
             [
-                (held.observation_connection.take(), held.owns_observation_connection),
+                (
+                    held.observation_connection.take(),
+                    held.owns_observation_connection,
+                ),
                 (held.connection.take(), held.owns_connection),
             ]
         };
@@ -374,8 +409,8 @@ impl WarehouseRuntime {
     fn read_connection(slf: &Bound<'_, Self>) -> PyResult<ReadConnection> {
         let py: Python<'_> = slf.py();
         let this: &Self = slf.get();
-        let observation_factory: Option<Any<'_>> =
-            bound(py, &this.observation_connection_factory).filter(|factory| factory.is_truthy().unwrap_or(true));
+        let observation_factory: Option<Any<'_>> = bound(py, &this.observation_connection_factory)
+            .filter(|factory| factory.is_truthy().unwrap_or(true));
         let factory: Option<Any<'_>> = match observation_factory {
             Some(factory) => Some(factory),
             None => bound(py, &this.connection_factory),
@@ -402,7 +437,11 @@ impl WarehouseRuntime {
             }
             if !this.connections_missing() {
                 within(attempt_lock, || this.probe_connection(py))?;
-                retry_now.call_method("wait", (), Some(&py_kwargs!(py; timeout = HEALTH_CHECK_SECONDS)?))?;
+                retry_now.call_method(
+                    "wait",
+                    (),
+                    Some(&py_kwargs!(py; timeout = HEALTH_CHECK_SECONDS)?),
+                )?;
                 retry_now.call_method0("clear")?;
                 continue;
             }
@@ -439,14 +478,20 @@ impl ReadConnection {
             let runtime: &Bound<'py, PyAny> = self.runtime.bind(py);
             let shared: PyResult<Any<'py>> = (|| {
                 let observation: Any<'py> = runtime.getattr("observation_connection")?;
-                if observation.is_truthy()? { Ok(observation) } else { runtime.getattr("connection") }
+                if observation.is_truthy()? {
+                    Ok(observation)
+                } else {
+                    runtime.getattr("connection")
+                }
             })();
             return match shared {
                 Ok(connection) => Ok(connection),
                 Err(error) => {
                     let raised: Any<'py> = error.value(py).clone().into_any();
                     let traceback: Any<'py> = raised.getattr("__traceback__")?;
-                    if let Err(exit_error) = lock.call_method1("__exit__", (raised.get_type(), &raised, traceback)) {
+                    if let Err(exit_error) =
+                        lock.call_method1("__exit__", (raised.get_type(), &raised, traceback))
+                    {
                         return Err(while_handling(py, exit_error, &error));
                     }
                     Err(error)
@@ -471,7 +516,9 @@ impl ReadConnection {
     #[pyo3(signature = (*exc_info))]
     fn __exit__(&self, py: Python<'_>, exc_info: &Bound<'_, PyTuple>) -> PyResult<bool> {
         if self.factory.is_none() {
-            self.query_lock.bind(py).call_method1("__exit__", exc_info.clone())?;
+            self.query_lock
+                .bind(py)
+                .call_method1("__exit__", exc_info.clone())?;
             return Ok(false);
         }
         let opened: Option<Py<PyAny>> = guard(&self.opened).take();
@@ -492,7 +539,9 @@ pub(crate) struct BuildCancellationCoordinator {
 }
 
 fn warehouse_error(py: Python<'_>, message: &str) -> PyResult<PyErr> {
-    Ok(PyErr::from_value(attr(py, "sqltide.adapter.exceptions", "AdapterWarehouseError")?.call1((message,))?))
+    Ok(PyErr::from_value(
+        attr(py, "sqltide.adapter.exceptions", "AdapterWarehouseError")?.call1((message,))?,
+    ))
 }
 
 #[pymethods]
@@ -500,7 +549,10 @@ impl BuildCancellationCoordinator {
     #[new]
     #[pyo3(signature = (*, warehouse, database))]
     fn new(warehouse: Any<'_>, database: Option<Any<'_>>) -> Self {
-        Self { warehouse: warehouse.unbind(), database: database.map(Bound::unbind) }
+        Self {
+            warehouse: warehouse.unbind(),
+            database: database.map(Bound::unbind),
+        }
     }
 
     /// Use an isolated connection so the blocked build connection is not reused.
@@ -508,9 +560,16 @@ impl BuildCancellationCoordinator {
         let manager: Any<'py> = self.warehouse.bind(py).call_method0("read_connection")?;
         within_entered(&manager, |connection| {
             if connection.is_none() {
-                return Err(warehouse_error(py, "Warehouse cancellation connection is unavailable")?);
+                return Err(warehouse_error(
+                    py,
+                    "Warehouse cancellation connection is unavailable",
+                )?);
             }
-            connection.call_method("cancel_workflow_query", (), Some(&py_kwargs!(py; query_id = &query_id)?))
+            connection.call_method(
+                "cancel_workflow_query",
+                (),
+                Some(&py_kwargs!(py; query_id = &query_id)?),
+            )
         })
     }
 
@@ -522,13 +581,21 @@ impl BuildCancellationCoordinator {
         let manager: Any<'_> = self.warehouse.bind(py).call_method0("read_connection")?;
         within_entered(&manager, |connection| {
             if connection.is_none() {
-                return Err(warehouse_error(py, "Warehouse observation connection is unavailable")?);
+                return Err(warehouse_error(
+                    py,
+                    "Warehouse observation connection is unavailable",
+                )?);
             }
             let invocation_id: Any<'_> = outcome.getattr("invocation_id")?;
-            let invocation_literal: Any<'_> =
-                invocation_id.call_method1("replace", ("\\", "\\\\"))?.call_method1("replace", ("'", "\\'"))?;
+            let invocation_literal: Any<'_> = invocation_id
+                .call_method1("replace", ("\\", "\\\\"))?
+                .call_method1("replace", ("'", "\\'"))?;
             let format: Any<'_> = attr(py, "builtins", "format")?;
-            let table: Any<'_> = attr(py, "sqltide.adapter.constants", "METADATA_RUN_EVENTS_TABLE_NAME")?;
+            let table: Any<'_> = attr(
+                py,
+                "sqltide.adapter.constants",
+                "METADATA_RUN_EVENTS_TABLE_NAME",
+            )?;
             let query: String = format!(
                 "SELECT coalesce(max(sequence), 0) + 1 AS sequence FROM `{}`.`{}` WHERE invocation_id = '{}'",
                 format.call1((&database, ""))?.str()?,
@@ -536,9 +603,15 @@ impl BuildCancellationCoordinator {
                 format.call1((&invocation_literal, ""))?.str()?,
             );
             let sequence_result: Any<'_> = connection.call_method1("query", (query,))?;
-            let sequence: Any<'_> =
-                attr(py, "builtins", "int")?.call1((sequence_result.getattr("rows")?.get_item(0)?.get_item(0)?.str()?,))?;
-            let terminal_event_kind: &str = if outcome.getattr("status")?.eq(BUILD_CANCELLATION_FAILED_STATUS)? {
+            let sequence: Any<'_> = attr(py, "builtins", "int")?.call1((sequence_result
+                .getattr("rows")?
+                .get_item(0)?
+                .get_item(0)?
+                .str()?,))?;
+            let terminal_event_kind: &str = if outcome
+                .getattr("status")?
+                .eq(BUILD_CANCELLATION_FAILED_STATUS)?
+            {
                 CANCELLATION_FAILED_EVENT_KIND
             } else {
                 CANCELLATION_EVENT_KIND
@@ -552,7 +625,10 @@ impl BuildCancellationCoordinator {
                 ("processExitCode", "process_exit_code"),
                 ("warehouseSupported", "warehouse_supported"),
                 ("queryFound", "query_found"),
-                ("warehouseTerminationConfirmed", "warehouse_termination_confirmed"),
+                (
+                    "warehouseTerminationConfirmed",
+                    "warehouse_termination_confirmed",
+                ),
                 ("errorMessage", "error_message"),
             ] {
                 terminal_payload.set_item(key, outcome.getattr(field)?)?;
@@ -592,7 +668,12 @@ impl BuildCancellationCoordinator {
                     payload_json = dumps(&terminal_payload)?,
                 )?),
             )?;
-            attr(py, "sqltide.executor.observability.main._persist_run_events", "persist_run_events")?.call(
+            attr(
+                py,
+                "sqltide.executor.observability.main._persist_run_events",
+                "persist_run_events",
+            )?
+            .call(
                 (),
                 Some(&py_kwargs!(py;
                     connection = connection,

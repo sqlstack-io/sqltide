@@ -87,8 +87,14 @@ fn cookie_unquote(value: &str) -> String {
     while index < inner.len() {
         if inner[index] == b'\\' && index + 1 < inner.len() {
             let octal: &[u8] = &inner[index + 1..inner.len().min(index + 4)];
-            if octal.len() == 3 && octal.iter().all(|byte| (b'0'..=b'3').contains(&octal[0]) && (b'0'..=b'7').contains(byte)) {
-                let code: u32 = octal.iter().fold(0, |total, byte| total * 8 + u32::from(byte - b'0'));
+            if octal.len() == 3
+                && octal
+                    .iter()
+                    .all(|byte| (b'0'..=b'3').contains(&octal[0]) && (b'0'..=b'7').contains(byte))
+            {
+                let code: u32 = octal
+                    .iter()
+                    .fold(0, |total, byte| total * 8 + u32::from(byte - b'0'));
                 let mut buffer: [u8; 4] = [0; 4];
                 let character: char = char::from_u32(code).unwrap_or('\u{fffd}');
                 out.extend_from_slice(character.encode_utf8(&mut buffer).as_bytes());
@@ -146,7 +152,11 @@ impl HttpReply {
             headers.push(("content-length".to_owned(), body.len().to_string()));
         }
         headers.push(("content-type".to_owned(), content_type.to_owned()));
-        Self { status, headers, body }
+        Self {
+            status,
+            headers,
+            body,
+        }
     }
 
     pub(crate) fn header(&self, name: &str) -> Option<&str> {
@@ -187,7 +197,11 @@ impl HttpReply {
 
     /// A `JSONResponse(content)`, which the standard library serializes.
     pub(crate) fn json(status: u16, value: &JsonValue) -> PyResult<Self> {
-        Ok(Self::new(status, JSON_CONTENT_TYPE, stdlib_json(value)?.into_bytes()))
+        Ok(Self::new(
+            status,
+            JSON_CONTENT_TYPE,
+            stdlib_json(value)?.into_bytes(),
+        ))
     }
 }
 
@@ -201,7 +215,8 @@ pub(crate) fn stdlib_json(value: &JsonValue) -> PyResult<String> {
         sort_keys: false,
         allow_nan: false,
     };
-    dumps(value, &JsonDialect::Stdlib(options)).map_err(|error| PyValueError::new_err(format!("{error:?}")))
+    dumps(value, &JsonDialect::Stdlib(options))
+        .map_err(|error| PyValueError::new_err(format!("{error:?}")))
 }
 
 /// A failure that ends one request.
@@ -245,7 +260,11 @@ impl Failure {
     }
 
     /// The reply FastAPI's HTTP exception handler writes.
-    pub(crate) fn reply(status: u16, detail: &JsonValue, headers: &[(String, String)]) -> PyResult<HttpReply> {
+    pub(crate) fn reply(
+        status: u16,
+        detail: &JsonValue,
+        headers: &[(String, String)],
+    ) -> PyResult<HttpReply> {
         let mut reply: HttpReply = if bodiless(status) {
             HttpReply {
                 status,
@@ -258,7 +277,9 @@ impl Failure {
         // Headers passed to the response come before the ones it initializes.
         reply.headers.splice(
             0..0,
-            headers.iter().map(|(name, value)| (name.to_ascii_lowercase(), value.clone())),
+            headers
+                .iter()
+                .map(|(name, value)| (name.to_ascii_lowercase(), value.clone())),
         );
         Ok(reply)
     }
@@ -284,9 +305,11 @@ pub(crate) fn text(value: impl Into<String>) -> JsonValue {
 }
 
 pub(crate) fn integer(value: i128) -> JsonValue {
-    JsonValue::Integer(JsonInteger::parse(&value.to_string()).unwrap_or_else(|| {
-        JsonInteger::parse("0").unwrap_or_else(|| unreachable!("zero parses"))
-    }))
+    JsonValue::Integer(
+        JsonInteger::parse(&value.to_string()).unwrap_or_else(|| {
+            JsonInteger::parse("0").unwrap_or_else(|| unreachable!("zero parses"))
+        }),
+    )
 }
 
 /// A handler's Python result as the response serializer writes a value typed `object`: enum
@@ -326,16 +349,32 @@ pub(crate) fn py_json(value: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
         return Ok(JsonValue::Object(items));
     }
     if let Ok(items) = value.cast::<PyList>() {
-        return items.iter().map(|item| py_json(&item)).collect::<PyResult<_>>().map(JsonValue::Array);
+        return items
+            .iter()
+            .map(|item| py_json(&item))
+            .collect::<PyResult<_>>()
+            .map(JsonValue::Array);
     }
     if let Ok(items) = value.cast::<PyTuple>() {
-        return items.iter().map(|item| py_json(&item)).collect::<PyResult<_>>().map(JsonValue::Array);
+        return items
+            .iter()
+            .map(|item| py_json(&item))
+            .collect::<PyResult<_>>()
+            .map(JsonValue::Array);
     }
     if let Ok(items) = value.cast::<PySet>() {
-        return items.iter().map(|item| py_json(&item)).collect::<PyResult<_>>().map(JsonValue::Array);
+        return items
+            .iter()
+            .map(|item| py_json(&item))
+            .collect::<PyResult<_>>()
+            .map(JsonValue::Array);
     }
     if let Ok(items) = value.cast::<PyFrozenSet>() {
-        return items.iter().map(|item| py_json(&item)).collect::<PyResult<_>>().map(JsonValue::Array);
+        return items
+            .iter()
+            .map(|item| py_json(&item))
+            .collect::<PyResult<_>>()
+            .map(JsonValue::Array);
     }
     // Enum members, dataclasses, paths, UUIDs, datetimes and the rest: as pydantic writes a
     // value typed `object`.
@@ -371,12 +410,17 @@ impl<H> Route<H> {
         let segments: Vec<Segment> = template
             .trim_start_matches('/')
             .split('/')
-            .map(|segment| match segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')) {
-                Some(name) => match name.strip_suffix(":path") {
-                    Some(name) => Segment::Rest(name.to_owned()),
-                    None => Segment::Parameter(name.to_owned()),
-                },
-                None => Segment::Literal(segment.to_owned()),
+            .map(|segment| {
+                match segment
+                    .strip_prefix('{')
+                    .and_then(|rest| rest.strip_suffix('}'))
+                {
+                    Some(name) => match name.strip_suffix(":path") {
+                        Some(name) => Segment::Rest(name.to_owned()),
+                        None => Segment::Parameter(name.to_owned()),
+                    },
+                    None => Segment::Literal(segment.to_owned()),
+                }
             })
             .collect();
         Self {
@@ -452,7 +496,10 @@ pub(crate) fn route<'a, H>(routes: &'a [Route<H>], request: &HttpRequest) -> Rou
             Some(stripped) => stripped.to_owned(),
             None => format!("{}/", request.path),
         };
-        if routes.iter().any(|candidate| candidate.matches(&toggled).is_some()) {
+        if routes
+            .iter()
+            .any(|candidate| candidate.matches(&toggled).is_some())
+        {
             let host: &str = request.header("host").unwrap_or("");
             let mut location: String = format!("{}://{host}{toggled}", request.scheme);
             if !request.query_string.is_empty() {
@@ -596,11 +643,16 @@ pub(crate) fn http_date(seconds: i64) -> String {
     let shifted: i64 = days + 719_468;
     let era: i64 = shifted.div_euclid(146_097);
     let day_of_era: i64 = shifted.rem_euclid(146_097);
-    let year_of_era: i64 = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year_of_era: i64 =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let day_of_year: i64 = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_index: i64 = (5 * day_of_year + 2) / 153;
     let day: i64 = day_of_year - (153 * month_index + 2) / 5 + 1;
-    let month: i64 = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let month: i64 = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
     let year: i64 = year_of_era + era * 400 + i64::from(month <= 2);
     format!(
         "{weekday}, {day:02} {} {year:04} {:02}:{:02}:{:02} GMT",
@@ -614,13 +666,18 @@ pub(crate) fn http_date(seconds: i64) -> String {
 pub(crate) fn now_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX))
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+        })
 }
 
 /// MD5, used only for the ETag format the earlier static file server wrote.
 pub(crate) fn md5_hex(input: &[u8]) -> String {
     use md5::{Digest, Md5};
-    Md5::digest(input).iter().map(|byte| format!("{byte:02x}")).collect()
+    Md5::digest(input)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// The router's 405 for a path whose routes take other methods.

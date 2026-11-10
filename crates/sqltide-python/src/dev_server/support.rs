@@ -47,7 +47,12 @@ pub(crate) fn type_adapter<'py>(annotation: &Bound<'py, PyAny>) -> PyResult<Boun
 }
 
 /// Whether `error` is an instance of `module.name`.
-pub(crate) fn is_instance(py: Python<'_>, error: &PyErr, module: &str, name: &str) -> PyResult<bool> {
+pub(crate) fn is_instance(
+    py: Python<'_>,
+    error: &PyErr,
+    module: &str,
+    name: &str,
+) -> PyResult<bool> {
     let class: Bound<'_, PyAny> = attr(py, module, name)?;
     error.value(py).is_instance(&class)
 }
@@ -71,7 +76,8 @@ pub(crate) fn translate(py: Python<'_>, error: PyErr, clauses: &[(&str, &str, u1
 }
 
 /// The adapter failure every warehouse-backed route answers with 502.
-pub(crate) const ADAPTER_ERROR: (&str, &str, u16) = ("sqltide.adapter.exceptions", "AdapterError", 502);
+pub(crate) const ADAPTER_ERROR: (&str, &str, u16) =
+    ("sqltide.adapter.exceptions", "AdapterError", 502);
 
 /// `str(error)` of a Python exception.
 pub(crate) fn message(py: Python<'_>, error: &PyErr) -> PyResult<String> {
@@ -155,16 +161,21 @@ fn parse_plain(scalar: Scalar, raw: &str, loc: Vec<JsonValue>) -> Result<Value, 
     match scalar {
         Scalar::Text { min_length } => {
             if let Some(minimum) = min_length
-                && raw.chars().count() < minimum {
-                    let plural: &str = if minimum == 1 { "character" } else { "characters" };
-                    return Err(validation_error(
-                        "string_too_short",
-                        loc,
-                        &format!("String should have at least {minimum} {plural}"),
-                        input,
-                        Some(object(vec![("min_length", integer(minimum as i128))])),
-                    ));
-                }
+                && raw.chars().count() < minimum
+            {
+                let plural: &str = if minimum == 1 {
+                    "character"
+                } else {
+                    "characters"
+                };
+                return Err(validation_error(
+                    "string_too_short",
+                    loc,
+                    &format!("String should have at least {minimum} {plural}"),
+                    input,
+                    Some(object(vec![("min_length", integer(minimum as i128))])),
+                ));
+            }
             Ok(Value::Text(raw.to_owned()))
         }
         Scalar::Integer { ge, le } => {
@@ -178,25 +189,27 @@ fn parse_plain(scalar: Scalar, raw: &str, loc: Vec<JsonValue>) -> Result<Value, 
                 ));
             };
             if let Some(bound) = ge
-                && value < i128::from(bound) {
-                    return Err(validation_error(
-                        "greater_than_equal",
-                        loc,
-                        &format!("Input should be greater than or equal to {bound}"),
-                        input,
-                        Some(object(vec![("ge", integer(i128::from(bound)))])),
-                    ));
-                }
+                && value < i128::from(bound)
+            {
+                return Err(validation_error(
+                    "greater_than_equal",
+                    loc,
+                    &format!("Input should be greater than or equal to {bound}"),
+                    input,
+                    Some(object(vec![("ge", integer(i128::from(bound)))])),
+                ));
+            }
             if let Some(bound) = le
-                && value > i128::from(bound) {
-                    return Err(validation_error(
-                        "less_than_equal",
-                        loc,
-                        &format!("Input should be less than or equal to {bound}"),
-                        input,
-                        Some(object(vec![("le", integer(i128::from(bound)))])),
-                    ));
-                }
+                && value > i128::from(bound)
+            {
+                return Err(validation_error(
+                    "less_than_equal",
+                    loc,
+                    &format!("Input should be less than or equal to {bound}"),
+                    input,
+                    Some(object(vec![("le", integer(i128::from(bound)))])),
+                ));
+            }
             Ok(Value::Integer(value))
         }
         Scalar::Boolean => match raw.to_ascii_lowercase().as_str() {
@@ -216,20 +229,38 @@ fn parse_plain(scalar: Scalar, raw: &str, loc: Vec<JsonValue>) -> Result<Value, 
 
 /// The installed pydantic validated UUID parameters, so its version decides which spellings
 /// parse and how a failure reads.
-fn parse_uuid(py: Python<'_>, raw: &str, loc: Vec<JsonValue>) -> PyResult<Result<Value, JsonValue>> {
+fn parse_uuid(
+    py: Python<'_>,
+    raw: &str,
+    loc: Vec<JsonValue>,
+) -> PyResult<Result<Value, JsonValue>> {
     static ADAPTER: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let adapter: &Py<PyAny> = ADAPTER.get_or_try_init(py, || {
         Ok::<_, PyErr>(type_adapter(&attr(py, "uuid", "UUID")?)?.unbind())
     })?;
-    match adapter.bind(py).call_method("validate_python", (raw,), Some(&py_kwargs!(py; from_attributes = true)?)) {
+    match adapter.bind(py).call_method(
+        "validate_python",
+        (raw,),
+        Some(&py_kwargs!(py; from_attributes = true)?),
+    ) {
         Ok(parsed) => Ok(Ok(Value::Uuid(parsed.str()?.to_string()))),
         Err(error) if is_instance(py, &error, "pydantic", "ValidationError")? => {
             let first: Bound<'_, PyAny> = error.value(py).call_method0("errors")?.get_item(0)?;
             let kind: String = first.get_item("type")?.extract()?;
             let message: String = first.get_item("msg")?.extract()?;
             let context: Bound<'_, PyAny> = first.call_method1("get", ("ctx",))?;
-            let context: Option<JsonValue> = if context.is_none() { None } else { Some(py_json(&context)?) };
-            Ok(Err(validation_error(&kind, loc, &message, text(raw), context)))
+            let context: Option<JsonValue> = if context.is_none() {
+                None
+            } else {
+                Some(py_json(&context)?)
+            };
+            Ok(Err(validation_error(
+                &kind,
+                loc,
+                &message,
+                text(raw),
+                context,
+            )))
         }
         Err(error) => Err(error),
     }
@@ -257,7 +288,9 @@ pub(crate) fn str_as_int(raw: &str) -> Option<i128> {
         || whole.starts_with('_')
         || whole.ends_with('_')
         || whole.contains("__")
-        || !whole.bytes().all(|byte| byte.is_ascii_digit() || byte == b'_')
+        || !whole
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'_')
     {
         return None;
     }
@@ -279,7 +312,9 @@ pub(crate) fn read_body<'py>(py: Python<'py>, request: &HttpRequest) -> Outcome<
         return Ok(Body::Missing);
     }
     let raw: Bound<'py, PyBytes> = PyBytes::new(py, &request.body);
-    let is_json: bool = request.header("content-type").is_some_and(json_content_type);
+    let is_json: bool = request
+        .header("content-type")
+        .is_some_and(json_content_type);
     if !is_json {
         return Ok(Body::Parsed(raw.into_any()));
     }
@@ -346,7 +381,11 @@ pub(crate) fn validate_body<'py>(
     };
     let class: Bound<'py, PyAny> = attr(py, module, model)?;
     let adapter = type_adapter(&class)?;
-    match adapter.call_method("validate_python", (value,), Some(&py_kwargs!(py; from_attributes = true)?)) {
+    match adapter.call_method(
+        "validate_python",
+        (value,),
+        Some(&py_kwargs!(py; from_attributes = true)?),
+    ) {
         Ok(validated) => Ok(Some(validated)),
         Err(error) => {
             let validation_type = attr(py, "pydantic", "ValidationError")?;
@@ -354,7 +393,8 @@ pub(crate) fn validate_body<'py>(
                 return Err(error);
             }
             let raised = error.value(py);
-            let details = raised.call_method("errors", (), Some(&py_kwargs!(py; include_url = false)?))?;
+            let details =
+                raised.call_method("errors", (), Some(&py_kwargs!(py; include_url = false)?))?;
             for detail in details.cast::<PyList>()?.iter() {
                 let detail = detail.cast_into::<PyDict>()?;
                 let loc = detail.get_item("loc")?.map_or(Ok(Vec::new()), |loc| {
@@ -387,7 +427,9 @@ pub(crate) fn validate_body<'py>(
 pub(crate) fn encodable(value: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
     if let Ok(bytes) = value.cast::<PyBytes>() {
         let decoded: Bound<'_, PyAny> = bytes.call_method0("decode")?;
-        return Ok(JsonValue::String(decoded.cast::<PyString>()?.to_str()?.to_owned()));
+        return Ok(JsonValue::String(
+            decoded.cast::<PyString>()?.to_str()?.to_owned(),
+        ));
     }
     py_json(value)
 }
@@ -410,16 +452,22 @@ pub(crate) fn validate_string_mapping<'py>(
     };
     let annotation = py.eval(c"dict[str, str]", None, None)?;
     let adapter = type_adapter(&annotation)?;
-    match adapter.call_method("validate_python", (value,), Some(&py_kwargs!(py; from_attributes = true)?)) {
+    match adapter.call_method(
+        "validate_python",
+        (value,),
+        Some(&py_kwargs!(py; from_attributes = true)?),
+    ) {
         Ok(validated) => Ok(Some(validated)),
         Err(error) => {
             let validation_type = attr(py, "pydantic", "ValidationError")?;
             if !error.value(py).is_instance(&validation_type)? {
                 return Err(error);
             }
-            let details = error
-                .value(py)
-                .call_method("errors", (), Some(&py_kwargs!(py; include_url = false)?))?;
+            let details = error.value(py).call_method(
+                "errors",
+                (),
+                Some(&py_kwargs!(py; include_url = false)?),
+            )?;
             for detail in details.cast::<PyList>()?.iter() {
                 let detail = detail.cast_into::<PyDict>()?;
                 let mut entries: Vec<(JsonKey, JsonValue)> = Vec::new();
@@ -445,11 +493,16 @@ pub(crate) fn validate_string_mapping<'py>(
 
 /// `a, b, ... = value`: the items of an `count`-element unpacking, raising Python's `ValueError`
 /// for any other length.
-pub(crate) fn unpack<'py>(value: &Bound<'py, PyAny>, count: usize) -> PyResult<Vec<Bound<'py, PyAny>>> {
+pub(crate) fn unpack<'py>(
+    value: &Bound<'py, PyAny>,
+    count: usize,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
     let mut items: Vec<Bound<'py, PyAny>> = Vec::with_capacity(count);
     for item in value.try_iter()? {
         if items.len() == count {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!("too many values to unpack (expected {count})")));
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "too many values to unpack (expected {count})"
+            )));
         }
         items.push(item?);
     }

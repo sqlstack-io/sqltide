@@ -29,7 +29,9 @@ fn enum_member<'py>(py: Python<'py>, class: &str, member: &str) -> PyResult<Boun
 /// The project name policy grants name: the compiled name, else the resolved project path.
 fn project_name(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> PyResult<String> {
     if let Some(analysis) = analysis {
-        let name = analysis.getattr("compiled_project")?.getattr("project_name")?;
+        let name = analysis
+            .getattr("compiled_project")?
+            .getattr("project_name")?;
         if !name.is_none() {
             return name.extract();
         }
@@ -40,9 +42,14 @@ fn project_name(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> PyR
         .extract()
 }
 
-fn target_name(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+fn target_name(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<String>> {
     if let Some(analysis) = analysis {
-        let name = analysis.getattr("compiled_project")?.getattr("target_name")?;
+        let name = analysis
+            .getattr("compiled_project")?
+            .getattr("target_name")?;
         if !name.is_none() {
             return name.extract().map(Some);
         }
@@ -50,7 +57,10 @@ fn target_name(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> PyRe
     Ok(call.app.services.selected_target.clone())
 }
 
-fn policy<'py>(py: Python<'py>, analysis: Option<&Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyAny>> {
+fn policy<'py>(
+    py: Python<'py>,
+    analysis: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     match analysis {
         Some(analysis) => analysis.getattr("access_policy"),
         None => Ok(py.None().into_bound(py)),
@@ -58,11 +68,17 @@ fn policy<'py>(py: Python<'py>, analysis: Option<&Bound<'py, PyAny>>) -> PyResul
 }
 
 fn account_store<'py>(call: &Call<'py, '_>) -> Bound<'py, PyAny> {
-    call.service(|services| &services.authorization).getattr("store").unwrap_or_else(|_| call.py.None().into_bound(call.py))
+    call.service(|services| &services.authorization)
+        .getattr("store")
+        .unwrap_or_else(|_| call.py.None().into_bound(call.py))
 }
 
 /// Allow the operation or answer 403 with the decision's evidence.
-pub(crate) fn require(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>, check: Check<'_>) -> Outcome<()> {
+pub(crate) fn require(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+    check: Check<'_>,
+) -> Outcome<()> {
     let py: Python<'_> = call.py;
     let authenticated = authenticated(call)?;
     let grant_scope = match check.grant_scope {
@@ -81,8 +97,15 @@ pub(crate) fn require(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>, 
             policy = policy(py, analysis)?,
         )?),
     )?;
-    let decision = attr(py, "sqltide.authorization.main.authorize_operation", "authorize_operation")?
-        .call((), Some(&py_kwargs!(py; store = account_store(call), request = request)?))?;
+    let decision = attr(
+        py,
+        "sqltide.authorization.main.authorize_operation",
+        "authorize_operation",
+    )?
+    .call(
+        (),
+        Some(&py_kwargs!(py; store = account_store(call), request = request)?),
+    )?;
     if decision.getattr("allowed")?.is_truthy()? {
         return Ok(());
     }
@@ -90,17 +113,32 @@ pub(crate) fn require(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>, 
         403,
         object(vec![
             ("message", text(check.denial_message)),
-            ("permission", py_json(&decision.getattr("permission")?.getattr("value")?)?),
-            ("reason", py_json(&decision.getattr("reason")?.getattr("value")?)?),
+            (
+                "permission",
+                py_json(&decision.getattr("permission")?.getattr("value")?)?,
+            ),
+            (
+                "reason",
+                py_json(&decision.getattr("reason")?.getattr("value")?)?,
+            ),
             ("project", py_json(&decision.getattr("project_name")?)?),
             ("target", py_json(&decision.getattr("target_name")?)?),
-            ("missingPipelines", py_json(&decision.getattr("missing_pipelines")?)?),
+            (
+                "missingPipelines",
+                py_json(&decision.getattr("missing_pipelines")?)?,
+            ),
         ]),
     ))
 }
 
 fn unresolved(message: String) -> Failure {
-    Failure::detail(403, object(vec![("message", text(message)), ("reason", text("unresolved_scope"))]))
+    Failure::detail(
+        403,
+        object(vec![
+            ("message", text(message)),
+            ("reason", text("unresolved_scope")),
+        ]),
+    )
 }
 
 fn target_check(permission: &'static str, message: &str) -> Check<'static> {
@@ -117,7 +155,10 @@ pub(crate) fn is_system_admin(call: &Call<'_, '_>) -> Outcome<bool> {
     Ok(has_admin_role(&authenticated(call)?)?)
 }
 
-pub(crate) fn require_reload(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> Outcome<()> {
+pub(crate) fn require_reload(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> Outcome<()> {
     require(
         call,
         analysis,
@@ -130,35 +171,70 @@ pub(crate) fn require_reload(call: &Call<'_, '_>, analysis: Option<&Bound<'_, Py
     )
 }
 
-pub(crate) fn require_kill(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> Outcome<()> {
-    require(call, analysis, target_check("BUILD_KILL", "Force-killing builds is not permitted"))
-}
-
-pub(crate) fn require_message_read(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>) -> Outcome<()> {
-    require(
-        call,
-        Some(analysis),
-        target_check("SOURCE_MESSAGES_READ", "Reading raw source messages is not permitted"),
-    )
-}
-
-pub(crate) fn require_cleanup(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> Outcome<()> {
-    require(call, analysis, target_check("DEPLOYMENT_CLEANUP", "Deployment cleanup is not permitted"))
-}
-
-pub(crate) fn require_automation(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> Outcome<()> {
+pub(crate) fn require_kill(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> Outcome<()> {
     require(
         call,
         analysis,
-        target_check("AUTOMATION_MANAGE", "Sensor automation management is not permitted"),
+        target_check("BUILD_KILL", "Force-killing builds is not permitted"),
+    )
+}
+
+pub(crate) fn require_message_read(
+    call: &Call<'_, '_>,
+    analysis: &Bound<'_, PyAny>,
+) -> Outcome<()> {
+    require(
+        call,
+        Some(analysis),
+        target_check(
+            "SOURCE_MESSAGES_READ",
+            "Reading raw source messages is not permitted",
+        ),
+    )
+}
+
+pub(crate) fn require_cleanup(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> Outcome<()> {
+    require(
+        call,
+        analysis,
+        target_check("DEPLOYMENT_CLEANUP", "Deployment cleanup is not permitted"),
+    )
+}
+
+pub(crate) fn require_automation(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> Outcome<()> {
+    require(
+        call,
+        analysis,
+        target_check(
+            "AUTOMATION_MANAGE",
+            "Sensor automation management is not permitted",
+        ),
     )
 }
 
 /// Authorize one named check; an unknown name defers to the runner's own validation.
-pub(crate) fn require_check(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>, kind: &str, name: &str) -> Outcome<()> {
+pub(crate) fn require_check(
+    call: &Call<'_, '_>,
+    analysis: &Bound<'_, PyAny>,
+    kind: &str,
+    name: &str,
+) -> Outcome<()> {
     let model_names: Option<Vec<String>> = if kind == "test" {
         let mut found: Option<Vec<String>> = None;
-        for test_case in analysis.getattr("compiled_project")?.getattr("test_cases")?.try_iter()? {
+        for test_case in analysis
+            .getattr("compiled_project")?
+            .getattr("test_cases")?
+            .try_iter()?
+        {
             let test_case = test_case?;
             if named(&test_case)? == name {
                 let mut models: Vec<String> = Vec::new();
@@ -172,7 +248,11 @@ pub(crate) fn require_check(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>, ki
         found
     } else {
         let mut found: Option<Vec<String>> = None;
-        for audit in analysis.getattr("compiled_project")?.getattr("audits")?.try_iter()? {
+        for audit in analysis
+            .getattr("compiled_project")?
+            .getattr("audits")?
+            .try_iter()?
+        {
             let audit = audit?;
             if named(&audit)? == name {
                 found = Some(audit.getattr("referenced_model_names")?.extract()?);
@@ -185,9 +265,15 @@ pub(crate) fn require_check(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>, ki
         return Ok(());
     };
     let Some(scope) = pipelines_for_models(analysis, &model_names)? else {
-        return Err(unresolved(format!("Cannot resolve pipeline ownership for check '{name}'")));
+        return Err(unresolved(format!(
+            "Cannot resolve pipeline ownership for check '{name}'"
+        )));
     };
-    let permission: &str = if kind == "test" { "QUALITY_TEST_RUN" } else { "QUALITY_AUDIT_RUN" };
+    let permission: &str = if kind == "test" {
+        "QUALITY_TEST_RUN"
+    } else {
+        "QUALITY_AUDIT_RUN"
+    };
     require(
         call,
         Some(analysis),
@@ -210,9 +296,16 @@ fn named(item: &Bound<'_, PyAny>) -> PyResult<String> {
 }
 
 /// The sorted pipelines owning `model_names`, or `None` when one is unknown.
-fn pipelines_for_models(analysis: &Bound<'_, PyAny>, model_names: &[String]) -> PyResult<Option<Vec<String>>> {
+fn pipelines_for_models(
+    analysis: &Bound<'_, PyAny>,
+    model_names: &[String],
+) -> PyResult<Option<Vec<String>>> {
     let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
+    for model in analysis
+        .getattr("compiled_project")?
+        .getattr("models")?
+        .try_iter()?
+    {
         let model = model?;
         owner.insert(
             model.getattr("key")?.getattr("name")?.extract()?,
@@ -247,9 +340,13 @@ fn models_from_logical_ids(logical_ids: &Bound<'_, PyAny>) -> PyResult<Option<Ve
     Ok(Some(names))
 }
 
-fn pipelines_for_keys(analysis: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>) -> Outcome<Vec<String>> {
+fn pipelines_for_keys(
+    analysis: &Bound<'_, PyAny>,
+    keys: &Bound<'_, PyAny>,
+) -> Outcome<Vec<String>> {
     let py: Python<'_> = analysis.py();
-    let model_type = attr(py, "sqltide.compiler.compile.types", "LogicalResourceType")?.getattr("MODEL")?;
+    let model_type =
+        attr(py, "sqltide.compiler.compile.types", "LogicalResourceType")?.getattr("MODEL")?;
     let mut names: Vec<String> = Vec::new();
     for key in keys.try_iter()? {
         let key = key?;
@@ -257,12 +354,15 @@ fn pipelines_for_keys(analysis: &Bound<'_, PyAny>, keys: &Bound<'_, PyAny>) -> O
             names.push(key.getattr("name")?.extract()?);
         }
     }
-    pipelines_for_models(analysis, &names)?
-        .ok_or_else(|| unresolved("Cannot resolve pipeline ownership for the resolved build scope".to_owned()))
+    pipelines_for_models(analysis, &names)?.ok_or_else(|| {
+        unresolved("Cannot resolve pipeline ownership for the resolved build scope".to_owned())
+    })
 }
 
 /// The direct half of a build preparation.
-pub(crate) fn direct_part<'py>(preparation: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
+pub(crate) fn direct_part<'py>(
+    preparation: &Bound<'py, PyAny>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py: Python<'py> = preparation.py();
     if preparation.is_instance(&attr(py, BUILD_MODELS, "DirectWorkflowPreparation")?)? {
         return Ok(Some(preparation.clone()));
@@ -274,7 +374,9 @@ pub(crate) fn direct_part<'py>(preparation: &Bound<'py, PyAny>) -> PyResult<Opti
 }
 
 /// The staged-deployment half of a build preparation.
-pub(crate) fn virtual_part<'py>(preparation: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
+pub(crate) fn virtual_part<'py>(
+    preparation: &Bound<'py, PyAny>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py: Python<'py> = preparation.py();
     if preparation.is_instance(&attr(py, BUILD_MODELS, "VirtualWorkflowPreparation")?)? {
         return Ok(Some(preparation.clone()));
@@ -286,13 +388,26 @@ pub(crate) fn virtual_part<'py>(preparation: &Bound<'py, PyAny>) -> PyResult<Opt
 }
 
 /// Require complete pipeline coverage for a resolved build workflow.
-pub(crate) fn require_prepared_build(call: &Call<'_, '_>, analysis: &Bound<'_, PyAny>, preparation: &Bound<'_, PyAny>) -> Outcome<()> {
+pub(crate) fn require_prepared_build(
+    call: &Call<'_, '_>,
+    analysis: &Bound<'_, PyAny>,
+    preparation: &Bound<'_, PyAny>,
+) -> Outcome<()> {
     let direct: Vec<String> = match direct_part(preparation)? {
-        Some(direct) => pipelines_for_keys(analysis, &direct.getattr("preview")?.getattr("plan")?.getattr("execution_scope")?)?,
+        Some(direct) => pipelines_for_keys(
+            analysis,
+            &direct
+                .getattr("preview")?
+                .getattr("plan")?
+                .getattr("execution_scope")?,
+        )?,
         None => Vec::new(),
     };
     let staged: Vec<String> = match virtual_part(preparation)? {
-        Some(staged) => pipelines_for_keys(analysis, &staged.getattr("preview")?.getattr("run_execution_scope")?)?,
+        Some(staged) => pipelines_for_keys(
+            analysis,
+            &staged.getattr("preview")?.getattr("run_execution_scope")?,
+        )?,
         None => Vec::new(),
     };
     let scoped = |permission: &'static str, pipelines: Vec<String>, message: &str| {
@@ -308,13 +423,25 @@ pub(crate) fn require_prepared_build(call: &Call<'_, '_>, analysis: &Bound<'_, P
         )
     };
     if direct.is_empty() && staged.is_empty() {
-        return scoped("BUILD_DIRECT_RUN", Vec::new(), "Build authorization requires a resolvable pipeline scope");
+        return scoped(
+            "BUILD_DIRECT_RUN",
+            Vec::new(),
+            "Build authorization requires a resolvable pipeline scope",
+        );
     }
     if !direct.is_empty() {
-        scoped("BUILD_DIRECT_RUN", direct, "Direct build writes are not permitted")?;
+        scoped(
+            "BUILD_DIRECT_RUN",
+            direct,
+            "Direct build writes are not permitted",
+        )?;
     }
     if !staged.is_empty() {
-        scoped("DEPLOYMENT_CREATE", staged, "Creating staged deployments is not permitted")?;
+        scoped(
+            "DEPLOYMENT_CREATE",
+            staged,
+            "Creating staged deployments is not permitted",
+        )?;
     }
     Ok(())
 }
@@ -342,7 +469,9 @@ pub(crate) fn require_run_cancel(
         }
     }
     let Some(pipelines) = pipelines else {
-        return Err(unresolved(format!("Cannot resolve pipeline scope for run '{invocation_id}'")));
+        return Err(unresolved(format!(
+            "Cannot resolve pipeline scope for run '{invocation_id}'"
+        )));
     };
     require(
         call,
@@ -363,7 +492,10 @@ pub(crate) fn require_promotion(
     deployment_id: &str,
     logical_ids: &Bound<'_, PyAny>,
 ) -> Outcome<()> {
-    let list = pyo3::types::PyList::new(call.py, logical_ids.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+    let list = pyo3::types::PyList::new(
+        call.py,
+        logical_ids.try_iter()?.collect::<PyResult<Vec<_>>>()?,
+    )?;
     let pipelines: Option<Vec<String>> = match models_from_logical_ids(list.as_any())? {
         Some(models) => pipelines_for_models(analysis, &models)?,
         None => None,
@@ -409,21 +541,37 @@ pub(crate) fn require_destruction(
         return Err(Failure::detail(
             403,
             object(vec![
-                ("message", text("Destructive operations require an active system administrator")),
+                (
+                    "message",
+                    text("Destructive operations require an active system administrator"),
+                ),
                 ("reason", text("system_admin_required")),
             ]),
         ));
     }
     // `DestructionOperation(operation)` rejects an unknown operation with ValueError.
-    let operation = attr(py, "sqltide.executor.destruction.types", "DestructionOperation")?.call1((operation,))?;
+    let operation = attr(
+        py,
+        "sqltide.executor.destruction.types",
+        "DestructionOperation",
+    )?
+    .call1((operation,))?;
     let reset: bool = operation.getattr("value")?.extract::<String>()? == "reset_target";
     require(
         call,
         Some(analysis),
         Check {
-            permission: if reset { "TARGET_RESET" } else { "PIPELINE_DESTROY" },
+            permission: if reset {
+                "TARGET_RESET"
+            } else {
+                "PIPELINE_DESTROY"
+            },
             grant_scope: reset.then_some("TARGET"),
-            affected_pipelines: if reset { Vec::new() } else { affected_pipelines },
+            affected_pipelines: if reset {
+                Vec::new()
+            } else {
+                affected_pipelines
+            },
             denial_message: if reset {
                 "Resetting this target is not permitted".to_owned()
             } else {
@@ -434,12 +582,19 @@ pub(crate) fn require_destruction(
 }
 
 /// The caller's effective capabilities; destructive permissions show only to administrators.
-pub(crate) fn capabilities_payload(call: &Call<'_, '_>, analysis: Option<&Bound<'_, PyAny>>) -> Outcome<JsonValue> {
+pub(crate) fn capabilities_payload(
+    call: &Call<'_, '_>,
+    analysis: Option<&Bound<'_, PyAny>>,
+) -> Outcome<JsonValue> {
     let py: Python<'_> = call.py;
     let authenticated = authenticated(call)?;
     let mut pipeline_names: Vec<String> = Vec::new();
     if let Some(analysis) = analysis {
-        for item in analysis.getattr("compiled_project")?.getattr("pipelines")?.try_iter()? {
+        for item in analysis
+            .getattr("compiled_project")?
+            .getattr("pipelines")?
+            .try_iter()?
+        {
             pipeline_names.push(item?.getattr("pipeline")?.getattr("name")?.extract()?);
         }
         pipeline_names.sort();
@@ -454,8 +609,15 @@ pub(crate) fn capabilities_payload(call: &Call<'_, '_>, analysis: Option<&Bound<
             policy = policy(py, analysis)?,
         )?),
     )?;
-    let capabilities = attr(py, "sqltide.authorization.main._effective_capabilities", "effective_capabilities")?
-        .call((), Some(&py_kwargs!(py; store = account_store(call), request = request)?))?;
+    let capabilities = attr(
+        py,
+        "sqltide.authorization.main._effective_capabilities",
+        "effective_capabilities",
+    )?
+    .call(
+        (),
+        Some(&py_kwargs!(py; store = account_store(call), request = request)?),
+    )?;
     let system_admin: bool = capabilities.getattr("system_admin")?.is_truthy()?;
     let hidden = |permission: &Bound<'_, PyAny>| -> PyResult<bool> {
         let value: String = permission.getattr("value")?.extract()?;
@@ -478,7 +640,10 @@ pub(crate) fn capabilities_payload(call: &Call<'_, '_>, analysis: Option<&Bound<
         let key: String = permission.getattr("value")?.extract()?;
         let value: JsonValue = py_json(&entry.get_item(1)?)?;
         // A dict comprehension keeps the last value of a repeated key at its first position.
-        match pipeline_permissions.iter_mut().find(|(existing, _)| *existing == sqltide_json::JsonKey::Text(key.clone())) {
+        match pipeline_permissions
+            .iter_mut()
+            .find(|(existing, _)| *existing == sqltide_json::JsonKey::Text(key.clone()))
+        {
             Some((_, existing)) => *existing = value,
             None => pipeline_permissions.push((sqltide_json::JsonKey::Text(key), value)),
         }
@@ -488,8 +653,14 @@ pub(crate) fn capabilities_payload(call: &Call<'_, '_>, analysis: Option<&Bound<
         ("project", py_json(&capabilities.getattr("project_name")?)?),
         ("target", py_json(&capabilities.getattr("target_name")?)?),
         ("permissions", JsonValue::Array(permissions)),
-        ("pipelinePermissions", JsonValue::Object(pipeline_permissions)),
-        ("staleRoles", py_json(&capabilities.getattr("stale_roles")?)?),
+        (
+            "pipelinePermissions",
+            JsonValue::Object(pipeline_permissions),
+        ),
+        (
+            "staleRoles",
+            py_json(&capabilities.getattr("stale_roles")?)?,
+        ),
     ]))
 }
 
@@ -514,7 +685,14 @@ pub(crate) fn access_policy_payload(analysis: Option<&Bound<'_, PyAny>>) -> PyRe
                 permissions.push(py_json(&permission?.getattr("value")?)?);
             }
             grants.push(object(vec![
-                ("scope", if scope.is_none() { JsonValue::Null } else { py_json(&scope.getattr("value")?)? }),
+                (
+                    "scope",
+                    if scope.is_none() {
+                        JsonValue::Null
+                    } else {
+                        py_json(&scope.getattr("value")?)?
+                    },
+                ),
                 ("pipelines", py_json(&grant.getattr("pipelines")?)?),
                 ("permissions", JsonValue::Array(permissions)),
             ]));

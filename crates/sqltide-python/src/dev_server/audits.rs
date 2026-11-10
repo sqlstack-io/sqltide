@@ -22,7 +22,12 @@ const MAX_BACKOFF_SECONDS: f64 = 300.0;
 
 type Any<'py> = Bound<'py, PyAny>;
 
-pub(super) fn member<'py>(py: Python<'py>, module: &str, class: &str, name: &str) -> PyResult<Any<'py>> {
+pub(super) fn member<'py>(
+    py: Python<'py>,
+    module: &str,
+    class: &str,
+    name: &str,
+) -> PyResult<Any<'py>> {
     attr(py, module, class)?.getattr(name)
 }
 
@@ -33,7 +38,10 @@ fn schedule_state<'py>(py: Python<'py>, name: &str) -> PyResult<Any<'py>> {
 /// `f"..."` of literal text and formatted values, as `"".join(format(part, ""))` builds it.
 pub(super) fn fstring<'py>(py: Python<'py>, parts: &[Any<'py>]) -> PyResult<Any<'py>> {
     let format: Any<'py> = attr(py, "builtins", "format")?;
-    let pieces: Vec<Any<'py>> = parts.iter().map(|part| format.call1((part, ""))).collect::<PyResult<_>>()?;
+    let pieces: Vec<Any<'py>> = parts
+        .iter()
+        .map(|part| format.call1((part, "")))
+        .collect::<PyResult<_>>()?;
     PyString::new(py, "").call_method1("join", (pieces,))
 }
 
@@ -44,18 +52,28 @@ pub(super) fn literal<'py>(py: Python<'py>, text: &str) -> Any<'py> {
 /// `audit.name or audit.file_path.stem`.
 pub(super) fn audit_name<'py>(audit: &Any<'py>) -> PyResult<Any<'py>> {
     let name: Any<'py> = audit.getattr("name")?;
-    if name.is_truthy()? { Ok(name) } else { audit.getattr("file_path")?.getattr("stem") }
+    if name.is_truthy()? {
+        Ok(name)
+    } else {
+        audit.getattr("file_path")?.getattr("stem")
+    }
 }
 
 pub(super) fn logical_project_identity<'py>(project_dir: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = project_dir.py();
-    attr(py, "sqltide.executor.observability.main.logical_project_identity", "logical_project_identity")?
-        .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))
+    attr(
+        py,
+        "sqltide.executor.observability.main.logical_project_identity",
+        "logical_project_identity",
+    )?
+    .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))
 }
 
 /// Whether one effective-configuration section of the compiled target is enabled.
 fn section_enabled(analysis: &Any<'_>, section: &str) -> PyResult<bool> {
-    let loaded_project: Any<'_> = analysis.getattr("discovered_inputs")?.getattr("loaded_project")?;
+    let loaded_project: Any<'_> = analysis
+        .getattr("discovered_inputs")?
+        .getattr("loaded_project")?;
     if loaded_project.is_none() {
         return Ok(false);
     }
@@ -63,7 +81,10 @@ fn section_enabled(analysis: &Any<'_>, section: &str) -> PyResult<bool> {
     if configuration.is_none() {
         return Ok(false);
     }
-    configuration.getattr(section)?.getattr("enabled")?.is_truthy()
+    configuration
+        .getattr(section)?
+        .getattr("enabled")?
+        .is_truthy()
 }
 
 /// Return whether the compiled target enables scheduled audits.
@@ -88,9 +109,15 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     project_dir: &Any<'py>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = analysis.py();
-    let enabled: bool = attr(py, NATIVE, "scheduler_enabled")?.call1((analysis,))?.is_truthy()?;
+    let enabled: bool = attr(py, NATIVE, "scheduler_enabled")?
+        .call1((analysis,))?
+        .is_truthy()?;
     let mut audits: Vec<Any<'py>> = Vec::new();
-    for audit in analysis.getattr("compiled_project")?.getattr("audits")?.try_iter()? {
+    for audit in analysis
+        .getattr("compiled_project")?
+        .getattr("audits")?
+        .try_iter()?
+    {
         let audit: Any<'py> = audit?;
         if audit.getattr("scheduled")?.is_truthy()? {
             audits.push(audit);
@@ -100,7 +127,10 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     let payload: Bound<'py, PyDict> = PyDict::new(py);
     payload.set_item("enabled", enabled)?;
     if audits.is_empty() {
-        payload.set_item("state", schedule_state(py, if enabled { "IDLE" } else { "DISABLED" })?)?;
+        payload.set_item(
+            "state",
+            schedule_state(py, if enabled { "IDLE" } else { "DISABLED" })?,
+        )?;
         payload.set_item("warehouseNow", &warehouse_now)?;
         payload.set_item("dueCount", 0)?;
         payload.set_item("audits", PyList::empty(py))?;
@@ -124,9 +154,15 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
             virtual_environments = analysis.getattr("compile_inputs")?.getattr("virtual_environments")?,
         )?),
     )?;
-    let relation_names: Any<'py> = analysis.getattr("realized_project")?.getattr("relation_name_by_logical_key")?;
+    let relation_names: Any<'py> = analysis
+        .getattr("realized_project")?
+        .getattr("relation_name_by_logical_key")?;
     let relation_name_by_model: Bound<'py, PyDict> = PyDict::new(py);
-    for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
+    for model in analysis
+        .getattr("compiled_project")?
+        .getattr("models")?
+        .try_iter()?
+    {
         let key: Any<'py> = model?.getattr("key")?;
         relation_name_by_model.set_item(key.getattr("name")?, relation_names.get_item(&key)?)?;
     }
@@ -145,7 +181,12 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
             warehouse_now = &warehouse_now,
         )?),
     )?;
-    let audit_kind: Any<'py> = member(py, "sqltide.compiler.quality.types", "QualityNodeKind", "AUDIT")?;
+    let audit_kind: Any<'py> = member(
+        py,
+        "sqltide.compiler.quality.types",
+        "QualityNodeKind",
+        "AUDIT",
+    )?;
     let status_by_name: Bound<'py, PyDict> = PyDict::new(py);
     let statuses: Any<'py> = checks_status_payload(analysis, connection, database, project_dir)?;
     for status in statuses.try_iter()? {
@@ -169,7 +210,8 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
             )?),
         )?)?;
     }
-    let materialization: Any<'py> = attr(py, NATIVE, "read_latest_direct_build_materialization")?.call(
+    let materialization: Any<'py> = attr(py, NATIVE, "read_latest_direct_build_materialization")?
+        .call(
         (),
         Some(&py_kwargs!(py;
             connection = connection,
@@ -177,7 +219,12 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
             project_identity = logical_project_identity(project_dir)?,
         )?),
     )?;
-    let blocked: bool = materialization.eq(member(py, OBSERVABILITY_TYPES, "MaterializationOutcome", "FAILED")?)?;
+    let blocked: bool = materialization.eq(member(
+        py,
+        OBSERVABILITY_TYPES,
+        "MaterializationOutcome",
+        "FAILED",
+    )?)?;
     if blocked {
         let not_materialized: Any<'py> = schedule_state(py, "NOT_MATERIALIZED")?;
         for audit_state in audit_states.iter() {
@@ -208,7 +255,12 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     Ok(payload)
 }
 
-fn checks_status_payload<'py>(analysis: &Any<'py>, connection: &Any<'py>, database: &Any<'py>, project_dir: &Any<'py>) -> PyResult<Any<'py>> {
+fn checks_status_payload<'py>(
+    analysis: &Any<'py>,
+    connection: &Any<'py>,
+    database: &Any<'py>,
+    project_dir: &Any<'py>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     attr(py, NATIVE, "build_checks_status_payload")?.call(
         (),
@@ -223,7 +275,12 @@ fn audit_status<'py>(result: &Any<'py>) -> PyResult<Any<'py>> {
         "ERROR"
     } else if result.getattr("passed")?.is_truthy()? {
         "PASSED"
-    } else if result.getattr("severity")?.eq(member(py, AUDITING_TYPES, "AuditSeverity", "WARNING")?)? {
+    } else if result.getattr("severity")?.eq(member(
+        py,
+        AUDITING_TYPES,
+        "AuditSeverity",
+        "WARNING",
+    )?)? {
         "WARNING"
     } else {
         "FAILED"
@@ -244,22 +301,49 @@ fn scheduled_context<'py>(audit: &Any<'py>, scheduled_for: &Any<'py>) -> PyResul
     )
 }
 
-fn node_result<'py>(invocation: &Any<'py>, audit: &Any<'py>, scheduled_for: &Any<'py>, fields: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+fn node_result<'py>(
+    invocation: &Any<'py>,
+    audit: &Any<'py>,
+    scheduled_for: &Any<'py>,
+    fields: Bound<'py, PyDict>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = audit.py();
-    let identity: Any<'py> = attr(py, NATIVE, "require_quality_identity")?.call1((audit.getattr("quality_identity")?,))?;
+    let identity: Any<'py> = attr(py, NATIVE, "require_quality_identity")?
+        .call1((audit.getattr("quality_identity")?,))?;
     let kwargs = py_kwargs!(py; invocation = invocation, identity = identity, context = scheduled_context(audit, scheduled_for)?)?;
     kwargs.update(fields.as_mapping())?;
-    attr(py, "sqltide.executor.observability.main.build_node_result_record", "build_node_result_record")?.call((), Some(&kwargs))
+    attr(
+        py,
+        "sqltide.executor.observability.main.build_node_result_record",
+        "build_node_result_record",
+    )?
+    .call((), Some(&kwargs))
 }
 
-pub(super) fn terminal_invocation<'py>(started: &Any<'py>, terminal: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+pub(super) fn terminal_invocation<'py>(
+    started: &Any<'py>,
+    terminal: Bound<'py, PyDict>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = started.py();
-    let terminal: Any<'py> = attr(py, OBSERVABILITY_MODELS, "TerminalInvocation")?.call((), Some(&terminal))?;
-    attr(py, "sqltide.executor.observability.main.build_invocation_record", "build_invocation_record")?
-        .call((), Some(&py_kwargs!(py; started = started, terminal = terminal)?))
+    let terminal: Any<'py> =
+        attr(py, OBSERVABILITY_MODELS, "TerminalInvocation")?.call((), Some(&terminal))?;
+    attr(
+        py,
+        "sqltide.executor.observability.main.build_invocation_record",
+        "build_invocation_record",
+    )?
+    .call(
+        (),
+        Some(&py_kwargs!(py; started = started, terminal = terminal)?),
+    )
 }
 
-pub(super) fn persist<'py>(connection: &Any<'py>, database: &Any<'py>, invocation: &Any<'py>, node_results: &Bound<'py, PyTuple>) -> PyResult<Any<'py>> {
+pub(super) fn persist<'py>(
+    connection: &Any<'py>,
+    database: &Any<'py>,
+    invocation: &Any<'py>,
+    node_results: &Bound<'py, PyTuple>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     attr(py, "sqltide.executor.observability.main.persist_terminal_observations", "persist_terminal_observations")?.call(
         (),
@@ -286,10 +370,17 @@ pub(crate) fn execute_due_audits<'py>(
     let scheduled_for_by_name: Bound<'py, PyDict> = PyDict::new(py);
     for item in due.try_iter()? {
         let item: Any<'py> = item?;
-        scheduled_for_by_name.set_item(item.get_item("name")?.str()?, item.get_item("scheduledFor")?.str()?)?;
+        scheduled_for_by_name.set_item(
+            item.get_item("name")?.str()?,
+            item.get_item("scheduledFor")?.str()?,
+        )?;
     }
     let mut audits: Vec<Any<'py>> = Vec::new();
-    for audit in analysis.getattr("compiled_project")?.getattr("audits")?.try_iter()? {
+    for audit in analysis
+        .getattr("compiled_project")?
+        .getattr("audits")?
+        .try_iter()?
+    {
         let audit: Any<'py> = audit?;
         if scheduled_for_by_name.contains(audit_name(&audit)?)? {
             audits.push(audit);
@@ -300,20 +391,32 @@ pub(crate) fn execute_due_audits<'py>(
     }
     let count: usize = audits.len();
     let scheduled = member(py, OBSERVABILITY_TYPES, "QualityResultTrigger", "SCHEDULED")?;
-    let started: Any<'py> =
-        attr(py, "sqltide.executor.observability.main.start_invocation", "start_invocation")?.call0()?;
-    let event_sink: Option<Any<'py>> = match observation_connection.filter(|connection| !connection.is_none()) {
-        None => None,
-        Some(observation) => Some(attr(py, "sqltide.executor.observability.classes.run_event_sink", "RunEventSink")?.call(
-            (),
-            Some(&py_kwargs!(py;
-                connection = observation,
-                database = database,
-                invocation_id = started.get_item(0)?,
-                project_identity = project_dir.getattr("name")?,
-            )?),
-        )?),
-    };
+    let started: Any<'py> = attr(
+        py,
+        "sqltide.executor.observability.main.start_invocation",
+        "start_invocation",
+    )?
+    .call0()?;
+    let event_sink: Option<Any<'py>> =
+        match observation_connection.filter(|connection| !connection.is_none()) {
+            None => None,
+            Some(observation) => Some(
+                attr(
+                    py,
+                    "sqltide.executor.observability.classes.run_event_sink",
+                    "RunEventSink",
+                )?
+                .call(
+                    (),
+                    Some(&py_kwargs!(py;
+                        connection = observation,
+                        database = database,
+                        invocation_id = started.get_item(0)?,
+                        project_identity = project_dir.getattr("name")?,
+                    )?),
+                )?,
+            ),
+        };
     if let Some(sink) = &event_sink {
         sink.call_method(
             "run_started",
@@ -328,25 +431,42 @@ pub(crate) fn execute_due_audits<'py>(
             if let Some(sink) = &event_sink {
                 sink.call_method("audit_started", (), Some(&py_kwargs!(py; name = &name)?))?;
             }
-            let relation_names: Any<'py> = analysis.getattr("realized_project")?.getattr("relation_name_by_logical_key")?;
+            let relation_names: Any<'py> = analysis
+                .getattr("realized_project")?
+                .getattr("relation_name_by_logical_key")?;
             let resolver: Bound<'py, PyDict> = PyDict::new(py);
-            for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
+            for model in analysis
+                .getattr("compiled_project")?
+                .getattr("models")?
+                .try_iter()?
+            {
                 let key: Any<'py> = model?.getattr("key")?;
-                let relation: Any<'py> = fstring(py, &[database.clone(), literal(py, "."), relation_names.get_item(&key)?])?;
+                let relation: Any<'py> = fstring(
+                    py,
+                    &[
+                        database.clone(),
+                        literal(py, "."),
+                        relation_names.get_item(&key)?,
+                    ],
+                )?;
                 resolver.set_item(key.getattr("name")?, relation)?;
             }
-            let audit_result: Any<'py> = attr(py, "sqltide.executor.auditing.main.execute_sql_audits", "execute_sql_audits")?
-                .call(
-                    (),
-                    Some(&py_kwargs!(py;
-                        loaded_audits = PyTuple::new(py, [audit])?,
-                        resolver = resolver,
-                        client = connection,
-                        dialect = analysis.getattr("adapter_profile")?.getattr("sql_analysis_dialect")?,
-                    )?),
-                )?
-                .getattr("audit_results")?
-                .get_item(0)?;
+            let audit_result: Any<'py> = attr(
+                py,
+                "sqltide.executor.auditing.main.execute_sql_audits",
+                "execute_sql_audits",
+            )?
+            .call(
+                (),
+                Some(&py_kwargs!(py;
+                    loaded_audits = PyTuple::new(py, [audit])?,
+                    resolver = resolver,
+                    client = connection,
+                    dialect = analysis.getattr("adapter_profile")?.getattr("sql_analysis_dialect")?,
+                )?),
+            )?
+            .getattr("audit_results")?
+            .get_item(0)?;
             audit_results.push(audit_result.clone());
             if let Some(sink) = &event_sink {
                 sink.call_method(
@@ -362,14 +482,26 @@ pub(crate) fn execute_due_audits<'py>(
             }
         }
         let result: Any<'py> = attr(py, "sqltide.executor.auditing.models", "SqlAuditRunResult")?
-            .call((), Some(&py_kwargs!(py; audit_results = PyTuple::new(py, &audit_results)?)?))?;
+            .call(
+            (),
+            Some(&py_kwargs!(py; audit_results = PyTuple::new(py, &audit_results)?)?),
+        )?;
         Ok((result, audit_results))
     })();
     let (result, audit_results) = match executed {
         Ok(executed) => executed,
         Err(error) if error.is_instance_of::<PyException>(py) => {
-            return match record_failed_batch(py, &error, &audits, &event_sink, &started, &scheduled_for_by_name, connection, database, project_dir)
-            {
+            return match record_failed_batch(
+                py,
+                &error,
+                &audits,
+                &event_sink,
+                &started,
+                &scheduled_for_by_name,
+                connection,
+                database,
+                project_dir,
+            ) {
                 Ok(count) => Ok(count),
                 Err(raised) => Err(while_handling(py, raised, &error)),
             };
@@ -382,7 +514,8 @@ pub(crate) fn execute_due_audits<'py>(
             execution_error_count += 1;
         }
     }
-    let failed: bool = result.getattr("error_failure_count")?.is_truthy()? || execution_error_count > 0;
+    let failed: bool =
+        result.getattr("error_failure_count")?.is_truthy()? || execution_error_count > 0;
     let exit_code: i64 = i64::from(failed);
     let outcome: &str = if failed { "failed" } else { "succeeded" };
     if let Some(sink) = &event_sink {
@@ -395,8 +528,14 @@ pub(crate) fn execute_due_audits<'py>(
     let summary: Bound<'py, PyDict> = PyDict::new(py);
     summary.set_item("trigger", "scheduled")?;
     summary.set_item("scheduled_count", count)?;
-    summary.set_item("warning_failure_count", result.getattr("warning_failure_count")?)?;
-    summary.set_item("error_failure_count", result.getattr("error_failure_count")?)?;
+    summary.set_item(
+        "warning_failure_count",
+        result.getattr("warning_failure_count")?,
+    )?;
+    summary.set_item(
+        "error_failure_count",
+        result.getattr("error_failure_count")?,
+    )?;
     summary.set_item("execution_error_count", execution_error_count)?;
     let invocation: Any<'py> = terminal_invocation(
         &started,
@@ -418,16 +557,25 @@ pub(crate) fn execute_due_audits<'py>(
     let mut node_results: Vec<Any<'py>> = Vec::new();
     for (audit, audit_result) in audits.iter().zip(&audit_results) {
         let sample_rows: Bound<'py, PyList> = PyList::empty(py);
-        for row in audit_result.getattr("sample_rows")?.get_item(PySlice::new(py, 0, 5, 1))?.try_iter()? {
+        for row in audit_result
+            .getattr("sample_rows")?
+            .get_item(PySlice::new(py, 0, 5, 1))?
+            .try_iter()?
+        {
             sample_rows.append(attr(py, "builtins", "list")?.call1((row?,))?)?;
         }
         let payload: Bound<'py, PyDict> = PyDict::new(py);
-        payload.set_item("sample_column_names", attr(py, "builtins", "list")?.call1((audit_result.getattr("sample_column_names")?,))?)?;
+        payload.set_item(
+            "sample_column_names",
+            attr(py, "builtins", "list")?.call1((audit_result.getattr("sample_column_names")?,))?,
+        )?;
         payload.set_item("sample_rows", sample_rows)?;
         node_results.push(node_result(
             &invocation,
             audit,
-            &scheduled_for_by_name.get_item(audit_name(audit)?)?.expect("selected audits are scheduled"),
+            &scheduled_for_by_name
+                .get_item(audit_name(audit)?)?
+                .expect("selected audits are scheduled"),
             py_kwargs!(py;
                 status = audit_status(audit_result)?,
                 severity = audit_result.getattr("severity")?,
@@ -494,7 +642,9 @@ fn record_failed_batch<'py>(
         error_results.push(node_result(
             &invocation,
             audit,
-            &scheduled_for_by_name.get_item(audit_name(audit)?)?.expect("selected audits are scheduled"),
+            &scheduled_for_by_name
+                .get_item(audit_name(audit)?)?
+                .expect("selected audits are scheduled"),
             py_kwargs!(py;
                 status = member(py, AUDITING_TYPES, "QualityResultStatus", "ERROR")?,
                 severity = audit.getattr("severity")?,
@@ -507,7 +657,11 @@ fn record_failed_batch<'py>(
     let error_results: Bound<'py, PyTuple> = PyTuple::new(py, error_results)?;
     let persistence: Any<'py> = persist(connection, database, &invocation, &error_results)?;
     if !persistence.is_none() {
-        return Err(raise_from(&persistence_error(py, &persistence)?, &raised, Some(&raised))?);
+        return Err(raise_from(
+            &persistence_error(py, &persistence)?,
+            &raised,
+            Some(&raised),
+        )?);
     }
     Ok(error_results.len())
 }
@@ -558,7 +712,8 @@ impl AuditScheduler {
 
     fn record_error(&self, py: Python<'_>, error: &PyErr) -> PyResult<()> {
         let errors: u32 = guard(&self.health).consecutive_errors + 1;
-        let delay: f64 = (POLL_SECONDS * 2_f64.powi(i32::try_from(errors - 1).unwrap_or(i32::MAX))).min(MAX_BACKOFF_SECONDS);
+        let delay: f64 = (POLL_SECONDS * 2_f64.powi(i32::try_from(errors - 1).unwrap_or(i32::MAX)))
+            .min(MAX_BACKOFF_SECONDS);
         let backoff_until: f64 = Self::monotonic(py)? + delay;
         let message: Py<PyAny> = error.value(py).str()?.into_any().unbind();
         let backing_off: Py<PyAny> = schedule_state(py, "BACKING_OFF")?.unbind();
@@ -570,7 +725,12 @@ impl AuditScheduler {
         Ok(())
     }
 
-    fn record_success(&self, py: Python<'_>, state: &str, completed_at: Option<Any<'_>>) -> PyResult<()> {
+    fn record_success(
+        &self,
+        py: Python<'_>,
+        state: &str,
+        completed_at: Option<Any<'_>>,
+    ) -> PyResult<()> {
         let state: Py<PyAny> = schedule_state(py, state)?.unbind();
         {
             let mut health = guard(&self.health);
@@ -580,16 +740,17 @@ impl AuditScheduler {
             health.state = state;
         }
         // The fields above are reset before the tick time is read, as the Python did.
-        let completed_at: Any<'_> = match completed_at.filter(|value| value.is_truthy().unwrap_or(true)) {
-            Some(value) => value,
-            None => {
-                let now: String = attr(py, "datetime", "datetime")?
-                    .call_method1("now", (attr(py, "datetime", "UTC")?,))?
-                    .call_method1("strftime", ("%Y-%m-%d %H:%M:%S.%f",))?
-                    .extract()?;
-                PyString::new(py, &now[..now.len() - 3]).into_any()
-            }
-        };
+        let completed_at: Any<'_> =
+            match completed_at.filter(|value| value.is_truthy().unwrap_or(true)) {
+                Some(value) => value,
+                None => {
+                    let now: String = attr(py, "datetime", "datetime")?
+                        .call_method1("now", (attr(py, "datetime", "UTC")?,))?
+                        .call_method1("strftime", ("%Y-%m-%d %H:%M:%S.%f",))?
+                        .extract()?;
+                    PyString::new(py, &now[..now.len() - 3]).into_any()
+                }
+            };
         guard(&self.health).last_successful_tick = Some(completed_at.unbind());
         Ok(())
     }
@@ -611,21 +772,42 @@ impl AuditScheduler {
     }
 
     fn database<'py>(&self, py: Python<'py>) -> Option<Any<'py>> {
-        self.database.as_ref().map(|database| database.bind(py).clone())
+        self.database
+            .as_ref()
+            .map(|database| database.bind(py).clone())
     }
 
     /// `local build {invocationId or 'unknown'} is running` when a local build runs.
     fn local_build_warning<'py>(&self, py: Python<'py>) -> PyResult<Option<Any<'py>>> {
-        let feed: Any<'py> = self.builds.bind(py).call_method("feed", (), Some(&py_kwargs!(py; after = 0)?))?;
+        let feed: Any<'py> =
+            self.builds
+                .bind(py)
+                .call_method("feed", (), Some(&py_kwargs!(py; after = 0)?))?;
         if !feed.get_item("running")?.is_truthy()? {
             return Ok(None);
         }
         let invocation: Any<'py> = feed.call_method1("get", ("invocationId",))?;
-        let invocation: Any<'py> = if invocation.is_truthy()? { invocation } else { literal(py, "unknown") };
-        Ok(Some(fstring(py, &[literal(py, "local build "), invocation, literal(py, " is running")])?))
+        let invocation: Any<'py> = if invocation.is_truthy()? {
+            invocation
+        } else {
+            literal(py, "unknown")
+        };
+        Ok(Some(fstring(
+            py,
+            &[
+                literal(py, "local build "),
+                invocation,
+                literal(py, " is running"),
+            ],
+        )?))
     }
 
-    fn active_runs<'py>(&self, py: Python<'py>, connection: &Any<'py>, database: &Any<'py>) -> PyResult<Any<'py>> {
+    fn active_runs<'py>(
+        &self,
+        py: Python<'py>,
+        connection: &Any<'py>,
+        database: &Any<'py>,
+    ) -> PyResult<Any<'py>> {
         attr(py, NATIVE, "read_active_runs")?.call(
             (),
             Some(&py_kwargs!(py;
@@ -675,7 +857,8 @@ impl AuditScheduler {
                 return Ok(Some(run));
             }
             if status.eq(&presumed_failed)?
-                && (latest_applied_at.is_none() || run.get_item("startedAt")?.str()?.ge(&latest_applied_at)?)
+                && (latest_applied_at.is_none()
+                    || run.get_item("startedAt")?.str()?.ge(&latest_applied_at)?)
             {
                 return Ok(Some(run));
             }
@@ -725,26 +908,51 @@ impl AuditScheduler {
         result
     }
 
-    fn locked_tick(&self, py: Python<'_>, connection: &Any<'_>, database: &Any<'_>) -> PyResult<usize> {
+    fn locked_tick(
+        &self,
+        py: Python<'_>,
+        connection: &Any<'_>,
+        database: &Any<'_>,
+    ) -> PyResult<usize> {
         if let Some(warning) = self.local_build_warning(py)? {
             self.record_blocked(py, warning)?;
             return Ok(0);
         }
         let analysis: Any<'_> = self.state.bind(py).call_method0("current_analysis")?;
-        if !attr(py, NATIVE, "scheduler_enabled")?.call1((&analysis,))?.is_truthy()? {
+        if !attr(py, NATIVE, "scheduler_enabled")?
+            .call1((&analysis,))?
+            .is_truthy()?
+        {
             self.record_success(py, "DISABLED", None)?;
             return Ok(0);
         }
         if let Some(blocking) = self.blocking_mutating_build(py)? {
             let invocation: Any<'_> = blocking.call_method1("get", ("invocationId",))?;
-            let invocation: Any<'_> = if invocation.is_truthy()? { invocation } else { literal(py, "unknown") };
-            let warning: Any<'_> =
-                fstring(py, &[literal(py, "build "), invocation, literal(py, " is "), blocking.get_item("status")?])?;
+            let invocation: Any<'_> = if invocation.is_truthy()? {
+                invocation
+            } else {
+                literal(py, "unknown")
+            };
+            let warning: Any<'_> = fstring(
+                py,
+                &[
+                    literal(py, "build "),
+                    invocation,
+                    literal(py, " is "),
+                    blocking.get_item("status")?,
+                ],
+            )?;
             self.record_blocked(py, warning)?;
             return Ok(0);
         }
         if self.has_active_scheduled_audit(py)? {
-            self.record_blocked(py, literal(py, "another scheduler process has an active scheduled audit run"))?;
+            self.record_blocked(
+                py,
+                literal(
+                    py,
+                    "another scheduler process has an active scheduled audit run",
+                ),
+            )?;
             return Ok(0);
         }
         let project_dir: &Bound<'_, PyAny> = self.project_dir.bind(py);
@@ -774,7 +982,8 @@ impl AuditScheduler {
                 }
             }
         }
-        let payload_state: Any<'_> = attr(py, DEV_TYPES, "AuditScheduleState")?.call1((payload.get_item("state")?.str()?,))?;
+        let payload_state: Any<'_> = attr(py, DEV_TYPES, "AuditScheduleState")?
+            .call1((payload.get_item("state")?.str()?,))?;
         if due.is_empty() {
             let completed_at: Any<'_> = payload.get_item("warehouseNow")?.str()?.into_any();
             self.record_success_with(py, payload_state, Some(completed_at))?;
@@ -796,7 +1005,12 @@ impl AuditScheduler {
         result.extract()
     }
 
-    fn record_success_with(&self, py: Python<'_>, state: Any<'_>, completed_at: Option<Any<'_>>) -> PyResult<()> {
+    fn record_success_with(
+        &self,
+        py: Python<'_>,
+        state: Any<'_>,
+        completed_at: Option<Any<'_>>,
+    ) -> PyResult<()> {
         self.record_success(py, "IDLE", completed_at)?;
         guard(&self.health).state = state.unbind();
         Ok(())
@@ -829,26 +1043,34 @@ impl AuditScheduler {
         builds: Any<'_>,
         presumed_failed_after_seconds: Option<Any<'_>>,
     ) -> PyResult<Self> {
-        let warehouse: Any<'_> = match warehouse.filter(|warehouse| warehouse.is_truthy().unwrap_or(true)) {
-            Some(warehouse) => warehouse,
-            None => attr(py, NATIVE, "WarehouseRuntime")?.call(
-                (),
-                Some(&py_kwargs!(py;
-                    connection = connection,
-                    observation_connection = observation_connection,
-                    connection_factory = py.None(),
-                    observation_connection_factory = py.None(),
-                    database = &database,
-                )?),
-            )?,
-        };
+        let warehouse: Any<'_> =
+            match warehouse.filter(|warehouse| warehouse.is_truthy().unwrap_or(true)) {
+                Some(warehouse) => warehouse,
+                None => attr(py, NATIVE, "WarehouseRuntime")?.call(
+                    (),
+                    Some(&py_kwargs!(py;
+                        connection = connection,
+                        observation_connection = observation_connection,
+                        connection_factory = py.None(),
+                        observation_connection_factory = py.None(),
+                        database = &database,
+                    )?),
+                )?,
+            };
         let presumed_failed_after_seconds: Any<'_> = match presumed_failed_after_seconds {
             Some(seconds) => seconds,
-            None => attr(py, "sqltide.compiler.discovery.constants", "DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS")?,
+            None => attr(
+                py,
+                "sqltide.compiler.discovery.constants",
+                "DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS",
+            )?,
         };
         let database: Option<Any<'_>> = database.filter(|database| !database.is_none());
-        let initial: &str =
-            if !warehouse.getattr("connection")?.is_none() && database.is_some() { "IDLE" } else { "DISABLED" };
+        let initial: &str = if !warehouse.getattr("connection")?.is_none() && database.is_some() {
+            "IDLE"
+        } else {
+            "DISABLED"
+        };
         Ok(Self {
             state: state.unbind(),
             warehouse: warehouse.unbind(),
@@ -888,7 +1110,9 @@ impl AuditScheduler {
     /// Stop polling and wait briefly for the current tick.
     fn close(&self, py: Python<'_>) -> PyResult<()> {
         self.stop.bind(py).call_method0("set")?;
-        let thread: Option<Any<'_>> = guard(&self.thread).as_ref().map(|thread| thread.bind(py).clone());
+        let thread: Option<Any<'_>> = guard(&self.thread)
+            .as_ref()
+            .map(|thread| thread.bind(py).clone());
         if let Some(thread) = thread {
             thread.call_method0("join")?;
         }
@@ -916,8 +1140,14 @@ impl AuditScheduler {
         let health = guard(&self.health);
         let state: Py<PyAny> = health.state.clone_ref(py);
         let consecutive_errors: u32 = health.consecutive_errors;
-        let latest_error: Option<Py<PyAny>> = health.latest_error.as_ref().map(|error| error.clone_ref(py));
-        let last_successful_tick: Option<Py<PyAny>> = health.last_successful_tick.as_ref().map(|tick| tick.clone_ref(py));
+        let latest_error: Option<Py<PyAny>> = health
+            .latest_error
+            .as_ref()
+            .map(|error| error.clone_ref(py));
+        let last_successful_tick: Option<Py<PyAny>> = health
+            .last_successful_tick
+            .as_ref()
+            .map(|tick| tick.clone_ref(py));
         let running_audit_count: usize = health.running_audit_count;
         drop(health);
         let payload: Bound<'py, PyDict> = PyDict::new(py);
@@ -940,7 +1170,10 @@ impl AuditScheduler {
             {
                 return Err(error);
             }
-            stop.call_method1("wait", (python_max(POLL_SECONDS, self.seconds_until_attempt(py)?),))?;
+            stop.call_method1(
+                "wait",
+                (python_max(POLL_SECONDS, self.seconds_until_attempt(py)?),),
+            )?;
         }
         Ok(())
     }

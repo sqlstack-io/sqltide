@@ -16,7 +16,12 @@ const VIRTUAL_ENVIRONMENT_MODE: &str = "virtual_environment";
 
 type Any<'py> = Bound<'py, PyAny>;
 
-fn call<'py>(py: Python<'py>, module: &str, name: &str, kwargs: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+fn call<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+    kwargs: Bound<'py, PyDict>,
+) -> PyResult<Any<'py>> {
     attr(py, module, name)?.call((), Some(&kwargs))
 }
 
@@ -67,7 +72,12 @@ fn record_operation<'py>(
             summary = summary,
         )?,
     )?;
-    persist(connection, metadata_database, &invocation, &PyTuple::empty(py))?;
+    persist(
+        connection,
+        metadata_database,
+        &invocation,
+        &PyTuple::empty(py),
+    )?;
     Ok(())
 }
 
@@ -81,7 +91,9 @@ pub(crate) fn promotion_executed_logical_ids<'py>(
     deployment_id: &Any<'py>,
 ) -> PyResult<Bound<'py, PyTuple>> {
     let py: Python<'py> = connection.py();
-    let inventory: Any<'py> = match connection.call_method1("load_deployment_inventory", (metadata_database,)) {
+    let inventory: Any<'py> = match connection
+        .call_method1("load_deployment_inventory", (metadata_database,))
+    {
         Ok(inventory) => inventory,
         Err(error) if is_instance(py, &error, "sqltide.adapter.exceptions", "AdapterError")? => {
             return Ok(PyTuple::empty(py));
@@ -102,7 +114,10 @@ pub(crate) fn promotion_executed_logical_ids<'py>(
     let constants: &str = "sqltide.compiler.compile.constants";
     let object_types: Bound<'py, PySet> = PySet::new(
         py,
-        [attr(py, constants, "DESIRED_OBJECT_TYPE_TABLE")?, attr(py, constants, "DESIRED_OBJECT_TYPE_VIEW")?],
+        [
+            attr(py, constants, "DESIRED_OBJECT_TYPE_TABLE")?,
+            attr(py, constants, "DESIRED_OBJECT_TYPE_VIEW")?,
+        ],
     )?;
     let names: Bound<'py, PySet> = PySet::empty(py)?;
     for mapping in deployment.getattr("prepared_object_mappings")?.try_iter()? {
@@ -112,7 +127,10 @@ pub(crate) fn promotion_executed_logical_ids<'py>(
         }
     }
     let mut identities: Vec<Any<'py>> = Vec::new();
-    for name in attr(py, "builtins", "sorted")?.call1((names,))?.try_iter()? {
+    for name in attr(py, "builtins", "sorted")?
+        .call1((names,))?
+        .try_iter()?
+    {
         identities.push(fstring(py, &[literal(py, "model:"), name?])?);
     }
     PyTuple::new(py, identities)
@@ -130,7 +148,12 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let started: Bound<'py, PyTuple> = start(py)?;
-    let sink: Any<'py> = attr(py, "sqltide.executor.observability.classes.run_event_sink", "RunEventSink")?.call(
+    let sink: Any<'py> = attr(
+        py,
+        "sqltide.executor.observability.classes.run_event_sink",
+        "RunEventSink",
+    )?
+    .call(
         (),
         Some(&py_kwargs!(py;
             connection = connection,
@@ -200,7 +223,11 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         }
         Err(error) => return Err(error),
     };
-    sink.call_method("run_completed", (), Some(&py_kwargs!(py; outcome = "succeeded", exit_code = 0, error_message = py.None())?))?;
+    sink.call_method(
+        "run_completed",
+        (),
+        Some(&py_kwargs!(py; outcome = "succeeded", exit_code = 0, error_message = py.None())?),
+    )?;
     let summary: Bound<'py, PyDict> = PyDict::new(py);
     summary.set_item("publishedViews", result.getattr("published_views")?.len()?)?;
     record_operation(
@@ -229,7 +256,10 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
     payload.set_item("invocationId", started.get_item(0)?)?;
     payload.set_item("deploymentId", result.getattr("deployment_id")?)?;
     payload.set_item("publishedViews", views)?;
-    payload.set_item("graphAtomicPublish", result.getattr("graph_atomic_publish")?)?;
+    payload.set_item(
+        "graphAtomicPublish",
+        result.getattr("graph_atomic_publish")?,
+    )?;
     Ok(payload)
 }
 
@@ -260,9 +290,21 @@ pub(crate) fn run_dev_deployment_cleanup<'py>(
         "execute_janitor",
         py_kwargs!(py; request = request, client = connection)?,
     )?;
-    let applied: bool = result.is_instance(&attr(py, "sqltide.executor.janitor.models", "JanitorApplyResult")?)?;
-    let removed: usize = if applied { result.getattr("deleted_object_names")?.len()? } else { 0 };
-    let removed_deployments: usize = if applied { result.getattr("deleted_deployment_ids")?.len()? } else { 0 };
+    let applied: bool = result.is_instance(&attr(
+        py,
+        "sqltide.executor.janitor.models",
+        "JanitorApplyResult",
+    )?)?;
+    let removed: usize = if applied {
+        result.getattr("deleted_object_names")?.len()?
+    } else {
+        0
+    };
+    let removed_deployments: usize = if applied {
+        result.getattr("deleted_deployment_ids")?.len()?
+    } else {
+        0
+    };
     let summary: Bound<'py, PyDict> = PyDict::new(py);
     summary.set_item("removedRelations", removed)?;
     summary.set_item("removedDeployments", removed_deployments)?;
@@ -313,7 +355,9 @@ pub(crate) fn build_deployment_diff_payload<'py>(
 /// `str(getattr(column, "name", ""))`.
 fn column_name<'py>(column: &Any<'py>) -> PyResult<Bound<'py, PyString>> {
     let py: Python<'py> = column.py();
-    attr(py, "builtins", "getattr")?.call1((column, "name", ""))?.str()
+    attr(py, "builtins", "getattr")?
+        .call1((column, "name", ""))?
+        .str()
 }
 
 /// Names of `left` columns absent from `right`, in `left` order.

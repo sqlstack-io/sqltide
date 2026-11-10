@@ -81,7 +81,9 @@ fn text<'py>(py: Python<'py>, value: &[u8]) -> PyResult<Bound<'py, PyString>> {
 }
 
 fn raised(py: Python<'_>, class: &str, message: &[u8]) -> PyResult<PyErr> {
-    Ok(PyErr::from_value(attr(py, DEV_EXCEPTIONS, class)?.call1((text(py, message)?,))?))
+    Ok(PyErr::from_value(
+        attr(py, DEV_EXCEPTIONS, class)?.call1((text(py, message)?,))?,
+    ))
 }
 
 fn invalid(py: Python<'_>, message: &[u8]) -> PyResult<PyErr> {
@@ -90,7 +92,10 @@ fn invalid(py: Python<'_>, message: &[u8]) -> PyResult<PyErr> {
 
 fn unsupported_op(predicate: &Any<'_>, field: &str) -> PyResult<PyErr> {
     let op: Text = raw(&predicate.getattr("op")?)?;
-    invalid(predicate.py(), &cat!("unsupported op '", op, "' for field '", field, "'"))
+    invalid(
+        predicate.py(),
+        &cat!("unsupported op '", op, "' for field '", field, "'"),
+    )
 }
 
 /// `int(str(value))`.
@@ -99,7 +104,11 @@ fn int<'py>(value: &Any<'py>) -> PyResult<Any<'py>> {
 }
 
 fn optional_str<'py>(value: &Any<'py>) -> PyResult<Option<Bound<'py, PyString>>> {
-    if value.is_none() { Ok(None) } else { Ok(Some(value.str()?)) }
+    if value.is_none() {
+        Ok(None)
+    } else {
+        Ok(Some(value.str()?))
+    }
 }
 
 /// Escape backslashes and single quotes for a ClickHouse string literal.
@@ -121,7 +130,10 @@ fn items<'py>(value: &Any<'py>) -> PyResult<Vec<Any<'py>>> {
 
 fn require_non_negative(value: &Any<'_>, field_name: &str) -> PyResult<()> {
     if value.is_instance_of::<PyBool>() || !value.is_instance_of::<PyInt>() || value.lt(0)? {
-        return Err(invalid(value.py(), &cat!("field '", field_name, "' requires non-negative integers"))?);
+        return Err(invalid(
+            value.py(),
+            &cat!("field '", field_name, "' requires non-negative integers"),
+        )?);
     }
     Ok(())
 }
@@ -131,18 +143,36 @@ fn require_non_negative(value: &Any<'_>, field_name: &str) -> PyResult<()> {
 pub(crate) fn parse_messages_document(request: &Any<'_>) -> PyResult<MessagesQueryDocument> {
     let py: Python<'_> = request.py();
     let kind: Text = raw(&request.getattr("mode")?.getattr("kind")?)?;
-    if ![MODE_KIND_NEWEST, MODE_KIND_TIME_RANGE, MODE_KIND_OFFSET_RANGE].contains(&kind.as_slice()) {
+    if ![
+        MODE_KIND_NEWEST,
+        MODE_KIND_TIME_RANGE,
+        MODE_KIND_OFFSET_RANGE,
+    ]
+    .contains(&kind.as_slice())
+    {
         return Err(invalid(py, &cat!("unsupported mode kind '", kind, "'"))?);
     }
     let time_column_name: Text = raw(&request.getattr("timeColumn")?)?;
     let time_column: &str = match time_column_name.as_slice() {
         b"landed" => "_replay_landed_at",
         b"kafka" => "kafka_timestamp",
-        _ => return Err(invalid(py, &cat!("unsupported time column '", time_column_name, "'"))?),
+        _ => {
+            return Err(invalid(
+                py,
+                &cat!("unsupported time column '", time_column_name, "'"),
+            )?);
+        }
     };
     let preview_paths: Any<'_> = request.getattr("previewPaths")?;
     if preview_paths.len()? > PREVIEW_PATH_MAX_COUNT {
-        return Err(invalid(py, &cat!("previewPaths allows at most ", PREVIEW_PATH_MAX_COUNT.to_string(), " paths"))?);
+        return Err(invalid(
+            py,
+            &cat!(
+                "previewPaths allows at most ",
+                PREVIEW_PATH_MAX_COUNT.to_string(),
+                " paths"
+            ),
+        )?);
     }
     let mut conditions: Vec<Text> = Vec::new();
     for predicate in request.getattr("predicates")?.try_iter()? {
@@ -160,11 +190,19 @@ pub(crate) fn parse_messages_document(request: &Any<'_>) -> PyResult<MessagesQue
         limit = ceiling;
     }
     let cursor: Any<'_> = request.getattr("cursor")?;
-    let cursor_condition: Option<Text> = if cursor.is_none() { None } else { Some(cursor_condition(&cursor)?) };
+    let cursor_condition: Option<Text> = if cursor.is_none() {
+        None
+    } else {
+        Some(cursor_condition(&cursor)?)
+    };
     let mut preview_projections: Vec<Text> = Vec::new();
     for (index, path) in preview_paths.try_iter()?.enumerate() {
         let path: Vec<Any<'_>> = items(&path?)?;
-        preview_projections.push(cat!(json_string_expression(py, &path, "previewPaths")?, " AS preview_", index.to_string()));
+        preview_projections.push(cat!(
+            json_string_expression(py, &path, "previewPaths")?,
+            " AS preview_",
+            index.to_string()
+        ));
     }
     Ok(MessagesQueryDocument {
         newest: kind == MODE_KIND_NEWEST,
@@ -187,7 +225,13 @@ pub(crate) fn build_messages_sql<'py>(
 ) -> PyResult<Bound<'py, PyString>> {
     let py: Python<'py> = database.py();
     let window: Option<Text> = window_seconds.map(shown).transpose()?;
-    let sql: Text = messages_sql(py, &shown(database)?, &shown(relation_name)?, document.get(), window)?;
+    let sql: Text = messages_sql(
+        py,
+        &shown(database)?,
+        &shown(relation_name)?,
+        document.get(),
+        window,
+    )?;
     text(py, &sql)
 }
 
@@ -198,8 +242,16 @@ fn messages_sql(
     document: &MessagesQueryDocument,
     window: Option<Text>,
 ) -> PyResult<Text> {
-    let projections: Text = document.preview_projections.iter().flat_map(|projection| cat!(", ", projection)).collect();
-    let where_clause: Text = where_clause(&document.conditions, window, document.cursor_condition.as_ref());
+    let projections: Text = document
+        .preview_projections
+        .iter()
+        .flat_map(|projection| cat!(", ", projection))
+        .collect();
+    let where_clause: Text = where_clause(
+        &document.conditions,
+        window,
+        document.cursor_condition.as_ref(),
+    );
     Ok(cat!(
         "SELECT toString(_replay_landed_at) AS landed_at, ",
         "toString(kafka_timestamp) AS kafka_timestamp, ",
@@ -233,7 +285,11 @@ pub(crate) fn read_source_messages<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let document: MessagesQueryDocument = parse_messages_document(request)?;
-    let windows: Vec<Option<i64>> = if document.newest { NEWEST_WINDOWS_SECONDS.to_vec() } else { vec![None] };
+    let windows: Vec<Option<i64>> = if document.newest {
+        NEWEST_WINDOWS_SECONDS.to_vec()
+    } else {
+        vec![None]
+    };
     let mut rows: Any<'py> = PyTuple::empty(py).into_any();
     let mut used_window: Option<i64> = None;
     for window_seconds in windows {
@@ -244,7 +300,9 @@ pub(crate) fn read_source_messages<'py>(
             &document,
             window_seconds.map(|seconds| seconds.to_string().into_bytes()),
         )?;
-        rows = connection.call_method1("query", (text(py, &sql)?,))?.call_method0("named_rows")?;
+        rows = connection
+            .call_method1("query", (text(py, &sql)?,))?
+            .call_method0("named_rows")?;
         used_window = window_seconds;
         if i64::try_from(rows.len()?).unwrap_or(i64::MAX) >= document.limit_value {
             break;
@@ -256,7 +314,10 @@ pub(crate) fn read_source_messages<'py>(
     }
     let payload: Bound<'py, PyDict> = PyDict::new(py);
     payload.set_item("rows", &row_payloads)?;
-    payload.set_item("nextCursor", next_cursor(&row_payloads, document.limit_value)?)?;
+    payload.set_item(
+        "nextCursor",
+        next_cursor(&row_payloads, document.limit_value)?,
+    )?;
     payload.set_item("windowSeconds", used_window)?;
     payload.set_item("limit", document.limit.bind(py))?;
     Ok(payload)
@@ -308,7 +369,9 @@ pub(crate) fn read_source_message_record<'py>(
 ) -> PyResult<Option<Bound<'py, PyDict>>> {
     let py: Python<'py> = connection.py();
     let sql: Bound<'py, PyString> = build_record_sql(database, relation_name, partition, offset)?;
-    let rows: Any<'py> = connection.call_method1("query", (sql,))?.call_method0("named_rows")?;
+    let rows: Any<'py> = connection
+        .call_method1("query", (sql,))?
+        .call_method0("named_rows")?;
     if !rows.is_truthy()? {
         return Ok(None);
     }
@@ -316,7 +379,10 @@ pub(crate) fn read_source_message_record<'py>(
     let value_bytes: Any<'py> = int(&row.get_item("value_bytes")?)?;
     let record: Bound<'py, PyDict> = PyDict::new(py);
     record.set_item("landedAt", row.get_item("landed_at")?.str()?)?;
-    record.set_item("kafkaTimestamp", optional_str(&row.get_item("kafka_timestamp")?)?)?;
+    record.set_item(
+        "kafkaTimestamp",
+        optional_str(&row.get_item("kafka_timestamp")?)?,
+    )?;
     record.set_item("partition", int(&row.get_item("partition")?)?)?;
     record.set_item("offset", int(&row.get_item("offset")?)?)?;
     record.set_item("topic", row.get_item("topic")?.str()?)?;
@@ -340,7 +406,8 @@ pub(crate) fn build_facets_sql<'py>(
     facet_path: &Any<'py>,
 ) -> PyResult<(Bound<'py, PyString>, Bound<'py, PyString>)> {
     let py: Python<'py> = database.py();
-    let (top_values, totals) = facets_sql(database, relation_name, document.get(), &items(facet_path)?)?;
+    let (top_values, totals) =
+        facets_sql(database, relation_name, document.get(), &items(facet_path)?)?;
     Ok((text(py, &top_values)?, text(py, &totals)?))
 }
 
@@ -350,7 +417,9 @@ fn facets_sql(
     document: &MessagesQueryDocument,
     facet_path: &[Any<'_>],
 ) -> PyResult<(Text, Text)> {
-    let window: Option<Text> = document.newest.then(|| FACET_NEWEST_WINDOW_SECONDS.to_string().into_bytes());
+    let window: Option<Text> = document
+        .newest
+        .then(|| FACET_NEWEST_WINDOW_SECONDS.to_string().into_bytes());
     let inner: Text = cat!(
         "SELECT ",
         json_string_expression(database.py(), facet_path, "facetPath")?,
@@ -367,7 +436,11 @@ fn facets_sql(
         ") WHERE facet_value != '' GROUP BY facet_value ORDER BY n DESC, facet_value ASC LIMIT ",
         FACET_VALUE_LIMIT.to_string(),
     );
-    let totals: Text = cat!("SELECT count() AS total, countIf(facet_value = '') AS null_count FROM (", inner, ")");
+    let totals: Text = cat!(
+        "SELECT count() AS total, countIf(facet_value = '') AS null_count FROM (",
+        inner,
+        ")"
+    );
     Ok((top_values, totals))
 }
 
@@ -395,8 +468,12 @@ pub(crate) fn read_source_message_facets<'py>(
     let document: MessagesQueryDocument = parse_messages_document(&messages_request)?;
     let facet_path: Vec<Any<'py>> = items(&request.getattr("facetPath")?)?;
     let (top_values_sql, totals_sql) = facets_sql(database, relation_name, &document, &facet_path)?;
-    let value_rows: Any<'py> = connection.call_method1("query", (text(py, &top_values_sql)?,))?.call_method0("named_rows")?;
-    let totals_rows: Any<'py> = connection.call_method1("query", (text(py, &totals_sql)?,))?.call_method0("named_rows")?;
+    let value_rows: Any<'py> = connection
+        .call_method1("query", (text(py, &top_values_sql)?,))?
+        .call_method0("named_rows")?;
+    let totals_rows: Any<'py> = connection
+        .call_method1("query", (text(py, &totals_sql)?,))?
+        .call_method0("named_rows")?;
     let zero: Any<'py> = 0_i64.into_pyobject(py)?.into_any();
     let (total_count, null_count) = if totals_rows.is_truthy()? {
         let first: Any<'py> = totals_rows.get_item(0)?;
@@ -426,14 +503,21 @@ pub(crate) fn read_source_message_facets<'py>(
     payload.set_item("nullCount", null_count)?;
     payload.set_item("otherCount", other_count)?;
     payload.set_item("totalCount", total_count)?;
-    payload.set_item("windowSeconds", document.newest.then_some(FACET_NEWEST_WINDOW_SECONDS))?;
+    payload.set_item(
+        "windowSeconds",
+        document.newest.then_some(FACET_NEWEST_WINDOW_SECONDS),
+    )?;
     Ok(payload)
 }
 
 /// Fail with an actionable reset message when the raw table predates header capture.
 #[pyfunction]
 #[pyo3(signature = (*, connection, database, relation_name))]
-pub(crate) fn ensure_header_columns(connection: &Any<'_>, database: &Any<'_>, relation_name: &Any<'_>) -> PyResult<()> {
+pub(crate) fn ensure_header_columns(
+    connection: &Any<'_>,
+    database: &Any<'_>,
+    relation_name: &Any<'_>,
+) -> PyResult<()> {
     let py: Python<'_> = connection.py();
     let query: Text = cat!(
         "SELECT count() AS present FROM system.columns WHERE database = '",
@@ -444,7 +528,9 @@ pub(crate) fn ensure_header_columns(connection: &Any<'_>, database: &Any<'_>, re
         HEADER_KEYS_COLUMN_NAME,
         "'",
     );
-    let rows: Any<'_> = connection.call_method1("query", (text(py, &query)?,))?.call_method0("named_rows")?;
+    let rows: Any<'_> = connection
+        .call_method1("query", (text(py, &query)?,))?
+        .call_method0("named_rows")?;
     let present: bool = rows.is_truthy()? && int(&rows.get_item(0)?.get_item("present")?)?.gt(0)?;
     if !present {
         return Err(raised(
@@ -470,7 +556,10 @@ fn predicate_condition(predicate: &Any<'_>) -> PyResult<Text> {
         b"value" => value_condition(predicate),
         b"json" => json_condition(predicate),
         b"header" => header_condition(predicate),
-        _ => Err(invalid(predicate.py(), &cat!("unsupported predicate field '", field, "'"))?),
+        _ => Err(invalid(
+            predicate.py(),
+            &cat!("unsupported predicate field '", field, "'"),
+        )?),
     }
 }
 
@@ -480,14 +569,21 @@ fn partition_condition(predicate: &Any<'_>) -> PyResult<Text> {
     }
     let values: Any<'_> = predicate.getattr("values")?;
     if !values.is_truthy()? {
-        return Err(invalid(predicate.py(), b"field 'partition' requires at least one value")?);
+        return Err(invalid(
+            predicate.py(),
+            b"field 'partition' requires at least one value",
+        )?);
     }
     let values: Vec<Any<'_>> = items(&values)?;
     for value in &values {
         require_non_negative(value, "partition")?;
     }
     let rendered: Vec<Text> = values.iter().map(shown).collect::<PyResult<_>>()?;
-    Ok(cat!("_replay_partition IN (", rendered.join(b", ".as_slice()), ")"))
+    Ok(cat!(
+        "_replay_partition IN (",
+        rendered.join(b", ".as_slice()),
+        ")"
+    ))
 }
 
 fn key_condition(predicate: &Any<'_>) -> PyResult<Text> {
@@ -513,7 +609,11 @@ fn json_condition(predicate: &Any<'_>) -> PyResult<Text> {
     let string_expression: Text = json_string_expression(predicate.py(), &path, "json")?;
     let op: Text = raw(&predicate.getattr("op")?)?;
     if op == b"exists" {
-        return Ok(cat!("JSONHas(kafka_value, ", json_path_arguments(predicate.py(), &path, "json")?, ")"));
+        return Ok(cat!(
+            "JSONHas(kafka_value, ",
+            json_path_arguments(predicate.py(), &path, "json")?,
+            ")"
+        ));
     }
     let numeric_operator: Option<&str> = match op.as_slice() {
         b"gt" => Some(">"),
@@ -523,13 +623,26 @@ fn json_condition(predicate: &Any<'_>) -> PyResult<Text> {
     if let Some(operator) = numeric_operator {
         let number: Text = numeric_value(predicate, "json")?;
         let path_arguments: Text = json_path_arguments(predicate.py(), &path, "json")?;
-        return Ok(cat!("JSONExtractFloat(kafka_value, ", path_arguments, ") ", operator, " ", number));
+        return Ok(cat!(
+            "JSONExtractFloat(kafka_value, ",
+            path_arguments,
+            ") ",
+            operator,
+            " ",
+            number
+        ));
     }
     let literal: Text = string_value(predicate, "json")?;
     match op.as_slice() {
         b"eq" => Ok(cat!(string_expression, " = '", literal, "'")),
         b"ne" => Ok(cat!(string_expression, " != '", literal, "'")),
-        b"contains" => Ok(cat!("position(", string_expression, ", '", literal, "') > 0")),
+        b"contains" => Ok(cat!(
+            "position(",
+            string_expression,
+            ", '",
+            literal,
+            "') > 0"
+        )),
         _ => Err(unsupported_op(predicate, "json")?),
     }
 }
@@ -538,7 +651,11 @@ fn header_condition(predicate: &Any<'_>) -> PyResult<Text> {
     let literal: Text = string_value(predicate, "header")?;
     match raw(&predicate.getattr("op")?)?.as_slice() {
         b"eq" => Ok(cat!("has(kafka_header_keys, '", literal, "')")),
-        b"contains" => Ok(cat!("arrayExists(v -> position(v, '", literal, "') > 0, kafka_header_values)")),
+        b"contains" => Ok(cat!(
+            "arrayExists(v -> position(v, '",
+            literal,
+            "') > 0, kafka_header_values)"
+        )),
         _ => Err(unsupported_op(predicate, "header")?),
     }
 }
@@ -558,11 +675,18 @@ fn time_range_conditions(mode: &Any<'_>, time_column: &str) -> PyResult<Vec<Text
     let from_time: Any<'_> = mode.getattr("fromTime")?;
     let to_time: Any<'_> = mode.getattr("toTime")?;
     if from_time.is_none() && to_time.is_none() {
-        return Err(invalid(mode.py(), b"timeRange mode requires fromTime or toTime")?);
+        return Err(invalid(
+            mode.py(),
+            b"timeRange mode requires fromTime or toTime",
+        )?);
     }
     let mut conditions: Vec<Text> = Vec::new();
     if !from_time.is_none() {
-        conditions.push(cat!(time_column, " >= ", time_literal(&from_time, "fromTime")?));
+        conditions.push(cat!(
+            time_column,
+            " >= ",
+            time_literal(&from_time, "fromTime")?
+        ));
     }
     if !to_time.is_none() {
         conditions.push(cat!(time_column, " <= ", time_literal(&to_time, "toTime")?));
@@ -573,7 +697,10 @@ fn time_range_conditions(mode: &Any<'_>, time_column: &str) -> PyResult<Vec<Text
 fn offset_range_conditions(mode: &Any<'_>) -> PyResult<Vec<Text>> {
     let partition: Any<'_> = mode.getattr("partition")?;
     if partition.is_none() {
-        return Err(invalid(mode.py(), b"offsetRange mode requires exactly one partition")?);
+        return Err(invalid(
+            mode.py(),
+            b"offsetRange mode requires exactly one partition",
+        )?);
     }
     require_non_negative(&partition, "partition")?;
     let mut conditions: Vec<Text> = vec![cat!("_replay_partition = ", shown(&partition)?)];
@@ -610,33 +737,59 @@ fn cursor_condition(cursor: &Any<'_>) -> PyResult<Text> {
     ))
 }
 
-fn where_clause(conditions: &[Text], window: Option<Text>, cursor_condition: Option<&Text>) -> Text {
+fn where_clause(
+    conditions: &[Text],
+    window: Option<Text>,
+    cursor_condition: Option<&Text>,
+) -> Text {
     let mut all: Vec<Text> = conditions.to_vec();
     if let Some(window_seconds) = window {
-        all.push(cat!("_replay_landed_at >= now64(3) - INTERVAL ", window_seconds, " SECOND"));
+        all.push(cat!(
+            "_replay_landed_at >= now64(3) - INTERVAL ",
+            window_seconds,
+            " SECOND"
+        ));
     }
     if let Some(condition) = cursor_condition {
         all.push(condition.clone());
     }
-    if all.is_empty() { Vec::new() } else { cat!(" WHERE ", all.join(b" AND ".as_slice())) }
+    if all.is_empty() {
+        Vec::new()
+    } else {
+        cat!(" WHERE ", all.join(b" AND ".as_slice()))
+    }
 }
 
 fn json_string_expression(py: Python<'_>, path: &[Any<'_>], field_name: &str) -> PyResult<Text> {
-    Ok(cat!("JSONExtractString(kafka_value, ", json_path_arguments(py, path, field_name)?, ")"))
+    Ok(cat!(
+        "JSONExtractString(kafka_value, ",
+        json_path_arguments(py, path, field_name)?,
+        ")"
+    ))
 }
 
 fn json_path_arguments(py: Python<'_>, path: &[Any<'_>], field_name: &str) -> PyResult<Text> {
     if path.is_empty() {
-        return Err(invalid(py, &cat!("field '", field_name, "' requires a JSON path"))?);
+        return Err(invalid(
+            py,
+            &cat!("field '", field_name, "' requires a JSON path"),
+        )?);
     }
     if path.len() > PATH_MAX_DEPTH {
         return Err(invalid(
             py,
-            &cat!("field '", field_name, "' allows JSON paths of depth at most ", PATH_MAX_DEPTH.to_string()),
+            &cat!(
+                "field '",
+                field_name,
+                "' allows JSON paths of depth at most ",
+                PATH_MAX_DEPTH.to_string()
+            ),
         )?);
     }
-    let segments: Vec<Text> =
-        path.iter().map(|segment| json_path_segment(segment, field_name)).collect::<PyResult<_>>()?;
+    let segments: Vec<Text> = path
+        .iter()
+        .map(|segment| json_path_segment(segment, field_name))
+        .collect::<PyResult<_>>()?;
     Ok(segments.join(b", ".as_slice()))
 }
 
@@ -660,8 +813,9 @@ fn json_path_segment(segment: &Any<'_>, field_name: &str) -> PyResult<Text> {
             ),
         )?);
     }
-    let forbidden: bool =
-        value.iter().any(|byte| matches!(byte, b'\'' | b'"' | b'`' | b'\\') || *byte < CONTROL_CHARACTER_LIMIT);
+    let forbidden: bool = value
+        .iter()
+        .any(|byte| matches!(byte, b'\'' | b'"' | b'`' | b'\\') || *byte < CONTROL_CHARACTER_LIMIT);
     if forbidden {
         return Err(invalid(
             segment.py(),
@@ -678,7 +832,10 @@ fn json_path_segment(segment: &Any<'_>, field_name: &str) -> PyResult<Text> {
 fn string_value(predicate: &Any<'_>, field_name: &str) -> PyResult<Text> {
     let value: Any<'_> = predicate.getattr("value")?;
     if !value.is_instance_of::<PyString>() {
-        return Err(invalid(predicate.py(), &cat!("field '", field_name, "' requires a string value"))?);
+        return Err(invalid(
+            predicate.py(),
+            &cat!("field '", field_name, "' requires a string value"),
+        )?);
     }
     Ok(sql_literal(&raw(&value)?))
 }
@@ -687,8 +844,17 @@ fn string_value(predicate: &Any<'_>, field_name: &str) -> PyResult<Text> {
 fn numeric_value(predicate: &Any<'_>, field_name: &str) -> PyResult<Text> {
     let py: Python<'_> = predicate.py();
     let value: Any<'_> = predicate.getattr("value")?;
-    if value.is_instance_of::<PyBool>() || !(value.is_instance_of::<PyInt>() || value.is_instance_of::<PyFloat>()) {
-        return Err(invalid(py, &cat!("field '", field_name, "' requires a numeric value for gt/lt"))?);
+    if value.is_instance_of::<PyBool>()
+        || !(value.is_instance_of::<PyInt>() || value.is_instance_of::<PyFloat>())
+    {
+        return Err(invalid(
+            py,
+            &cat!(
+                "field '",
+                field_name,
+                "' requires a numeric value for gt/lt"
+            ),
+        )?);
     }
     shown(&attr(py, "builtins", "float")?.call1((value,))?)
 }
@@ -700,17 +866,24 @@ fn time_literal(value: &Any<'_>, field_name: &str) -> PyResult<Text> {
     let parsed: PyResult<Any<'_>> = value
         .call_method1("replace", (" ", "T"))
         .and_then(|normalized| normalized.call_method1("removesuffix", ("Z",)))
-        .and_then(|normalized| attr(py, "datetime", "datetime")?.call_method1("fromisoformat", (normalized,)));
+        .and_then(|normalized| {
+            attr(py, "datetime", "datetime")?.call_method1("fromisoformat", (normalized,))
+        });
     if let Err(error) = parsed {
         if !error.is_instance_of::<PyValueError>(py) {
             return Err(error);
         }
         let message: String = format!("field '{field_name}' requires an ISO 8601 timestamp");
-        let replacement: Any<'_> = attr(py, DEV_EXCEPTIONS, "MessageQueryValidationError")?.call1((message,))?;
+        let replacement: Any<'_> =
+            attr(py, DEV_EXCEPTIONS, "MessageQueryValidationError")?.call1((message,))?;
         let handled: Any<'_> = error.value(py).clone().into_any();
         return Err(raise_from(&replacement, &handled, Some(&handled))?);
     }
-    Ok(cat!("parseDateTime64BestEffort('", sql_literal(&raw(value)?), "', 3)"))
+    Ok(cat!(
+        "parseDateTime64BestEffort('",
+        sql_literal(&raw(value)?),
+        "', 3)"
+    ))
 }
 
 fn row_payload<'py>(row: &Any<'py>, preview_count: usize) -> PyResult<Bound<'py, PyDict>> {
@@ -718,7 +891,10 @@ fn row_payload<'py>(row: &Any<'py>, preview_count: usize) -> PyResult<Bound<'py,
     let value_bytes: Any<'py> = int(&row.get_item("value_bytes")?)?;
     let payload: Bound<'py, PyDict> = PyDict::new(py);
     payload.set_item("landedAt", row.get_item("landed_at")?.str()?)?;
-    payload.set_item("kafkaTimestamp", optional_str(&row.get_item("kafka_timestamp")?)?)?;
+    payload.set_item(
+        "kafkaTimestamp",
+        optional_str(&row.get_item("kafka_timestamp")?)?,
+    )?;
     payload.set_item("partition", int(&row.get_item("partition")?)?)?;
     payload.set_item("offset", int(&row.get_item("offset")?)?)?;
     payload.set_item("key", row.get_item("key")?.str()?)?;
@@ -736,7 +912,10 @@ fn row_payload<'py>(row: &Any<'py>, preview_count: usize) -> PyResult<Bound<'py,
     Ok(payload)
 }
 
-fn next_cursor<'py>(row_payloads: &Bound<'py, PyList>, limit: i64) -> PyResult<Option<Bound<'py, PyDict>>> {
+fn next_cursor<'py>(
+    row_payloads: &Bound<'py, PyList>,
+    limit: i64,
+) -> PyResult<Option<Bound<'py, PyDict>>> {
     if i64::try_from(row_payloads.len()).unwrap_or(i64::MAX) < limit {
         return Ok(None);
     }
@@ -753,7 +932,8 @@ fn header_pairs<'py>(row: &Any<'py>) -> PyResult<Bound<'py, PyList>> {
     let keys: Any<'py> = row.get_item("header_keys")?;
     let values: Any<'py> = row.get_item("header_values")?;
     let pairs: Bound<'py, PyList> = PyList::empty(py);
-    let sequence = |value: &Any<'py>| value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>();
+    let sequence =
+        |value: &Any<'py>| value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>();
     if !sequence(&keys) || !sequence(&values) {
         return Ok(pairs);
     }

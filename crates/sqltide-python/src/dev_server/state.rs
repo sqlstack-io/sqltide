@@ -12,8 +12,7 @@ use super::support::{attr, unpack};
 use crate::py_kwargs;
 
 const LANDED_AT_COLUMN: &str = "_replay_landed_at";
-const NO_MANAGED_SOURCES_REASON: &str =
-    "no managed Kafka sources define broker connections; the dev server has no credentials to inspect a cluster";
+const NO_MANAGED_SOURCES_REASON: &str = "no managed Kafka sources define broker connections; the dev server has no credentials to inspect a cluster";
 const THROUGHPUT_WINDOW_LADDER: [(i64, i64); 3] = [(3600, 60), (86400, 1800), (604800, 10800)];
 const FRESH: &str = "fresh";
 const LAGGING: &str = "lagging";
@@ -43,11 +42,19 @@ fn is<'py>(value: &Any<'py>, module: &str, class: &str) -> PyResult<bool> {
 }
 
 fn is_kafka_landing(source: &Any<'_>) -> PyResult<bool> {
-    is(&source.getattr("source")?, "sqltide.compiler.discovery.models", "KafkaLandingStep")
+    is(
+        &source.getattr("source")?,
+        "sqltide.compiler.discovery.models",
+        "KafkaLandingStep",
+    )
 }
 
 fn is_table_model(model: &Any<'_>) -> PyResult<bool> {
-    is(model, "sqltide.compiler.compile.models", "CompiledTableModel")
+    is(
+        model,
+        "sqltide.compiler.compile.models",
+        "CompiledTableModel",
+    )
 }
 
 /// `dict.get(key)` on any mapping-like object.
@@ -60,15 +67,26 @@ fn get_or_empty<'py>(mapping: &Any<'py>, key: &Any<'py>) -> PyResult<Any<'py>> {
 }
 
 fn optional_str<'py>(value: Any<'py>) -> PyResult<Any<'py>> {
-    if value.is_none() { Ok(value) } else { Ok(value.str()?.into_any()) }
+    if value.is_none() {
+        Ok(value)
+    } else {
+        Ok(value.str()?.into_any())
+    }
 }
 
 fn sources<'py>(analysis: &Any<'py>) -> PyResult<Vec<Any<'py>>> {
-    analysis.getattr("compiled_project")?.getattr("sources")?.try_iter()?.collect()
+    analysis
+        .getattr("compiled_project")?
+        .getattr("sources")?
+        .try_iter()?
+        .collect()
 }
 
 fn relation_name_of<'py>(analysis: &Any<'py>, key: &Any<'py>) -> PyResult<Any<'py>> {
-    analysis.getattr("realized_project")?.getattr("relation_name_by_logical_key")?.get_item(key)
+    analysis
+        .getattr("realized_project")?
+        .getattr("relation_name_by_logical_key")?
+        .get_item(key)
 }
 
 fn resources_of<'py>(analysis: &Any<'py>, key: &Any<'py>) -> PyResult<Vec<Any<'py>>> {
@@ -82,7 +100,11 @@ fn resources_of<'py>(analysis: &Any<'py>, key: &Any<'py>) -> PyResult<Vec<Any<'p
 }
 
 fn named_rows<'py>(connection: &Any<'py>, query: String) -> PyResult<Vec<Any<'py>>> {
-    connection.call_method1("query", (query,))?.call_method0("named_rows")?.try_iter()?.collect()
+    connection
+        .call_method1("query", (query,))?
+        .call_method0("named_rows")?
+        .try_iter()?
+        .collect()
 }
 
 /// Approximate rows and bytes for every relation in one scan of system.tables.
@@ -99,13 +121,18 @@ pub(crate) fn build_relation_stats_query(database: &str) -> String {
 #[pyfunction]
 #[pyo3(signature = (*, database))]
 pub(crate) fn build_parts_query(database: &str) -> String {
-    format!("SELECT table, count() AS parts FROM system.parts WHERE database = '{database}' AND active GROUP BY table")
+    format!(
+        "SELECT table, count() AS parts FROM system.parts WHERE database = '{database}' AND active GROUP BY table"
+    )
 }
 
 /// Oldest and newest landed event per lineage-bearing relation, batched.
 #[pyfunction]
 #[pyo3(signature = (*, database, relation_names))]
-pub(crate) fn build_extents_query(database: &str, relation_names: Vec<Any<'_>>) -> PyResult<String> {
+pub(crate) fn build_extents_query(
+    database: &str,
+    relation_names: Vec<Any<'_>>,
+) -> PyResult<String> {
     Ok(relation_names
         .iter()
         .map(|name| {
@@ -127,7 +154,8 @@ pub(crate) fn build_throughputs_query(database: &str, windows: Any<'_>) -> PyRes
     let mut selects: Vec<String> = Vec::new();
     for window in windows.try_iter()? {
         let parts = unpack(&window?, 3)?;
-        let (relation_name, window_seconds, bucket_seconds) = (text(&parts[0])?, &parts[1], &parts[2]);
+        let (relation_name, window_seconds, bucket_seconds) =
+            (text(&parts[0])?, &parts[1], &parts[2]);
         selects.push(format!(
             "SELECT '{relation_name}' AS relation, toUnixTimestamp(toStartOfInterval(\
              _replay_landed_at, INTERVAL {} SECOND)) AS bucket, count() AS rows \
@@ -143,7 +171,10 @@ pub(crate) fn build_throughputs_query(database: &str, windows: Any<'_>) -> PyRes
 /// Per-partition landed offsets for every source in one warehouse round trip.
 #[pyfunction]
 #[pyo3(signature = (*, database, relation_names))]
-pub(crate) fn build_partitions_query(database: &str, relation_names: Vec<Any<'_>>) -> PyResult<String> {
+pub(crate) fn build_partitions_query(
+    database: &str,
+    relation_names: Vec<Any<'_>>,
+) -> PyResult<String> {
     Ok(relation_names
         .iter()
         .map(|name| {
@@ -167,13 +198,19 @@ pub(crate) fn choose_throughput_window(newest_age_seconds: Option<f64>) -> (i64,
     let Some(age) = newest_age_seconds else {
         return last;
     };
-    THROUGHPUT_WINDOW_LADDER.into_iter().find(|(window, _)| age < *window as f64).unwrap_or(last)
+    THROUGHPUT_WINDOW_LADDER
+        .into_iter()
+        .find(|(window, _)| age < *window as f64)
+        .unwrap_or(last)
 }
 
 /// Measure a stable logical view by the deployment relation it is bound to.
 #[pyfunction]
 #[pyo3(signature = (*, stats, bindings))]
-pub(crate) fn apply_bound_relation_stats<'py>(stats: Any<'py>, bindings: Any<'py>) -> PyResult<Any<'py>> {
+pub(crate) fn apply_bound_relation_stats<'py>(
+    stats: Any<'py>,
+    bindings: Any<'py>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = stats.py();
     for binding in bindings.try_iter()? {
         let parts = unpack(&binding?, 2)?;
@@ -331,8 +368,17 @@ fn warehouse_health_payload<'py>(
 }
 
 fn has_quarantine_model(analysis: &Any<'_>) -> PyResult<bool> {
-    let quarantine = attr(analysis.py(), "sqltide.compiler.discovery.types", "RowErrorPolicy")?.getattr("QUARANTINE")?;
-    for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
+    let quarantine = attr(
+        analysis.py(),
+        "sqltide.compiler.discovery.types",
+        "RowErrorPolicy",
+    )?
+    .getattr("QUARANTINE")?;
+    for model in analysis
+        .getattr("compiled_project")?
+        .getattr("models")?
+        .try_iter()?
+    {
         let model = model?;
         if is_table_model(&model)? && model.getattr("on_row_error")?.is(&quarantine) {
             return Ok(true);
@@ -367,19 +413,36 @@ fn managed_kafka_relation_names<'py>(analysis: &Any<'py>) -> PyResult<Bound<'py,
 
 fn active_bindings<'py>(connection: &Any<'py>, database: &str) -> PyResult<Bound<'py, PyTuple>> {
     let py: Python<'py> = connection.py();
-    if !connection.getattr("capabilities")?.getattr("stable_logical_bindings")?.is_truthy()? {
+    if !connection
+        .getattr("capabilities")?
+        .getattr("stable_logical_bindings")?
+        .is_truthy()?
+    {
         return Ok(PyTuple::empty(py));
     }
     let inspected = connection.call_method1("inspect_managed_table_state", (database,))?;
     let mut bindings: Vec<Any<'py>> = Vec::new();
     for binding in inspected.getattr("active_bindings")?.try_iter()? {
         let binding = binding?;
-        bindings.push(PyTuple::new(py, [binding.getattr("logical_name")?, binding.getattr("physical_name")?])?.into_any());
+        bindings.push(
+            PyTuple::new(
+                py,
+                [
+                    binding.getattr("logical_name")?,
+                    binding.getattr("physical_name")?,
+                ],
+            )?
+            .into_any(),
+        );
     }
     PyTuple::new(py, bindings)
 }
 
-fn relation_stats<'py>(connection: &Any<'py>, database: &str, bindings: &Bound<'py, PyTuple>) -> PyResult<Any<'py>> {
+fn relation_stats<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    bindings: &Bound<'py, PyTuple>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     let stats: Bound<'py, PyDict> = PyDict::new(py);
     for row in named_rows(connection, build_relation_stats_query(database))? {
@@ -413,13 +476,20 @@ fn lineage_relation_names(catalog: &Any<'_>) -> PyResult<Vec<String>> {
     Ok(names)
 }
 
-fn extents<'py>(connection: &Any<'py>, database: &str, relation_names: Vec<String>) -> PyResult<Bound<'py, PyDict>> {
+fn extents<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    relation_names: Vec<String>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let extents: Bound<'py, PyDict> = PyDict::new(py);
     if relation_names.is_empty() {
         return Ok(extents);
     }
-    let names: Vec<Any<'py>> = relation_names.iter().map(|name| Ok(name.into_pyobject(py)?.into_any())).collect::<PyResult<_>>()?;
+    let names: Vec<Any<'py>> = relation_names
+        .iter()
+        .map(|name| Ok(name.into_pyobject(py)?.into_any()))
+        .collect::<PyResult<_>>()?;
     for row in named_rows(connection, build_extents_query(database, names)?)? {
         let entry = py_kwargs!(py;
             oldest = row.get_item("oldest")?.str()?,
@@ -432,7 +502,11 @@ fn extents<'py>(connection: &Any<'py>, database: &str, relation_names: Vec<Strin
 }
 
 /// `{relation: {partition: (partition, max_offset, oldest, newest, rows)}}`.
-fn warehouse_partitions<'py>(connection: &Any<'py>, database: &str, relation_names: Vec<String>) -> PyResult<Bound<'py, PyDict>> {
+fn warehouse_partitions<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    relation_names: Vec<String>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let observations: Bound<'py, PyDict> = PyDict::new(py);
     if relation_names.is_empty() {
@@ -441,7 +515,10 @@ fn warehouse_partitions<'py>(connection: &Any<'py>, database: &str, relation_nam
     for relation_name in &relation_names {
         observations.set_item(relation_name, PyDict::new(py))?;
     }
-    let names: Vec<Any<'py>> = relation_names.iter().map(|name| Ok(name.into_pyobject(py)?.into_any())).collect::<PyResult<_>>()?;
+    let names: Vec<Any<'py>> = relation_names
+        .iter()
+        .map(|name| Ok(name.into_pyobject(py)?.into_any()))
+        .collect::<PyResult<_>>()?;
     for row in named_rows(connection, build_partitions_query(database, names)?)? {
         let relation_name = row.get_item("relation")?.str()?;
         let partition = int(&row.get_item("partition")?)?;
@@ -461,10 +538,16 @@ fn warehouse_partitions<'py>(connection: &Any<'py>, database: &str, relation_nam
     Ok(observations)
 }
 
-fn source_extents<'py>(partitions: &Bound<'py, PyDict>, extents: &Bound<'py, PyDict>) -> PyResult<()> {
+fn source_extents<'py>(
+    partitions: &Bound<'py, PyDict>,
+    extents: &Bound<'py, PyDict>,
+) -> PyResult<()> {
     let py: Python<'py> = partitions.py();
     for (relation_name, by_partition) in partitions.iter() {
-        let observations: Vec<Any<'py>> = by_partition.call_method0("values")?.try_iter()?.collect::<PyResult<_>>()?;
+        let observations: Vec<Any<'py>> = by_partition
+            .call_method0("values")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
         if observations.is_empty() {
             continue;
         }
@@ -472,7 +555,10 @@ fn source_extents<'py>(partitions: &Bound<'py, PyDict>, extents: &Bound<'py, PyD
         let mut newest: Option<String> = None;
         let mut rows: Any<'py> = 0_i64.into_pyobject(py)?.into_any();
         for observation in &observations {
-            let (first, last): (String, String) = (observation.get_item(2)?.extract()?, observation.get_item(3)?.extract()?);
+            let (first, last): (String, String) = (
+                observation.get_item(2)?.extract()?,
+                observation.get_item(3)?.extract()?,
+            );
             if oldest.as_ref().is_none_or(|current| first < *current) {
                 oldest = Some(first);
             }
@@ -481,16 +567,30 @@ fn source_extents<'py>(partitions: &Bound<'py, PyDict>, extents: &Bound<'py, PyD
             }
             rows = rows.add(observation.get_item(4)?)?;
         }
-        extents.set_item(relation_name, py_kwargs!(py; oldest = oldest, newest = newest, rows = rows)?)?;
+        extents.set_item(
+            relation_name,
+            py_kwargs!(py; oldest = oldest, newest = newest, rows = rows)?,
+        )?;
     }
     Ok(())
 }
 
-fn fingerprint_baselines<'py>(analysis: &Any<'py>, connection: &Any<'py>, database: &str) -> PyResult<Any<'py>> {
+fn fingerprint_baselines<'py>(
+    analysis: &Any<'py>,
+    connection: &Any<'py>,
+    database: &str,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     let mut identities: Vec<String> = Vec::new();
-    for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
-        identities.push(format!("{database}.{}", text(&model?.getattr("key")?.getattr("name")?)?));
+    for model in analysis
+        .getattr("compiled_project")?
+        .getattr("models")?
+        .try_iter()?
+    {
+        identities.push(format!(
+            "{database}.{}",
+            text(&model?.getattr("key")?.getattr("name")?)?
+        ));
     }
     let snapshot = connection.call_method(
         "load_direct_fingerprints",
@@ -500,13 +600,22 @@ fn fingerprint_baselines<'py>(analysis: &Any<'py>, connection: &Any<'py>, databa
     let statuses = attr(py, "sqltide.adapter.types", "AdapterOptionalStateStatus")?;
     let status = snapshot.getattr("status")?;
     if status.ne(statuses.getattr("AVAILABLE")?)? {
-        return Ok(if status.eq(statuses.getattr("UNAVAILABLE")?)? { none(py) } else { PyDict::new(py).into_any() });
+        return Ok(if status.eq(statuses.getattr("UNAVAILABLE")?)? {
+            none(py)
+        } else {
+            PyDict::new(py).into_any()
+        });
     }
     let prefix: String = format!("{database}.");
     let baselines: Bound<'py, PyDict> = PyDict::new(py);
     for record in snapshot.getattr("baselines")?.try_iter()? {
         let record = record?;
-        baselines.set_item(record.getattr("logical_model_identity")?.call_method1("removeprefix", (&prefix,))?, record)?;
+        baselines.set_item(
+            record
+                .getattr("logical_model_identity")?
+                .call_method1("removeprefix", (&prefix,))?,
+            record,
+        )?;
     }
     Ok(baselines.into_any())
 }
@@ -536,11 +645,20 @@ fn policy_seconds<'py>(value: &Any<'py>) -> PyResult<Option<Any<'py>>> {
         return Err(PyIndexError::new_err("string index out of range"));
     };
     let amount = builtin(py, "float")?.call1((&raw[..raw.len() - unit.len_utf8()],))?;
-    let multiplier = attr(py, "sqltide.compiler.discovery.constants", "SECONDS_BY_DURATION_UNIT")?.get_item(unit.to_string())?;
+    let multiplier = attr(
+        py,
+        "sqltide.compiler.discovery.constants",
+        "SECONDS_BY_DURATION_UNIT",
+    )?
+    .get_item(unit.to_string())?;
     Ok(Some(amount.mul(multiplier)?))
 }
 
-fn freshness<'py>(newest: &Any<'py>, captured_at: &str, policy: &Any<'py>) -> PyResult<Option<&'static str>> {
+fn freshness<'py>(
+    newest: &Any<'py>,
+    captured_at: &str,
+    policy: &Any<'py>,
+) -> PyResult<Option<&'static str>> {
     if policy.is_none() {
         return Ok(None);
     }
@@ -576,7 +694,12 @@ fn kafka_settings<'py>(source: &Any<'py>, managed: &Any<'py>) -> PyResult<Any<'p
     )
 }
 
-fn kafka_lag<'py>(analysis: &Any<'py>, source: &Any<'py>, database: &str, reader: &Any<'py>) -> PyResult<Any<'py>> {
+fn kafka_lag<'py>(
+    analysis: &Any<'py>,
+    source: &Any<'py>,
+    database: &str,
+    reader: &Any<'py>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
     if !is_kafka_landing(source)? || reader.is_none() {
         return Ok(none(py));
@@ -585,7 +708,11 @@ fn kafka_lag<'py>(analysis: &Any<'py>, source: &Any<'py>, database: &str, reader
         return Ok(none(py));
     };
     let kafka = kafka_settings(source, &managed)?;
-    reader.call_method("read", (), Some(&py_kwargs!(py; kafka = kafka, database = database)?))
+    reader.call_method(
+        "read",
+        (),
+        Some(&py_kwargs!(py; kafka = kafka, database = database)?),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -606,20 +733,28 @@ fn model_states<'py>(
     for pipeline in compiled.getattr("pipelines")?.try_iter()? {
         let pipeline = pipeline?;
         let source = pipeline.getattr("source")?;
-        let policy = if source.is_none() { none(py) } else { source.getattr("source")?.getattr("freshness")? };
+        let policy = if source.is_none() {
+            none(py)
+        } else {
+            source.getattr("source")?.getattr("freshness")?
+        };
         for model in pipeline.getattr("models")?.try_iter()? {
             policies.set_item(model?.getattr("key")?.getattr("name")?, &policy)?;
         }
     }
     for pipeline in compiled.getattr("pipelines")?.try_iter()? {
         let pipeline = pipeline?;
-        if modes.call1((pipeline.getattr("pipeline")?.getattr("mode")?,))?.eq(modes.getattr("DIRECT")?)? {
+        if modes
+            .call1((pipeline.getattr("pipeline")?.getattr("mode")?,))?
+            .eq(modes.getattr("DIRECT")?)?
+        {
             for model in pipeline.getattr("models")?.try_iter()? {
                 direct_model_names.push(model?.getattr("key")?.getattr("name")?);
             }
         }
     }
-    let direct_names = attr(py, "builtins", "set")?.call1((PyList::new(py, direct_model_names)?,))?;
+    let direct_names =
+        attr(py, "builtins", "set")?.call1((PyList::new(py, direct_model_names)?,))?;
     let fingerprint = attr(py, "sqltide._native", "DirectModelFingerprint")?;
     let states: Bound<'py, PyDict> = PyDict::new(py);
     let empty = || PyDict::new(py).into_any();
@@ -628,8 +763,16 @@ fn model_states<'py>(
         let is_table: bool = is_table_model(&model)?;
         let name = model.getattr("key")?.getattr("name")?;
         let relation_name = relation_name_of(analysis, &model.getattr("key")?)?;
-        let relation_stats = if is_table { get_or_empty(stats, &relation_name)? } else { empty() };
-        let extent = if is_table { get_or_empty(extents.as_any(), &relation_name)? } else { empty() };
+        let relation_stats = if is_table {
+            get_or_empty(stats, &relation_name)?
+        } else {
+            empty()
+        };
+        let extent = if is_table {
+            get_or_empty(extents.as_any(), &relation_name)?
+        } else {
+            empty()
+        };
         let newest = optional_str(get(&extent, "newest")?)?;
         let drift_reasons = if !baselines.is_none() && direct_names.contains(&name)? {
             fingerprint.call_method(
@@ -640,7 +783,11 @@ fn model_states<'py>(
         } else {
             PyTuple::empty(py).into_any()
         };
-        let policy = if is_table { get(policies.as_any(), &name)? } else { none(py) };
+        let policy = if is_table {
+            get(policies.as_any(), &name)?
+        } else {
+            none(py)
+        };
         let state = py_kwargs!(py;
             relationName = &relation_name,
             rows = get(&relation_stats, "rows")?,
@@ -660,22 +807,36 @@ fn model_states<'py>(
     Ok(states)
 }
 
-fn zero_filled_buckets<'py>(counts: &Bound<'py, PyDict>, window_seconds: i64, bucket_seconds: i64) -> PyResult<Any<'py>> {
+fn zero_filled_buckets<'py>(
+    counts: &Bound<'py, PyDict>,
+    window_seconds: i64,
+    bucket_seconds: i64,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = counts.py();
     let bucket_count: i64 = window_seconds.div_euclid(bucket_seconds);
     if counts.is_empty() {
-        return Ok(PyList::new(py, vec![0_i64; usize::try_from(bucket_count).unwrap_or(0)])?.into_any());
+        return Ok(
+            PyList::new(py, vec![0_i64; usize::try_from(bucket_count).unwrap_or(0)])?.into_any(),
+        );
     }
     let newest: i64 = builtin(py, "max")?.call1((counts,))?.extract()?;
     let start: i64 = newest - (bucket_count - 1) * bucket_seconds;
     let mut buckets: Vec<Any<'py>> = Vec::new();
     for index in 0..bucket_count {
-        buckets.push(counts.as_any().call_method1("get", (start + index * bucket_seconds, 0))?);
+        buckets.push(
+            counts
+                .as_any()
+                .call_method1("get", (start + index * bucket_seconds, 0))?,
+        );
     }
     Ok(PyList::new(py, buckets)?.into_any())
 }
 
-fn throughputs<'py>(connection: &Any<'py>, database: &str, newest_ages: &Bound<'py, PyDict>) -> PyResult<Bound<'py, PyDict>> {
+fn throughputs<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    newest_ages: &Bound<'py, PyDict>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let result: Bound<'py, PyDict> = PyDict::new(py);
     if newest_ages.is_empty() {
@@ -686,16 +847,30 @@ fn throughputs<'py>(connection: &Any<'py>, database: &str, newest_ages: &Bound<'
         let (window, bucket) = choose_throughput_window(age.extract()?);
         windows.push((relation_name.extract()?, window, bucket));
     }
-    let query_windows = PyList::new(py, windows.iter().map(|(name, window, bucket)| (name.clone(), *window, *bucket)))?.into_any();
+    let query_windows = PyList::new(
+        py,
+        windows
+            .iter()
+            .map(|(name, window, bucket)| (name.clone(), *window, *bucket)),
+    )?
+    .into_any();
     let counts: Bound<'py, PyDict> = PyDict::new(py);
-    for row in named_rows(connection, build_throughputs_query(database, query_windows)?)? {
+    for row in named_rows(
+        connection,
+        build_throughputs_query(database, query_windows)?,
+    )? {
         let relation = row.get_item("relation")?.str()?;
-        let by_bucket = counts.as_any().call_method1("setdefault", (relation, PyDict::new(py)))?;
+        let by_bucket = counts
+            .as_any()
+            .call_method1("setdefault", (relation, PyDict::new(py)))?;
         let bucket = int(&row.get_item("bucket")?)?;
         by_bucket.set_item(bucket, int(&row.get_item("rows")?)?)?;
     }
     for (relation_name, window, bucket) in windows {
-        let by_bucket = counts.get_item(&relation_name)?.map_or_else(|| Ok(PyDict::new(py)), |found| found.cast_into::<PyDict>().map_err(PyErr::from))?;
+        let by_bucket = counts.get_item(&relation_name)?.map_or_else(
+            || Ok(PyDict::new(py)),
+            |found| found.cast_into::<PyDict>().map_err(PyErr::from),
+        )?;
         result.set_item(
             &relation_name,
             py_kwargs!(py;
@@ -810,7 +985,14 @@ fn source_states<'py>(
         let newest = optional_str(get(&extent, "newest")?)?;
         let age = age_seconds(&newest, captured_at)?;
         let kafka_lag = kafka_lag(analysis, &source, database, reader)?;
-        inputs.push(Input { source, relation_name, extent, newest, age, kafka_lag });
+        inputs.push(Input {
+            source,
+            relation_name,
+            extent,
+            newest,
+            age,
+            kafka_lag,
+        });
     }
     let newest_ages: Bound<'py, PyDict> = PyDict::new(py);
     for item in &inputs {
@@ -880,21 +1062,30 @@ pub(crate) fn build_state_payload<'py>(
     let lineage: Vec<String> = lineage_relation_names(&catalog)?;
     let mut source_relations: Vec<String> = Vec::new();
     for source in sources(&analysis)? {
-        let relation_name: String = relation_name_of(&analysis, &source.getattr("key")?)?.extract()?;
+        let relation_name: String =
+            relation_name_of(&analysis, &source.getattr("key")?)?.extract()?;
         if lineage.contains(&relation_name) {
             source_relations.push(relation_name);
         }
     }
     let warehouse = warehouse_partitions(&connection, &database, source_relations.clone())?;
-    let other_relations: Vec<String> = lineage.into_iter().filter(|name| !source_relations.contains(name)).collect();
+    let other_relations: Vec<String> = lineage
+        .into_iter()
+        .filter(|name| !source_relations.contains(name))
+        .collect();
     let extents = extents(&connection, &database, other_relations)?;
     source_extents(&warehouse, &extents)?;
     let baselines = fingerprint_baselines(&analysis, &connection, &database)?;
     let mut model_relation_names: Vec<String> = Vec::new();
-    for model in analysis.getattr("compiled_project")?.getattr("models")?.try_iter()? {
+    for model in analysis
+        .getattr("compiled_project")?
+        .getattr("models")?
+        .try_iter()?
+    {
         let model = model?;
         if is_table_model(&model)? {
-            model_relation_names.push(relation_name_of(&analysis, &model.getattr("key")?)?.extract()?);
+            model_relation_names
+                .push(relation_name_of(&analysis, &model.getattr("key")?)?.extract()?);
         }
     }
     let activity = read_model_activity(
@@ -917,7 +1108,10 @@ pub(crate) fn build_state_payload<'py>(
     .into_any())
 }
 
-fn broker_topic_item<'py>(topic: &Any<'py>, broker_list: &Any<'py>) -> PyResult<Bound<'py, PyDict>> {
+fn broker_topic_item<'py>(
+    topic: &Any<'py>,
+    broker_list: &Any<'py>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = topic.py();
     py_kwargs!(py;
         name = topic.getattr("name")?,
@@ -933,7 +1127,9 @@ fn broker_topic_item<'py>(topic: &Any<'py>, broker_list: &Any<'py>) -> PyResult<
 }
 
 /// `(source_name, relation_name, kafka)` for every managed Kafka source.
-fn managed_topic_sources<'py>(analysis: &Any<'py>) -> PyResult<Vec<(Any<'py>, Any<'py>, Any<'py>)>> {
+fn managed_topic_sources<'py>(
+    analysis: &Any<'py>,
+) -> PyResult<Vec<(Any<'py>, Any<'py>, Any<'py>)>> {
     let mut entries: Vec<(Any<'py>, Any<'py>, Any<'py>)> = Vec::new();
     for source in sources(analysis)? {
         if !is_kafka_landing(&source)? {
@@ -956,7 +1152,10 @@ fn retained_stats<'py>(connection: &Any<'py>, database: &Any<'py>) -> PyResult<B
     if connection.is_none() || database.is_none() {
         return Ok(stats);
     }
-    for row in named_rows(connection, build_relation_stats_query(&database.extract::<String>()?))? {
+    for row in named_rows(
+        connection,
+        build_relation_stats_query(&database.extract::<String>()?),
+    )? {
         let entry = py_kwargs!(py;
             rows = int(&row.get_item("total_rows")?)?,
             bytes = int(&row.get_item("total_bytes")?)?,
@@ -991,7 +1190,8 @@ pub(crate) fn build_topics_payload<'py>(
     for (_, _, kafka) in &managed {
         let broker_list = kafka.getattr("broker_list")?;
         if !snapshots.contains(&broker_list)? {
-            let snapshot = topic_reader.call_method("read", (), Some(&py_kwargs!(py; kafka = kafka)?))?;
+            let snapshot =
+                topic_reader.call_method("read", (), Some(&py_kwargs!(py; kafka = kafka)?))?;
             snapshots.set_item(broker_list, snapshot)?;
         }
     }
@@ -1003,10 +1203,17 @@ pub(crate) fn build_topics_payload<'py>(
         }
         for topic in snapshot.getattr("topics")?.try_iter()? {
             let topic = topic?;
-            topics.set_item(topic.getattr("name")?, broker_topic_item(&topic, &broker_list)?)?;
+            topics.set_item(
+                topic.getattr("name")?,
+                broker_topic_item(&topic, &broker_list)?,
+            )?;
         }
     }
-    let lag_database = if database.is_truthy()? { database.clone() } else { "".into_pyobject(py)?.into_any() };
+    let lag_database = if database.is_truthy()? {
+        database.clone()
+    } else {
+        "".into_pyobject(py)?.into_any()
+    };
     for (source_name, relation_name, kafka) in &managed {
         let topic = kafka.getattr("topic")?;
         let fallback = py_kwargs!(py;
@@ -1020,14 +1227,33 @@ pub(crate) fn build_topics_payload<'py>(
             retainedRows = none(py),
             retainedBytes = none(py),
         )?;
-        let item = topics.as_any().call_method1("setdefault", (&topic, fallback))?;
-        item.get_item("sources")?
-            .call_method1("append", (py_kwargs!(py; name = source_name, relationName = relation_name)?,))?;
-        let lag = kafka_lag_reader.call_method("read", (), Some(&py_kwargs!(py; kafka = kafka, database = &lag_database)?))?;
-        item.set_item("lagMessages", if lag.is_none() { none(py) } else { lag.getattr("total_messages")? })?;
+        let item = topics
+            .as_any()
+            .call_method1("setdefault", (&topic, fallback))?;
+        item.get_item("sources")?.call_method1(
+            "append",
+            (py_kwargs!(py; name = source_name, relationName = relation_name)?,),
+        )?;
+        let lag = kafka_lag_reader.call_method(
+            "read",
+            (),
+            Some(&py_kwargs!(py; kafka = kafka, database = &lag_database)?),
+        )?;
+        item.set_item(
+            "lagMessages",
+            if lag.is_none() {
+                none(py)
+            } else {
+                lag.getattr("total_messages")?
+            },
+        )?;
         let relation_stats = get(stats.as_any(), relation_name)?;
         let stat = |name: &str| -> PyResult<Any<'py>> {
-            if relation_stats.is_none() { Ok(none(py)) } else { relation_stats.get_item(name) }
+            if relation_stats.is_none() {
+                Ok(none(py))
+            } else {
+                relation_stats.get_item(name)
+            }
         };
         item.set_item("retainedRows", stat("rows")?)?;
         item.set_item("retainedBytes", stat("bytes")?)?;
@@ -1062,4 +1288,3 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(build_state_payload, module)?)?;
     module.add_function(wrap_pyfunction!(build_topics_payload, module)?)
 }
-

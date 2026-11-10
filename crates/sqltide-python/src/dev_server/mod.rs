@@ -3,8 +3,8 @@
 
 pub(crate) mod activity;
 pub(crate) mod app;
-pub(crate) mod auth;
 pub(crate) mod audits;
+pub(crate) mod auth;
 pub(crate) mod authz;
 pub(crate) mod build_process;
 pub(crate) mod checks;

@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFrozenSet, PyList, PySlice, PyString};
-use sqltide_discovery::config::{DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS, RUN_UNRESPONSIVE_AFTER_SECONDS};
+use sqltide_discovery::config::{
+    DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS, RUN_UNRESPONSIVE_AFTER_SECONDS,
+};
 
 use super::support::{attr, unpack};
 use crate::py_kwargs;
@@ -27,8 +29,7 @@ const CANCELLATION_FAILED: &str = "cancellation_failed";
 const INVOCATIONS_TABLE: &str = "_sqltide_invocations";
 const RUN_EVENTS_TABLE: &str = "_sqltide_run_events";
 const RUN_STATEMENTS_TABLE: &str = "_sqltide_run_statements";
-const EVENT_COLUMNS: &str =
-    "invocation_id, sequence, toString(emitted_at) AS emitted_at, event_kind, step_id, phase, payload_json";
+const EVENT_COLUMNS: &str = "invocation_id, sequence, toString(emitted_at) AS emitted_at, event_kind, step_id, phase, payload_json";
 
 type Any<'py> = Bound<'py, PyAny>;
 
@@ -51,7 +52,11 @@ fn get<'py>(mapping: &Any<'py>, key: &str) -> PyResult<Any<'py>> {
 }
 
 /// `mapping.get(key, default)`.
-fn get_or<'py, T: IntoPyObject<'py>>(mapping: &Any<'py>, key: &str, default: T) -> PyResult<Any<'py>> {
+fn get_or<'py, T: IntoPyObject<'py>>(
+    mapping: &Any<'py>,
+    key: &str,
+    default: T,
+) -> PyResult<Any<'py>> {
     mapping.call_method1("get", (key, default))
 }
 
@@ -74,13 +79,19 @@ fn py_min(first: f64, second: f64) -> f64 {
 }
 
 fn named_rows<'py>(connection: &Any<'py>, query: String) -> PyResult<Vec<Any<'py>>> {
-    connection.call_method1("query", (query,))?.call_method0("named_rows")?.try_iter()?.collect()
+    connection
+        .call_method1("query", (query,))?
+        .call_method0("named_rows")?
+        .try_iter()?
+        .collect()
 }
 
 fn table_exists(connection: &Any<'_>, database: &str, table: &str) -> PyResult<bool> {
     let rows = named_rows(
         connection,
-        format!("SELECT count() AS present FROM system.tables WHERE database = '{database}' AND name = '{table}'"),
+        format!(
+            "SELECT count() AS present FROM system.tables WHERE database = '{database}' AND name = '{table}'"
+        ),
     )?;
     match rows.first() {
         None => Ok(false),
@@ -95,16 +106,27 @@ fn status_member<'py>(py: Python<'py>, name: &str) -> PyResult<Any<'py>> {
 /// `datetime.fromisoformat(value.replace(" ", "T").removesuffix("Z")).replace(tzinfo=UTC)`.
 fn parse_timestamp<'py>(value: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = value.py();
-    let normalized = value.call_method1("replace", (" ", "T"))?.call_method1("removesuffix", ("Z",))?;
+    let normalized = value
+        .call_method1("replace", (" ", "T"))?
+        .call_method1("removesuffix", ("Z",))?;
     let parsed = attr(py, "datetime", "datetime")?.call_method1("fromisoformat", (normalized,))?;
-    parsed.call_method("replace", (), Some(&py_kwargs!(py; tzinfo = attr(py, "datetime", "UTC")?)?))
+    parsed.call_method(
+        "replace",
+        (),
+        Some(&py_kwargs!(py; tzinfo = attr(py, "datetime", "UTC")?)?),
+    )
 }
 
 /// `max(int((later - earlier).total_seconds()), 0)`.
 fn whole_seconds<'py>(later: &Any<'py>, earlier: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = later.py();
-    let seconds = attr(py, "builtins", "int")?.call1((later.sub(earlier)?.call_method0("total_seconds")?,))?;
-    if seconds.lt(0)? { Ok(0_i64.into_pyobject(py)?.into_any()) } else { Ok(seconds) }
+    let seconds = attr(py, "builtins", "int")?
+        .call1((later.sub(earlier)?.call_method0("total_seconds")?,))?;
+    if seconds.lt(0)? {
+        Ok(0_i64.into_pyobject(py)?.into_any())
+    } else {
+        Ok(seconds)
+    }
 }
 
 fn age_seconds<'py>(timestamp: &Any<'py>, warehouse_now: &Any<'py>) -> PyResult<Any<'py>> {
@@ -120,7 +142,11 @@ fn derive_status<'py>(
 ) -> PyResult<Any<'py>> {
     let py: Python<'py> = terminal_outcome.py();
     let statuses: Bound<'py, PyDict> = PyDict::new(py);
-    for (outcome, name) in [("succeeded", "SUCCEEDED"), ("failed", "FAILED"), ("cancelled", "CANCELLED")] {
+    for (outcome, name) in [
+        ("succeeded", "SUCCEEDED"),
+        ("failed", "FAILED"),
+        ("cancelled", "CANCELLED"),
+    ] {
         statuses.set_item(outcome, status_member(py, name)?)?;
     }
     for outcome in [terminal_outcome, completed_event_outcome] {
@@ -128,7 +154,10 @@ fn derive_status<'py>(
             return statuses.as_any().get_item(outcome);
         }
     }
-    let age: f64 = warehouse_now.sub(last_signal_at)?.call_method0("total_seconds")?.extract()?;
+    let age: f64 = warehouse_now
+        .sub(last_signal_at)?
+        .call_method0("total_seconds")?
+        .extract()?;
     let signal_age: f64 = py_max(age, 0.0);
     if signal_age < RUN_UNRESPONSIVE_AFTER_SECONDS as f64 {
         return status_member(py, "RUNNING");
@@ -149,7 +178,13 @@ pub(crate) fn derive_run_status<'py>(
     warehouse_now: Any<'py>,
     presumed_failed_after_seconds: i64,
 ) -> PyResult<Any<'py>> {
-    derive_status(&terminal_outcome, &completed_event_outcome, &last_signal_at, &warehouse_now, presumed_failed_after_seconds)
+    derive_status(
+        &terminal_outcome,
+        &completed_event_outcome,
+        &last_signal_at,
+        &warehouse_now,
+        presumed_failed_after_seconds,
+    )
 }
 
 /// Return terminal duration or current elapsed time for an active event stream.
@@ -160,7 +195,11 @@ pub(crate) fn derive_run_duration_ms<'py>(
     completed_at: Any<'py>,
     warehouse_now: Any<'py>,
 ) -> PyResult<Any<'py>> {
-    let end: Any<'py> = if completed_at.is_none() { warehouse_now } else { parse_timestamp(&completed_at)? };
+    let end: Any<'py> = if completed_at.is_none() {
+        warehouse_now
+    } else {
+        parse_timestamp(&completed_at)?
+    };
     whole_seconds(&end, &parse_timestamp(&started_at)?)?.mul(1000)
 }
 
@@ -168,13 +207,19 @@ pub(crate) fn derive_run_duration_ms<'py>(
 fn parsed_event_payload<'py>(payload_json: &Any<'py>) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = payload_json.py();
     match attr(py, "json", "loads")?.call1((payload_json.str()?,)) {
-        Ok(parsed) => Ok(parsed.cast_into::<PyDict>().unwrap_or_else(|_| PyDict::new(py))),
+        Ok(parsed) => Ok(parsed
+            .cast_into::<PyDict>()
+            .unwrap_or_else(|_| PyDict::new(py))),
         Err(error) if error.is_instance_of::<PyValueError>(py) => Ok(PyDict::new(py)),
         Err(error) => Err(error),
     }
 }
 
-fn audit_counts<'py>(py: Python<'py>, counts: [Any<'py>; 4], total: Any<'py>) -> PyResult<Any<'py>> {
+fn audit_counts<'py>(
+    py: Python<'py>,
+    counts: [Any<'py>; 4],
+    total: Any<'py>,
+) -> PyResult<Any<'py>> {
     let [passed, warning, failed, error] = counts;
     Ok(py_kwargs!(py; passed = passed, warning = warning, failed = failed, error = error, total = total)?.into_any())
 }
@@ -182,7 +227,11 @@ fn audit_counts<'py>(py: Python<'py>, counts: [Any<'py>; 4], total: Any<'py>) ->
 /// The durable outcome counts of a completed scheduled audit cycle.
 #[pyfunction]
 #[pyo3(signature = (*, command, mode, summary_json))]
-pub(crate) fn terminal_audit_summary<'py>(command: Any<'py>, mode: Any<'py>, summary_json: Any<'py>) -> PyResult<Any<'py>> {
+pub(crate) fn terminal_audit_summary<'py>(
+    command: Any<'py>,
+    mode: Any<'py>,
+    summary_json: Any<'py>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = command.py();
     if command.ne("audit")? || mode.ne("scheduled")? {
         return Ok(none(py));
@@ -195,7 +244,11 @@ pub(crate) fn terminal_audit_summary<'py>(command: Any<'py>, mode: Any<'py>, sum
     let zero = || -> PyResult<Any<'py>> { Ok(0_i64.into_pyobject(py)?.into_any()) };
     if !get(&summary, "error_count")?.is_none() {
         let error_count = int(&summary.get_item("error_count")?)?;
-        return audit_counts(py, [zero()?, zero()?, zero()?, error_count.clone()], error_count);
+        return audit_counts(
+            py,
+            [zero()?, zero()?, zero()?, error_count.clone()],
+            error_count,
+        );
     }
     let total = int(&get_or(&summary, "scheduled_count", 0)?)?;
     let warning = int(&get_or(&summary, "warning_failure_count", 0)?)?;
@@ -214,7 +267,11 @@ struct TerminalFilter<'a> {
     table_exists: Option<bool>,
 }
 
-fn terminal_runs<'py>(connection: &Any<'py>, database: &str, filter: TerminalFilter<'_>) -> PyResult<Bound<'py, PyDict>> {
+fn terminal_runs<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    filter: TerminalFilter<'_>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let runs: Bound<'py, PyDict> = PyDict::new(py);
     let present: bool = match filter.table_exists {
@@ -230,11 +287,20 @@ fn terminal_runs<'py>(connection: &Any<'py>, database: &str, filter: TerminalFil
     }
     match filter.scheduled {
         Some(true) => clauses.push("command = 'audit' AND mode = 'scheduled'".to_owned()),
-        Some(false) => clauses.push("NOT (command = 'audit' AND coalesce(mode, '') = 'scheduled')".to_owned()),
+        Some(false) => {
+            clauses.push("NOT (command = 'audit' AND coalesce(mode, '') = 'scheduled')".to_owned())
+        }
         None => {}
     }
-    let where_clause: String = if clauses.is_empty() { String::new() } else { format!(" WHERE {}", clauses.join(" AND ")) };
-    let limit_clause: String = filter.limit.map(|limit| format!(" LIMIT {limit}")).unwrap_or_default();
+    let where_clause: String = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", clauses.join(" AND "))
+    };
+    let limit_clause: String = filter
+        .limit
+        .map(|limit| format!(" LIMIT {limit}"))
+        .unwrap_or_default();
     let query: String = format!(
         "SELECT invocation_id, project_identity, command, mode, outcome, exit_code, \
          toString(started_at) AS started_at, toString(completed_at) AS completed_at, \
@@ -263,10 +329,19 @@ fn terminal_runs<'py>(connection: &Any<'py>, database: &str, filter: TerminalFil
         run.set_item("summary", parsed_event_payload(&field("summary_json")?)?)?;
         run.set_item(
             "auditSummary",
-            terminal_audit_summary(text(&field("command")?)?, text(&field("mode")?)?, field("summary_json")?)?,
+            terminal_audit_summary(
+                text(&field("command")?)?,
+                text(&field("mode")?)?,
+                field("summary_json")?,
+            )?,
         )?;
         run.set_item("toolVersion", text(&field("tool_version")?)?)?;
-        for name in ["lastActivity", "completedOperationCount", "totalStatements", "currentStep"] {
+        for name in [
+            "lastActivity",
+            "completedOperationCount",
+            "totalStatements",
+            "currentStep",
+        ] {
             run.set_item(name, none(py))?;
         }
         runs.set_item(invocation_id, run)?;
@@ -309,8 +384,11 @@ fn run_started_streams<'py>(
     if invocation_ids.is_empty() || !table_exists {
         return Ok(PyDict::new(py));
     }
-    let literals: String =
-        invocation_ids.iter().map(|id| format!("'{}'", sql_literal(id))).collect::<Vec<_>>().join(", ");
+    let literals: String = invocation_ids
+        .iter()
+        .map(|id| format!("'{}'", sql_literal(id)))
+        .collect::<Vec<_>>()
+        .join(", ");
     let query: String = format!(
         "SELECT {EVENT_COLUMNS} FROM `{database}`.`{RUN_EVENTS_TABLE}` \
          WHERE invocation_id IN ({literals}) AND event_kind = '{RUN_STARTED}' ORDER BY invocation_id, sequence"
@@ -329,7 +407,11 @@ struct EventFilter<'a, 'py> {
     table_exists: Option<bool>,
 }
 
-fn event_streams<'py>(connection: &Any<'py>, database: &str, filter: EventFilter<'_, 'py>) -> PyResult<Bound<'py, PyDict>> {
+fn event_streams<'py>(
+    connection: &Any<'py>,
+    database: &str,
+    filter: EventFilter<'_, 'py>,
+) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
     let present: bool = match filter.table_exists {
         Some(present) => present,
@@ -355,12 +437,21 @@ fn event_streams<'py>(connection: &Any<'py>, database: &str, filter: EventFilter
         ));
     }
     if filter.exclude_terminal_invocations {
-        clauses.push(format!("invocation_id NOT IN (SELECT invocation_id FROM `{database}`.`{INVOCATIONS_TABLE}`)"));
+        clauses.push(format!(
+            "invocation_id NOT IN (SELECT invocation_id FROM `{database}`.`{INVOCATIONS_TABLE}`)"
+        ));
     }
-    let where_clause: String = if clauses.is_empty() { String::new() } else { format!(" WHERE {}", clauses.join(" AND ")) };
+    let where_clause: String = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", clauses.join(" AND "))
+    };
     let query: String = match filter.recent_limit {
         None => {
-            let limit_clause: String = filter.row_limit.map(|limit| format!(" LIMIT {limit}")).unwrap_or_default();
+            let limit_clause: String = filter
+                .row_limit
+                .map(|limit| format!(" LIMIT {limit}"))
+                .unwrap_or_default();
             format!(
                 "SELECT {EVENT_COLUMNS} FROM `{database}`.`{RUN_EVENTS_TABLE}`{where_clause} \
                  ORDER BY invocation_id, sequence{limit_clause}"
@@ -435,7 +526,11 @@ fn active_step<'py>(py: Python<'py>, events: &[Any<'py>]) -> PyResult<Any<'py>> 
             {
                 continue;
             }
-            return if get(event, "stepId")?.is_none() { Ok(none(py)) } else { text(&event.get_item("stepId")?) };
+            return if get(event, "stepId")?.is_none() {
+                Ok(none(py))
+            } else {
+                text(&event.get_item("stepId")?)
+            };
         } else if kind.eq(AUDIT_STARTED)? {
             if get(event, "stepId")?.is_none() {
                 return Ok(none(py));
@@ -495,7 +590,11 @@ fn run_progress<'py>(py: Python<'py>, events: &[Any<'py>]) -> PyResult<Bound<'py
         None => none(py),
         Some(started) => get(started, "totalStatements")?,
     };
-    let total_statements: Any<'py> = if raw_total.is_none() { raw_total } else { int(&raw_total)? };
+    let total_statements: Any<'py> = if raw_total.is_none() {
+        raw_total
+    } else {
+        int(&raw_total)?
+    };
     let completed_kinds = PyFrozenSet::new(py, [STATEMENT_COMPLETED, AUDIT_COMPLETED])?;
     let mut completed: i64 = 0;
     for event in events {
@@ -561,7 +660,10 @@ fn active_run<'py>(
     run.set_item("invocationId", invocation_id)?;
     run.set_item("command", text(&get_or(&started, "command", "build")?)?)?;
     let command = get_or(&started, "command", "build")?;
-    run.set_item("displayCommand", text(&get_or(&started, "displayCommand", command)?)?)?;
+    run.set_item(
+        "displayCommand",
+        text(&get_or(&started, "displayCommand", command)?)?,
+    )?;
     run.set_item("mode", text(&get_or(&started, "mode", "unknown")?)?)?;
     run.set_item("status", status.str()?)?;
     run.set_item("outcome", status.str()?)?;
@@ -573,7 +675,10 @@ fn active_run<'py>(
     };
     run.set_item("completedAt", completed_at)?;
     run.set_item("lastSignalAt", &last_signal_at)?;
-    run.set_item("lastSignalAgeSeconds", age_seconds(&last_signal_at, warehouse_now)?)?;
+    run.set_item(
+        "lastSignalAgeSeconds",
+        age_seconds(&last_signal_at, warehouse_now)?,
+    )?;
     let completed_text: Any<'py> = match &completed {
         None => none(py),
         Some(completed) => text(&completed.get_item("emittedAt")?)?,
@@ -582,7 +687,10 @@ fn active_run<'py>(
         "durationMs",
         derive_run_duration_ms(started_at.clone(), completed_text, warehouse_now.clone())?,
     )?;
-    run.set_item("selectedNodeCount", int(&get_or(&started, "selectedNodeCount", 0)?)?)?;
+    run.set_item(
+        "selectedNodeCount",
+        int(&get_or(&started, "selectedNodeCount", 0)?)?,
+    )?;
     run.set_item("executedLogicalIds", get(&started, "executedLogicalIds")?)?;
     run.set_item("contextLogicalIds", get(&started, "contextLogicalIds")?)?;
     run.set_item("errorMessage", from_completed("errorMessage")?)?;
@@ -634,7 +742,10 @@ fn assemble<'py>(
         if let Some(started) = first_of(&events, RUN_STARTED)?
             && get(&started, "displayCommand")?.is_truthy()?
         {
-            run.set_item("displayCommand", text(&started.get_item("displayCommand")?)?)?;
+            run.set_item(
+                "displayCommand",
+                text(&started.get_item("displayCommand")?)?,
+            )?;
         }
         let mut signalled: bool = false;
         for event in &events {
@@ -666,7 +777,13 @@ fn assemble<'py>(
     }
     // A stable descending sort keeps equal start times in their original order, as
     // `list.sort(reverse=True)` does.
-    keyed.sort_by(|left, right| right.0.as_any().compare(left.0.as_any()).unwrap_or(Ordering::Equal));
+    keyed.sort_by(|left, right| {
+        right
+            .0
+            .as_any()
+            .compare(left.0.as_any())
+            .unwrap_or(Ordering::Equal)
+    });
     Ok(keyed.into_iter().map(|(_, run)| run).collect())
 }
 
@@ -681,7 +798,15 @@ pub(crate) fn assemble_runs<'py>(
     presumed_failed_after_seconds: i64,
 ) -> PyResult<Any<'py>> {
     let py: Python<'py> = terminal_by_id.py();
-    let runs = PyList::new(py, assemble(&terminal_by_id, &streams, &warehouse_now, presumed_failed_after_seconds)?)?;
+    let runs = PyList::new(
+        py,
+        assemble(
+            &terminal_by_id,
+            &streams,
+            &warehouse_now,
+            presumed_failed_after_seconds,
+        )?,
+    )?;
     match limit {
         None => Ok(runs.into_any()),
         Some(limit) => runs.as_any().get_item(PySlice::new(py, 0, limit, 1)),
@@ -704,11 +829,20 @@ pub(crate) fn read_runs<'py>(
     let terminal: Bound<'py, PyDict> = PyDict::new(py);
     if invocations_present {
         for (limit, scheduled) in [(limit, false), (Some(SCHEDULED_RUNS_LIMIT), true)] {
-            let filter = TerminalFilter { limit, scheduled: Some(scheduled), table_exists: Some(true), ..TerminalFilter::default() };
+            let filter = TerminalFilter {
+                limit,
+                scheduled: Some(scheduled),
+                table_exists: Some(true),
+                ..TerminalFilter::default()
+            };
             terminal.update(terminal_runs(&connection, database, filter)?.as_mapping())?;
         }
     }
-    let ids: Vec<String> = terminal.keys().iter().map(|key| key.extract()).collect::<PyResult<_>>()?;
+    let ids: Vec<String> = terminal
+        .keys()
+        .iter()
+        .map(|key| key.extract())
+        .collect::<PyResult<_>>()?;
     let streams = run_started_streams(&connection, database, &ids, events_present)?;
     let active = event_streams(
         &connection,
@@ -722,14 +856,26 @@ pub(crate) fn read_runs<'py>(
         },
     )?;
     streams.update(active.as_mapping())?;
-    Ok(PyList::new(py, assemble(terminal.as_any(), streams.as_any(), &warehouse_now, presumed_failed_after_seconds)?)?
-        .into_any())
+    Ok(PyList::new(
+        py,
+        assemble(
+            terminal.as_any(),
+            streams.as_any(),
+            &warehouse_now,
+            presumed_failed_after_seconds,
+        )?,
+    )?
+    .into_any())
 }
 
 /// Return only event streams that have no durable terminal fact.
 #[pyfunction]
 #[pyo3(signature = (*, connection, database, presumed_failed_after_seconds = DEFAULT_PRESUMED_FAILED))]
-pub(crate) fn read_active_runs<'py>(connection: Any<'py>, database: &str, presumed_failed_after_seconds: i64) -> PyResult<Any<'py>> {
+pub(crate) fn read_active_runs<'py>(
+    connection: Any<'py>,
+    database: &str,
+    presumed_failed_after_seconds: i64,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     let warehouse_now = parse_timestamp(&connection.call_method0("capture_warehouse_timestamp")?)?;
     let invocations_present: bool = table_exists(&connection, database, INVOCATIONS_TABLE)?;
@@ -744,12 +890,22 @@ pub(crate) fn read_active_runs<'py>(connection: Any<'py>, database: &str, presum
         },
     )?;
     let terminal = PyDict::new(py);
-    Ok(PyList::new(py, assemble(terminal.as_any(), streams.as_any(), &warehouse_now, presumed_failed_after_seconds)?)?
-        .into_any())
+    Ok(PyList::new(
+        py,
+        assemble(
+            terminal.as_any(),
+            streams.as_any(),
+            &warehouse_now,
+            presumed_failed_after_seconds,
+        )?,
+    )?
+    .into_any())
 }
 
 fn project_identity_predicate(project_identity: &str) -> String {
-    let logical: &str = project_identity.rsplit_once('/').map_or(project_identity, |(_, name)| name);
+    let logical: &str = project_identity
+        .rsplit_once('/')
+        .map_or(project_identity, |(_, name)| name);
     format!(
         "(project_identity = '{}' OR endsWith(project_identity, '{}'))",
         sql_literal(logical),
@@ -797,7 +953,11 @@ pub(crate) fn read_latest_direct_build_materialization<'py>(
         return Ok(none(py));
     };
     let value = row.get_item("materialized_outcome")?;
-    if value.is_truthy()? { text(&value) } else { Ok(none(py)) }
+    if value.is_truthy()? {
+        text(&value)
+    } else {
+        Ok(none(py))
+    }
 }
 
 /// Return the latest successful direct materialization completion for this target.
@@ -832,7 +992,12 @@ struct OffsetProgress {
     total_partitions: usize,
 }
 
-fn offset_progress(request: &Any<'_>, frontiers: &Any<'_>, elapsed_seconds: f64, completed: bool) -> PyResult<Option<OffsetProgress>> {
+fn offset_progress(
+    request: &Any<'_>,
+    frontiers: &Any<'_>,
+    elapsed_seconds: f64,
+    completed: bool,
+) -> PyResult<Option<OffsetProgress>> {
     let mut spans: Vec<(Any<'_>, i64)> = Vec::new();
     for item in request.getattr("ranges")?.try_iter()? {
         let item = item?;
@@ -849,7 +1014,10 @@ fn offset_progress(request: &Any<'_>, frontiers: &Any<'_>, elapsed_seconds: f64,
         let frontier = frontier?;
         let partition: i64 = frontier.getattr("partition")?.extract()?;
         let offset: i64 = frontier.getattr("completed_offset")?.extract()?;
-        let previous: i64 = frontier_by_partition.get(&partition).copied().unwrap_or(offset);
+        let previous: i64 = frontier_by_partition
+            .get(&partition)
+            .copied()
+            .unwrap_or(offset);
         frontier_by_partition.insert(partition, offset.max(previous));
     }
     let completed_span: i64 = if completed {
@@ -859,13 +1027,23 @@ fn offset_progress(request: &Any<'_>, frontiers: &Any<'_>, elapsed_seconds: f64,
         for (item, span) in &spans {
             let partition: i64 = item.getattr("partition")?.extract()?;
             let lower: i64 = item.getattr("lower_offset")?.extract()?;
-            let frontier: i64 = frontier_by_partition.get(&partition).copied().unwrap_or(lower);
+            let frontier: i64 = frontier_by_partition
+                .get(&partition)
+                .copied()
+                .unwrap_or(lower);
             sum += (frontier - lower).max(0).min(*span);
         }
         sum
     };
-    let percentage: f64 = py_min(py_max(completed_span as f64 / total_span as f64 * 100.0, 0.0), 100.0);
-    let velocity: f64 = if elapsed_seconds <= 0.0 { 0.0 } else { completed_span as f64 / elapsed_seconds };
+    let percentage: f64 = py_min(
+        py_max(completed_span as f64 / total_span as f64 * 100.0, 0.0),
+        100.0,
+    );
+    let velocity: f64 = if elapsed_seconds <= 0.0 {
+        0.0
+    } else {
+        completed_span as f64 / elapsed_seconds
+    };
     let eta_seconds: Option<f64> = if completed {
         Some(0.0)
     } else if velocity <= 0.0 {
@@ -882,7 +1060,10 @@ fn offset_progress(request: &Any<'_>, frontiers: &Any<'_>, elapsed_seconds: f64,
         eta_seconds,
         completed_span,
         total_span,
-        observed_partitions: frontier_by_partition.keys().filter(|partition| partitions.contains(partition)).count(),
+        observed_partitions: frontier_by_partition
+            .keys()
+            .filter(|partition| partitions.contains(partition))
+            .count(),
         total_partitions: partitions.len(),
     }))
 }
@@ -913,7 +1094,10 @@ pub(crate) fn calculate_replay_offset_progress<'py>(
     )
 }
 
-fn decode_ranges<'py>(metadata: &Any<'py>, raw_ranges: &Any<'py>) -> PyResult<(Vec<Any<'py>>, [Any<'py>; 4])> {
+fn decode_ranges<'py>(
+    metadata: &Any<'py>,
+    raw_ranges: &Any<'py>,
+) -> PyResult<(Vec<Any<'py>>, [Any<'py>; 4])> {
     let py: Python<'py> = metadata.py();
     let range_class = attr(py, "sqltide.adapter.models", "AdapterReplayOffsetRange")?;
     let mut ranges: Vec<Any<'py>> = Vec::new();
@@ -952,17 +1136,18 @@ pub(crate) fn decode_replay_offset_progress_request<'py>(value: Any<'py>) -> PyR
     if !raw_ranges.is_instance_of::<PyList>() {
         return Ok(none(py));
     }
-    let (ranges, [database, relation, partition_column, offset_column]) = match decode_ranges(&value, &raw_ranges) {
-        Ok(decoded) => decoded,
-        Err(error)
-            if error.is_instance_of::<PyKeyError>(py)
-                || error.is_instance_of::<PyTypeError>(py)
-                || error.is_instance_of::<PyValueError>(py) =>
-        {
-            return Ok(none(py));
-        }
-        Err(error) => return Err(error),
-    };
+    let (ranges, [database, relation, partition_column, offset_column]) =
+        match decode_ranges(&value, &raw_ranges) {
+            Ok(decoded) => decoded,
+            Err(error)
+                if error.is_instance_of::<PyKeyError>(py)
+                    || error.is_instance_of::<PyTypeError>(py)
+                    || error.is_instance_of::<PyValueError>(py) =>
+            {
+                return Ok(none(py));
+            }
+            Err(error) => return Err(error),
+        };
     if ranges.is_empty() {
         return Ok(none(py));
     }
@@ -971,7 +1156,12 @@ pub(crate) fn decode_replay_offset_progress_request<'py>(value: Any<'py>) -> PyR
             return Ok(none(py));
         }
     }
-    attr(py, "sqltide.adapter.models", "AdapterReplayOffsetProgressRequest")?.call(
+    attr(
+        py,
+        "sqltide.adapter.models",
+        "AdapterReplayOffsetProgressRequest",
+    )?
+    .call(
         (),
         Some(&py_kwargs!(py;
             database = database,
@@ -987,7 +1177,11 @@ pub(crate) fn decode_replay_offset_progress_request<'py>(value: Any<'py>) -> PyR
 /// statement recorded its offset ranges.
 #[pyfunction]
 #[pyo3(signature = (*, connection, events, observed_at))]
-pub(crate) fn statement_progress<'py>(connection: Any<'py>, events: Any<'py>, observed_at: Any<'py>) -> PyResult<Any<'py>> {
+pub(crate) fn statement_progress<'py>(
+    connection: Any<'py>,
+    events: Any<'py>,
+    observed_at: Any<'py>,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     let events: Vec<Any<'py>> = events.try_iter()?.collect::<PyResult<_>>()?;
     let Some(active) = active_statement(py, &events)? else {
@@ -1022,7 +1216,11 @@ pub(crate) fn statement_progress<'py>(connection: Any<'py>, events: Any<'py>, ob
     }
     let elapsed = progress.getattr("elapsed_seconds")?;
     let rate = |name: &str| -> PyResult<Any<'py>> {
-        if elapsed.le(0)? { Ok(0.0_f64.into_pyobject(py)?.into_any()) } else { progress.getattr(name)?.div(&elapsed) }
+        if elapsed.le(0)? {
+            Ok(0.0_f64.into_pyobject(py)?.into_any())
+        } else {
+            progress.getattr(name)?.div(&elapsed)
+        }
     };
     let metrics: Bound<'py, PyDict> = py_kwargs!(py;
         elapsedSeconds = &elapsed,
@@ -1076,13 +1274,29 @@ pub(crate) fn read_run_events<'py>(
     let py: Python<'py> = connection.py();
     let warehouse_timestamp = connection.call_method0("capture_warehouse_timestamp")?;
     let warehouse_now = parse_timestamp(&warehouse_timestamp)?;
-    let terminal = terminal_runs(&connection, database, TerminalFilter { invocation_id: Some(invocation_id), ..TerminalFilter::default() })?;
+    let terminal = terminal_runs(
+        &connection,
+        database,
+        TerminalFilter {
+            invocation_id: Some(invocation_id),
+            ..TerminalFilter::default()
+        },
+    )?;
     let status_streams = event_streams(
         &connection,
         database,
-        EventFilter { invocation_id: Some(invocation_id), recent_limit: Some(RUN_EVENT_WINDOW_SIZE), ..EventFilter::default() },
+        EventFilter {
+            invocation_id: Some(invocation_id),
+            recent_limit: Some(RUN_EVENT_WINDOW_SIZE),
+            ..EventFilter::default()
+        },
     )?;
-    let runs = assemble(terminal.as_any(), status_streams.as_any(), &warehouse_now, presumed_failed_after_seconds)?;
+    let runs = assemble(
+        terminal.as_any(),
+        status_streams.as_any(),
+        &warehouse_now,
+        presumed_failed_after_seconds,
+    )?;
     let run: Option<&Any<'py>> = runs.first();
     let streams = event_streams(
         &connection,
@@ -1094,7 +1308,9 @@ pub(crate) fn read_run_events<'py>(
             ..EventFilter::default()
         },
     )?;
-    let events: Any<'py> = streams.get_item(invocation_id)?.unwrap_or_else(|| PyList::empty(py).into_any());
+    let events: Any<'py> = streams
+        .get_item(invocation_id)?
+        .unwrap_or_else(|| PyList::empty(py).into_any());
     let event_count: usize = events.len()?;
     let run_value = |name: &str| -> PyResult<Any<'py>> {
         match run {
@@ -1161,16 +1377,31 @@ pub(crate) fn read_run_statement<'py>(
 /// Return one exact terminal run without applying the history-list limit.
 #[pyfunction]
 #[pyo3(signature = (*, connection, database, invocation_id))]
-pub(crate) fn read_terminal_run<'py>(connection: Any<'py>, database: &str, invocation_id: &str) -> PyResult<Any<'py>> {
+pub(crate) fn read_terminal_run<'py>(
+    connection: Any<'py>,
+    database: &str,
+    invocation_id: &str,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
-    let runs = terminal_runs(&connection, database, TerminalFilter { invocation_id: Some(invocation_id), ..TerminalFilter::default() })?;
+    let runs = terminal_runs(
+        &connection,
+        database,
+        TerminalFilter {
+            invocation_id: Some(invocation_id),
+            ..TerminalFilter::default()
+        },
+    )?;
     Ok(runs.get_item(invocation_id)?.unwrap_or_else(|| none(py)))
 }
 
 /// Return exact terminal intent, falling back to complete destruction events.
 #[pyfunction]
 #[pyo3(signature = (*, connection, database, invocation_id))]
-pub(crate) fn read_destruction_recovery_run<'py>(connection: Any<'py>, database: &str, invocation_id: &str) -> PyResult<Any<'py>> {
+pub(crate) fn read_destruction_recovery_run<'py>(
+    connection: Any<'py>,
+    database: &str,
+    invocation_id: &str,
+) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     let terminal = read_terminal_run(connection.clone(), database, invocation_id)?;
     if !terminal.is_none() {
@@ -1179,7 +1410,11 @@ pub(crate) fn read_destruction_recovery_run<'py>(connection: Any<'py>, database:
     let streams = event_streams(
         &connection,
         database,
-        EventFilter { invocation_id: Some(invocation_id), recent_limit: Some(1), ..EventFilter::default() },
+        EventFilter {
+            invocation_id: Some(invocation_id),
+            recent_limit: Some(1),
+            ..EventFilter::default()
+        },
     )?;
     let events: Vec<Any<'py>> = match streams.get_item(invocation_id)? {
         None => Vec::new(),
@@ -1194,8 +1429,11 @@ pub(crate) fn read_destruction_recovery_run<'py>(connection: Any<'py>, database:
     if !is_mapping(&evidence)? {
         evidence = get(&started, "operationEvidence")?;
     }
-    let summary: Any<'py> =
-        if is_mapping(&evidence)? { attr(py, "builtins", "dict")?.call1((evidence,))? } else { none(py) };
+    let summary: Any<'py> = if is_mapping(&evidence)? {
+        attr(py, "builtins", "dict")?.call1((evidence,))?
+    } else {
+        none(py)
+    };
     Ok(py_kwargs!(py;
         invocationId = invocation_id,
         projectIdentity = get(&started, "projectIdentity")?,
@@ -1219,8 +1457,17 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(read_run_statement, module)?)?;
     module.add_function(wrap_pyfunction!(read_terminal_run, module)?)?;
     module.add_function(wrap_pyfunction!(read_destruction_recovery_run, module)?)?;
-    module.add_function(wrap_pyfunction!(read_latest_direct_build_materialization, module)?)?;
-    module.add_function(wrap_pyfunction!(read_latest_applied_direct_build_at, module)?)?;
-    module.add_function(wrap_pyfunction!(decode_replay_offset_progress_request, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        read_latest_direct_build_materialization,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        read_latest_applied_direct_build_at,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        decode_replay_offset_progress_request,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(calculate_replay_offset_progress, module)?)
 }
