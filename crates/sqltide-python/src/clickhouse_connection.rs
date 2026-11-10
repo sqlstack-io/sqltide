@@ -6,7 +6,7 @@
 use std::sync::Mutex;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyFrozenSet, PyList, PyTuple};
+use pyo3::types::{PyDict, PyFrozenSet, PyList, PyTuple, PyType};
 
 use crate::dev_server::support::attr;
 use crate::handling::raise_from;
@@ -121,6 +121,28 @@ fn concat<'py>(py: Python<'py>, parts: &[Any<'py>]) -> PyResult<Bound<'py, PyTup
     PyTuple::new(py, items)
 }
 
+/// Refuse to build a subclass that leaves abstract contract methods unimplemented, as
+/// `object.__new__` does for an ordinary ABC.
+fn reject_abstract(cls: &Bound<'_, PyType>) -> PyResult<()> {
+    let Ok(abstract_methods) = cls.getattr("__abstractmethods__") else {
+        return Ok(());
+    };
+    let mut names: Vec<String> = abstract_methods
+        .try_iter()?
+        .map(|name| name?.extract())
+        .collect::<PyResult<_>>()?;
+    if names.is_empty() {
+        return Ok(());
+    }
+    names.sort();
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "Can't instantiate abstract class {} without an implementation for abstract method{} '{}'",
+        cls.name()?,
+        if names.len() == 1 { "" } else { "s" },
+        names.join("', '")
+    )))
+}
+
 /// A neutral adapter connection backed by the ClickHouse driver.
 #[pyclass(module = "sqltide._native", frozen, subclass)]
 pub(crate) struct ClickHouseConnectionCore {
@@ -193,12 +215,15 @@ impl ClickHouseConnectionCore {
 #[pymethods]
 impl ClickHouseConnectionCore {
     #[new]
+    #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
     fn new(
-        py: Python<'_>,
+        cls: &Bound<'_, PyType>,
         _args: &Bound<'_, PyTuple>,
         _kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
+        let py: Python<'_> = cls.py();
+        reject_abstract(cls)?;
         Ok(Self {
             raw_client: Mutex::new(None),
             replay_frontier_lock: attr(py, "threading", "Lock")?.call0()?.unbind(),
@@ -1052,9 +1077,15 @@ pub(crate) struct ClickHouseAdapterCore;
 #[pymethods]
 impl ClickHouseAdapterCore {
     #[new]
+    #[classmethod]
     #[pyo3(signature = (*_args, **_kwargs))]
-    fn new(_args: &Bound<'_, PyTuple>, _kwargs: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+    fn new(
+        cls: &Bound<'_, PyType>,
+        _args: &Bound<'_, PyTuple>,
+        _kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        reject_abstract(cls)?;
+        Ok(Self)
     }
 
     /// Return the registered ClickHouse adapter identity.

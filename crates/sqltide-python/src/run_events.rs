@@ -509,6 +509,7 @@ impl RunEventSink {
                 attr(py, ADAPTER_EXCEPTIONS, "AdapterWarehouseError")?
                     .call1((format!("Required run-event persistence failed: {message}"),))?,
             );
+            raised.value(py).setattr("__context__", error.value(py))?;
             raised.set_cause(py, Some(error));
             return Err(raised);
         }

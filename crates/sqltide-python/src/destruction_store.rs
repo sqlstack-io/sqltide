@@ -8,6 +8,7 @@ use sqltide_planner::direct::sha256_hex;
 
 use crate::control_store::sql;
 use crate::dev_server::support::attr;
+use crate::handling::while_handling;
 use crate::py_kwargs;
 
 const DRIVER: &str = "sqltide.auth.classes.relational_driver";
@@ -543,9 +544,9 @@ impl RelationalDestructionPlanStore {
         });
         match recorded {
             Err(failure) if matches!(error_kind(py, &failure)?.as_deref(), Some("integrity")) => {
-                let raced: Any<'_> =
-                    self.read_only(py, |transaction| self.schema_version(transaction))?;
-                schema_version_error(py, &raced)
+                self.read_only(py, |transaction| self.schema_version(transaction))
+                    .and_then(|raced| schema_version_error(py, &raced))
+                    .map_err(|raised| while_handling(py, raised, &failure))
             }
             other => other,
         }

@@ -2,6 +2,7 @@
 //! qualify, the admin client configuration, the scoped consumer group and the operator notice.
 //! The kafka-python client itself is driven by its Python glue module.
 
+use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use sqltide_clickhouse::resources::database_scoped_consumer_group;
@@ -103,20 +104,28 @@ fn reset_fresh_landing_offsets<'py>(
             &resource.getattr("consumer_group")?.extract::<String>()?,
             &managed.getattr("database")?.extract::<String>()?,
         );
-        let config: Bound<'py, PyDict> = client_config(
-            &resource.getattr("broker_list")?,
-            &attr(py, "builtins", "dict")?.call1((resource.getattr("settings")?,))?,
-        )?;
-        let (deleted, error): (bool, Option<String>) = attr(py, GLUE, "delete_consumer_group")?
-            .call(
-                (),
-                Some(&py_kwargs!(py;
-                    client_factory = &client_factory,
-                    config = config,
-                    consumer_group = &consumer_group,
-                )?),
-            )?
-            .extract()?;
+        let broker_list: Any<'py> = resource.getattr("broker_list")?;
+        let settings: Any<'py> =
+            attr(py, "builtins", "dict")?.call1((resource.getattr("settings")?,))?;
+        // Like the admin client itself, a configuration that cannot be built is reported in the
+        // notice rather than failing the build.
+        let (deleted, error): (bool, Option<String>) = match client_config(&broker_list, &settings)
+        {
+            Ok(config) => attr(py, GLUE, "delete_consumer_group")?
+                .call(
+                    (),
+                    Some(&py_kwargs!(py;
+                        client_factory = &client_factory,
+                        config = config,
+                        consumer_group = &consumer_group,
+                    )?),
+                )?
+                .extract()?,
+            Err(failure) if failure.is_instance_of::<PyException>(py) => {
+                (false, Some(failure.value(py).str()?.extract()?))
+            }
+            Err(failure) => return Err(failure),
+        };
         let notice: Option<String> = notice(&consumer_group, &landing, deleted, error.as_deref());
         resets.push(attr(py, MODELS, "ConsumerGroupOffsetReset")?.call(
             (),
