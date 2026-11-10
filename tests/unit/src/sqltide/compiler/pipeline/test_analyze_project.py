@@ -279,9 +279,9 @@ def test_given_adapter_profile_when_analyzing_then_references_use_its_dialect(
     "test_case",
     [
         ProjectSqlAnalysisCallCountTestCase(
-            description="bounds Python-side Polyglot calls across one two-model project analysis",
+            description="makes no Python-side Polyglot calls across one two-model project analysis",
             expected_model_count=2,
-            expected_analyze_calls=1,
+            expected_analyze_calls=0,
         )
     ],
     ids=lambda case: case.description,
@@ -870,7 +870,7 @@ def test_given_cli_compilation_paths_when_inspecting_imports_then_only_one_servi
     assert len(entrypoint_paths) == test_case.expected_entrypoint_count
     assert service_call_counts == (1,) * test_case.expected_entrypoint_count
     assert old_entrypoint_counts == (0,) * test_case.expected_entrypoint_count
-    assert assembly_source.count('"build_sql_test_cases"') == test_case.expected_assembly_call_count
+    assert assembly_source.count("build_sql_test_cases(") == test_case.expected_assembly_call_count
     assert analysis_source.count("realize_project(") == test_case.expected_realization_call_count
     assert analysis_source.index("assemble_project(") < analysis_source.index("realize_project(")
     assert assembly_source.count(".realize_model(") == test_case.expected_consumer_rebuild_count

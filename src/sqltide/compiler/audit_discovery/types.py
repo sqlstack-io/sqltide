@@ -9,4 +9,3 @@ class AuditAttachmentKind(StrEnum):
     STANDALONE = "standalone"
     MODEL = "model"
     COLUMN = "column"
-

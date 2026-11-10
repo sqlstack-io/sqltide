@@ -3,6 +3,7 @@
 import json
 import sys
 
+import sqltide._native as _native
 from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
@@ -21,7 +22,6 @@ from sqltide.cli.build.models import (
 )
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.compiler.quality.main.require_quality_identity import require_quality_identity
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import AuditSeverity
 from sqltide.executor.direct.exceptions import DirectBuildError
@@ -318,7 +318,7 @@ def _direct_audit_node_results(
         records.append(
             build_node_result_record(
                 invocation=invocation,
-                identity=require_quality_identity(audit.quality_identity),
+                identity=_native.require_quality_identity(audit.quality_identity),
                 context=QualityResultContext(
                     trigger=QualityResultTrigger.BUILD,
                     cadence_seconds=audit.cadence_seconds,
@@ -355,7 +355,7 @@ def _deferred_direct_audit_node_results(
     return tuple(
         build_node_result_record(
             invocation=invocation,
-            identity=require_quality_identity(audit.quality_identity),
+            identity=_native.require_quality_identity(audit.quality_identity),
             context=QualityResultContext(
                 trigger=QualityResultTrigger.BUILD,
                 cadence_seconds=audit.cadence_seconds,

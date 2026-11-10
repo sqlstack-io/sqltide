@@ -13,7 +13,7 @@ use sqltide_compile::sql_test_chain::{ChainError, resolve_chain};
 /// `(binding key, definition fingerprint, execution fingerprint)` of one SQL test, from its
 /// canonicalized SQL.
 #[pyfunction]
-fn quality_test_identity(
+pub(crate) fn quality_test_identity(
     node_name: &str,
     mode: &str,
     assertion_names: Vec<String>,
@@ -38,7 +38,7 @@ fn quality_test_identity(
 /// canonicalized SQL.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-fn quality_audit_identity(
+pub(crate) fn quality_audit_identity(
     node_name: &str,
     attached_column: Option<&str>,
     attached_model: Option<&str>,
@@ -144,7 +144,7 @@ impl SqlTestChainRegistry {
 /// `query` preceded by a `WITH` clause of `(name, query)` CTEs.
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)]
-fn sql_test_wrap_with_ctes(query: &str, ctes: Vec<(String, String)>) -> String {
+pub(crate) fn sql_test_wrap_with_ctes(query: &str, ctes: Vec<(String, String)>) -> String {
     let ctes: Vec<(&str, &str)> = ctes
         .iter()
         .map(|(name, cte_query)| (name.as_str(), cte_query.as_str()))
@@ -156,7 +156,7 @@ fn sql_test_wrap_with_ctes(query: &str, ctes: Vec<(String, String)>) -> String {
 /// `ValueError(missing column names)` when the model does not produce an expected column.
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)]
-fn sql_test_chain_step_queries(
+pub(crate) fn sql_test_chain_step_queries(
     expected_column_names: Vec<String>,
     output_columns: Vec<(String, String)>,
     actual_cte_name: &str,

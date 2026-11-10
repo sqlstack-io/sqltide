@@ -77,7 +77,7 @@ fn analysis_failure(py: Python<'_>, message: String, context: Option<PyErr>) -> 
 
 /// The output column names produced by one authored query.
 #[pyfunction]
-fn sql_infer_projection_names<'py>(
+pub(crate) fn sql_infer_projection_names<'py>(
     py: Python<'py>,
     sql: &str,
     dialect_name: &str,

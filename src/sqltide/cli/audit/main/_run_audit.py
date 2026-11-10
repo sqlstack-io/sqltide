@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
@@ -13,7 +14,6 @@ from sqltide.compiler.compile.models import CompiledPipeline, CompilerAdapterPro
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.main.analyze_project import analyze_project
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.quality.main.require_quality_identity import require_quality_identity
 from sqltide.executor.auditing.main.deferred_audit_result import deferred_audit_result
 from sqltide.executor.auditing.main.execute_sql_audits import execute_sql_audits
 from sqltide.executor.auditing.main.load_materialized_model_names import (
@@ -238,7 +238,7 @@ def _audit_node_results(
         records.append(
             build_node_result_record(
                 invocation=invocation,
-                identity=require_quality_identity(audit.quality_identity),
+                identity=_native.require_quality_identity(audit.quality_identity),
                 context=QualityResultContext(
                     trigger=QualityResultTrigger.MANUAL,
                     cadence_seconds=audit.cadence_seconds,

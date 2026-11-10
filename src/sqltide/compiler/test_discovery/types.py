@@ -8,4 +8,3 @@ class SqlTestMode(StrEnum):
 
     MODEL = "model"
     MACRO = "macro"
-

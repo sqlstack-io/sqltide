@@ -80,6 +80,16 @@ rule = "FFR309"
 path = "src/sqltide/compiler/test_discovery/__init__.py"
 reason = "Native bindings own SQL test file parsing, CTE classification and test target names; this package only declares the test models, types, constants and errors they build and raise."
 
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/testing/__init__.py"
+reason = "Native bindings own SQL test chain assembly, comparison rendering requests and test case identities; this package only declares the SQL test case models and errors they build and raise."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/quality/__init__.py"
+reason = "Native bindings own SQL test and audit quality identities and the compiled identity requirement; this package only declares the quality identity model, node kinds and errors they build and raise."
+
 [targets.web]
 analyzer = "svelte"
 root = "ui"

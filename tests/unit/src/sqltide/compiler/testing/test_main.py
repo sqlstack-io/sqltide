@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
     SqlReferenceRewriter,
 )
-from sqltide.compiler.testing.main._build_sql_test_cases import build_sql_test_cases
 from sqltide.compiler.testing.models import SqlTestCase
 from tests.unit.src.sqltide.compiler.testing._test_types import (
     BuildSqlTestCasesErrorTestCase,
@@ -179,7 +179,7 @@ def test_given_discovered_sql_tests_when_building_cases_then_it_assembles_expect
         test_file_contents=test_case.test_file_contents,
     )
 
-    test_case_result: SqlTestCase = build_sql_test_cases(
+    test_case_result: SqlTestCase = _native.build_sql_test_cases(
         loaded_tests=(loaded_test,),
         compiled_pipelines=(compiled_pipeline,),
         reference_rewriter=SqlReferenceRewriter(dialect="clickhouse"),
@@ -228,7 +228,7 @@ def test_given_invalid_sql_tests_when_building_cases_then_it_raises_clear_errors
     )
 
     with pytest.raises(ValueError, match=test_case.expected_error_fragment):
-        build_sql_test_cases(
+        _native.build_sql_test_cases(
             loaded_tests=(loaded_test,),
             compiled_pipelines=(compiled_pipeline,),
             reference_rewriter=SqlReferenceRewriter(dialect="clickhouse"),

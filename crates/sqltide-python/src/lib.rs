@@ -31,6 +31,7 @@ mod rules;
 mod sources;
 mod sql_scan;
 mod test_discovery;
+mod testing;
 mod timestamps;
 mod toml;
 mod workflow;
@@ -111,6 +112,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     sources::register(module)?;
     sql_scan::register(module)?;
     test_discovery::register(module)?;
+    testing::register(module)?;
     timestamps::register(module)?;
     toml::register(module)?;
     workflow::register(module)

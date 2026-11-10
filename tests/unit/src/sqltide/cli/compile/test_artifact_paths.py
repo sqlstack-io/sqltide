@@ -2,6 +2,10 @@ from pathlib import Path
 
 import pytest
 
+from sqltide.adapter.models import (
+    AdapterSetDifferenceComparisonRequest,
+    AdapterSetDifferenceTarget,
+)
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.compile._helpers.content import static_test_sql
 from sqltide.cli.compile._helpers.paths import (
@@ -16,7 +20,6 @@ from sqltide.cli.compile.exceptions import CompileArtifactError
 from sqltide.cli.compile.models import StaticArtifactFile, StaticCompileArtifacts
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.sql_analysis.main._validate_query import validate_query
-from sqltide.compiler.testing._helpers.comparison import render_comparison_query
 from sqltide.compiler.testing.models import SqlTestCase, SqlTestChainStep
 from tests.unit.src.sqltide.cli.compile._test_types import (
     AuditArtifactPathTestCase,
@@ -271,10 +274,19 @@ def test_given_multi_target_test_when_assembling_static_sql_then_emits_one_state
     )
     compiled_test: SqlTestCase = SqlTestCase(
         file_path=Path("tests/chain.sql"),
-        query=render_comparison_query(
-            comparison_renderer=ClickHouseAdapter().render_set_difference_comparison,
-            target_cases=target_cases,
-            assertion_cases=(),
+        query=ClickHouseAdapter().render_set_difference_comparison(
+            request=AdapterSetDifferenceComparisonRequest(
+                targets=tuple(
+                    AdapterSetDifferenceTarget(
+                        name=step.target_model_name,
+                        column_names=step.expected_column_names,
+                        ctes=step.ctes,
+                        actual_query=step.actual_query,
+                        expected_query=step.expected_query,
+                    )
+                    for step in target_cases
+                )
+            )
         ),
         name="chain",
         target_cases=target_cases,

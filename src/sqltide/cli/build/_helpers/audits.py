@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import sqltide._native as _native
 from sqltide.cli.build.models import DirectBuildPreviewContext
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.compile.main.replace_refs import replace_refs
 from sqltide.compiler.compile.models import CompilerAdapterProfile
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
@@ -42,7 +42,7 @@ def prepare_direct_build_audits(
     return tuple(
         DirectBuildAudit(
             name=audit.name or audit.file_path.name,
-            query=replace_refs(sql=audit.query, resolver=resolver, rewriter=rewriter),
+            query=_native.replace_refs(sql=audit.query, resolver=resolver, rewriter=rewriter),
             severity=audit.severity,
             description=audit.description,
         )

@@ -9,7 +9,7 @@ from sqltide.adapter.models import (
     AdapterReplayRequest,
     CatalogSnapshot,
 )
-from sqltide.adapter.types import AdapterResourceRenderer
+from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
@@ -65,6 +65,7 @@ from sqltide.compiler.planner.models import (
     RebuildSubtree,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
+from sqltide.compiler.quality.models import QualityNodeIdentity
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
 from sqltide.compiler.sql_analysis.models import (
@@ -79,6 +80,7 @@ from sqltide.compiler.sql_analysis.models import (
     SqlTopLevelCtes,
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
+from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState
 from sqltide.executor.destruction.models import DestructionPlan
@@ -222,6 +224,22 @@ def discover_sql_tests(
     macro_context: MacroContext | None = None,
 ) -> list[LoadedSqlTest]: ...
 def sql_test_target_names(*, loaded_test: LoadedSqlTest) -> tuple[str, ...]: ...
+def replace_refs(*, sql: str, resolver: dict[str, str], rewriter: SqlReferenceRewriter) -> str: ...
+def build_sql_test_cases(
+    *,
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    reference_rewriter: SqlReferenceRewriter,
+    comparison_renderer: AdapterSetDifferenceComparisonRenderer,
+    dialect: str,
+) -> tuple[SqlTestCase, ...]: ...
+def build_test_quality_identity(
+    *, loaded_test: LoadedSqlTest, test_case: SqlTestCase, dialect: str
+) -> QualityNodeIdentity: ...
+def build_audit_quality_identity(
+    *, audit: LoadedSqlAudit, resolved_query: str, dialect: str
+) -> QualityNodeIdentity: ...
+def require_quality_identity(identity: QualityNodeIdentity | None) -> QualityNodeIdentity: ...
 def build_model_audit_instances(
     *, models: tuple[TransformStep | ViewStep, ...]
 ) -> tuple[LoadedGenericSqlAuditInstance, ...]: ...

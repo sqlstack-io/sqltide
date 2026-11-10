@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.quality.main.require_quality_identity import require_quality_identity
 from sqltide.dev_server.exceptions import AuditSchedulerPersistenceError
 from sqltide.executor.auditing.main.execute_sql_audits import execute_sql_audits
 from sqltide.executor.auditing.models import SqlAuditResult, SqlAuditRunResult
@@ -199,7 +199,7 @@ def _scheduled_error_node_result(
 ) -> AdapterNodeResultRecord:
     return build_node_result_record(
         invocation=invocation,
-        identity=require_quality_identity(audit.quality_identity),
+        identity=_native.require_quality_identity(audit.quality_identity),
         context=QualityResultContext(
             trigger=QualityResultTrigger.SCHEDULED,
             scheduled_for=scheduled_for,
@@ -236,7 +236,7 @@ def _scheduled_node_result(
     )
     return build_node_result_record(
         invocation=invocation,
-        identity=require_quality_identity(audit.quality_identity),
+        identity=_native.require_quality_identity(audit.quality_identity),
         context=QualityResultContext(
             trigger=QualityResultTrigger.SCHEDULED,
             scheduled_for=scheduled_for,

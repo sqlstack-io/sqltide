@@ -418,7 +418,7 @@ pub(crate) fn sql_validate_query(sql: &str, dialect_name: &str) -> PyResult<()> 
 }
 
 #[pyfunction]
-fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
+pub(crate) fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
     canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 

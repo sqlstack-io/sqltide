@@ -25,18 +25,19 @@ from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
 from sqltide.compiler.sql_analysis.models import (
     SqlAggregateFacts,
     SqlModelAnalysis,
+    SqlOutputColumn,
+    SqlProjection,
     SqlReference,
     SqlSourceSpan,
 )
 from sqltide.compiler.sql_analysis.types import SqlQueryShape, SqlRelationType
 from sqltide.compiler.test_discovery.models import (
     LoadedSqlTest,
+    SqlTestCte,
     SqlTestMock,
     SqlTestModelPayload,
 )
 from sqltide.compiler.test_discovery.types import SqlTestMode
-from sqltide.compiler.testing.classes.sql_test_chain_assembler import SqlTestChainAssembler
-from sqltide.compiler.testing.main._build_sql_test_cases import build_sql_test_cases
 from sqltide.compiler.testing.models import SqlTestCase
 from tests.unit.src.sqltide.compiler.discovery._helpers.load.helpers import (
     write_pipeline_file,
@@ -150,7 +151,7 @@ def build_single_sql_test_case(*, tmp_path: Path, test_file_contents: str) -> Sq
         tmp_path=tmp_path,
         test_file_contents=test_file_contents,
     )
-    return build_sql_test_cases(
+    return _native.build_sql_test_cases(
         loaded_tests=(loaded_test,),
         compiled_pipelines=(compiled_pipeline,),
         reference_rewriter=SqlReferenceRewriter(dialect="clickhouse"),
@@ -159,7 +160,7 @@ def build_single_sql_test_case(*, tmp_path: Path, test_file_contents: str) -> Sq
     )[0]
 
 
-def build_deep_chain_assembler(*, model_count: int) -> SqlTestChainAssembler:
+def build_deep_chain_test_case(*, model_count: int) -> SqlTestCase:
     source: KafkaLandingStep = KafkaLandingStep(
         name="orders",
         kafka=KafkaSettings(broker_list="localhost:9092", topic="orders"),
@@ -206,7 +207,13 @@ def build_deep_chain_assembler(*, model_count: int) -> SqlTestChainAssembler:
                 sql_analysis=SqlModelAnalysis(
                     authored_sql=query,
                     shape=SqlQueryShape.SELECT,
-                    projections=(),
+                    projections=(
+                        SqlProjection(
+                            index=0,
+                            output=SqlOutputColumn(name="id", type="UInt64"),
+                            span=span,
+                        ),
+                    ),
                     references=(
                         SqlReference(
                             name=dependency_name,
@@ -237,19 +244,23 @@ def build_deep_chain_assembler(*, model_count: int) -> SqlTestChainAssembler:
                 query="SELECT 1 AS id",
             ),
         ),
-        expected_targets=(),
+        expected_targets=(
+            SqlTestCte(
+                name=f"__expected__model_{model_count - 1}",
+                query="SELECT CAST(1 AS UInt64) AS id",
+            ),
+        ),
         assertions=(),
         assertion_reference_names=(),
     )
     loaded_test: LoadedSqlTest = LoadedSqlTest(
         file_path=Path("/project/tests/deep_chain.sql"),
         mode=SqlTestMode.MODEL,
-        authored_ctes=(),
+        authored_ctes=(SqlTestCte(name="__source__orders", query="SELECT 1 AS id"),),
         payload=payload,
     )
-    return SqlTestChainAssembler(
-        loaded_test=loaded_test,
-        payload=payload,
+    return _native.build_sql_test_cases(
+        loaded_tests=(loaded_test,),
         compiled_pipelines=(
             CompiledPipeline(
                 pipeline=pipeline,
@@ -261,7 +272,9 @@ def build_deep_chain_assembler(*, model_count: int) -> SqlTestChainAssembler:
             ),
         ),
         reference_rewriter=SqlReferenceRewriter(dialect="clickhouse"),
-    )
+        comparison_renderer=ClickHouseAdapter().render_set_difference_comparison,
+        dialect="clickhouse",
+    )[0]
 
 
 CYCLIC_MODEL_SQL_BY_NAME: tuple[tuple[str, str], ...] = (
@@ -301,7 +314,7 @@ def build_cyclic_sql_test_case(*, tmp_path: Path, test_file_contents: str) -> Sq
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),
     )
     loaded_test: LoadedSqlTest = _native.discover_sql_tests(root=tmp_path / "tests")[0]
-    return build_sql_test_cases(
+    return _native.build_sql_test_cases(
         loaded_tests=(loaded_test,),
         compiled_pipelines=(compiled_pipeline,),
         reference_rewriter=SqlReferenceRewriter(dialect="clickhouse"),

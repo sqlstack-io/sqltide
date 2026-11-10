@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import sqltide._native as _native
 from sqltide._native import resolve_audit_warmup_states
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_NODE_RESULTS_TABLE_NAME
@@ -16,7 +17,6 @@ from sqltide.adapter.models import (
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.types import LogicalResourceType
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.quality.main.require_quality_identity import require_quality_identity
 from sqltide.compiler.quality.models import QualityNodeIdentity
 from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.dev_server.exceptions import DevServerError
@@ -280,7 +280,7 @@ def build_checks_status_payload(
             if model_name not in anchors_by_model and model_name not in materialized_model_names
         ]
     for audit in analysis.compiled_project.audits:
-        identity: QualityNodeIdentity = require_quality_identity(audit.quality_identity)
+        identity: QualityNodeIdentity = _native.require_quality_identity(audit.quality_identity)
         nodes.append(
             AdapterCurrentQualityNode(
                 node_kind=identity.node_kind,
@@ -293,7 +293,7 @@ def build_checks_status_payload(
             )
         )
     for test_case in analysis.compiled_project.test_cases:
-        identity: QualityNodeIdentity = require_quality_identity(test_case.quality_identity)
+        identity: QualityNodeIdentity = _native.require_quality_identity(test_case.quality_identity)
         nodes.append(
             AdapterCurrentQualityNode(
                 node_kind=identity.node_kind,
@@ -428,7 +428,7 @@ def _audit_node_result(
 ) -> AdapterNodeResultRecord:
     return build_node_result_record(
         invocation=invocation,
-        identity=require_quality_identity(audit.quality_identity),
+        identity=_native.require_quality_identity(audit.quality_identity),
         context=QualityResultContext(
             trigger=QualityResultTrigger.MANUAL,
             cadence_seconds=audit.cadence_seconds,
@@ -484,7 +484,7 @@ def _persist_test_observation(
         node_results=(
             build_node_result_record(
                 invocation=invocation,
-                identity=require_quality_identity(test_case.quality_identity),
+                identity=_native.require_quality_identity(test_case.quality_identity),
                 context=QualityResultContext(trigger=QualityResultTrigger.MANUAL),
                 status=status,
                 severity=None,
