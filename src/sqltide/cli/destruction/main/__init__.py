@@ -1,1 +1,0 @@
-"""Destruction CLI command entrypoint."""

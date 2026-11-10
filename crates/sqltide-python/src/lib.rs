@@ -30,6 +30,7 @@ mod compile_command;
 mod config;
 mod deployment_resolution;
 mod destruction;
+mod destruction_command;
 mod destruction_execution;
 mod destruction_planning;
 mod direct_build;
@@ -139,6 +140,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compile_command::register(module)?;
     test_command::register(module)?;
     audit_command::register(module)?;
+    destruction_command::register(module)?;
     graph::register(module)?;
     macros::register(module)?;
     model_analysis::register(module)?;
