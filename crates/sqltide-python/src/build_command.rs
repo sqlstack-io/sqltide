@@ -43,7 +43,7 @@ fn native<'py>(py: Python<'py>, name: &str, pairs: &[(&str, Value<'py>)]) -> PyR
     call(py, NATIVE, name, pairs)
 }
 
-fn int(py: Python<'_>, value: i64) -> PyResult<Value<'_>> {
+pub(crate) fn int(py: Python<'_>, value: i64) -> PyResult<Value<'_>> {
     Ok(value.into_pyobject(py)?.into_any())
 }
 
@@ -52,7 +52,7 @@ fn caught(py: Python<'_>, error: &PyErr, module: &str, name: &str) -> PyResult<b
 }
 
 /// `print(value)`, or `print(value, file=sys.stderr)`, resolving the stream when called.
-fn print(py: Python<'_>, value: &Value<'_>, stderr: bool) -> PyResult<()> {
+pub(crate) fn print(py: Python<'_>, value: &Value<'_>, stderr: bool) -> PyResult<()> {
     let arguments: Bound<'_, PyDict> = PyDict::new(py);
     if stderr {
         arguments.set_item("file", py.import("sys")?.getattr("stderr")?)?;
@@ -68,7 +68,7 @@ fn print_text(py: Python<'_>, value: &str, stderr: bool) -> PyResult<()> {
 }
 
 /// `try: body() except Exception: pass`.
-fn quietly(py: Python<'_>, body: impl FnOnce() -> PyResult<()>) -> PyResult<()> {
+pub(crate) fn quietly(py: Python<'_>, body: impl FnOnce() -> PyResult<()>) -> PyResult<()> {
     match body() {
         Err(error) if error.is_instance_of::<PyException>(py) => Ok(()),
         outcome => outcome,
@@ -164,7 +164,7 @@ fn complete_run(
     run_completed(sink, outcome, exit_code, error_message)
 }
 
-fn invocation_record<'py>(
+pub(crate) fn invocation_record<'py>(
     py: Python<'py>,
     started: &Value<'py>,
     terminal: &[(&str, Value<'py>)],

@@ -6,10 +6,10 @@ from _pytest.capture import CaptureResult
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
+from sqltide._native import run_test
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.cli.test.main._run_test import run_test
 from tests.integration.src.sqltide.cli._test_types import (
     CliTestCommandIntegrationTestCase,
 )

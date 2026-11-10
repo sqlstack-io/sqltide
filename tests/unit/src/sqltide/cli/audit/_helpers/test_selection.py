@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.cli.audit._helpers.selection import select_loaded_sql_audits
+from sqltide._native import select_loaded_sql_audits
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import CompiledPipeline

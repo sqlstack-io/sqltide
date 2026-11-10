@@ -60,6 +60,8 @@ from sqltide.cli.build.models import (
     VirtualWorkflowPreparation,
     WorkflowPreparationOptions,
 )
+from sqltide.cli.destruction.models import DestructionCommandOptions
+from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
@@ -195,6 +197,7 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
+from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
     WarehouseStatement,
@@ -1388,6 +1391,102 @@ def execute_mixed_build_command(
     observation_client: AdapterConnection,
     started: tuple[str, str, int],
     startup_timings: RunStartupTimings,
+) -> int: ...
+def initialize_observability(*, connection: AdapterConnection, database: str) -> None: ...
+def publish_manifest(
+    *, connection: AdapterConnection, database: str, manifest: AdapterManifest
+) -> None: ...
+def run_compile(
+    *,
+    pipelines_root: Path,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    target_dir: Path | None = None,
+) -> int: ...
+def run_destruction(
+    *,
+    options: DestructionCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def render_destruction_plan(plan: DestructionPlan) -> str: ...
+def read_destruction_challenges(plan: DestructionPlan) -> tuple[str, ...]: ...
+def run_audit(
+    *,
+    pipelines_root: Path,
+    project_dir: Path,
+    database: str,
+    selectors: tuple[str, ...],
+    json_output: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    force: bool = False,
+) -> int: ...
+def select_loaded_sql_audits(
+    *,
+    loaded_audits: tuple[LoadedSqlAudit, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    selectors: tuple[str, ...],
+) -> tuple[LoadedSqlAudit, ...]: ...
+def run_test(
+    *,
+    pipelines_root: Path,
+    project_dir: Path | None,
+    selectors: tuple[str, ...],
+    paths: tuple[Path, ...],
+    verbose: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    target_dir: Path | None = None,
+    database: str = "",
+) -> int: ...
+def select_loaded_sql_tests(
+    *,
+    loaded_tests: tuple[LoadedSqlTest, ...],
+    compiled_pipelines: tuple[CompiledPipeline, ...],
+    selectors: tuple[str, ...],
+    paths: tuple[Path, ...],
+    project_dir: Path,
+) -> tuple[LoadedSqlTest, ...]: ...
+def render_sql_test_results(
+    *, results: tuple[SqlTestExecutionResult, ...], project_dir: Path, verbose: bool
+) -> str: ...
+def write_test_runtime_target(
+    *,
+    target_dir: Path,
+    test_cases: tuple[SqlTestCase, ...],
+    results: tuple[SqlTestExecutionResult, ...],
+) -> None: ...
+def static_audit_path(*, audit: LoadedSqlAudit, project_dir: Path) -> str: ...
+def static_source_resource_path(*, source_name: str, resource_name: str) -> str: ...
+def static_test_path(*, test_case: SqlTestCase) -> str: ...
+def runtime_test_path(*, test_case: SqlTestCase) -> Path: ...
+def stage_static_compile_artifacts(
+    *,
+    staging_root: Path,
+    compiled_files: list[tuple[str, str]],
+    manifest_json: str,
+    dag_json: str,
+) -> None: ...
+def validate_unique_artifact_paths(paths: list[str]) -> None: ...
+def run_build(
+    *,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def run_plan(
+    *,
+    options: PlanCommandOptions,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
 ) -> int: ...
 def add_empty_replay_source_warnings(
     *,

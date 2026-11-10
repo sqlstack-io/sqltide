@@ -45,18 +45,21 @@ from sqltide.executor.destruction.exceptions import DestructionError
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    from sqltide.cli.audit.main._run_audit import run_audit
-    from sqltide.cli.build.main._run_build import run_build
-    from sqltide.cli.compile.main._run_compile import run_compile
+    from sqltide._native import (
+        run_audit,
+        run_build,
+        run_compile,
+        run_destruction,
+        run_plan,
+        run_test,
+    )
     from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
     from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
     from sqltide.cli.deployment.main._run_deployment_show import run_deployment_show
-    from sqltide.cli.destruction.main._run_destruction import run_destruction
     from sqltide.cli.dev.main._run_dev import run_dev
     from sqltide.cli.discover.main._run_discover import run_discover
     from sqltide.cli.doctor.main._run_doctor import run_doctor
     from sqltide.cli.janitor.main._run_janitor import run_janitor
-    from sqltide.cli.plan.main._run_plan import run_plan
     from sqltide.cli.promotion.main._run_deployment_promotion import (
         run_deployment_promotion,
     )
@@ -66,7 +69,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_repair_active_view,
     )
     from sqltide.cli.rollback.main._run_deployment_rollback import run_deployment_rollback
-    from sqltide.cli.test.main._run_test import run_test
 
     handlers: CliEntrypointHandlers = CliEntrypointHandlers(
         run_discover=run_discover,

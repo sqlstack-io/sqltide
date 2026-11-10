@@ -9,12 +9,12 @@ from sqltide._native import (
     analyze_project,
     load_planning_warehouse_snapshot,
     resolve_unsupported_bounded_replay_behavior,
+    run_plan,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.compiler.compile.models import (
     Column,

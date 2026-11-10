@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import select_loaded_sql_tests
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.test._helpers.selection import select_loaded_sql_tests
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from tests.unit.src.sqltide.cli.test._helpers._test_types import (
     MacroSqlTestSelectionTestCase,
