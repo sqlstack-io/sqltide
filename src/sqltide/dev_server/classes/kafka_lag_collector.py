@@ -7,9 +7,7 @@ from collections.abc import Callable, Mapping
 from kafka import KafkaAdminClient, KafkaConsumer, TopicPartition
 from kafka.structs import OffsetAndMetadata
 
-from sqltide.adapters.clickhouse.main.database_scoped_consumer_group import (
-    database_scoped_consumer_group,
-)
+from sqltide._native import database_scoped_consumer_group
 from sqltide.compiler.discovery.models import KafkaSettings
 from sqltide.dev_server._helpers.broker.client import (
     build_kafka_client_config,

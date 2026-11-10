@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 49432
+remaining_lines = 46427
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -169,14 +169,6 @@ note = "Rule 3: EventSensorContext that user event sensors receive, re-exported 
 path = "sensors/classes/polling_sensor_context.py"
 rule = 3
 note = "Rule 3: PollingSensorContext that user polling sensors receive, re-exported by sqltide.sensors; read-only properties."
-
-[[handled_native_errors]]
-location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_direct_fingerprints"
-note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
-
-[[handled_native_errors]]
-location = "adapters/clickhouse/_helpers/metadata.py::load_clickhouse_manifests"
-note = "Catches AdapterWarehouseError from the warehouse read only; a native rendering failure raises ValueError and propagates."
 
 [[handled_native_errors]]
 location = "executor/auditing/main/execute_sql_audits.py::_execute_single_sql_audit"

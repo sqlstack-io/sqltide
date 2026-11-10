@@ -1,14 +1,14 @@
 import pytest
 
+from sqltide._native import (
+    render_clickhouse_latest_node_status_query,
+    render_clickhouse_run_event_inserts,
+    render_clickhouse_run_statement_inserts,
+)
 from sqltide.adapter.models import (
     AdapterCurrentQualityNode,
     AdapterRunEventRecord,
     AdapterRunStatementRecord,
-)
-from sqltide.adapters.clickhouse._helpers.metadata import (
-    render_clickhouse_latest_node_status_query,
-    render_clickhouse_run_event_inserts,
-    render_clickhouse_run_statement_inserts,
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     LatestNodeStatusQueryTestCase,

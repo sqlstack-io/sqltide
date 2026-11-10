@@ -1,9 +1,11 @@
+import time
 from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
 from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
 
+from sqltide._native import load_clickhouse_warehouse_health
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import (
     AdapterAuthenticationError,
@@ -24,15 +26,9 @@ from sqltide.adapter.models import (
     CatalogRelation,
     CatalogSnapshot,
 )
-from sqltide.adapters.clickhouse._helpers import inspection
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
-from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
-    ClickHouseWarehouseHealthReader,
-)
 from sqltide.adapters.clickhouse.constants import (
-    CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION,
     CLICKHOUSE_CATALOG_RETRY_DELAY_SECONDS,
-    CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
 )
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
@@ -214,9 +210,9 @@ def test_given_clickhouse_connection_when_reading_publish_capabilities_then_guar
                     "s3://warehouse/",
                     "ObjectStorage",
                     0,
-                    CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
-                    CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
-                    CLICKHOUSE_UNKNOWN_CAPACITY_BYTES,
+                    2**64 - 1,
+                    2**64 - 1,
+                    2**64 - 1,
                     0,
                 ),
             ),
@@ -352,7 +348,7 @@ def test_given_clickhouse_system_metrics_when_reading_health_then_snapshot_is_tr
     assert health.kafka_consumers.polling_tables == test_case.expected_polling_tables
     assert health.kafka_consumers.exception_tables == test_case.expected_exception_tables
     assert health.kafka_consumers.stuck_consumers == test_case.expected_stuck_consumers
-    assert health.capacity_warning_fraction == CLICKHOUSE_CAPACITY_WARNING_AVAILABLE_FRACTION
+    assert health.capacity_warning_fraction == 0.15
     assert len(raw_client.statements) == test_case.expected_query_count
     assert "query_id != currentQueryID()" in raw_client.statements[3]
     assert "database =" not in raw_client.statements[3]
@@ -404,9 +400,9 @@ def test_given_project_footprint_failure_when_reading_health_then_table_evidence
         {"active_queries": 0, "active_merges": 0, "incomplete_mutations": 0},
     ]
 
-    health: AdapterWarehouseHealth = ClickHouseWarehouseHealthReader(
-        connection=cast(AdapterConnection, connection)
-    ).read(database="analytics")
+    health: AdapterWarehouseHealth = load_clickhouse_warehouse_health(
+        connection=cast(AdapterConnection, connection), database="analytics"
+    )
 
     assert str(health.availability) == "partial"
     assert health.tables is None
@@ -523,7 +519,7 @@ def test_given_transient_empty_ddl_when_loading_catalog_then_retries_complete_sn
     test_case: CatalogRetryTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),
@@ -570,7 +566,7 @@ def test_given_persistent_empty_ddl_when_loading_catalog_then_fails_after_bounde
     test_case: CatalogFailureTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),
@@ -607,7 +603,7 @@ def test_given_nonempty_invalid_ddl_when_loading_catalog_then_fails_without_retr
     test_case: CatalogFailureTestCase,
 ) -> None:
     delays: list[float] = []
-    monkeypatch.setattr(inspection.time, "sleep", delays.append)
+    monkeypatch.setattr(time, "sleep", delays.append)
     raw_client: SequencedRawClickHouseClient = SequencedRawClickHouseClient(
         (
             build_catalog_timezone_result(),

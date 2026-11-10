@@ -8,8 +8,15 @@ from typing import cast
 import clickhouse_connect
 from clickhouse_connect.driver.exceptions import ClickHouseError, StreamFailureError
 
+from sqltide._native import (
+    build_clickhouse_connection_config,
+    realize_clickhouse_model,
+    realize_clickhouse_source,
+    render_clickhouse_resource,
+    render_clickhouse_set_difference_comparison,
+    translate_clickhouse_driver_error,
+)
 from sqltide.adapter.classes.adapter import Adapter
-from sqltide.adapter.exceptions import AdapterConfigurationError
 from sqltide.adapter.models import (
     AdapterAdoptedSourceRealizationRequest,
     AdapterConnectionConfig,
@@ -26,21 +33,13 @@ from sqltide.adapter.models import (
     AdapterView,
     AdapterViewRealizationRequest,
 )
-from sqltide.adapters.clickhouse._helpers.errors import translate_driver_error
-from sqltide.adapters.clickhouse._helpers.realization import realize_clickhouse_source
-from sqltide.adapters.clickhouse._helpers.rendering import (
-    render_clickhouse_resource,
-    render_clickhouse_set_difference_comparison,
-)
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_ADAPTER_NAME,
-    CLICKHOUSE_CONNECTION_CONFIG_KEYS,
     CLICKHOUSE_DEFAULT_DATABASE,
     CLICKHOUSE_MODEL_TABLE_NAME_PREFIX,
     CLICKHOUSE_SQL_ANALYSIS_DIALECT,
 )
-from sqltide.adapters.clickhouse.main._realize_model import realize_clickhouse_model
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
 
 
@@ -77,7 +76,7 @@ class ClickHouseAdapter(Adapter):
         try:
             raw_client: RawClickHouseClient = self._open_raw_client(config)
         except (ClickHouseError, StreamFailureError) as error:
-            raise translate_driver_error(error) from error
+            raise translate_clickhouse_driver_error(error) from error
         return ClickHouseConnection(raw_client)
 
     def build_connection_config(
@@ -88,35 +87,7 @@ class ClickHouseAdapter(Adapter):
     ) -> AdapterConnectionConfig:
         """Validate the exercised ClickHouse connection fields without opening a connection."""
 
-        unknown_keys: tuple[str, ...] = tuple(
-            sorted(set(values) - CLICKHOUSE_CONNECTION_CONFIG_KEYS)
-        )
-        if unknown_keys:
-            raise AdapterConfigurationError(
-                f"ClickHouse connection contains unsupported fields: {', '.join(unknown_keys)}"
-            )
-        host: object | None = values.get("host")
-        port: object | None = values.get("port")
-        username: object | None = values.get("username")
-        password: object | None = values.get("password")
-        if not isinstance(host, str) or not host:
-            raise AdapterConfigurationError("ClickHouse connection requires non-empty string host")
-        if not isinstance(port, int):
-            raise AdapterConfigurationError("ClickHouse connection requires integer port")
-        if not isinstance(username, str) or not username:
-            raise AdapterConfigurationError(
-                "ClickHouse connection requires non-empty string username"
-            )
-        if not isinstance(password, str):
-            raise AdapterConfigurationError("ClickHouse connection requires string password")
-        return AdapterConnectionConfig(
-            host=host,
-            port=port,
-            username=username,
-            password=password,
-            database=database,
-            settings=_connection_settings(values.get("settings")),
-        )
+        return build_clickhouse_connection_config(values=values, database=database)
 
     def render_resource(
         self,
@@ -165,7 +136,7 @@ class ClickHouseAdapter(Adapter):
     ) -> str:
         """Render neutral bag-comparison inputs as one ClickHouse query."""
 
-        return render_clickhouse_set_difference_comparison(request=request)
+        return render_clickhouse_set_difference_comparison(request.targets)
 
     def _open_raw_client(self, config: AdapterConnectionConfig) -> RawClickHouseClient:
         """Open a session-less driver client; session ids only cause SESSION_IS_LOCKED here."""
@@ -194,32 +165,3 @@ class ClickHouseAdapter(Adapter):
                 settings=dict(config.settings),
             ),
         )
-
-
-def _connection_settings(value: object | None) -> tuple[tuple[str, str], ...]:
-    """Validate optional ClickHouse session settings into ordered name/value pairs."""
-
-    if value is None:
-        return ()
-    if not isinstance(value, Mapping):
-        raise AdapterConfigurationError(
-            "ClickHouse connection settings requires a table of setting values"
-        )
-    declared: Mapping[str, object] = cast(Mapping[str, object], value)
-    pairs: list[tuple[str, str]] = []
-    name: str
-    setting: object
-    for name, setting in declared.items():
-        if not name:
-            raise AdapterConfigurationError(
-                "ClickHouse connection settings requires non-empty setting names"
-            )
-        if isinstance(setting, bool):
-            pairs.append((name, "1" if setting else "0"))
-            continue
-        if not isinstance(setting, (str, int, float)):
-            raise AdapterConfigurationError(
-                f"ClickHouse connection setting {name} requires a string, number, or boolean value"
-            )
-        pairs.append((name, str(setting)))
-    return tuple(sorted(pairs))

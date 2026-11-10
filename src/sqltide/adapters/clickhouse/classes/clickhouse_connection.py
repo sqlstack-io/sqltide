@@ -4,37 +4,52 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Mapping, Sequence
-from hashlib import sha256
+from collections.abc import Sequence
 
 from clickhouse_connect.driver.exceptions import ClickHouseError, StreamFailureError
 from clickhouse_connect.driver.summary import QuerySummary
 
+from sqltide._native import (
+    acquire_clickhouse_target_mutation_lock,
+    build_inspected_managed_table_state,
+    cancel_clickhouse_workflow_query,
+    clickhouse_catalog_resource_matches,
+    compare_clickhouse_readiness,
+    load_clickhouse_catalog,
+    load_clickhouse_deployment_inventory,
+    load_clickhouse_direct_fingerprints,
+    load_clickhouse_external_dependants,
+    load_clickhouse_manifests,
+    load_clickhouse_refresh_states,
+    load_clickhouse_statement_progress,
+    load_clickhouse_warehouse_health,
+    observe_clickhouse_replay_offset_frontiers,
+    release_clickhouse_target_mutation_lock,
+    rename_clickhouse_streambuild_metadata,
+    render_clickhouse_direct_fingerprint_observations,
+    render_clickhouse_ensure_database,
+    render_clickhouse_latest_node_status_query,
+    render_clickhouse_manifest_publication,
+    render_clickhouse_metadata_migration_workflow,
+    render_clickhouse_metadata_state,
+    render_clickhouse_relation_cleanup,
+    render_clickhouse_replay_coverage_query,
+    render_clickhouse_replay_from_capture,
+    render_clickhouse_replay_from_deployment,
+    render_clickhouse_resource,
+    render_clickhouse_run_event_inserts,
+    render_clickhouse_run_statement_inserts,
+    render_clickhouse_sensor_retention_cleanup,
+    render_clickhouse_sensor_state_inserts,
+    render_clickhouse_stable_binding_replacement,
+    translate_clickhouse_driver_error,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
-    METADATA_DEAD_LETTERS_TABLE_NAME,
-    METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME,
-    METADATA_DEPLOYMENTS_TABLE_NAME,
-    METADATA_DIRECT_FINGERPRINTS_TABLE_NAME,
-    METADATA_INVOCATIONS_TABLE_NAME,
-    METADATA_MANIFESTS_TABLE_NAME,
     METADATA_NODE_RESULTS_TABLE_NAME,
-    METADATA_OBJECT_STATE_TABLE_NAME,
-    METADATA_PUBLISH_HISTORY_TABLE_NAME,
-    METADATA_RUN_EVENTS_TABLE_NAME,
-    METADATA_RUN_STATEMENTS_TABLE_NAME,
-    METADATA_SCHEMA_VERSIONS_TABLE_NAME,
-    METADATA_SENSOR_CHECKPOINTS_TABLE_NAME,
-    METADATA_SENSOR_LEASES_TABLE_NAME,
-    METADATA_SENSOR_OVERRIDES_TABLE_NAME,
-    METADATA_SENSOR_STEPS_TABLE_NAME,
-    METADATA_SENSOR_TICKS_TABLE_NAME,
-    TARGET_MUTATION_LOCK_TABLE_NAME,
 )
 from sqltide.adapter.exceptions import (
-    AdapterError,
     AdapterResultError,
-    AdapterTargetMutationLockError,
     AdapterWarehouseError,
 )
 from sqltide.adapter.models import (
@@ -77,47 +92,6 @@ from sqltide.adapter.models import (
     CatalogSnapshot,
     InspectedManagedTableState,
 )
-from sqltide.adapters.clickhouse._helpers.errors import translate_driver_error
-from sqltide.adapters.clickhouse._helpers.inspection import (
-    clickhouse_catalog_resource_matches,
-    load_clickhouse_catalog,
-    load_clickhouse_external_dependants,
-    load_clickhouse_refresh_states,
-)
-from sqltide.adapters.clickhouse._helpers.lifecycle import (
-    load_clickhouse_deployment_inventory,
-    render_clickhouse_relation_cleanup,
-    render_clickhouse_stable_binding_replacement,
-)
-from sqltide.adapters.clickhouse._helpers.managed_tables import (
-    build_inspected_managed_table_state,
-)
-from sqltide.adapters.clickhouse._helpers.metadata import (
-    load_clickhouse_direct_fingerprints,
-    load_clickhouse_manifests,
-    render_clickhouse_direct_fingerprint_observations,
-    render_clickhouse_latest_node_status_query,
-    render_clickhouse_manifest_publication,
-    render_clickhouse_metadata_migration_workflow,
-    render_clickhouse_metadata_state,
-    render_clickhouse_run_event_inserts,
-    render_clickhouse_run_statement_inserts,
-    render_clickhouse_sensor_retention_cleanup,
-    render_clickhouse_sensor_state_inserts,
-)
-from sqltide.adapters.clickhouse._helpers.readiness import compare_clickhouse_readiness
-from sqltide.adapters.clickhouse._helpers.rendering import (
-    render_clickhouse_ensure_database,
-    render_clickhouse_resource,
-)
-from sqltide.adapters.clickhouse._helpers.replay import (
-    render_clickhouse_replay_coverage_query,
-    render_clickhouse_replay_from_capture,
-    render_clickhouse_replay_from_deployment,
-)
-from sqltide.adapters.clickhouse.classes.warehouse_health_reader import (
-    ClickHouseWarehouseHealthReader,
-)
 from sqltide.adapters.clickhouse.constants import (
     CLICKHOUSE_ADAPTER_NAME,
     CLICKHOUSE_DIRECT_REBUILD_SUPPORTED,
@@ -149,34 +123,10 @@ _NODE_RESULT_REQUIRED_COLUMNS: frozenset[str] = frozenset(
     }
 )
 _QUERY_ID_SETTING: str = "query_id"
-_TARGET_MUTATION_LOCK_COMMENT_PREFIX: str = "sqltide-target-lock-v2:"
-_METADATA_TABLE_NAME_PREFIX: str = "_sqltide_"
-_STREAMBUILD_METADATA_TABLE_NAME_PREFIX: str = "_streambuild_"
-_METADATA_TABLE_NAMES: tuple[str, ...] = (
-    METADATA_SCHEMA_VERSIONS_TABLE_NAME,
-    METADATA_OBJECT_STATE_TABLE_NAME,
-    METADATA_DEPLOYMENTS_TABLE_NAME,
-    METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME,
-    METADATA_PUBLISH_HISTORY_TABLE_NAME,
-    METADATA_DIRECT_FINGERPRINTS_TABLE_NAME,
-    METADATA_DEAD_LETTERS_TABLE_NAME,
-    METADATA_MANIFESTS_TABLE_NAME,
-    METADATA_INVOCATIONS_TABLE_NAME,
-    METADATA_NODE_RESULTS_TABLE_NAME,
-    METADATA_RUN_EVENTS_TABLE_NAME,
-    METADATA_RUN_STATEMENTS_TABLE_NAME,
-    METADATA_SENSOR_CHECKPOINTS_TABLE_NAME,
-    METADATA_SENSOR_TICKS_TABLE_NAME,
-    METADATA_SENSOR_STEPS_TABLE_NAME,
-    METADATA_SENSOR_OVERRIDES_TABLE_NAME,
-    METADATA_SENSOR_LEASES_TABLE_NAME,
-)
 _MAX_TABLE_SIZE_TO_DROP_SETTING: str = "max_table_size_to_drop"
 _REPLAY_FRONTIER_TTL_SECONDS: float = 5.0
 _REPLAY_FRONTIER_RETENTION_SECONDS: float = 60.0
 _MAX_REPLAY_FRONTIER_OBSERVATIONS: int = 128
-_QUERY_CANCELLATION_CONFIRM_SECONDS: float = 5.0
-_QUERY_CANCELLATION_POLL_SECONDS: float = 0.05
 
 
 class ClickHouseConnection(AdapterConnection):
@@ -284,7 +234,8 @@ class ClickHouseConnection(AdapterConnection):
     ) -> AdapterWarehouseHealth:
         """Read bounded ClickHouse system-table diagnostics."""
 
-        return ClickHouseWarehouseHealthReader(connection=self).read(
+        return load_clickhouse_warehouse_health(
+            connection=self,
             database=database,
             managed_source_names=managed_source_names,
             include_dead_letters=include_dead_letters,
@@ -325,7 +276,7 @@ class ClickHouseConnection(AdapterConnection):
                 else self._raw_client.query(query=statement, settings=settings)
             )
         except (ClickHouseError, StreamFailureError) as error:
-            raise translate_driver_error(error) from error
+            raise translate_clickhouse_driver_error(error) from error
         result_rows: Sequence[Sequence[object]] = raw_result.result_rows
         return AdapterQueryResult(
             column_names=tuple(raw_result.column_names),
@@ -358,7 +309,7 @@ class ClickHouseConnection(AdapterConnection):
                 else self._raw_client.command(cmd=statement, settings=settings)
             )
         except (ClickHouseError, StreamFailureError) as error:
-            raise translate_driver_error(error) from error
+            raise translate_clickhouse_driver_error(error) from error
         if (
             not isinstance(summary, QuerySummary)
             or CLICKHOUSE_WRITTEN_ROWS_SUMMARY_KEY not in summary.summary
@@ -369,56 +320,12 @@ class ClickHouseConnection(AdapterConnection):
     def load_statement_progress(self, *, query_id: str) -> AdapterStatementProgress | None:
         """Read one active query snapshot from ClickHouse system.processes."""
 
-        query_id_literal: str = query_id.replace("\\", "\\\\").replace("'", "\\'")
-        result: AdapterQueryResult = self.query(
-            "SELECT elapsed, read_rows, read_bytes, total_rows_approx, memory_usage, "
-            "Settings AS settings FROM system.processes "
-            f"WHERE query_id = '{query_id_literal}' LIMIT 1"
-        )
-        rows: tuple[Mapping[str, object], ...] = result.named_rows()
-        if not rows:
-            return None
-        row: Mapping[str, object] = rows[0]
-        raw_settings: object = row["settings"]
-        settings: tuple[tuple[str, str], ...] = (
-            tuple(sorted((str(name), str(value)) for name, value in raw_settings.items()))
-            if isinstance(raw_settings, Mapping)
-            else ()
-        )
-        return AdapterStatementProgress(
-            elapsed_seconds=float(str(row["elapsed"])),
-            read_rows=int(str(row["read_rows"])),
-            read_bytes=int(str(row["read_bytes"])),
-            total_rows_approx=int(str(row["total_rows_approx"])),
-            memory_usage_bytes=int(str(row["memory_usage"])),
-            settings=settings,
-        )
+        return load_clickhouse_statement_progress(connection=self, query_id=query_id)
 
     def cancel_workflow_query(self, *, query_id: str) -> AdapterQueryCancellation:
         """Kill one exact ClickHouse query and confirm it leaves system.processes."""
 
-        result: AdapterQueryResult = self._query(
-            statement=f"KILL QUERY WHERE query_id = {_quote_clickhouse_string(query_id)} SYNC",
-            query_id=None,
-        )
-        query_found: bool = bool(result.rows)
-        deadline: float = time.monotonic() + _QUERY_CANCELLATION_CONFIRM_SECONDS
-        while time.monotonic() < deadline:
-            if self.load_statement_progress(query_id=query_id) is None:
-                return AdapterQueryCancellation(
-                    query_id=query_id,
-                    supported=True,
-                    query_found=query_found,
-                    termination_confirmed=True,
-                )
-            time.sleep(_QUERY_CANCELLATION_POLL_SECONDS)
-        return AdapterQueryCancellation(
-            query_id=query_id,
-            supported=True,
-            query_found=query_found,
-            termination_confirmed=False,
-            detail="ClickHouse query remained active after KILL QUERY SYNC",
-        )
+        return cancel_clickhouse_workflow_query(connection=self, query_id=query_id)
 
     def load_replay_offset_frontiers(
         self, *, query_id: str, request: AdapterReplayOffsetProgressRequest
@@ -433,11 +340,10 @@ class ClickHouseConnection(AdapterConnection):
             )
             if cached is not None and now - cached[0] < _REPLAY_FRONTIER_TTL_SECONDS:
                 return cached[1]
-            observed: tuple[AdapterReplayOffsetFrontier, ...] = self._read_replay_offset_frontiers(
-                request=request
-            )
-            frontiers: tuple[AdapterReplayOffsetFrontier, ...] = _merge_replay_offset_frontiers(
-                previous=() if cached is None else cached[1], observed=observed
+            frontiers: tuple[AdapterReplayOffsetFrontier, ...] = (
+                observe_clickhouse_replay_offset_frontiers(
+                    connection=self, request=request, previous=() if cached is None else cached[1]
+                )
             )
             retained: dict[
                 tuple[str, AdapterReplayOffsetProgressRequest],
@@ -455,32 +361,6 @@ class ClickHouseConnection(AdapterConnection):
             )
             return frontiers
 
-    def _read_replay_offset_frontiers(
-        self, *, request: AdapterReplayOffsetProgressRequest
-    ) -> tuple[AdapterReplayOffsetFrontier, ...]:
-        partitions: tuple[int, ...] = tuple(sorted({item.partition for item in request.ranges}))
-        if not partitions:
-            return ()
-        database: str = _quote_clickhouse_identifier(request.database)
-        relation: str = _quote_clickhouse_identifier(request.relation)
-        partition_column: str = _quote_clickhouse_identifier(request.partition_column)
-        offset_column: str = _quote_clickhouse_identifier(request.offset_column)
-        rendered_partitions: str = ", ".join(str(partition) for partition in partitions)
-        rows: tuple[Mapping[str, object], ...] = self.query(
-            f"SELECT toInt64({partition_column}) AS partition, "
-            f"toInt64(max({offset_column})) AS completed_offset "
-            f"FROM {database}.{relation} "
-            f"WHERE {partition_column} IN ({rendered_partitions}) "
-            "GROUP BY partition ORDER BY partition"
-        ).named_rows()
-        return tuple(
-            AdapterReplayOffsetFrontier(
-                partition=int(str(row["partition"])),
-                completed_offset=int(str(row["completed_offset"])),
-            )
-            for row in rows
-        )
-
     def capture_warehouse_timestamp(self) -> str:
         """Capture ClickHouse server time as an exact UTC DateTime64(3) string."""
 
@@ -496,105 +376,14 @@ class ClickHouseConnection(AdapterConnection):
     ) -> AdapterTargetMutationLock:
         """Acquire one target-wide lock using ClickHouse's atomic DDL namespace."""
 
-        table: str = _qualified_lock_table(database)
-        owner_comment: str = f"{_TARGET_MUTATION_LOCK_COMMENT_PREFIX}{owner_id}"
-        try:
-            self._execute_workflow_sql(
-                statement=(
-                    f"CREATE TABLE {table} (guard UInt8) ENGINE = TinyLog "
-                    f"COMMENT {_quote_clickhouse_string(owner_comment)};"
-                ),
-                query_id=None,
-            )
-        except AdapterError as error:
-            exists: bool
-            current_owner: str | None
-            try:
-                exists, current_owner = self._target_mutation_lock_state(database=database)
-            except AdapterError:
-                raise error from None
-            if not exists:
-                raise
-            owner_suffix: str = "" if current_owner is None else f" by '{current_owner}'"
-            raise AdapterTargetMutationLockError(
-                f"Target database '{database}' is already mutation-locked{owner_suffix}"
-            ) from error
-        return AdapterTargetMutationLock(database=database, owner_id=owner_id)
+        return acquire_clickhouse_target_mutation_lock(
+            connection=self, database=database, owner_id=owner_id
+        )
 
     def release_target_mutation_lock(self, lock: AdapterTargetMutationLock) -> None:
         """Atomically exchange and verify the exact lock generation before release."""
 
-        release_name: str = (
-            f"{TARGET_MUTATION_LOCK_TABLE_NAME}_release_"
-            f"{sha256(lock.owner_id.encode()).hexdigest()[:16]}"
-        )
-        release_table: str = (
-            f"{_quote_clickhouse_identifier(lock.database)}."
-            f"{_quote_clickhouse_identifier(release_name)}"
-        )
-        owner_comment: str = f"{_TARGET_MUTATION_LOCK_COMMENT_PREFIX}{lock.owner_id}"
-        self._execute_workflow_sql(
-            statement=(
-                f"CREATE TABLE {release_table} (guard UInt8) ENGINE = TinyLog "
-                f"COMMENT {_quote_clickhouse_string(owner_comment)};"
-            ),
-            query_id=None,
-        )
-        lock_table: str = _qualified_lock_table(lock.database)
-        self._execute_workflow_sql(
-            statement=f"EXCHANGE TABLES {lock_table} AND {release_table};",
-            query_id=None,
-        )
-        marker_exists: bool
-        current_owner: str | None
-        marker_exists, current_owner = self._target_mutation_lock_record(
-            database=lock.database,
-            table_name=release_name,
-        )
-        if not marker_exists or current_owner != lock.owner_id:
-            self._execute_workflow_sql(
-                statement=f"EXCHANGE TABLES {lock_table} AND {release_table};",
-                query_id=None,
-            )
-            self._execute_workflow_sql(
-                statement=f"DROP TABLE {release_table} SYNC;",
-                query_id=None,
-            )
-            raise AdapterTargetMutationLockError(
-                f"Target mutation lock ownership changed for database '{lock.database}'"
-            )
-        self._execute_workflow_sql(
-            statement=f"DROP TABLE {release_table} SYNC;",
-            query_id=None,
-        )
-        self._execute_workflow_sql(
-            statement=f"DROP TABLE {lock_table} SYNC;",
-            query_id=None,
-        )
-
-    def _target_mutation_lock_state(self, *, database: str) -> tuple[bool, str | None]:
-        return self._target_mutation_lock_record(
-            database=database,
-            table_name=TARGET_MUTATION_LOCK_TABLE_NAME,
-        )
-
-    def _target_mutation_lock_record(
-        self, *, database: str, table_name: str
-    ) -> tuple[bool, str | None]:
-        result: AdapterQueryResult = self.query(
-            "SELECT comment FROM system.tables "
-            f"WHERE database = {_quote_clickhouse_string(database)} "
-            f"AND name = {_quote_clickhouse_string(table_name)} LIMIT 1"
-        )
-        if not result.rows:
-            return False, None
-        comment: str = str(result.rows[0][0])
-        return (
-            True,
-            comment.removeprefix(_TARGET_MUTATION_LOCK_COMMENT_PREFIX)
-            if comment.startswith(_TARGET_MUTATION_LOCK_COMMENT_PREFIX)
-            else None,
-        )
+        release_clickhouse_target_mutation_lock(connection=self, lock=lock)
 
     def render_ensure_database(self, database: str) -> str:
         """Render exact ClickHouse database creation SQL."""
@@ -634,51 +423,7 @@ class ClickHouseConnection(AdapterConnection):
     def rename_streambuild_metadata(self, database: str) -> None:
         """Rename StreamBuild metadata tables, tolerating a concurrent identical rename."""
 
-        renames: dict[str, str] = {
-            _streambuild_table_name(name): name for name in _METADATA_TABLE_NAMES
-        }
-        streambuild_lock: str = _streambuild_table_name(TARGET_MUTATION_LOCK_TABLE_NAME)
-        candidates: tuple[str, ...] = (*renames, *renames.values(), streambuild_lock)
-        existing: frozenset[str] = self._existing_table_names(database=database, names=candidates)
-        pending: tuple[str, ...] = tuple(name for name in renames if name in existing)
-        if not pending:
-            return
-        if streambuild_lock in existing:
-            raise AdapterError(
-                f"Target database '{database}' is mutation-locked by a StreamBuild run. Wait "
-                "for it to finish, or drop the stale "
-                f"{database}.{streambuild_lock} table after confirming no run is active, "
-                "then retry"
-            )
-        conflicts: tuple[str, ...] = tuple(
-            renames[name] for name in pending if renames[name] in existing
-        )
-        if conflicts:
-            raise AdapterError(
-                f"Target database '{database}' contains both StreamBuild and SQLTide metadata "
-                f"({', '.join(conflicts)}). A StreamBuild version wrote to this target after "
-                "it was renamed; stop using StreamBuild here and drop the outdated "
-                f"{_STREAMBUILD_METADATA_TABLE_NAME_PREFIX}* tables, then retry"
-            )
-        quoted_database: str = _quote_clickhouse_identifier(database)
-        rename_clauses: str = ", ".join(
-            f"{quoted_database}.{_quote_clickhouse_identifier(name)} TO "
-            f"{quoted_database}.{_quote_clickhouse_identifier(renames[name])}"
-            for name in pending
-        )
-        try:
-            self._execute_workflow_sql(statement=f"RENAME TABLE {rename_clauses};", query_id=None)
-        except AdapterError:
-            if self._existing_table_names(database=database, names=pending):
-                raise
-
-    def _existing_table_names(self, *, database: str, names: Sequence[str]) -> frozenset[str]:
-        result: AdapterQueryResult = self.query(
-            "SELECT name FROM system.tables "
-            f"WHERE database = {_quote_clickhouse_string(database)} "
-            f"AND name IN ({', '.join(_quote_clickhouse_string(name) for name in names)})"
-        )
-        return frozenset(str(row[0]) for row in result.rows)
+        rename_clickhouse_streambuild_metadata(connection=self, database=database)
 
     def render_migrate_metadata_state(self, database: str) -> tuple[str, ...]:
         """Render the exact idempotent ClickHouse metadata migration."""
@@ -919,37 +664,7 @@ class ClickHouseConnection(AdapterConnection):
         try:
             self._raw_client.close()
         except (ClickHouseError, StreamFailureError) as error:
-            raise translate_driver_error(error) from error
-
-
-def _streambuild_table_name(name: str) -> str:
-    return _STREAMBUILD_METADATA_TABLE_NAME_PREFIX + name.removeprefix(_METADATA_TABLE_NAME_PREFIX)
-
-
-def _qualified_lock_table(database: str) -> str:
-    return f"{_quote_clickhouse_identifier(database)}.`{TARGET_MUTATION_LOCK_TABLE_NAME}`"
-
-
-def _merge_replay_offset_frontiers(
-    *,
-    previous: tuple[AdapterReplayOffsetFrontier, ...],
-    observed: tuple[AdapterReplayOffsetFrontier, ...],
-) -> tuple[AdapterReplayOffsetFrontier, ...]:
-    completed_by_partition: dict[int, int] = {
-        item.partition: item.completed_offset for item in previous
-    }
-    for item in observed:
-        completed_by_partition[item.partition] = max(
-            item.completed_offset,
-            completed_by_partition.get(item.partition, item.completed_offset),
-        )
-    return tuple(
-        AdapterReplayOffsetFrontier(
-            partition=partition,
-            completed_offset=completed_by_partition[partition],
-        )
-        for partition in sorted(completed_by_partition)
-    )
+            raise translate_clickhouse_driver_error(error) from error
 
 
 def _quote_clickhouse_identifier(value: str) -> str:

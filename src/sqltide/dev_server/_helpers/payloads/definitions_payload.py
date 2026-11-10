@@ -6,14 +6,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal, cast
 
+from sqltide._native import database_scoped_consumer_group
 from sqltide.adapter.models import (
     AdapterManagedSource,
     AdapterMaterializedView,
     AdapterTable,
     AdapterView,
-)
-from sqltide.adapters.clickhouse.main.database_scoped_consumer_group import (
-    database_scoped_consumer_group,
 )
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.compile.models import (
