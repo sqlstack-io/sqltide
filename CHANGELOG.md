@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.65.7](https://github.com/sqlstack-io/sqltide/compare/v0.65.6...v0.65.7) (2026-11-10)
+
+
+### Refactoring
+
+* load pipelines and SQL model files natively ([#351](https://github.com/sqlstack-io/sqltide/issues/351)) ([3d035a1](https://github.com/sqlstack-io/sqltide/commit/3d035a18c634f404347b9e03e3f529c2586251d4))
+* run the compiler back-end natively ([#354](https://github.com/sqlstack-io/sqltide/issues/354)) ([9ccc91e](https://github.com/sqlstack-io/sqltide/commit/9ccc91e37bce03c8ccb2a5bd5c847a892d70b6d9))
+* run the compiler front-end natively ([#353](https://github.com/sqlstack-io/sqltide/issues/353)) ([79ec69b](https://github.com/sqlstack-io/sqltide/commit/79ec69b0fbee0634ca9254eebca5cd00a86a3446))
+
 ## [0.65.6](https://github.com/sqlstack-io/sqltide/compare/v0.65.5...v0.65.6) (2026-11-10)
 
 
