@@ -72,6 +72,11 @@ reason = "Native bindings own model selection, its downstream execution closure,
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"
+path = "src/sqltide/cli/build/__init__.py"
+reason = "Native bindings own build preparation, previews, confirmation, execution and result rendering; this package only declares the option and preparation shapes, the tool version constant and the build exceptions they use."
+
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
 path = "src/sqltide/executor/destruction/__init__.py"
 reason = "Native bindings own destruction workflow assembly, the fresh-plan drift check, recorded execution and the in-memory plan store; this package declares the destruction models, types and errors they build and raise, plus the SQLAlchemy plan store."
 

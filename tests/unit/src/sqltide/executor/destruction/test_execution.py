@@ -34,9 +34,7 @@ from tests.unit.src.sqltide.executor.destruction.helpers import (
 _NOW: datetime = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
 _ACTOR: DestructionActor = DestructionActor(actor_id="actor-1", actor_name="Alice")
 
-_INITIALIZE_OBSERVABILITY: str = (
-    "sqltide.executor.observability.main.initialize_observability.initialize_observability"
-)
+_INITIALIZE_OBSERVABILITY: str = "sqltide._native.initialize_observability"
 _PERSIST_TERMINAL_OBSERVATIONS: str = (
     "sqltide.executor.observability.main.persist_terminal_observations"
     ".persist_terminal_observations"

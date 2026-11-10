@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 36848
+remaining_lines = 36420
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -183,16 +183,8 @@ location = "dev_server/_helpers/server/destruction_routes.py::run"
 note = "Background execution worker: the request already returned, so a destruction failure is logged with its traceback and the plan's dispatch reservation is released; the recorded invocation carries the outcome."
 
 [[handled_native_errors]]
-location = "cli/build/main/_run_build.py::run_build"
-note = "Command error reporting: a build failure is recorded as a failed invocation and printed, and the command exits 1; an interrupt is recorded as cancelled and exits 130."
-
-[[handled_native_errors]]
 location = "cli/compile/main/_run_compile.py::run_compile"
 note = "Command error reporting: a SQL contract failure is rendered with its diagnostic and the command exits 1 without writing artifacts."
-
-[[handled_native_errors]]
-location = "cli/plan/main/_run_plan.py::run_plan"
-note = "Command error reporting: a compile, planning or adapter failure is printed and the command exits 1 without planning."
 
 [[handled_native_errors]]
 location = "cli/promotion/main/_run_deployment_promotion.py::run_deployment_promotion"

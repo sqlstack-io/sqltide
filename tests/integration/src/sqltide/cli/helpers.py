@@ -25,6 +25,8 @@ from sqltide._native import (
     render_direct_execution_json,
     render_direct_plan_json,
     row_error_policy_view_steps,
+    run_build,
+    run_plan,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
@@ -61,7 +63,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.build.constants import SQLTIDE_TOOL_VERSION
-from sqltide.cli.build.main._run_build import run_build
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     DirectBuildPreviewContext,
@@ -69,7 +70,6 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
-from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.workflow_artifacts.main._publish_build_workflow import publish_build_workflow

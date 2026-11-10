@@ -60,6 +60,7 @@ from sqltide.cli.build.models import (
     VirtualWorkflowPreparation,
     WorkflowPreparationOptions,
 )
+from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
@@ -1388,6 +1389,25 @@ def execute_mixed_build_command(
     observation_client: AdapterConnection,
     started: tuple[str, str, int],
     startup_timings: RunStartupTimings,
+) -> int: ...
+def initialize_observability(*, connection: AdapterConnection, database: str) -> None: ...
+def publish_manifest(
+    *, connection: AdapterConnection, database: str, manifest: AdapterManifest
+) -> None: ...
+def run_build(
+    *,
+    options: BuildCommandOptions,
+    client: AdapterConnection,
+    observation_client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
+def run_plan(
+    *,
+    options: PlanCommandOptions,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
 ) -> int: ...
 def add_empty_replay_source_warnings(
     *,

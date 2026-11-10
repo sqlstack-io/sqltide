@@ -8,6 +8,7 @@ from sqltide._native import (
     analyze_project,
     assemble_virtual_build_workflow,
     build_virtual_build_preview,
+    run_build,
 )
 from sqltide.adapter.models import (
     AdapterDirectFingerprintSnapshot,
@@ -15,7 +16,6 @@ from sqltide.adapter.models import (
     AdapterQueryResult,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.build.main._run_build import run_build
 from sqltide.cli.build.models import (
     BuildCommandOptions,
     VirtualBuildPreviewContext,

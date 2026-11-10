@@ -8,6 +8,8 @@ from sqltide._native import (
     render_clickhouse_replay_coverage_query,
     render_clickhouse_replay_from_capture,
     render_clickhouse_replay_from_deployment,
+    run_build,
+    run_plan,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
@@ -43,7 +45,6 @@ from sqltide.adapter.models import (
 from sqltide.adapter.types import AdapterReplayBoundaryMode
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.audit.main._run_audit import run_audit
-from sqltide.cli.build.main._run_build import run_build
 from sqltide.cli.compile.main._run_compile import run_compile
 from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
 from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
@@ -54,7 +55,6 @@ from sqltide.cli.discover.main._run_discover import run_discover
 from sqltide.cli.doctor.main._run_doctor import run_doctor
 from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.janitor.main._run_janitor import run_janitor
-from sqltide.cli.plan.main._run_plan import run_plan
 from sqltide.cli.promotion.main._run_deployment_promotion import run_deployment_promotion
 from sqltide.cli.readiness.main._run_deployment_audit import run_deployment_audit
 from sqltide.cli.reconcile.main._run_reconcile import run_reconcile
