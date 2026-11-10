@@ -537,7 +537,7 @@ def test_given_dev_app_context_when_lifespan_exits_then_owned_resources_are_clos
     with (
         patch("sqltide._native.AuditScheduler") as scheduler_class,
         patch("sqltide._native.SensorScheduler") as sensor_scheduler_class,
-        patch("sqltide.dev_server.classes.build_process.BuildProcessManager") as builds_class,
+        patch("sqltide._native.BuildProcessManager") as builds_class,
         patch("sqltide._native.KafkaLagReader") as lag_reader_class,
         patch("sqltide._native.KafkaTopicReader") as topic_reader_class,
     ):

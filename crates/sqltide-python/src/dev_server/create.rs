@@ -13,15 +13,10 @@ use super::support::attr;
 use crate::handling::while_handling;
 use crate::py_kwargs;
 
-const CLASSES: &str = "sqltide.dev_server.classes";
 const NATIVE: &str = "sqltide._native";
 const LOCALHOST_NAME: &str = "localhost";
 /// Control-store URLs that name a private in-memory SQLite database.
 pub(crate) const SQLITE_MEMORY_URLS: [&str; 2] = ["sqlite://", "sqlite:///:memory:"];
-
-fn class<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<Bound<'py, PyAny>> {
-    attr(py, &format!("{CLASSES}.{module}"), name)
-}
 
 fn default_control_store_url(py: Python<'_>, project_dir: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     Ok(attr(py, "sqltide.auth.main.default_control_store_url", "default_control_store_url")?
@@ -177,7 +172,7 @@ pub(crate) fn create_dev_app(
     )?;
     let cancellation = attr(py, NATIVE, "BuildCancellationCoordinator")?
         .call((), Some(&py_kwargs!(py; warehouse = &warehouse, database = effective_database.clone())?))?;
-    let builds = class(py, "build_process", "BuildProcessManager")?.call(
+    let builds = attr(py, NATIVE, "BuildProcessManager")?.call(
         (),
         Some(&py_kwargs!(py;
             reporter = &reporter,
@@ -405,6 +400,10 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::readers::register(module)?;
     super::lifecycle::register(module)?;
     super::audits::register(module)?;
+    super::checks::register(module)?;
+    super::build_process::register(module)?;
+    super::deployments::register(module)?;
+    super::terminal::register(module)?;
     super::warehouse::register(module)?;
     super::sensor_scheduler::register(module)
 }

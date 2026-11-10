@@ -22,7 +22,7 @@ const MAX_BACKOFF_SECONDS: f64 = 300.0;
 
 type Any<'py> = Bound<'py, PyAny>;
 
-fn member<'py>(py: Python<'py>, module: &str, class: &str, name: &str) -> PyResult<Any<'py>> {
+pub(super) fn member<'py>(py: Python<'py>, module: &str, class: &str, name: &str) -> PyResult<Any<'py>> {
     attr(py, module, class)?.getattr(name)
 }
 
@@ -31,23 +31,23 @@ fn schedule_state<'py>(py: Python<'py>, name: &str) -> PyResult<Any<'py>> {
 }
 
 /// `f"..."` of literal text and formatted values, as `"".join(format(part, ""))` builds it.
-fn fstring<'py>(py: Python<'py>, parts: &[Any<'py>]) -> PyResult<Any<'py>> {
+pub(super) fn fstring<'py>(py: Python<'py>, parts: &[Any<'py>]) -> PyResult<Any<'py>> {
     let format: Any<'py> = attr(py, "builtins", "format")?;
     let pieces: Vec<Any<'py>> = parts.iter().map(|part| format.call1((part, ""))).collect::<PyResult<_>>()?;
     PyString::new(py, "").call_method1("join", (pieces,))
 }
 
-fn literal<'py>(py: Python<'py>, text: &str) -> Any<'py> {
+pub(super) fn literal<'py>(py: Python<'py>, text: &str) -> Any<'py> {
     PyString::new(py, text).into_any()
 }
 
 /// `audit.name or audit.file_path.stem`.
-fn audit_name<'py>(audit: &Any<'py>) -> PyResult<Any<'py>> {
+pub(super) fn audit_name<'py>(audit: &Any<'py>) -> PyResult<Any<'py>> {
     let name: Any<'py> = audit.getattr("name")?;
     if name.is_truthy()? { Ok(name) } else { audit.getattr("file_path")?.getattr("stem") }
 }
 
-fn logical_project_identity<'py>(project_dir: &Any<'py>) -> PyResult<Any<'py>> {
+pub(super) fn logical_project_identity<'py>(project_dir: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = project_dir.py();
     attr(py, "sqltide.executor.observability.main.logical_project_identity", "logical_project_identity")?
         .call((), Some(&py_kwargs!(py; project_dir = project_dir)?))
@@ -114,7 +114,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
         }
     }
     let sorted_names: Any<'py> = attr(py, "builtins", "sorted")?.call1((model_names,))?;
-    let anchors: Any<'py> = attr(py, "sqltide.executor.auditing.main.load_model_anchors", "load_model_anchors")?.call(
+    let anchors: Any<'py> = attr(py, "sqltide.executor.auditing.main._load_model_anchors", "load_model_anchors")?.call(
         (),
         Some(&py_kwargs!(py;
             client = connection,
@@ -132,7 +132,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
     }
     let materialized: Any<'py> = attr(
         py,
-        "sqltide.executor.auditing.main.load_materialized_model_names",
+        "sqltide.executor.auditing.main._load_materialized_model_names",
         "load_materialized_model_names",
     )?
     .call((), Some(&py_kwargs!(py; client = connection, database = database, relation_name_by_model = relation_name_by_model)?))?;
@@ -210,7 +210,7 @@ pub(crate) fn build_audit_scheduler_payload<'py>(
 
 fn checks_status_payload<'py>(analysis: &Any<'py>, connection: &Any<'py>, database: &Any<'py>, project_dir: &Any<'py>) -> PyResult<Any<'py>> {
     let py: Python<'py> = analysis.py();
-    attr(py, "sqltide.dev_server._helpers.server.checks_execution", "build_checks_status_payload")?.call(
+    attr(py, NATIVE, "build_checks_status_payload")?.call(
         (),
         Some(&py_kwargs!(py; analysis = analysis, connection = connection, database = database, project_dir = project_dir)?),
     )
@@ -252,14 +252,14 @@ fn node_result<'py>(invocation: &Any<'py>, audit: &Any<'py>, scheduled_for: &Any
     attr(py, "sqltide.executor.observability.main.build_node_result_record", "build_node_result_record")?.call((), Some(&kwargs))
 }
 
-fn terminal_invocation<'py>(started: &Any<'py>, terminal: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
+pub(super) fn terminal_invocation<'py>(started: &Any<'py>, terminal: Bound<'py, PyDict>) -> PyResult<Any<'py>> {
     let py: Python<'py> = started.py();
     let terminal: Any<'py> = attr(py, OBSERVABILITY_MODELS, "TerminalInvocation")?.call((), Some(&terminal))?;
     attr(py, "sqltide.executor.observability.main.build_invocation_record", "build_invocation_record")?
         .call((), Some(&py_kwargs!(py; started = started, terminal = terminal)?))
 }
 
-fn persist<'py>(connection: &Any<'py>, database: &Any<'py>, invocation: &Any<'py>, node_results: &Bound<'py, PyTuple>) -> PyResult<Any<'py>> {
+pub(super) fn persist<'py>(connection: &Any<'py>, database: &Any<'py>, invocation: &Any<'py>, node_results: &Bound<'py, PyTuple>) -> PyResult<Any<'py>> {
     let py: Python<'py> = connection.py();
     attr(py, "sqltide.executor.observability.main.persist_terminal_observations", "persist_terminal_observations")?.call(
         (),

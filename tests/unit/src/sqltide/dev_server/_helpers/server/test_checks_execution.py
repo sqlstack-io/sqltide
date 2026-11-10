@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from sqltide._native import run_audit_batch
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterNodeResultRecord
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.quality.models import QualityNodeIdentity
-from sqltide.dev_server._helpers.server.checks_execution import run_audit_batch
 from sqltide.executor.auditing.models import (
     AuditWarmupState,
     SqlAuditResult,
@@ -77,23 +77,23 @@ def test_given_multiple_audits_when_running_batch_then_project_work_occurs_once(
     }
     with (
         patch(
-            "sqltide.dev_server._helpers.server.checks_execution.load_model_anchors",
+            "sqltide.executor.auditing.main._load_model_anchors.load_model_anchors",
             return_value={},
         ) as load_anchors,
         patch(
-            "sqltide.dev_server._helpers.server.checks_execution.load_materialized_model_names",
+            "sqltide.executor.auditing.main._load_materialized_model_names.load_materialized_model_names",
             return_value=frozenset({"orders", "customers"}),
         ) as load_materialized,
         patch(
-            "sqltide.dev_server._helpers.server.checks_execution.resolve_audit_warmup_states",
+            "sqltide._native.resolve_audit_warmup_states",
             return_value=warmup_states,
         ) as resolve_warmup,
         patch(
-            "sqltide.dev_server._helpers.server.checks_execution.execute_sql_audits",
+            "sqltide.executor.auditing.main.execute_sql_audits.execute_sql_audits",
             return_value=SqlAuditRunResult(audit_results=results),
         ) as execute_audits,
         patch(
-            "sqltide.dev_server._helpers.server.checks_execution.persist_terminal_observations",
+            "sqltide.executor.observability.main.persist_terminal_observations.persist_terminal_observations",
             return_value=None,
         ) as persist_observations,
     ):

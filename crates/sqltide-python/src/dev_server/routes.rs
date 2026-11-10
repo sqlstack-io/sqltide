@@ -24,10 +24,7 @@ const AUTH_MODELS: &str = "sqltide.auth.models";
 const DEFINITIONS_PAYLOAD: &str = NATIVE;
 const DEPLOYMENTS_PAYLOAD: &str = NATIVE;
 const MESSAGE_QUERY: &str = NATIVE;
-const CHECKS: &str = "sqltide.dev_server._helpers.server.checks_execution";
 const COMPILE_RUNNER: &str = NATIVE;
-const DEPLOYMENT_OPERATIONS: &str = "sqltide.dev_server._helpers.server.deployment_operations";
-const BUILD_PROCESS: &str = "sqltide.dev_server.classes.build_process";
 const NATIVE: &str = "sqltide._native";
 
 const TEXT: Scalar = Scalar::Text { min_length: None };
@@ -263,7 +260,7 @@ fn read_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             let direct = authz::direct_part(&preparation)?;
             let invocation = invoke(
                 py,
-                BUILD_PROCESS,
+                NATIVE,
                 "build_invocation",
                 py_kwargs!(py;
                     selectors = &selectors,
@@ -441,7 +438,7 @@ fn read_deployment_diff(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = reading(call, |client| {
         Ok(invoke(
             py,
-            DEPLOYMENT_OPERATIONS,
+            NATIVE,
             "build_deployment_diff_payload",
             py_kwargs!(py;
                 connection = client,
@@ -463,7 +460,7 @@ fn promote_deployment(call: &Call<'_, '_>) -> Outcome<HttpReply> {
         let logical_ids = locked(call, || {
             Ok(invoke(
                 py,
-                DEPLOYMENT_OPERATIONS,
+                NATIVE,
                 "promotion_executed_logical_ids",
                 py_kwargs!(py; connection = &client, metadata_database = database(call), deployment_id = deployment_id.as_str())?,
             )?)
@@ -473,8 +470,8 @@ fn promote_deployment(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            DEPLOYMENT_OPERATIONS,
-            "run_deployment_promotion",
+            NATIVE,
+            "run_dev_deployment_promotion",
             py_kwargs!(py;
                 connection = &client,
                 database = database(call),
@@ -496,8 +493,8 @@ fn cleanup_deployments(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            DEPLOYMENT_OPERATIONS,
-            "run_deployment_cleanup",
+            NATIVE,
+            "run_dev_deployment_cleanup",
             py_kwargs!(py;
                 connection = &client,
                 database = database(call),
@@ -638,7 +635,7 @@ fn run_check(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            CHECKS,
+            NATIVE,
             runner,
             py_kwargs!(py;
                 analysis = &analysis,
@@ -686,7 +683,7 @@ fn run_audits(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            CHECKS,
+            NATIVE,
             "run_audit_batch",
             py_kwargs!(py;
                 analysis = &analysis,
@@ -707,7 +704,7 @@ fn read_checks_status(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = locked(call, || {
         Ok(invoke(
             py,
-            CHECKS,
+            NATIVE,
             "build_checks_status_payload",
             py_kwargs!(py;
                 analysis = &analysis,

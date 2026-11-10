@@ -25,10 +25,10 @@ const CLI_STYLE: &str = "sqltide.cli.presentation.main._cli_style";
 const START_INVOCATION: &str = "sqltide.executor.observability.main.start_invocation";
 const AUDIT_MODELS: &str = "sqltide.executor.auditing.models";
 const AUDIT_TYPES: &str = "sqltide.executor.auditing.types";
-const LOAD_MODEL_ANCHORS: &str = "sqltide.executor.auditing.main.load_model_anchors";
-const LOAD_MATERIALIZED: &str = "sqltide.executor.auditing.main.load_materialized_model_names";
+const LOAD_MODEL_ANCHORS: &str = "sqltide.executor.auditing.main._load_model_anchors";
+const LOAD_MATERIALIZED: &str = "sqltide.executor.auditing.main._load_materialized_model_names";
 const EXECUTE_SQL_AUDITS: &str = "sqltide.executor.auditing.main.execute_sql_audits";
-const DEFERRED_RESULT: &str = "sqltide.executor.auditing.main.deferred_audit_result";
+const DEFERRED_RESULT: &str = "sqltide.executor.auditing.main._deferred_audit_result";
 const UPSTREAM_SELECTOR_PREFIX: &str = "+";
 const MAX_PAYLOAD_ROWS: isize = 5;
 

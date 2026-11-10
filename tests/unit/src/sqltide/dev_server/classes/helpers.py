@@ -18,6 +18,7 @@ from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 
 class CancellingProcess:
     def __init__(self) -> None:
+        self.stdout: None = None
         self.signal_received: int | None = None
         self.terminated: bool = False
         self.killed: bool = False

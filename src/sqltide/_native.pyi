@@ -65,7 +65,9 @@ from sqltide.cli.build.models import (
     WorkflowPreparationOptions,
 )
 from sqltide.cli.destruction.models import DestructionCommandOptions
+from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.plan.models import PlanCommandOptions
+from sqltide.cli.presentation.classes.cli_style import CliStyle
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
@@ -155,7 +157,6 @@ from sqltide.compiler.sql_analysis.models import (
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
-from sqltide.dev_server.classes.build_process import BuildProcessManager
 from sqltide.dev_server.models import (
     BuildCancellationOutcome,
     CompileErrorInfo,
@@ -181,6 +182,7 @@ from sqltide.executor.backfill.models import (
     BackfillExecutionResult,
     RootBackfillReport,
 )
+from sqltide.executor.deployment.models import DeploymentDiffResult
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,
@@ -1635,6 +1637,59 @@ def create_dev_app(
 ) -> DevApplication: ...
 def static_assets_root() -> Path: ...
 def static_assets_present(*, assets_root: Path) -> bool: ...
+def startup_lines(
+    *,
+    style: CliStyle,
+    outcome: CompileOutcome,
+    project_dir: Path,
+    database: str | None,
+    warehouse_connected: bool = True,
+    host: str,
+    port: int,
+    tool_version: str,
+) -> tuple[str, ...]: ...
+def reload_summary(*, outcome: CompileOutcome) -> tuple[str, ActivityTone, str]: ...
+def activity_line(
+    *,
+    style: CliStyle,
+    timestamp: str,
+    category: str,
+    status: str,
+    tone: ActivityTone,
+    detail: str,
+) -> str: ...
+
+@final
+class DevTerminalReporter:
+    """Prints the startup banner and one aligned activity line per server event."""
+
+    def __init__(self, *, style: CliStyle) -> None: ...
+    def report_startup(
+        self,
+        *,
+        outcome: CompileOutcome,
+        project_dir: Path,
+        database: str | None,
+        warehouse_connected: bool,
+        host: str,
+        port: int,
+    ) -> None: ...
+    def report_reload(self, *, outcome: CompileOutcome) -> None: ...
+    def report_activity(
+        self, *, category: str, status: str, tone: ActivityTone, detail: str
+    ) -> None: ...
+    def report_shutdown(self) -> None: ...
+
+def run_dev(
+    *,
+    options: DevCommandOptions,
+    client: AdapterConnection | None,
+    observation_client: AdapterConnection | None = None,
+    connection_factory: Callable[[], AdapterConnection] | None = None,
+    observation_connection_factory: Callable[[], AdapterConnection] | None = None,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+) -> int: ...
 def run_dev_server(
     *,
     run_compile: Callable[[], CompileAnalysis],
@@ -2000,6 +2055,114 @@ def execute_due_audits(
     project_dir: Path,
     due: tuple[dict[str, object], ...],
 ) -> int: ...
+def run_one_audit(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    name: str,
+    project_dir: Path,
+    database: str,
+) -> dict[str, object]: ...
+def run_audit_batch(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    names: tuple[str, ...],
+    project_dir: Path,
+    database: str,
+) -> list[dict[str, object]]: ...
+def run_one_test(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    name: str,
+    project_dir: Path,
+    database: str,
+) -> dict[str, object]: ...
+def build_checks_status_payload(
+    *,
+    analysis: CompileAnalysis,
+    connection: AdapterConnection,
+    database: str,
+    project_dir: Path,
+) -> list[dict[str, object]]: ...
+def promotion_executed_logical_ids(
+    *, connection: AdapterConnection, metadata_database: str, deployment_id: str
+) -> tuple[str, ...]: ...
+def run_dev_deployment_promotion(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    deployment_id: str,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def run_dev_deployment_cleanup(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    retention_days: int,
+    project_dir: Path,
+) -> dict[str, object]: ...
+def build_deployment_diff_payload(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    comparison: str,
+) -> dict[str, object]: ...
+def deployment_diff_payload(*, result: DeploymentDiffResult) -> dict[str, object]: ...
+def build_invocation(
+    *,
+    selectors: tuple[str, ...],
+    start_time: str | None,
+    execution_context: DevExecutionContext | None,
+    changed: bool = False,
+    include_missing_upstream: bool = False,
+    deployment_id: str | None = None,
+    confirmations: tuple[str, ...] | None = None,
+) -> tuple[list[str], str]: ...
+def build_child_environment(
+    *,
+    execution_context: DevExecutionContext | None,
+    display_command: str | None = None,
+    invocation_id: str | None = None,
+    expected_write_scope: frozenset[str] | None = None,
+    expected_read_scope: frozenset[str] | None = None,
+    expected_pipeline_scope: frozenset[str] | None = None,
+) -> dict[str, str]: ...
+
+@final
+class BuildProcessManager:
+    """Owns at most one running `sqt build` child and its live event feed."""
+
+    def __init__(
+        self,
+        *,
+        reporter: DevServerReporter,
+        execution_context: DevExecutionContext | None = None,
+        query_canceller: Callable[[str], AdapterQueryCancellation] | None = None,
+        cancellation_reporter: Callable[[BuildCancellationOutcome], None] | None = None,
+    ) -> None: ...
+    def start(
+        self,
+        *,
+        project_dir: Path,
+        selectors: tuple[str, ...],
+        start_time: str | None,
+        changed: bool = False,
+        include_missing_upstream: bool = False,
+        deployment_id: str | None = None,
+        confirmations: tuple[str, ...] | None = None,
+        expected_write_scope: frozenset[str] | None = None,
+        expected_read_scope: frozenset[str] | None = None,
+        expected_pipeline_scope: frozenset[str] | None = None,
+    ) -> dict[str, object]: ...
+    def feed(self, *, after: int) -> dict[str, object]: ...
+    def cancel(self, *, invocation_id: str) -> dict[str, object]: ...
+    def kill(self, *, invocation_id: str) -> dict[str, object]: ...
+    def close(self) -> None: ...
 
 @final
 class AuditScheduler:

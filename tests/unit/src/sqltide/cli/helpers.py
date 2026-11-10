@@ -12,6 +12,7 @@ from sqltide._native import (
     run_build,
     run_compile,
     run_destruction,
+    run_dev,
     run_plan,
     run_test,
 )
@@ -51,7 +52,6 @@ from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAda
 from sqltide.cli.deployment.main._run_deployment_diff import run_deployment_diff
 from sqltide.cli.deployment.main._run_deployment_list import run_deployment_list
 from sqltide.cli.deployment.main._run_deployment_show import run_deployment_show
-from sqltide.cli.dev.main._run_dev import run_dev
 from sqltide.cli.discover.main._run_discover import run_discover
 from sqltide.cli.doctor.main._run_doctor import run_doctor
 from sqltide.cli.entry.models import CliEntrypointHandlers

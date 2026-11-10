@@ -5,11 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sqltide._native import AuditScheduler, DevServerState
+from sqltide._native import AuditScheduler, BuildProcessManager, DevServerState
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.build_process import BuildProcessManager
 from tests.unit.src.sqltide.dev_server.classes._test_types import (
     AuditSchedulerActiveRunTestCase,
     AuditSchedulerBackoffTestCase,
