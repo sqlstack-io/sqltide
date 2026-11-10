@@ -8,6 +8,7 @@ from sqltide._native import (
     assemble_direct_build_workflow,
     assemble_virtual_build_workflow,
     normalize_cli_start_time,
+    resolve_selected_logical_model_keys,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.build._helpers.audits import prepare_direct_build_audits
@@ -26,7 +27,6 @@ from sqltide.cli.build.models import (
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.plan.main.render_direct_plan_text import render_direct_plan_text
 from sqltide.cli.plan.main.render_plan_result import render_plan_result
-from sqltide.cli.selection.main._selection import resolve_selected_logical_model_keys
 from sqltide.compiler.compile.models import (
     CompiledTableModel,
     CompilerAdapterProfile,

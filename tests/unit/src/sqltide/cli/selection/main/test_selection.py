@@ -4,9 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from sqltide._native import build_project_graph_from_compiled_project
+from sqltide._native import build_project_graph_from_compiled_project, resolve_selection
 from sqltide.cli.entry.exceptions import CliUserError
-from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import CompiledPipeline
 from sqltide.compiler.discovery.types import ReplayLineageMode

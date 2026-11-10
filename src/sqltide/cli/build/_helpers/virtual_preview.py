@@ -7,6 +7,7 @@ from sqltide._native import (
     load_planning_warehouse_snapshot,
     plan_deployment,
     plan_virtual_row_error_policy_changes,
+    resolve_selection,
     resolve_unsupported_bounded_replay_behavior,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
@@ -18,7 +19,6 @@ from sqltide.cli.build.models import (
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.cli.entry.main._resolve_default_database import resolve_default_database
 from sqltide.cli.plan.main._warnings import add_empty_replay_source_warnings
-from sqltide.cli.selection.main._selection import resolve_selection
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.compile.models import DesiredState, LogicalResourceKey
 from sqltide.compiler.compile.types import LogicalResourceType
