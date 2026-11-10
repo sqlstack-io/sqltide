@@ -104,7 +104,7 @@ fn code_points(text: &Bound<'_, PyString>) -> PyResult<Vec<u32>> {
 /// The text `json.dumps(value, indent=indent, sort_keys=sort_keys)` returns.
 #[pyfunction]
 #[pyo3(signature = (value, indent = None, sort_keys = false))]
-fn json_dumps(
+pub(crate) fn json_dumps(
     value: &Bound<'_, PyAny>,
     indent: Option<usize>,
     sort_keys: bool,

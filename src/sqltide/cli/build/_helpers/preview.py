@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqltide._native as _native
-from sqltide._native import collect_reachable_keys
+from sqltide._native import collect_reachable_keys, plan_row_error_policy_changes
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterDirectFingerprintRecord
 from sqltide.adapter.types import AdapterOptionalStateStatus
@@ -32,9 +32,6 @@ from sqltide.compiler.planner.models import (
     DirectWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.compiler.row_error_policy.main.plan_row_error_policy_changes import (
-    plan_row_error_policy_changes,
-)
 from sqltide.executor.direct.main.drifted_managed_sources import drifted_managed_sources
 from sqltide.executor.direct.models import DriftedManagedSource
 

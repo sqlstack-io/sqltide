@@ -1,5 +1,6 @@
 """Build one complete deterministic static compile target in memory."""
 
+from sqltide._native import build_dag_json
 from sqltide.adapter.models import AdapterManagedSource
 from sqltide.cli.compile._helpers.content import (
     normalized_sql,
@@ -23,7 +24,6 @@ from sqltide.compiler.compile.models import (
     CompiledSource,
     LogicalResourceKey,
 )
-from sqltide.compiler.dag.main.build_dag_json import build_dag_json
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.pipeline.types import AdapterResource
 from sqltide.compiler.testing.models import SqlTestCase

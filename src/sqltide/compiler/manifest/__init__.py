@@ -1,1 +1,0 @@
-"""Canonical persisted project manifests."""

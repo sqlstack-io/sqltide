@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqltide._native as _native
+from sqltide._native import plan_virtual_row_error_policy_changes
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogSnapshot
 from sqltide.cli.build.models import (
@@ -28,9 +29,6 @@ from sqltide.compiler.planner.models import (
     PlanningWarehouseSnapshot,
 )
 from sqltide.compiler.planner.types import RootDeploymentStateKind
-from sqltide.compiler.row_error_policy.main.plan_virtual_row_error_policy_changes import (
-    plan_virtual_row_error_policy_changes,
-)
 from sqltide.executor.backfill.main.build_backfill_deployment_identity import (
     build_backfill_deployment_identity,
 )
