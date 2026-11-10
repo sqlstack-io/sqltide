@@ -304,8 +304,8 @@ def test_given_complete_project_when_analyzing_then_polyglot_calls_remain_bounde
 
     with (
         patch(
-            "sqltide.compiler.sql_analysis._helpers.polyglot._native.polyglot_analyze_query",
-            wraps=_native.polyglot_analyze_query,
+            "sqltide._native.sql_infer_projection_names",
+            wraps=_native.sql_infer_projection_names,
         ) as analyze_query,
     ):
         analysis: CompileAnalysis = analyze_project(

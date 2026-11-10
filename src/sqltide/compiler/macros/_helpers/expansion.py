@@ -14,7 +14,6 @@ from sqltide.compiler.macros.constants import (
 )
 from sqltide.compiler.macros.exceptions import MacroError
 from sqltide.compiler.macros.models import LoadedMacro, MacroContext, MacroRegistry
-from sqltide.compiler.sql_analysis.classes.sql_lexical_scanner import SqlLexicalScanner
 from sqltide.diagnostics.models import RelatedDiagnosticLocation, SourceLocation
 
 
@@ -38,23 +37,21 @@ def expand_sql_body_macros(
         source_line=source_line,
         source_column=source_column,
     )
-    return SqlLexicalScanner.scanned(
-        lambda: _native.expand_macro_calls(
-            sql,
-            sorted(registry.macros),
-            str(file_path),
-            partial(
-                _call_macro,
-                registry=registry,
-                context=context,
-                file_path=file_path,
-                locate=locate,
-            ),
-            partial(_macro_error, registry=registry, locate=locate),
-            partial(_located_macro_error, registry=registry, locate=locate),
-            registry.declarations,
-            partial(registry.expansions.__setitem__, (file_path, sql, source_line, source_column)),
-        )
+    return _native.expand_macro_calls(
+        sql,
+        sorted(registry.macros),
+        str(file_path),
+        partial(
+            _call_macro,
+            registry=registry,
+            context=context,
+            file_path=file_path,
+            locate=locate,
+        ),
+        partial(_macro_error, registry=registry, locate=locate),
+        partial(_located_macro_error, registry=registry, locate=locate),
+        registry.declarations,
+        partial(registry.expansions.__setitem__, (file_path, sql, source_line, source_column)),
     )
 
 
@@ -203,7 +200,7 @@ def find_macro_call_names_impl(sql: str) -> tuple[str, ...]:
         return ()
     names: list[str]
     failure: str | None
-    names, failure = SqlLexicalScanner.scanned(lambda: _native.find_macro_call_names(sql))
+    names, failure = _native.find_macro_call_names(sql)
     if failure is not None:
         raise MacroError(failure)
     return tuple(names)
