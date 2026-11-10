@@ -4,14 +4,17 @@ from dataclasses import replace
 from pathlib import Path
 
 import sqltide._native as _native
-from sqltide._native import analyze_project, assemble_virtual_build_workflow
+from sqltide._native import (
+    analyze_project,
+    assemble_virtual_build_workflow,
+    build_virtual_build_preview,
+)
 from sqltide.adapter.models import (
     AdapterDirectFingerprintSnapshot,
     AdapterMutationResult,
     AdapterQueryResult,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.cli.build._helpers.virtual_preview import build_virtual_build_preview
 from sqltide.cli.build.main._run_build import run_build
 from sqltide.cli.build.models import (
     BuildCommandOptions,

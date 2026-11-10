@@ -254,7 +254,7 @@ def test_given_fixed_virtual_identity_when_publishing_then_plan_and_steps_are_ex
 ) -> None:
     write_direct_scope_project(project_root=tmp_path, virtual_environments=True)
     monkeypatch.setattr(
-        "sqltide.cli.build._helpers.virtual_preview.build_backfill_deployment_identity",
+        "sqltide._native.build_backfill_deployment_identity",
         lambda *, deployment_id: BackfillDeploymentIdentity(
             deployment_id=deployment_id,
             created_at=test_case.expected_created_at,
