@@ -4,9 +4,6 @@ from collections.abc import Mapping
 
 import sqltide._native as _native
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
-from sqltide.compiler.sql_analysis._helpers.model_analysis import analyze_model_sql_impl
-from sqltide.compiler.sql_analysis._helpers.polyglot import native_references, sql_tree_error
-from sqltide.compiler.sql_analysis._helpers.storage import analyze_storage_expressions
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
 from sqltide.compiler.sql_analysis.models import (
     SqlModelAnalysis,
@@ -37,7 +34,7 @@ class SqlModelAnalyzer:
 
         analysis: SqlModelAnalysis
         tree: _native.SqlModelTree
-        analysis, tree = analyze_model_sql_impl(
+        analysis, tree = _native.analyze_model_sql(
             sql=sql,
             engine=engine,
             order_by=order_by,
@@ -56,16 +53,13 @@ class SqlModelAnalyzer:
     ) -> SqlResolvedQuery:
         """Resolve and qualify a previously analyzed model without reparsing it."""
 
-        try:
-            canonical_sql, database_template = self._analyzer.resolve_model(
-                self._tree(analysis),
-                analysis.authored_sql,
-                native_references(analysis.references),
-                resolver,
-                ADAPTER_DATABASE_PLACEHOLDER,
-            )
-        except _native.SqlTreeError as error:
-            raise sql_tree_error(error) from None
+        canonical_sql, database_template = self._analyzer.resolve_model(
+            self._tree(analysis),
+            analysis.authored_sql,
+            list(analysis.references),
+            resolver,
+            ADAPTER_DATABASE_PLACEHOLDER,
+        )
         return SqlResolvedQuery(canonical_sql=canonical_sql, database_template=database_template)
 
     def uses_prewhere(self, *, analysis: SqlModelAnalysis) -> bool:
@@ -76,12 +70,9 @@ class SqlModelAnalyzer:
     def canonicalize_query(self, *, sql: str) -> SqlResolvedQuery:
         """Generate canonical and adapter-template forms of a generated query."""
 
-        try:
-            canonical_sql, database_template = self._analyzer.canonicalize_query(
-                sql, ADAPTER_DATABASE_PLACEHOLDER
-            )
-        except _native.SqlTreeError as error:
-            raise sql_tree_error(error) from None
+        canonical_sql, database_template = self._analyzer.canonicalize_query(
+            sql, ADAPTER_DATABASE_PLACEHOLDER
+        )
         return SqlResolvedQuery(canonical_sql=canonical_sql, database_template=database_template)
 
     def analyze_storage(
@@ -94,7 +85,7 @@ class SqlModelAnalyzer:
     ) -> tuple[SqlStorageExpression, ...]:
         """Analyze standalone storage clauses through this invocation's dialect."""
 
-        return analyze_storage_expressions(
+        return _native.analyze_storage_expressions(
             order_by=order_by,
             partition_by=partition_by,
             ttl=ttl,

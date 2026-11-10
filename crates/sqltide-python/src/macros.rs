@@ -18,7 +18,7 @@ use sqltide_sqltext::python_text::{python_isalnum, python_isspace, python_strip}
 use sqltide_sqltext::sql_scan::{find_matching_parenthesis, find_next_macro_start};
 
 use crate::config::spec_error;
-use crate::sql_scan::raise;
+use crate::sql_scan::scan_failure;
 
 const MACRO_CALL_CONTEXT: &str = "Macro call";
 const CONSTANT_CALL: &str = "const";
@@ -184,7 +184,7 @@ impl<'py> Expansion<'_, 'py> {
         let mut output_position: usize = 0;
         let mut cursor: usize = 0;
         while cursor < sql.len() {
-            let Some(start) = find_next_macro_start(sql, cursor).map_err(raise)? else {
+            let Some(start) = find_next_macro_start(sql, cursor).map_err(scan_failure)? else {
                 rendered.extend(&sql[cursor..]);
                 break;
             };
@@ -265,7 +265,7 @@ impl<'py> Expansion<'_, 'py> {
                 ));
             };
             let produced: Vec<char> = sql.to_cow()?.chars().collect();
-            if let Some(unexpanded) = find_next_macro_start(&produced, 0).map_err(raise)? {
+            if let Some(unexpanded) = find_next_macro_start(&produced, 0).map_err(scan_failure)? {
                 return Err(self.error(
                     &format!(
                         "Macro expansion in '{}' produced output containing unexpanded macro \
@@ -388,7 +388,7 @@ impl<'py> Expansion<'_, 'py> {
         let mut values: Vec<Bound<'py, PyAny>> = Vec::new();
         let mut cursor: usize = 0;
         while cursor < text.len() {
-            let Some(start) = find_next_macro_start(text, cursor).map_err(raise)? else {
+            let Some(start) = find_next_macro_start(text, cursor).map_err(scan_failure)? else {
                 break;
             };
             let (value, next) = self.evaluate_call(text, start, offset, false)?;
@@ -666,7 +666,7 @@ fn find_macro_call_names(sql: &str) -> PyResult<(Vec<String>, Option<String>)> {
     let mut names: Vec<String> = Vec::new();
     let mut cursor: usize = 0;
     while cursor < sql.len() {
-        let Some(start) = find_next_macro_start(&sql, cursor).map_err(raise)? else {
+        let Some(start) = find_next_macro_start(&sql, cursor).map_err(scan_failure)? else {
             break;
         };
         let name: String = macro_name(&sql, start);

@@ -25,17 +25,3 @@ class SqlStorageExpressionKind(StrEnum):
     ORDER_BY = "order_by"
     PARTITION_BY = "partition_by"
     TTL = "ttl"
-
-
-type NativeReference = tuple[str, str, str | None, int, int]
-
-
-class SqlTreeErrorKind(StrEnum):
-    """Which SQL analysis exception one native tree-analysis failure becomes."""
-
-    ANALYSIS = "analysis"
-    STATEMENT_COUNT = "statement_count"
-    QUERY_SHAPE = "query_shape"
-    UNTYPED_PROJECTION = "untyped_projection"
-    STAR_PROJECTION = "star_projection"
-    DUPLICATE_ALIAS = "duplicate_alias"

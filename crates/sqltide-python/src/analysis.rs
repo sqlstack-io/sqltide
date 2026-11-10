@@ -1,13 +1,14 @@
 //! Python bindings for `sqltide_sqlanalysis`. Parsed trees stay in Rust; Python receives compact
-//! facts and generated SQL, and turns `SqlTreeError(kind, *details)` into its exception types.
+//! facts and generated SQL. A failure raises its SQL analysis exception over the native
+//! `SqlTreeError(kind, *details)`, except where noted.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
 use pyo3::create_exception;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyDict, PyTuple};
 use sqltide_sqlanalysis::{
     AnalysisError, CatalogAnalysis, ExpectedReference, ModelError, NamedQuery, ParsedModel,
     Projection, ProjectionTypeCache, RelationCache, RelationIdentity, RelationRewrite,
@@ -19,21 +20,30 @@ use sqltide_sqlanalysis::{
 };
 use sqltide_sqltext::sql_scan::SourceSpan;
 
-use crate::sql_scan::{Span, raise as raise_scan, span};
+use crate::model_analysis::domain;
+use crate::sql_scan::{Span, raise as raise_scan, scan_failure, scan_references, span};
+
+const MODELS: &str = "sqltide.compiler.sql_analysis.models";
+const EXCEPTIONS: &str = "sqltide.compiler.sql_analysis.exceptions";
 
 create_exception!(_native, SqlTreeError, PyValueError);
 
-/// `(relation type, name, ref type, start, end)` for one lexically scanned reference.
-type Reference = (String, String, Option<String>, usize, usize);
 type NativeProjection = (usize, String, String, Span);
 
-fn analysis_error(error: AnalysisError) -> PyErr {
+/// The native `SqlTreeError` for one analysis failure, raised as is.
+fn raw_analysis_error(error: AnalysisError) -> PyErr {
     SqlTreeError::new_err(("analysis", error.0))
+}
+
+/// The SQL analysis exception for one analysis failure.
+fn analysis_error(error: AnalysisError) -> PyErr {
+    let native: PyErr = raw_analysis_error(error);
+    Python::attach(|py| domain(py, native))
 }
 
 fn model_error(py: Python<'_>, error: ModelError) -> PyResult<PyErr> {
     let details: Bound<'_, PyTuple> = match error {
-        ModelError::Analysis(error) => return Ok(analysis_error(error)),
+        ModelError::Analysis(error) => return Ok(raw_analysis_error(error)),
         ModelError::Scan(error) => return Ok(raise_scan(error)),
         ModelError::StatementCount(count) => ("statement_count", count).into_pyobject(py)?,
         ModelError::QueryShape {
@@ -69,18 +79,25 @@ fn lookup(resolver: &Bound<'_, PyAny>, name: &str) -> Option<String> {
     resolver.get_item(name).ok()?.extract().ok()
 }
 
-fn expected_references(references: Vec<Reference>) -> Vec<ExpectedReference> {
+/// The expected reference of each analyzed `SqlReference`.
+fn expected_references(references: &[Bound<'_, PyAny>]) -> PyResult<Vec<ExpectedReference>> {
     references
-        .into_iter()
-        .map(
-            |(relation_type, name, ref_type, start, end)| ExpectedReference {
-                relation_type,
-                name,
-                ref_type,
-                start,
-                end,
-            },
-        )
+        .iter()
+        .map(|reference| {
+            let ref_type: Bound<'_, PyAny> = reference.getattr("ref_type")?;
+            let location: Bound<'_, PyAny> = reference.getattr("span")?;
+            Ok(ExpectedReference {
+                relation_type: reference.getattr("relation_type")?.str()?.extract()?,
+                name: reference.getattr("name")?.extract()?,
+                ref_type: if ref_type.is_none() {
+                    None
+                } else {
+                    Some(ref_type.str()?.extract()?)
+                },
+                start: location.getattr("start")?.extract()?,
+                end: location.getattr("end")?.extract()?,
+            })
+        })
         .collect()
 }
 
@@ -93,18 +110,18 @@ pub(crate) struct SqlModelTree {
 #[pymethods]
 impl SqlModelTree {
     #[getter]
-    fn function_names(&self) -> Vec<String> {
+    pub(crate) fn function_names(&self) -> Vec<String> {
         self.model.function_names.clone()
     }
 
     #[getter]
-    fn has_group_by(&self) -> bool {
+    pub(crate) fn has_group_by(&self) -> bool {
         self.model.has_group_by
     }
 
     /// `(index, name, type, span)` for each typed outer projection.
     #[getter]
-    fn projections(&self) -> Vec<NativeProjection> {
+    pub(crate) fn projections(&self) -> Vec<NativeProjection> {
         self.model
             .projections
             .iter()
@@ -163,7 +180,7 @@ impl SqlTreeAnalyzer {
         let result = py.detach(|| analyze_model(sql, &self.dialect, &mut self.state().type_cache));
         match result {
             Ok(model) => Ok(SqlModelTree { model }),
-            Err(error) => Err(model_error(py, error)?),
+            Err(error) => Err(domain(py, model_error(py, error)?)),
         }
     }
 
@@ -172,11 +189,11 @@ impl SqlTreeAnalyzer {
         &self,
         model: &SqlModelTree,
         authored_sql: &str,
-        references: Vec<Reference>,
+        references: Vec<Bound<'_, PyAny>>,
         resolver: &Bound<'_, PyAny>,
         database_placeholder: &str,
     ) -> PyResult<(String, String)> {
-        let references: Vec<ExpectedReference> = expected_references(references);
+        let references: Vec<ExpectedReference> = expected_references(&references)?;
         self.state()
             .relations
             .resolve(
@@ -191,23 +208,61 @@ impl SqlTreeAnalyzer {
             .map_err(analysis_error)
     }
 
-    /// Validate a relation-only rewrite and return the canonical relation of each referenced target.
-    fn rewrite_relations(
+    /// `sql` with each logical reference replaced by its resolved target's canonical relation,
+    /// preserving the authored surrounding text.
+    fn rewrite_references(
         &self,
+        py: Python<'_>,
         sql: &str,
-        references: Vec<Reference>,
         resolver: &Bound<'_, PyAny>,
-    ) -> PyResult<HashMap<String, String>> {
-        let references: Vec<ExpectedReference> = expected_references(references);
-        validated_relation_rewrite(
+    ) -> PyResult<String> {
+        let references = scan_references(sql).map_err(|error| domain(py, error))?;
+        for (name, _, _, location) in &references {
+            if !resolver.contains(name)? {
+                let keywords: Bound<'_, PyDict> = PyDict::new(py);
+                keywords.set_item(
+                    "span",
+                    py.import(MODELS)?
+                        .getattr("SqlSourceSpan")?
+                        .call1(*location)?,
+                )?;
+                return Err(PyErr::from_value(
+                    py.import(EXCEPTIONS)?
+                        .getattr("SqlAnalysisError")?
+                        .call((format!("Unresolved ref: {name}"),), Some(&keywords))?,
+                ));
+            }
+        }
+        let expected: Vec<ExpectedReference> = references
+            .iter()
+            .map(
+                |(name, relation_type, ref_type, location)| ExpectedReference {
+                    relation_type: (*relation_type).to_owned(),
+                    name: name.clone(),
+                    ref_type: ref_type.map(str::to_owned),
+                    start: location.0,
+                    end: location.1,
+                },
+            )
+            .collect();
+        let canonical: HashMap<String, String> = validated_relation_rewrite(
             sql,
-            &references,
+            &expected,
             &|name| lookup(resolver, name),
             &mut self.state().relations,
             &self.dialect,
         )
         .map(|relations| relations.into_iter().collect())
-        .map_err(analysis_error)
+        .map_err(analysis_error)?;
+        let mut rewritten: Vec<char> = sql.chars().collect();
+        for (name, _, _, location) in references.iter().rev() {
+            let target: String = resolver.get_item(name)?.extract()?;
+            let relation: &String = canonical
+                .get(&target)
+                .ok_or_else(|| PyKeyError::new_err(target.clone()))?;
+            let _ = rewritten.splice(location.0..location.1, relation.chars());
+        }
+        sqltide_sqltext::sql_scan::normalized_statement_sql(&rewritten).map_err(scan_failure)
     }
 
     /// Generate `(canonical_sql, database_template)` for one non-model query.
@@ -305,7 +360,7 @@ fn sql_quarantine_ineligibility(
 ) -> PyResult<Option<(String, String)>> {
     quarantine_ineligibility(sql, &SqlDialect::new(dialect_name))
         .map(|blocked| blocked.map(|item| (item.column, item.reason)))
-        .map_err(analysis_error)
+        .map_err(raw_analysis_error)
 }
 
 /// `(kept-rows query, dead-letter query)` for one quarantine model.
@@ -317,12 +372,12 @@ fn sql_quarantine_split(
 ) -> PyResult<(String, String)> {
     quarantine_split(sql, model_name, &SqlDialect::new(dialect_name))
         .map(|split| (split.good_query, split.dead_letter_query))
-        .map_err(analysis_error)
+        .map_err(raw_analysis_error)
 }
 
 #[pyfunction]
 fn sql_select_is_row_level(sql: &str, dialect_name: &str) -> PyResult<bool> {
-    select_row_level(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
+    select_row_level(sql, &SqlDialect::new(dialect_name)).map_err(raw_analysis_error)
 }
 
 #[pyfunction]
@@ -367,11 +422,25 @@ fn sql_canonicalize(sql: &str, dialect_name: &str) -> PyResult<String> {
     canonicalize_sql(sql, &SqlDialect::new(dialect_name)).map_err(analysis_error)
 }
 
-/// One canonical data type. A failure raises `ValueError` with the compiler's message.
+/// One canonical data type. A failure raises `SqlAnalysisError` with the compiler's message.
 #[pyfunction]
-fn sql_normalize_data_type(sql: &str, dialect_name: &str) -> PyResult<String> {
-    sqltide_sqlanalysis::normalize_data_type(sql, dialect_name)
-        .map_err(|error| PyValueError::new_err(error.0))
+fn sql_normalize_data_type(py: Python<'_>, sql: &str, dialect_name: &str) -> PyResult<String> {
+    match sqltide_sqlanalysis::normalize_data_type(sql, dialect_name) {
+        Ok(normalized) => Ok(normalized),
+        Err(error) => {
+            let context: Bound<'_, PyAny> = PyValueError::new_err(error.0.clone())
+                .value(py)
+                .clone()
+                .into_any();
+            let failure: Bound<'_, PyAny> = py
+                .import(EXCEPTIONS)?
+                .getattr("SqlAnalysisError")?
+                .call1((error.0,))?;
+            failure.setattr("__context__", context)?;
+            failure.setattr("__cause__", py.None())?;
+            Err(PyErr::from_value(failure))
+        }
+    }
 }
 
 #[pyfunction]

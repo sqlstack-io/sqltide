@@ -33,7 +33,6 @@ polyglot-sql = { git = "https://github.com/sqlstack-io/polyglot.git", rev = "876
     "stacker",
 ] }
 pyo3 = { version = "0.26", features = ["abi3-py312"] }
-pythonize = "0.26"
 regex = "1.13"
 saphyr-parser = "0.1"
 serde = "1"
