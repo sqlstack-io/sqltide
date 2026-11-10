@@ -9,6 +9,7 @@ from pathlib import Path
 from scripts.python_boundary._helpers.lines import count_lines, tracked_python_files
 from scripts.python_boundary._helpers.native_errors import find_native_error_handlers
 from scripts.python_boundary._helpers.policy import get_policy_errors, read_boundary_policy
+from scripts.python_boundary._helpers.reexports import is_pure_reexport
 from scripts.python_boundary.constants import POLICY_FILE, SOURCE_ROOT
 from scripts.python_boundary.models import BoundaryPolicy, NativeErrorHandler
 
@@ -21,7 +22,9 @@ def run_python_boundary_check(argv: list[str] | None = None) -> int:
     root: Path = arguments.root
     policy: BoundaryPolicy = read_boundary_policy(root / POLICY_FILE)
     errors: list[str] = list(get_policy_errors(root=root, policy=policy))
-    tracked: tuple[Path, ...] = tracked_python_files(root=root, stays=policy.stays)
+    candidates: tuple[Path, ...] = tracked_python_files(root=root, stays=policy.stays)
+    reexports: tuple[Path, ...] = tuple(path for path in candidates if is_pure_reexport(path))
+    tracked: tuple[Path, ...] = tuple(path for path in candidates if path not in reexports)
     remaining: int = count_lines(tracked)
     if remaining > policy.remaining_lines:
         errors.append(
@@ -56,5 +59,9 @@ def run_python_boundary_check(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print(f"Python boundary is valid: {remaining} movable Python lines remain.")
+    print(
+        f"Python boundary is valid: {remaining} movable Python lines remain; "
+        f"{len(reexports)} pure native re-export files ({count_lines(reexports)} lines) "
+        "are not counted."
+    )
     return 0
