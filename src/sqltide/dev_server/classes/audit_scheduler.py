@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 
+from sqltide._native import (
+    read_active_runs,
+    read_latest_applied_direct_build_at,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.cli.entry.types import CliCommand
 from sqltide.compiler.discovery.constants import DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server._helpers.queries.runs_query import (
-    read_active_runs,
-    read_latest_applied_direct_build_at,
-)
 from sqltide.dev_server.classes.build_process import BuildProcessManager
 from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime

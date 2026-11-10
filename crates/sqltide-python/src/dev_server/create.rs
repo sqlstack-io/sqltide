@@ -398,5 +398,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::plan::register(module)?;
     super::activity::register(module)?;
     super::drift::register(module)?;
-    super::state::register(module)
+    super::state::register(module)?;
+    super::runs::register(module)
 }

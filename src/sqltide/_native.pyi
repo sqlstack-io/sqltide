@@ -157,8 +157,8 @@ from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.kafka_lag_reader import KafkaLagReader
 from sqltide.dev_server.classes.kafka_topic_reader import KafkaTopicReader
 from sqltide.dev_server.classes.warehouse_health_reader import WarehouseHealthReader
-from sqltide.dev_server.models import DevExecutionContext
-from sqltide.dev_server.types import DevServerReporter
+from sqltide.dev_server.models import DevExecutionContext, ReplayOffsetProgress
+from sqltide.dev_server.types import DevServerReporter, RunPresentationStatus
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
 from sqltide.executor.backfill.models import (
@@ -1715,3 +1715,71 @@ def build_topics_payload(
     topic_reader: KafkaTopicReader,
     kafka_lag_reader: KafkaLagReader,
 ) -> dict[str, object]: ...
+def derive_run_status(
+    *,
+    terminal_outcome: str | None,
+    completed_event_outcome: str | None,
+    last_signal_at: datetime,
+    warehouse_now: datetime,
+    presumed_failed_after_seconds: int = 600,
+) -> RunPresentationStatus: ...
+def derive_run_duration_ms(
+    *, started_at: str, completed_at: str | None, warehouse_now: datetime
+) -> int: ...
+def terminal_audit_summary(
+    *, command: str, mode: str, summary_json: object
+) -> dict[str, int] | None: ...
+def assemble_runs(
+    *,
+    terminal_by_id: dict[str, dict[str, object]],
+    streams: dict[str, list[dict[str, object]]],
+    warehouse_now: datetime,
+    limit: int | None = None,
+    presumed_failed_after_seconds: int = 600,
+) -> list[dict[str, object]]: ...
+def statement_progress(
+    *, connection: AdapterConnection, events: list[dict[str, object]], observed_at: str
+) -> dict[str, object] | None: ...
+def read_runs(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    limit: int | None = 100,
+    presumed_failed_after_seconds: int = 600,
+) -> list[dict[str, object]]: ...
+def read_active_runs(
+    *, connection: AdapterConnection, database: str, presumed_failed_after_seconds: int = 600
+) -> list[dict[str, object]]: ...
+def read_run_events(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    invocation_id: str,
+    after: int = 0,
+    presumed_failed_after_seconds: int = 600,
+) -> dict[str, object]: ...
+def read_run_statement(
+    *, connection: AdapterConnection, database: str, invocation_id: str, statement_sequence: int
+) -> dict[str, object]: ...
+def read_terminal_run(
+    *, connection: AdapterConnection, database: str, invocation_id: str
+) -> dict[str, object] | None: ...
+def read_destruction_recovery_run(
+    *, connection: AdapterConnection, database: str, invocation_id: str
+) -> dict[str, object] | None: ...
+def read_latest_direct_build_materialization(
+    *, connection: AdapterConnection, database: str, project_identity: str
+) -> str | None: ...
+def read_latest_applied_direct_build_at(
+    *, connection: AdapterConnection, database: str, project_identity: str
+) -> str | None: ...
+def decode_replay_offset_progress_request(
+    value: object,
+) -> AdapterReplayOffsetProgressRequest | None: ...
+def calculate_replay_offset_progress(
+    *,
+    request: AdapterReplayOffsetProgressRequest,
+    frontiers: tuple[AdapterReplayOffsetFrontier, ...],
+    elapsed_seconds: float,
+    completed: bool = False,
+) -> ReplayOffsetProgress | None: ...

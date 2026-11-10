@@ -39,7 +39,7 @@ def test_given_pipeline_build_role_when_starting_build_then_http_boundary_enforc
             return_value=build_direct_plan_preparation(),
         ),
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[],
         ),
         patch(
@@ -95,7 +95,7 @@ def test_given_run_control_role_when_signalling_build_then_http_boundary_enforce
     ]
     with (
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=active_runs,
         ),
         patch(

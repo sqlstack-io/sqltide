@@ -2,14 +2,15 @@
 
 from pathlib import Path
 
-from sqltide._native import audit_schedule_entry, resolve_audit_warmup_states
+from sqltide._native import (
+    audit_schedule_entry,
+    read_latest_direct_build_materialization,
+    resolve_audit_warmup_states,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.compiler.quality.types import QualityNodeKind
-from sqltide.dev_server._helpers.queries.runs_query import (
-    read_latest_direct_build_materialization,
-)
 from sqltide.dev_server._helpers.server.checks_execution import build_checks_status_payload
 from sqltide.dev_server.types import AuditScheduleState
 from sqltide.executor.auditing.main.load_materialized_model_names import (

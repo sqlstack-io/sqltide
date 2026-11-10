@@ -3,19 +3,8 @@ from typing import cast
 
 import pytest
 
-from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.adapter.models import (
-    AdapterQueryResult,
-    AdapterReplayOffsetFrontier,
-    AdapterReplayOffsetProgressRequest,
-    AdapterStatementProgress,
-)
-from sqltide.dev_server._helpers.queries import runs_query
-from sqltide.dev_server._helpers.queries.runs_query import (
-    _assemble_runs,
-    _statement_progress,
-    _terminal_audit_summary,
-    _terminal_runs,
+from sqltide._native import (
+    assemble_runs,
     derive_run_duration_ms,
     derive_run_status,
     read_destruction_recovery_run,
@@ -24,6 +13,15 @@ from sqltide.dev_server._helpers.queries.runs_query import (
     read_run_statement,
     read_runs,
     read_terminal_run,
+    statement_progress,
+    terminal_audit_summary,
+)
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.models import (
+    AdapterQueryResult,
+    AdapterReplayOffsetFrontier,
+    AdapterReplayOffsetProgressRequest,
+    AdapterStatementProgress,
 )
 from sqltide.dev_server.types import RunPresentationStatus
 from tests.unit.src.sqltide.dev_server._test_types import (
@@ -37,16 +35,18 @@ from tests.unit.src.sqltide.dev_server._test_types import (
     TerminalRunQueryTestCase,
 )
 from tests.unit.src.sqltide.dev_server.helpers import (
+    RUN_EVENT_COLUMNS,
     FakeAdapterConnection,
+    RecordingRunHistoryConnection,
+    active_run_events_query,
     build_fake_state_connection,
+    present_result,
+    run_table_query,
+    terminal_run_result,
+    terminal_runs_query,
 )
 
 _WAREHOUSE_NOW: datetime = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
-
-
-class RunHistoryClockConnection:
-    def capture_warehouse_timestamp(self) -> str:
-        return "2026-08-07 12:00:00.000"
 
 
 class StatementProgressConnection:
@@ -86,88 +86,41 @@ class StatementProgressConnection:
     ids=lambda case: case.description,
 )
 def test_given_scheduled_cycles_fill_history_when_reading_runs_then_builds_remain_visible(
-    monkeypatch: pytest.MonkeyPatch,
     test_case: RunHistoryQueryTestCase,
 ) -> None:
-    terminal_calls: list[tuple[int | None, bool | None]] = []
-    active_calls: list[dict[str, object]] = []
-    started_invocations: list[tuple[str, ...]] = []
-    table_checks: list[str] = []
-
-    terminal_payloads: dict[bool | None, dict[str, dict[str, object]]] = {
-        False: {
-            "build-run": {
-                "invocationId": "build-run",
-                "command": "build",
-                "mode": "direct",
-                "status": "succeeded",
-                "startedAt": "2026-08-07 11:00:00.000",
-                "lastSignalAt": "2026-08-07 11:01:00.000",
-            }
-        },
-        True: {
-            "audit-cycle": {
-                "invocationId": "audit-cycle",
-                "command": "audit",
-                "mode": "scheduled",
-                "status": "succeeded",
-                "startedAt": "2026-08-07 11:00:00.000",
-                "lastSignalAt": "2026-08-07 11:01:00.000",
-            }
-        },
-    }
-
-    def terminal_runs(
-        *,
-        connection: AdapterConnection,
-        database: str,
-        invocation_id: str | None = None,
-        limit: int | None = None,
-        scheduled: bool | None = None,
-        table_exists: bool | None = None,
-    ) -> dict[str, dict[str, object]]:
-        del connection, database, invocation_id
-        assert table_exists is True
-        terminal_calls.append((limit, scheduled))
-        return terminal_payloads[scheduled]
-
-    monkeypatch.setattr(runs_query, "_terminal_runs", terminal_runs)
-
-    def table_exists(**kwargs: object) -> bool:
-        table_checks.append(str(kwargs["table"]))
-        return True
-
-    monkeypatch.setattr(runs_query, "_table_exists", table_exists)
-    monkeypatch.setattr(
-        runs_query,
-        "_run_started_streams",
-        lambda **kwargs: started_invocations.append(kwargs["invocation_ids"]) or {},
-    )
-    monkeypatch.setattr(
-        runs_query,
-        "_event_streams",
-        lambda **kwargs: active_calls.append(kwargs) or {},
+    (build_limit, _), (scheduled_limit, _) = test_case.expected_terminal_calls
+    connection: RecordingRunHistoryConnection = RecordingRunHistoryConnection(
+        results={
+            run_table_query("_sqltide_invocations"): present_result(1),
+            run_table_query("_sqltide_run_events"): present_result(1),
+            terminal_runs_query(limit=build_limit, scheduled=False): terminal_run_result(
+                invocation_id="build-run", command="build", mode="direct"
+            ),
+            terminal_runs_query(limit=scheduled_limit, scheduled=True): terminal_run_result(
+                invocation_id="audit-cycle", command="audit", mode="scheduled"
+            ),
+        }
     )
 
-    connection: AdapterConnection = cast(AdapterConnection, RunHistoryClockConnection())
     runs: list[dict[str, object]] = read_runs(
-        connection=connection,
+        connection=cast(AdapterConnection, connection),
         database="analytics",
     )
 
     assert {run["invocationId"] for run in runs} == test_case.expected_invocation_ids
-    assert terminal_calls == list(test_case.expected_terminal_calls)
-    assert table_checks == ["_sqltide_invocations", "_sqltide_run_events"]
-    assert started_invocations == [("build-run", "audit-cycle")]
-    assert active_calls == [
-        {
-            "connection": connection,
-            "database": "analytics",
-            "recent_limit": 400,
-            "active_only": True,
-            "exclude_terminal_invocations": test_case.expected_exclude_terminal_invocations,
-            "table_exists": True,
-        }
+    assert connection.queries == [
+        run_table_query("_sqltide_invocations"),
+        run_table_query("_sqltide_run_events"),
+        *(
+            terminal_runs_query(limit=limit, scheduled=bool(scheduled))
+            for limit, scheduled in test_case.expected_terminal_calls
+        ),
+        f"SELECT {RUN_EVENT_COLUMNS} FROM `analytics`.`_sqltide_run_events` "
+        "WHERE invocation_id IN ('build-run', 'audit-cycle') AND event_kind = 'run_started' "
+        "ORDER BY invocation_id, sequence",
+        active_run_events_query(
+            exclude_terminal_invocations=test_case.expected_exclude_terminal_invocations
+        ),
     ]
 
 
@@ -184,31 +137,28 @@ def test_given_scheduled_cycles_fill_history_when_reading_runs_then_builds_remai
     ids=lambda case: case.description,
 )
 def test_given_no_invocation_table_when_reading_runs_then_active_events_remain_supported(
-    monkeypatch: pytest.MonkeyPatch,
     test_case: RunHistoryQueryTestCase,
 ) -> None:
-    active_calls: list[dict[str, object]] = []
-    monkeypatch.setattr(runs_query, "_table_exists", lambda **_: False)
-    monkeypatch.setattr(
-        runs_query,
-        "_terminal_runs",
-        lambda **_: pytest.fail("terminal runs must not be read without an invocation table"),
-    )
-    monkeypatch.setattr(runs_query, "_run_started_streams", lambda **_: {})
-    monkeypatch.setattr(
-        runs_query,
-        "_event_streams",
-        lambda **kwargs: active_calls.append(kwargs) or {},
+    connection: RecordingRunHistoryConnection = RecordingRunHistoryConnection(
+        results={
+            run_table_query("_sqltide_invocations"): present_result(0),
+            run_table_query("_sqltide_run_events"): present_result(1),
+        }
     )
 
-    read_runs(
-        connection=cast(AdapterConnection, RunHistoryClockConnection()),
+    runs: list[dict[str, object]] = read_runs(
+        connection=cast(AdapterConnection, connection),
         database="analytics",
     )
 
-    assert active_calls[0]["exclude_terminal_invocations"] is (
-        test_case.expected_exclude_terminal_invocations
-    )
+    assert {run["invocationId"] for run in runs} == test_case.expected_invocation_ids
+    assert connection.queries == [
+        run_table_query("_sqltide_invocations"),
+        run_table_query("_sqltide_run_events"),
+        active_run_events_query(
+            exclude_terminal_invocations=test_case.expected_exclude_terminal_invocations
+        ),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -225,68 +175,24 @@ def test_given_no_invocation_table_when_reading_runs_then_active_events_remain_s
 def test_given_null_mode_build_when_reading_terminal_operations_then_it_is_not_excluded(
     test_case: TerminalRunQueryTestCase,
 ) -> None:
-    invocation_table_query: str = (
-        "SELECT count() AS present FROM system.tables "
-        "WHERE database = 'analytics' AND name = '_sqltide_invocations'"
-    )
-    invocation_query: str = (
-        "SELECT invocation_id, project_identity, command, mode, outcome, exit_code, "
-        "toString(started_at) AS started_at, toString(completed_at) AS completed_at, "
-        "duration_ms, selected_node_count, error_message, summary_json, tool_version "
-        "FROM `analytics`.`_sqltide_invocations` "
-        "WHERE NOT (command = 'audit' AND coalesce(mode, '') = 'scheduled') "
-        "ORDER BY started_at DESC LIMIT 100"
-    )
-    connection: FakeAdapterConnection = FakeAdapterConnection(
-        catalog=build_fake_state_connection()._catalog,
-        warehouse_timestamp="2026-08-07 12:00:00.000",
-        results_by_query={
-            invocation_table_query: AdapterQueryResult(rows=((1,),), column_names=("present",)),
-            invocation_query: AdapterQueryResult(
-                rows=(
-                    (
-                        test_case.invocation_id,
-                        "project",
-                        "build",
-                        None,
-                        "succeeded",
-                        0,
-                        "2026-08-07 11:00:00.000",
-                        "2026-08-07 11:01:00.000",
-                        60000,
-                        1,
-                        None,
-                        "{}",
-                        "0.26.4",
-                    ),
-                ),
-                column_names=(
-                    "invocation_id",
-                    "project_identity",
-                    "command",
-                    "mode",
-                    "outcome",
-                    "exit_code",
-                    "started_at",
-                    "completed_at",
-                    "duration_ms",
-                    "selected_node_count",
-                    "error_message",
-                    "summary_json",
-                    "tool_version",
-                ),
+    connection: RecordingRunHistoryConnection = RecordingRunHistoryConnection(
+        results={
+            run_table_query("_sqltide_invocations"): present_result(1),
+            run_table_query("_sqltide_run_events"): present_result(0),
+            terminal_runs_query(limit=100, scheduled=False): terminal_run_result(
+                invocation_id=test_case.invocation_id, command="build", mode=None
             ),
-        },
+        }
     )
 
-    runs: dict[str, dict[str, object]] = _terminal_runs(
-        connection=connection,
+    runs: list[dict[str, object]] = read_runs(
+        connection=cast(AdapterConnection, connection),
         database="analytics",
-        limit=100,
-        scheduled=False,
     )
 
-    assert runs[test_case.invocation_id]["command"] == test_case.expected_command
+    assert [(run["invocationId"], run["command"]) for run in runs] == [
+        (test_case.invocation_id, test_case.expected_command)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -512,7 +418,7 @@ def test_given_active_query_when_reading_progress_then_metrics_are_exposed(
             },
         }
     ]
-    payload: dict[str, object] | None = _statement_progress(
+    payload: dict[str, object] | None = statement_progress(
         connection=cast(AdapterConnection, connection),
         events=events,
         observed_at="2026-08-07 12:00:00.000",
@@ -596,7 +502,7 @@ def test_given_persisted_statement_when_reading_run_sql_then_exact_payload_is_re
 def test_given_full_started_command_when_assembling_terminal_run_then_uses_full_command(
     test_case: DevRefactorTestCase,
 ) -> None:
-    runs: list[dict[str, object]] = _assemble_runs(
+    runs: list[dict[str, object]] = assemble_runs(
         terminal_by_id={
             "inv-1": {
                 "invocationId": "inv-1",
@@ -642,7 +548,7 @@ def test_given_full_started_command_when_assembling_terminal_run_then_uses_full_
 def test_given_active_query_after_cancel_when_assembling_run_then_failure_remains_visible(
     test_case: DevRefactorTestCase,
 ) -> None:
-    runs: list[dict[str, object]] = _assemble_runs(
+    runs: list[dict[str, object]] = assemble_runs(
         terminal_by_id={
             "inv-1": {
                 "invocationId": "inv-1",
@@ -695,7 +601,7 @@ def test_given_active_query_after_cancel_when_assembling_run_then_failure_remain
 def test_given_active_event_stream_when_assembling_run_then_progress_is_exposed(
     test_case: DevRefactorTestCase,
 ) -> None:
-    runs: list[dict[str, object]] = _assemble_runs(
+    runs: list[dict[str, object]] = assemble_runs(
         terminal_by_id={},
         streams={
             "inv-active": [
@@ -759,7 +665,7 @@ def test_given_active_event_stream_when_assembling_run_then_progress_is_exposed(
 def test_given_active_audit_cycle_when_assembling_run_then_partial_outcomes_are_exposed(
     test_case: DevRefactorTestCase,
 ) -> None:
-    runs: list[dict[str, object]] = _assemble_runs(
+    runs: list[dict[str, object]] = assemble_runs(
         terminal_by_id={},
         streams={
             "audit-cycle": [
@@ -810,7 +716,7 @@ def test_given_active_audit_cycle_when_assembling_run_then_partial_outcomes_are_
 def test_given_completed_audit_cycle_when_reading_summary_then_durable_counts_are_exposed(
     test_case: DevRefactorTestCase,
 ) -> None:
-    summary: dict[str, int] | None = _terminal_audit_summary(
+    summary: dict[str, int] | None = terminal_audit_summary(
         command="audit",
         mode="scheduled",
         summary_json=(
@@ -842,7 +748,7 @@ def test_given_terminal_audit_cycle_when_events_are_windowed_then_durable_summar
     test_case: DevRefactorTestCase,
 ) -> None:
     durable_summary: dict[str, int] = cast(dict[str, int], test_case.expected_value)
-    runs: list[dict[str, object]] = _assemble_runs(
+    runs: list[dict[str, object]] = assemble_runs(
         terminal_by_id={
             "audit-cycle": {
                 "invocationId": "audit-cycle",

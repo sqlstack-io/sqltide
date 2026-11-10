@@ -108,9 +108,7 @@ def test_given_isolated_read_factory_when_reading_route_then_primary_connection_
         )
     )
 
-    with patch(
-        "sqltide.dev_server._helpers.queries.runs_query.read_runs", return_value=[]
-    ) as read_runs_mock:
+    with patch("sqltide._native.read_runs", return_value=[]) as read_runs_mock:
         response: NativeResponse = client.get(test_case.path)
 
     assert response.status_code == test_case.expected_status

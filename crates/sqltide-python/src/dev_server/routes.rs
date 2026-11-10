@@ -23,7 +23,6 @@ const AUTH_MODELS: &str = "sqltide.auth.models";
 const DEFINITIONS_PAYLOAD: &str = NATIVE;
 const DEPLOYMENTS_PAYLOAD: &str = NATIVE;
 const MESSAGE_QUERY: &str = "sqltide.dev_server._helpers.queries.message_query";
-const RUNS_QUERY: &str = "sqltide.dev_server._helpers.queries.runs_query";
 const CHECKS: &str = "sqltide.dev_server._helpers.server.checks_execution";
 const COMPILE_RUNNER: &str = "sqltide.dev_server._helpers.server.compile_runner";
 const DEPLOYMENT_OPERATIONS: &str = "sqltide.dev_server._helpers.server.deployment_operations";
@@ -762,7 +761,7 @@ fn read_run_history(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = reading(call, |client| {
         Ok(invoke(
             py,
-            RUNS_QUERY,
+            NATIVE,
             "read_runs",
             py_kwargs!(py;
                 connection = client,
@@ -779,7 +778,7 @@ fn read_one_run_events(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = reading(call, |client| {
         Ok(invoke(
             py,
-            RUNS_QUERY,
+            NATIVE,
             "read_run_events",
             py_kwargs!(py;
                 connection = client,
@@ -798,7 +797,7 @@ fn read_one_run_statement(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let result = reading(call, |client| {
         Ok(invoke(
             py,
-            RUNS_QUERY,
+            NATIVE,
             "read_run_statement",
             py_kwargs!(py;
                 connection = client,
@@ -874,7 +873,7 @@ fn read_active_runs<'py>(call: &Call<'py, '_>, client: &Bound<'py, PyAny>) -> Py
     let py: Python<'py> = call.py;
     invoke(
         py,
-        RUNS_QUERY,
+        NATIVE,
         "read_active_runs",
         py_kwargs!(py;
             connection = client,

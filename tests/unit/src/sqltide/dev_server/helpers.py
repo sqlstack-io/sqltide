@@ -1625,3 +1625,108 @@ def build_overlay_reader(
         connection_factory=connection_factory,
         kafka_lag_reader=KafkaLagReader(),
     )
+
+
+RUN_INVOCATION_COLUMNS: tuple[str, ...] = (
+    "invocation_id",
+    "project_identity",
+    "command",
+    "mode",
+    "outcome",
+    "exit_code",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "selected_node_count",
+    "error_message",
+    "summary_json",
+    "tool_version",
+)
+RUN_EVENT_COLUMNS: str = (
+    "invocation_id, sequence, toString(emitted_at) AS emitted_at, event_kind, "
+    "step_id, phase, payload_json"
+)
+_TERMINAL_RUN_SCOPES: dict[bool, str] = {
+    True: "command = 'audit' AND mode = 'scheduled'",
+    False: "NOT (command = 'audit' AND coalesce(mode, '') = 'scheduled')",
+}
+_TERMINAL_RUN_EXCLUSIONS: dict[bool, str] = {
+    True: (
+        " AND invocation_id NOT IN (SELECT invocation_id FROM `analytics`.`_sqltide_invocations`)"
+    ),
+    False: "",
+}
+
+
+class RecordingRunHistoryConnection:
+    """Answers known warehouse queries, returns no rows otherwise, and records every query."""
+
+    def __init__(self, *, results: dict[str, AdapterQueryResult]) -> None:
+        self.queries: list[str] = []
+        self._results: dict[str, AdapterQueryResult] = results
+
+    def capture_warehouse_timestamp(self) -> str:
+        return "2026-08-07 12:00:00.000"
+
+    def query(self, statement: str) -> AdapterQueryResult:
+        self.queries.append(statement)
+        return self._results.get(statement, AdapterQueryResult(rows=()))
+
+
+def run_table_query(table: str) -> str:
+    return (
+        "SELECT count() AS present FROM system.tables "
+        f"WHERE database = 'analytics' AND name = '{table}'"
+    )
+
+
+def present_result(present: int) -> AdapterQueryResult:
+    return AdapterQueryResult(rows=((present,),), column_names=("present",))
+
+
+def terminal_runs_query(*, limit: int | None, scheduled: bool) -> str:
+    return (
+        "SELECT invocation_id, project_identity, command, mode, outcome, exit_code, "
+        "toString(started_at) AS started_at, toString(completed_at) AS completed_at, "
+        "duration_ms, selected_node_count, error_message, summary_json, tool_version "
+        f"FROM `analytics`.`_sqltide_invocations` WHERE {_TERMINAL_RUN_SCOPES[scheduled]} "
+        f"ORDER BY started_at DESC LIMIT {limit}"
+    )
+
+
+def terminal_run_result(
+    *, invocation_id: str, command: str, mode: str | None
+) -> AdapterQueryResult:
+    return AdapterQueryResult(
+        rows=(
+            (
+                invocation_id,
+                "project",
+                command,
+                mode,
+                "succeeded",
+                0,
+                "2026-08-07 11:00:00.000",
+                "2026-08-07 11:01:00.000",
+                60000,
+                1,
+                None,
+                "{}",
+                "0.26.4",
+            ),
+        ),
+        column_names=RUN_INVOCATION_COLUMNS,
+    )
+
+
+def active_run_events_query(*, exclude_terminal_invocations: bool) -> str:
+    return (
+        f"SELECT {RUN_EVENT_COLUMNS} FROM (SELECT {RUN_EVENT_COLUMNS}, "
+        "row_number() OVER (PARTITION BY invocation_id ORDER BY sequence DESC) AS recency "
+        "FROM `analytics`.`_sqltide_run_events` WHERE invocation_id IN ("
+        "SELECT invocation_id FROM `analytics`.`_sqltide_run_events` GROUP BY invocation_id "
+        "HAVING countIf(event_kind = 'run_started') > 0 "
+        "AND countIf(event_kind = 'run_completed') = 0)"
+        f"{_TERMINAL_RUN_EXCLUSIONS[exclude_terminal_invocations]}) "
+        "WHERE recency <= 400 OR event_kind = 'run_started' ORDER BY invocation_id, sequence"
+    )

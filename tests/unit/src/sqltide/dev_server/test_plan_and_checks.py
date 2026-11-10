@@ -498,7 +498,7 @@ def test_given_changed_build_flags_when_starting_then_process_receives_them(
     )
     with (
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[],
         ),
         patch(
@@ -640,7 +640,7 @@ def test_given_planned_deployment_when_starting_build_then_launches_same_deploym
     deployment_id: str = str(test_case.expected_value)
     with (
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[],
         ),
         patch(
@@ -1022,7 +1022,7 @@ def test_given_unresponsive_run_when_starting_build_then_conflict_explains_retry
     write_dev_server_project(project_dir=tmp_path)
     client: NativeTestClient = build_state_test_client(project_dir=tmp_path)
     with patch(
-        "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+        "sqltide._native.read_active_runs",
         return_value=[
             {
                 "invocationId": "stale-run",
@@ -1072,7 +1072,7 @@ def test_given_active_run_scope_when_starting_build_then_only_overlap_conflicts(
     }
     with (
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_active_runs",
+            "sqltide._native.read_active_runs",
             return_value=[
                 {
                     "invocationId": "active-run",

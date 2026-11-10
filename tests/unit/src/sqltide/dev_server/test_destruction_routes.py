@@ -381,7 +381,7 @@ def test_given_failed_destruction_run_when_recovering_then_server_replans_record
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
         patch(
@@ -522,7 +522,7 @@ def test_given_invalid_durable_run_when_recovering_then_no_plan_is_created(
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
         patch("sqltide._native.plan_destruction") as planner,
@@ -577,7 +577,7 @@ def test_given_new_dependency_when_recovering_then_it_is_not_silently_included(
     with (
         patch.object(WarehouseRuntime, "read_connection", read_connection),
         patch(
-            "sqltide.dev_server._helpers.queries.runs_query.read_destruction_recovery_run",
+            "sqltide._native.read_destruction_recovery_run",
             return_value=run,
         ),
         patch(

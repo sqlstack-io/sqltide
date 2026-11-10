@@ -419,7 +419,7 @@ pub(crate) fn create_recovery_plan(call: &Call<'_, '_>) -> Outcome<HttpReply> {
             }
             Ok(invoke(
                 py,
-                "sqltide.dev_server._helpers.queries.runs_query",
+                "sqltide._native",
                 "read_destruction_recovery_run",
                 py_kwargs!(py; connection = read_connection, database = database(call), invocation_id = invocation_id)?,
             )?)
