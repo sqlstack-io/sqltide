@@ -343,7 +343,8 @@ type TableArgument = (
 );
 
 /// `(object type, key, table, (transform source, transform target))`.
-type ReconcileObjectArgument = (String, Key, Option<TableArgument>, Option<(String, String)>);
+pub(crate) type ReconcileObjectArgument =
+    (String, Key, Option<TableArgument>, Option<(String, String)>);
 
 /// `(key, name, (table position, transform position) when eligible, rejection reasons)`.
 type ReconcileOutcomeResult = (
@@ -384,7 +385,7 @@ fn reconcile_object(argument: ReconcileObjectArgument) -> Object {
 /// A reconcile verdict per target. A type that cannot be normalized raises
 /// `ValueError(message)`.
 #[pyfunction]
-fn classify_reconcile_targets(
+pub(crate) fn classify_reconcile_targets(
     py: Python<'_>,
     desired: Vec<ReconcileObjectArgument>,
     actual: Vec<ReconcileObjectArgument>,
@@ -559,6 +560,5 @@ pub(crate) fn deployment_inventory_summaries(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(py_is_deployment_id, module)?)?;
     module.add_function(wrap_pyfunction!(py_is_deployment_physical_name, module)?)?;
-    module.add_function(wrap_pyfunction!(classify_reconcile_targets, module)?)?;
     Ok(())
 }

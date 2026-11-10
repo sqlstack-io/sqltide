@@ -4,9 +4,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import execute_reconcile
 from sqltide.compiler.compile.models import DesiredState
 from sqltide.compiler.planner.models import ActualState, ObjectStateRecord
-from sqltide.executor.reconcile.main.execute_reconcile import execute_reconcile
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.executor.reconcile._test_types import (

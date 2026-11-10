@@ -266,6 +266,7 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
+from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -1235,20 +1236,28 @@ def infer_pipeline_sources(
 def execute_janitor(
     *, request: JanitorRequest, client: AdapterConnection
 ) -> JanitorPreviewResult | JanitorApplyResult: ...
-
-type _ReconcileKey = tuple[str | None, str, str]
-type _ReconcileObject = tuple[
-    str,
-    _ReconcileKey,
-    tuple[str, list[str], str | None, list[tuple[str, str, str | None]]] | None,
-    tuple[str, str] | None,
-]
-
-def classify_reconcile_targets(
-    desired: list[_ReconcileObject],
-    actual: list[_ReconcileObject],
-    selected: list[_ReconcileKey],
-) -> list[tuple[_ReconcileKey, str, tuple[int, int | None] | None, list[str]]]: ...
+def execute_reconcile(
+    *,
+    client: AdapterConnection,
+    target_database: str,
+    metadata_database: str,
+    desired_state: DesiredState,
+    actual_state: ActualState,
+    selected_model_keys: frozenset[ObjectKey],
+    apply: bool = False,
+) -> ReconcilePreview | ReconcileResult: ...
+def execute_direct_reconcile(
+    *,
+    client: AdapterConnection,
+    target_database: str,
+    metadata_database: str,
+    desired_state: DesiredState,
+    catalog: CatalogSnapshot,
+    models: tuple[CompiledModel, ...],
+    selected_model_keys: frozenset[ObjectKey],
+    tool_version: str,
+    apply: bool = False,
+) -> ReconcilePreview | ReconcileResult: ...
 def execute_deployment_diff(
     *, request: DeploymentDiffRequest, client: AdapterConnection
 ) -> DeploymentDiffResult: ...

@@ -1006,10 +1006,7 @@ fn run_reconcile(
             Some(actual_state) => {
                 pairs.push(("actual_state", actual_state.clone()));
                 pairs.push(("selected_model_keys", selected.clone()));
-                (
-                    "sqltide.executor.reconcile.main.execute_reconcile",
-                    "execute_reconcile",
-                )
+                ("sqltide._native", "execute_reconcile")
             }
             None => {
                 pairs.push((
@@ -1028,10 +1025,7 @@ fn run_reconcile(
                     "tool_version",
                     attr(py, "sqltide.cli.build.constants", "SQLTIDE_TOOL_VERSION")?,
                 ));
-                (
-                    "sqltide.executor.reconcile.main.execute_direct_reconcile",
-                    "execute_direct_reconcile",
-                )
+                ("sqltide._native", "execute_direct_reconcile")
             }
         };
         if apply {

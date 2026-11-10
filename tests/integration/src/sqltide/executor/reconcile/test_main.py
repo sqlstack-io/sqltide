@@ -4,12 +4,12 @@ from typing import cast
 import pytest
 from clickhouse_connect.driver.client import Client
 
+from sqltide._native import execute_reconcile
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterConnectionConfig
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.models import DesiredState
 from sqltide.compiler.planner.models import ActualState
-from sqltide.executor.reconcile.main.execute_reconcile import execute_reconcile
 from sqltide.executor.reconcile.models import ReconcileResult
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 from tests.integration.src.sqltide.executor.reconcile._test_types import (

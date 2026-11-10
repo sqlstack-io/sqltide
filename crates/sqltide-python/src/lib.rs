@@ -63,6 +63,7 @@ mod project_analysis;
 mod project_discovery;
 mod promotion_command;
 mod realization;
+mod reconcile_command;
 mod row_error_policy;
 mod rules;
 mod run_events;
@@ -162,6 +163,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     janitor_command::register(module)?;
     deployment_command::register(module)?;
     promotion_command::register(module)?;
+    reconcile_command::register(module)?;
     pipeline_load::register(module)?;
     discovery::register(module)?;
     config::register(module)?;
