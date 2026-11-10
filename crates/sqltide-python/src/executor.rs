@@ -122,7 +122,6 @@ pub(crate) fn audit_readiness(
 
 /// Positions of `(name, dependency names)` relations with dependants first. Raises
 /// `ValueError(("duplicate", position))` or `ValueError(("cycle", names))`.
-#[pyfunction]
 pub(crate) fn order_relations_for_drop(
     relations: Vec<(String, Vec<String>)>,
 ) -> PyResult<Vec<usize>> {
@@ -564,6 +563,5 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(deployment_diff_relations, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_count_sql, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_status, module)?)?;
-    module.add_function(wrap_pyfunction!(deployment_inventory_summaries, module)?)?;
-    module.add_function(wrap_pyfunction!(order_relations_for_drop, module)?)
+    module.add_function(wrap_pyfunction!(deployment_inventory_summaries, module)?)
 }

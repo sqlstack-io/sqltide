@@ -5,17 +5,15 @@ from typing import cast
 
 import pytest
 
-from sqltide._native import plan_destruction
+from sqltide._native import (
+    assemble_destruction_workflow,
+    plan_destruction,
+    verify_destruction_drift,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogRelation
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.executor.destruction.exceptions import DestructionDriftError
-from sqltide.executor.destruction.main.assemble_destruction_workflow import (
-    assemble_destruction_workflow,
-)
-from sqltide.executor.destruction.main.verify_destruction_drift import (
-    verify_destruction_drift,
-)
 from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRelationEvidence,

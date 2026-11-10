@@ -12,8 +12,7 @@ use sqltide_executor::destruction::{
     Binding, CatalogRelation, Deployment, DestructionError, Evidence, Inventory, Key, Manifest,
     ManifestResource, Mapping, Operation, OwnedRelation, Ownership, PlanIdentity, Project,
     PublishEvent, RelationKind, Request, Snapshot, available_pipeline_names, build_challenges,
-    build_evidence, drop_statements, inactive_pipelines, plan_fingerprint, plan_scope,
-    resolve_selection,
+    build_evidence, inactive_pipelines, plan_fingerprint, plan_scope, resolve_selection,
 };
 use sqltide_executor::destruction_plan_payload::{
     PayloadError, PlanPayload, RelationPayload, Timestamp, deserialize_plan, serialize_plan,
@@ -513,26 +512,6 @@ pub(crate) fn list_destruction_inactive_pipelines(
         .collect())
 }
 
-/// `(step ID, display name, SQL)` dropping each `(kind, database, name)` relation in order.
-#[pyfunction]
-fn destruction_drop_statements(
-    relations: Vec<(String, String, String)>,
-    size_override: Option<i128>,
-) -> PyResult<Vec<(String, String, String)>> {
-    let relations: Vec<(RelationKind, String, String)> = relations
-        .into_iter()
-        .map(|(kind, database, name)| {
-            RelationKind::parse(&kind)
-                .map(|kind| (kind, database, name))
-                .ok_or_else(|| PyValueError::new_err(format!("Unknown relation kind '{kind}'")))
-        })
-        .collect::<PyResult<_>>()?;
-    Ok(drop_statements(&relations, size_override)
-        .into_iter()
-        .map(|statement| (statement.step_id, statement.display_name, statement.sql))
-        .collect())
-}
-
 const DESTRUCTION_MODELS: &str = "sqltide.executor.destruction.models";
 const DESTRUCTION_TYPES: &str = "sqltide.executor.destruction.types";
 const DESTRUCTION_EXCEPTIONS: &str = "sqltide.executor.destruction.exceptions";
@@ -752,6 +731,5 @@ fn deserialize_destruction_plan<'py>(
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(serialize_destruction_plan, module)?)?;
-    module.add_function(wrap_pyfunction!(deserialize_destruction_plan, module)?)?;
-    module.add_function(wrap_pyfunction!(destruction_drop_statements, module)?)
+    module.add_function(wrap_pyfunction!(deserialize_destruction_plan, module)?)
 }

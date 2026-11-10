@@ -6,18 +6,14 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import InMemoryDestructionPlanStore, execute_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import AdapterInvocationRecord, AdapterNodeResultRecord
-from sqltide.executor.destruction._helpers import execution as execution_module
-from sqltide.executor.destruction.classes.in_memory_destruction_plan_store import (
-    InMemoryDestructionPlanStore,
-)
 from sqltide.executor.destruction.exceptions import (
     DestructionDriftError,
     DestructionPlanNotFoundError,
     DestructionRecordingError,
 )
-from sqltide.executor.destruction.main.execute_destruction import execute_destruction
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionExecutionResult,
@@ -37,6 +33,15 @@ from tests.unit.src.sqltide.executor.destruction.helpers import (
 
 _NOW: datetime = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
 _ACTOR: DestructionActor = DestructionActor(actor_id="actor-1", actor_name="Alice")
+
+_INITIALIZE_OBSERVABILITY: str = (
+    "sqltide.executor.observability.main.initialize_observability.initialize_observability"
+)
+_PERSIST_TERMINAL_OBSERVATIONS: str = (
+    "sqltide.executor.observability.main.persist_terminal_observations"
+    ".persist_terminal_observations"
+)
+_ASSEMBLE_DESTRUCTION_WORKFLOW: str = "sqltide._native.assemble_destruction_workflow"
 
 
 @pytest.mark.parametrize(
@@ -86,13 +91,18 @@ def test_given_workflow_prepared_failure_when_destroying_then_plan_is_unconsumed
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
     monkeypatch.setattr(
-        execution_module,
-        "assemble_destruction_workflow",
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(
+        _ASSEMBLE_DESTRUCTION_WORKFLOW,
         lambda **_: statements,
     )
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     with pytest.raises(RuntimeError, match=test_case.expected_error_match):
         execute_destruction(
@@ -185,9 +195,15 @@ def test_given_locked_drift_when_destroying_then_attempt_is_recorded_without_mut
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     with pytest.raises(DestructionDriftError, match=test_case.expected_error_match):
         execute_destruction(
@@ -264,9 +280,15 @@ def test_given_interrupt_after_drop_when_destroying_then_terminal_state_is_recor
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     with pytest.raises(KeyboardInterrupt, match=test_case.expected_error_match):
         execute_destruction(
@@ -334,9 +356,15 @@ def test_given_drop_completion_failure_when_destroying_then_exact_prefix_and_res
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     result: DestructionExecutionResult = execute_destruction(
         frozen_plan=plan,
@@ -411,9 +439,15 @@ def test_given_residual_catalog_failure_after_drops_when_destroying_then_residua
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     result: DestructionExecutionResult = execute_destruction(
         frozen_plan=plan,
@@ -479,9 +513,15 @@ def test_given_run_completed_failure_when_destroying_then_terminal_invocation_is
         invocations.append(invocation)
         return None
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     result: DestructionExecutionResult = execute_destruction(
         frozen_plan=plan,
@@ -547,9 +587,15 @@ def test_given_primary_terminal_failure_when_destroying_then_fallback_records_in
         }
         return warning_by_client[client]
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     result: DestructionExecutionResult = execute_destruction(
         frozen_plan=plan,
@@ -606,9 +652,15 @@ def test_given_all_terminal_connections_fail_when_destroying_then_recording_erro
         attempts.append(client)
         return "injected terminal failure"
 
-    monkeypatch.setattr(execution_module, "initialize_observability", lambda **_: None)
-    monkeypatch.setattr(execution_module, "assemble_destruction_workflow", lambda **_: statements)
-    monkeypatch.setattr(execution_module, "persist_terminal_observations", persist_terminal)
+    monkeypatch.setattr(
+        _INITIALIZE_OBSERVABILITY,
+        lambda **_: None,
+    )
+    monkeypatch.setattr(_ASSEMBLE_DESTRUCTION_WORKFLOW, lambda **_: statements)
+    monkeypatch.setattr(
+        _PERSIST_TERMINAL_OBSERVATIONS,
+        persist_terminal,
+    )
 
     with pytest.raises(DestructionRecordingError, match=test_case.expected_error_match):
         execute_destruction(
