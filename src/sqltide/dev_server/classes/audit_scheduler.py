@@ -8,6 +8,7 @@ from pathlib import Path
 from time import monotonic
 
 from sqltide._native import (
+    DevServerState,
     read_active_runs,
     read_latest_applied_direct_build_at,
 )
@@ -16,7 +17,6 @@ from sqltide.cli.entry.types import CliCommand
 from sqltide.compiler.discovery.constants import DEFAULT_RUN_PRESUMED_FAILED_AFTER_SECONDS
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.classes.build_process import BuildProcessManager
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.classes.warehouse_runtime import WarehouseRuntime
 from sqltide.dev_server.main._build_audit_scheduler_payload import (
     build_audit_scheduler_payload,

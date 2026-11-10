@@ -10,6 +10,7 @@ use super::app::{BodySpec, Call, Endpoint, QueryParam};
 use super::auth;
 use super::authz;
 use super::destruction;
+use super::lifecycle::DevServerState;
 use super::http::{Failure, HttpReply, Outcome, Route, object, py_json};
 use super::sensors;
 use super::support::{ADAPTER_ERROR, Scalar, attr, is_instance, translate};
@@ -24,7 +25,7 @@ const DEFINITIONS_PAYLOAD: &str = NATIVE;
 const DEPLOYMENTS_PAYLOAD: &str = NATIVE;
 const MESSAGE_QUERY: &str = NATIVE;
 const CHECKS: &str = "sqltide.dev_server._helpers.server.checks_execution";
-const COMPILE_RUNNER: &str = "sqltide.dev_server._helpers.server.compile_runner";
+const COMPILE_RUNNER: &str = NATIVE;
 const DEPLOYMENT_OPERATIONS: &str = "sqltide.dev_server._helpers.server.deployment_operations";
 const BUILD_PROCESS: &str = "sqltide.dev_server.classes.build_process";
 const NATIVE: &str = "sqltide._native";
@@ -325,10 +326,11 @@ fn reload_project(call: &Call<'_, '_>) -> Outcome<HttpReply> {
     let py: Python<'_> = call.py;
     let state = state(call);
     // Authorize against the held policy snapshot and recompile under one compile lock.
-    let outcome = within(&state.getattr("_compile_lock")?, |_| {
-        let held = state.getattr("_authorization_analysis")?;
-        authz::require_reload(call, (!held.is_none()).then_some(&held))?;
-        Ok(state.call_method0("_reload_locked")?)
+    let native = state.cast::<DevServerState>().map_err(PyErr::from)?.get();
+    let outcome = within(&native.compile_lock(py), |_| {
+        let held = native.authorization_analysis(py);
+        authz::require_reload(call, held.as_ref())?;
+        Ok(native.reload_locked(py)?)
     })?;
     call.service(|services| &services.reporter)
         .call_method("report_reload", (), Some(&py_kwargs!(py; outcome = &outcome)?))?;

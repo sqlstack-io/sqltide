@@ -14,6 +14,7 @@ use crate::handling::while_handling;
 use crate::py_kwargs;
 
 const CLASSES: &str = "sqltide.dev_server.classes";
+const NATIVE: &str = "sqltide._native";
 const LOCALHOST_NAME: &str = "localhost";
 /// Control-store URLs that name a private in-memory SQLite database.
 pub(crate) const SQLITE_MEMORY_URLS: [&str; 2] = ["sqlite://", "sqlite:///:memory:"];
@@ -50,7 +51,7 @@ fn state_snapshot<'py>(
         None
     } else {
         Some(
-            attr(py, "sqltide._native", "OverlayReader")?
+            attr(py, NATIVE, "OverlayReader")?
                 .call(
                     (),
                     Some(&py_kwargs!(py; connection_factory = overlay_connection_factory, kafka_lag_reader = kafka_lag_reader)?),
@@ -58,7 +59,7 @@ fn state_snapshot<'py>(
                 .unbind(),
         )
     };
-    let health_reader: Py<PyAny> = attr(py, "sqltide._native", "WarehouseHealthReader")?.call0()?.unbind();
+    let health_reader: Py<PyAny> = attr(py, NATIVE, "WarehouseHealthReader")?.call0()?.unbind();
     let on_close: Bound<'py, PyAny> = match &reader {
         Some(reader) => reader.bind(py).getattr("close")?,
         None => py.None().into_bound(py),
@@ -90,7 +91,7 @@ fn state_snapshot<'py>(
         }
         let lock = state.bind(py).getattr("query_lock")?;
         crate::handling::within(&lock, || {
-            Ok(attr(py, "sqltide._native", "build_state_payload")?
+            Ok(attr(py, NATIVE, "build_state_payload")?
                 .call(
                     (),
                     Some(&py_kwargs!(py;
@@ -104,7 +105,7 @@ fn state_snapshot<'py>(
                 .unbind())
         })
     })?;
-    class(py, "state_snapshot", "StateSnapshot")?.call((), Some(&py_kwargs!(py; build = build, on_close = on_close)?))
+    attr(py, NATIVE, "StateSnapshot")?.call((), Some(&py_kwargs!(py; build = build, on_close = on_close)?))
 }
 
 /// Assemble one application over the shared long-running server state.
@@ -125,7 +126,7 @@ pub(crate) fn create_dev_app(
 ) -> PyResult<DevApplication> {
     let reporter = match reporter {
         Some(reporter) => reporter,
-        None => class(py, "silent_reporter", "SilentDevServerReporter")?.call0()?,
+        None => attr(py, NATIVE, "SilentDevServerReporter")?.call0()?,
     };
     let mut context = match execution_context {
         Some(context) => context,
@@ -185,8 +186,8 @@ pub(crate) fn create_dev_app(
             cancellation_reporter = cancellation.getattr("record_outcome")?,
         )?),
     )?;
-    let kafka_lag_reader = attr(py, "sqltide._native", "KafkaLagReader")?.call0()?;
-    let kafka_topic_reader = attr(py, "sqltide._native", "KafkaTopicReader")?.call0()?;
+    let kafka_lag_reader = attr(py, NATIVE, "KafkaLagReader")?.call0()?;
+    let kafka_topic_reader = attr(py, NATIVE, "KafkaTopicReader")?.call0()?;
     let presumed_failed_after_seconds = context.getattr("run_presumed_failed_after_seconds")?;
     let audit_scheduler = class(py, "audit_scheduler", "AuditScheduler")?.call(
         (),
@@ -354,7 +355,7 @@ pub(crate) fn run_dev_server(
         )?;
         return Ok(1);
     }
-    let state = class(py, "dev_server_state", "DevServerState")?.call((), Some(&py_kwargs!(py; run_compile = run_compile)?))?;
+    let state = attr(py, NATIVE, "DevServerState")?.call((), Some(&py_kwargs!(py; run_compile = run_compile)?))?;
     let outcome = state.call_method0("current")?;
     let application = native.getattr("create_dev_app")?.call(
         (),
@@ -401,5 +402,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::state::register(module)?;
     super::runs::register(module)?;
     super::messages::register(module)?;
-    super::readers::register(module)
+    super::readers::register(module)?;
+    super::lifecycle::register(module)
 }

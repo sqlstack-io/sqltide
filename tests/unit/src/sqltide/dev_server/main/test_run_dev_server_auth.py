@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 import pytest
 
 import sqltide._native as _native
-import sqltide.dev_server.classes.dev_server_state as dev_server_state_module
 from sqltide._native import run_dev_server
 from sqltide.auth.models import AuthSettings
 from sqltide.auth.types import AuthenticationMode
@@ -81,7 +80,7 @@ def test_given_disabled_auth_when_starting_on_shared_bind_then_startup_proceeds_
     application: MagicMock = MagicMock()
     monkeypatch.setattr(_native, "static_assets_root", lambda: tmp_path)
     monkeypatch.setattr(_native, "static_assets_present", lambda *, assets_root: True)
-    monkeypatch.setattr(dev_server_state_module, "DevServerState", MagicMock())
+    monkeypatch.setattr(_native, "DevServerState", MagicMock())
     monkeypatch.setattr(_native, "create_dev_app", MagicMock(return_value=application))
 
     result: int = run_dev_server(

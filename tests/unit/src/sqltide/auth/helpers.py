@@ -1,10 +1,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from sqltide._native import create_dev_app
+from sqltide._native import DevServerState, create_dev_app
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import AuthSettings
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 
 

@@ -1,4 +1,5 @@
 import os
+import threading
 from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -154,8 +155,9 @@ from sqltide.compiler.sql_analysis.models import (
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.models import (
+    CompileErrorInfo,
+    CompileOutcome,
     DevExecutionContext,
     KafkaLagSnapshot,
     KafkaTopicsSnapshot,
@@ -163,7 +165,12 @@ from sqltide.dev_server.models import (
     MessagesQueryRequest,
     ReplayOffsetProgress,
 )
-from sqltide.dev_server.types import DevServerReporter, RunPresentationStatus
+from sqltide.dev_server.types import (
+    ActivityTone,
+    CompileAuthorizationGuard,
+    DevServerReporter,
+    RunPresentationStatus,
+)
 from sqltide.diagnostics.models import CompilerDiagnostic
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditRunResult
 from sqltide.executor.backfill.models import (
@@ -1910,3 +1917,63 @@ class OverlayReader:
     ) -> None: ...
     def close(self) -> None: ...
     def read(self, *, analysis: CompileAnalysis, database: str) -> dict[str, object]: ...
+
+def build_compile_outcome(*, run_compile: Callable[[], CompileAnalysis]) -> CompileOutcome: ...
+def describe_compile_error(*, error: Exception) -> CompileErrorInfo: ...
+def build_status_payload(
+    *, outcome: CompileOutcome, warehouse_status: dict[str, object]
+) -> dict[str, object]: ...
+
+@final
+class StateSnapshot:
+    """Hold one warehouse overlay so requests never wait on per-relation reads."""
+
+    def __init__(
+        self,
+        *,
+        build: Callable[[], dict[str, object]],
+        refresh_seconds: float | None = None,
+        on_close: Callable[[], None] | None = None,
+    ) -> None: ...
+    def start(self) -> None: ...
+    def close(self) -> None: ...
+    def current(self) -> dict[str, object]: ...
+    def held(self) -> dict[str, object] | None: ...
+    def refresh(self) -> dict[str, object]: ...
+    def invalidate(self) -> None: ...
+
+@final
+class DevServerState:
+    """One long-running server's source of truth between requests."""
+
+    def __init__(self, *, run_compile: Callable[[], CompileAnalysis]) -> None: ...
+    @property
+    def snapshot(self) -> StateSnapshot: ...
+    def attach_snapshot(self, snapshot: StateSnapshot) -> None: ...
+    @property
+    def query_lock(self) -> threading.Lock: ...
+    def reload(self) -> CompileOutcome: ...
+    def reload_guarded(self, *, guard: CompileAuthorizationGuard) -> CompileOutcome: ...
+    def current(self) -> CompileOutcome: ...
+    def current_analysis(self) -> CompileAnalysis: ...
+    def current_servable_outcome(self) -> CompileOutcome: ...
+
+@final
+class SilentDevServerReporter:
+    """A DevServerReporter that says nothing; the default for embedded use."""
+
+    def report_startup(
+        self,
+        *,
+        outcome: CompileOutcome,
+        project_dir: Path,
+        database: str | None,
+        warehouse_connected: bool,
+        host: str,
+        port: int,
+    ) -> None: ...
+    def report_reload(self, *, outcome: CompileOutcome) -> None: ...
+    def report_activity(
+        self, *, category: str, status: str, tone: ActivityTone, detail: str
+    ) -> None: ...
+    def report_shutdown(self) -> None: ...

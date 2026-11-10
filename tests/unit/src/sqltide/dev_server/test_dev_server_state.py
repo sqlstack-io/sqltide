@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from sqltide.dev_server.classes.dev_server_state import DevServerState
+from sqltide._native import DevServerState
 from sqltide.dev_server.exceptions import ProjectNotCompiledError
 from sqltide.dev_server.models import CompileOutcome
 from tests.unit.src.sqltide.dev_server._test_types import (

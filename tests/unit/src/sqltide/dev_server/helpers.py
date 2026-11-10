@@ -9,8 +9,10 @@ from unittest.mock import MagicMock
 import sqltide._native as _native
 from sqltide._native import (
     DevApplication,
+    DevServerState,
     KafkaLagReader,
     OverlayReader,
+    StateSnapshot,
     analyze_project,
     build_activity_capabilities_query,
     build_extents_query,
@@ -74,8 +76,6 @@ from sqltide.compiler.planner.models import (
     PlannerWarning,
     PreparedShadowObject,
 )
-from sqltide.dev_server.classes.dev_server_state import DevServerState
-from sqltide.dev_server.classes.state_snapshot import StateSnapshot
 from sqltide.dev_server.models import (
     KafkaLagSnapshot,
     KafkaTopicsSnapshot,

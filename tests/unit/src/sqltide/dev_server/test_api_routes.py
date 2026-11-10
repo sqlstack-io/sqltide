@@ -5,9 +5,8 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from sqltide._native import DevApplication, create_dev_app
+from sqltide._native import DevApplication, DevServerState, create_dev_app
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.models import DevExecutionContext
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
     NativeResponse,

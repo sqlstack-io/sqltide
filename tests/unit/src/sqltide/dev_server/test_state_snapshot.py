@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from sqltide._native import OverlayReader
+from sqltide._native import OverlayReader, StateSnapshot
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.state_snapshot import StateSnapshot
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import NativeTestClient
 from tests.unit.src.sqltide.dev_server._test_types import (
     OverlayReaderTestCase,

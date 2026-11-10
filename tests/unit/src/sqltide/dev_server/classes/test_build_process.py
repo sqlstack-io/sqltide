@@ -5,9 +5,9 @@ from typing import cast
 
 import pytest
 
+from sqltide._native import SilentDevServerReporter
 from sqltide.adapter.models import AdapterQueryCancellation
 from sqltide.dev_server.classes.build_process import BuildProcessManager
-from sqltide.dev_server.classes.silent_reporter import SilentDevServerReporter
 from sqltide.dev_server.models import BuildCancellationOutcome
 from sqltide.executor.observability.constants import RUN_INVOCATION_ID_ENV_VAR
 from tests.unit.src.sqltide.dev_server.classes._test_types import (

@@ -10,6 +10,7 @@ pub(crate) mod definitions;
 pub(crate) mod destruction;
 pub(crate) mod drift;
 pub(crate) mod http;
+pub(crate) mod lifecycle;
 pub(crate) mod messages;
 pub(crate) mod payloads;
 pub(crate) mod plan;

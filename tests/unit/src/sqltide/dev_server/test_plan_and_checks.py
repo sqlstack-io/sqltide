@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sqltide._native import create_dev_app, validate_expected_build_scope
+from sqltide._native import DevServerState, create_dev_app, validate_expected_build_scope
 from sqltide.adapter.models import (
     AdapterDirectFingerprintRecord,
     AdapterDirectFingerprintSnapshot,
@@ -22,7 +22,6 @@ from sqltide.cli.entry.constants import DEV_CLI_VARIABLES_ENV_VAR
 from sqltide.cli.entry.exceptions import CliUserError
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from sqltide.dev_server.classes.build_process import _build_environment, build_invocation
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from sqltide.dev_server.exceptions import DevConfigurationError
 from sqltide.dev_server.models import DevExecutionContext
 from sqltide.dev_server.types import ActivityTone, DevServerReporter

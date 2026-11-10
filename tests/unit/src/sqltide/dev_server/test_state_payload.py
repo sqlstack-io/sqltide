@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from sqltide._native import (
+    DevServerState,
     DirectModelFingerprint,
     build_partitions_query,
     build_throughputs_query,
@@ -26,7 +27,6 @@ from sqltide.adapter.models import (
 )
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from tests.unit.src.sqltide.dev_server._helpers.server.helpers import (
     NativeResponse,
     NativeTestClient,

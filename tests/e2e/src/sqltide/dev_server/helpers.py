@@ -17,12 +17,11 @@ from urllib.request import Request, urlopen
 from clickhouse_connect.driver.client import Client
 from playwright.sync_api import Page
 
-from sqltide._native import DevApplication, create_dev_app
+from sqltide._native import DevApplication, DevServerState, create_dev_app
 from sqltide.auth.classes.control_store import ControlStore
 from sqltide.auth.models import UserAccount
 from sqltide.auth.types import AuthenticationSource
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.dev_server.classes.dev_server_state import DevServerState
 from tests.unit.src.sqltide.dev_server.helpers import (
     build_compile_callable,
     write_dev_server_project,
