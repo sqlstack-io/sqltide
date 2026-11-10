@@ -13,6 +13,7 @@ use sqltide_executor::virtual_workflow::Mode;
 use sqltide_executor::workflow::{step_segment, terminate_sql};
 use sqltide_planner::direct::sha256_hex;
 
+use crate::handling::while_handling;
 use crate::planner_support::{DirectModelFingerprint, build_adapter_resource};
 use crate::population_planning::{
     build_direct_population_plan, build_population_replay_templates, expand_population_plan,
@@ -1335,65 +1336,56 @@ fn execute_direct_build_workflow<'py>(
         if !is_step_failure(py, &error)? {
             return Err(error);
         }
-        let handled: Value<'py> = error.value(py).clone().into_any();
-        let workflow_failure: bool = handled.is_instance(&workflow_error)?;
-        let failure: Failure<'py> = Failure {
-            cause: if workflow_failure {
-                handled.getattr("cause")?
-            } else {
-                handled.clone()
-            },
-            failed_step_id: if workflow_failure {
-                string(&handled, "failed_step_id")?
-            } else {
-                string(&statement, "step_id")?
-            },
+        let translate = || -> PyResult<PyErr> {
+            let handled: Value<'py> = error.value(py).clone().into_any();
+            let workflow_failure: bool = handled.is_instance(&workflow_error)?;
+            let failure: Failure<'py> = Failure {
+                cause: if workflow_failure {
+                    handled.getattr("cause")?
+                } else {
+                    handled.clone()
+                },
+                failed_step_id: if workflow_failure {
+                    string(&handled, "failed_step_id")?
+                } else {
+                    string(&statement, "step_id")?
+                },
+            };
+            let recovery: Vec<Value<'py>> = recover_managed_sources(
+                py,
+                workflow,
+                connection,
+                &emitter,
+                &failure,
+                &execution.completed_step_ids,
+                execution.attempted.len() + 1,
+            )?;
+            execution.attempted.extend(recovery);
+            let partial_result: Value<'py> = build(
+                py,
+                WORKFLOW_MODELS,
+                "WorkflowExecutionResult",
+                &[("statement_results", tuple(py, execution.results)?)],
+            )?;
+            let raised: Value<'py> = build(
+                py,
+                DIRECT_EXCEPTIONS,
+                "DirectWorkflowExecutionError",
+                &[
+                    (
+                        "workflow",
+                        exact_workflow(py, workflow, &execution.attempted)?,
+                    ),
+                    ("partial_result", partial_result),
+                    ("captures", tuple(py, execution.captures)?),
+                    ("failed_step_id", text(py, &failure.failed_step_id)),
+                    ("cause", failure.cause.clone()),
+                ],
+            )?;
+            raised_from(&raised, &handled, &failure.cause)?;
+            Ok(PyErr::from_value(raised))
         };
-        let recovery: Vec<Value<'py>> = recover_managed_sources(
-            py,
-            workflow,
-            connection,
-            &emitter,
-            &failure,
-            &execution.completed_step_ids,
-            execution.attempted.len() + 1,
-        )
-        .inspect_err(|recovery_error| {
-            // Python chains a failure raised while handling the step failure to it.
-            if recovery_error
-                .value(py)
-                .getattr("__context__")
-                .is_ok_and(|context| context.is_none())
-            {
-                let _ = recovery_error
-                    .value(py)
-                    .setattr("__context__", error.value(py));
-            }
-        })?;
-        execution.attempted.extend(recovery);
-        let partial_result: Value<'py> = build(
-            py,
-            WORKFLOW_MODELS,
-            "WorkflowExecutionResult",
-            &[("statement_results", tuple(py, execution.results)?)],
-        )?;
-        let raised: Value<'py> = build(
-            py,
-            DIRECT_EXCEPTIONS,
-            "DirectWorkflowExecutionError",
-            &[
-                (
-                    "workflow",
-                    exact_workflow(py, workflow, &execution.attempted)?,
-                ),
-                ("partial_result", partial_result),
-                ("captures", tuple(py, execution.captures)?),
-                ("failed_step_id", text(py, &failure.failed_step_id)),
-                ("cause", failure.cause.clone()),
-            ],
-        )?;
-        raised_from(&raised, &handled, &failure.cause)?;
-        return Err(PyErr::from_value(raised));
+        return Err(translate().unwrap_or_else(|raised| while_handling(py, raised, &error)));
     }
     let result: Value<'py> = build(
         py,

@@ -5,9 +5,7 @@ from functools import partial
 
 import pytest
 
-from sqltide.executor.destruction.classes.in_memory_destruction_plan_store import (
-    InMemoryDestructionPlanStore,
-)
+from sqltide._native import InMemoryDestructionPlanStore
 from sqltide.executor.destruction.exceptions import (
     DestructionChallengeError,
     DestructionPlanExpiredError,

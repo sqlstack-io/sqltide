@@ -5,11 +5,9 @@ from uuid import UUID
 
 import pytest
 
+from sqltide._native import InMemoryDestructionPlanStore
 from sqltide.auth.models import UserAccount
 from sqltide.cli.destruction.models import DestructionCommandOptions
-from sqltide.executor.destruction.classes.in_memory_destruction_plan_store import (
-    InMemoryDestructionPlanStore,
-)
 from sqltide.executor.destruction.models import (
     DestructionPlan,
     DestructionRelationEvidence,

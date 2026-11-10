@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 
-from sqltide._native import list_inactive_pipelines, plan_destruction
+from sqltide._native import execute_destruction, list_inactive_pipelines, plan_destruction
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import (
     AdapterError,
@@ -48,7 +48,6 @@ from sqltide.executor.destruction.exceptions import (
     DestructionResourceError,
     DestructionSelectionError,
 )
-from sqltide.executor.destruction.main.execute_destruction import execute_destruction
 from sqltide.executor.destruction.models import (
     DestructionActor,
     DestructionPlan,

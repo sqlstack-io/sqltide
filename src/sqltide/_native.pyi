@@ -141,11 +141,13 @@ from sqltide.executor.backfill.models import (
     RootBackfillReport,
 )
 from sqltide.executor.destruction.models import (
+    DestructionActor,
+    DestructionExecutionResult,
     DestructionPlan,
     DestructionRequest,
     InactivePipeline,
 )
-from sqltide.executor.destruction.types import DestructionPlanningConnection
+from sqltide.executor.destruction.types import DestructionPlanningConnection, DestructionPlanStore
 from sqltide.executor.direct.models import (
     DirectBuildExecutionResult,
     DirectBuildRequest,
@@ -174,7 +176,7 @@ from sqltide.executor.readiness.models import (
     LoadedAuditDeployment,
     RootAuditResult,
 )
-from sqltide.executor.workflow.models import WorkflowExecutionResult
+from sqltide.executor.workflow.models import WarehouseStatement, WorkflowExecutionResult
 from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
 
 type _Span = tuple[int, int, int, int, int, int]
@@ -888,9 +890,6 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
-def destruction_drop_statements(
-    relations: list[tuple[str, str, str]], size_override: int | None
-) -> list[tuple[str, str, str]]: ...
 def translate_clickhouse_driver_error(error: Exception) -> AdapterWarehouseError: ...
 def render_clickhouse_resource(
     *,
@@ -1074,7 +1073,6 @@ def deployment_inventory_summaries(
         str | None,
     ]
 ]: ...
-def order_relations_for_drop(relations: list[tuple[str, list[str]]]) -> list[int]: ...
 
 class DesiredGraph:
     def __init__(self, desired_state: DesiredState) -> None: ...
@@ -1322,3 +1320,33 @@ def persist_reconciled_direct_fingerprints(
     tool_version: str,
     connection: AdapterConnection,
 ) -> None: ...
+def assemble_destruction_workflow(
+    *, plan: DestructionPlan, connection: AdapterConnection | None = None
+) -> tuple[WarehouseStatement, ...]: ...
+def verify_destruction_drift(
+    *, frozen_plan: DestructionPlan, replan: Callable[[], DestructionPlan]
+) -> DestructionPlan: ...
+def execute_destruction(
+    *,
+    frozen_plan: DestructionPlan,
+    actor: DestructionActor,
+    challenge_responses: tuple[str, ...],
+    reviewed_at: datetime,
+    store: DestructionPlanStore,
+    connection: AdapterConnection,
+    observation_connection: AdapterConnection,
+    project_dir: Path,
+    replan: Callable[[], DestructionPlan],
+    invocation_id: str | None = None,
+) -> DestructionExecutionResult: ...
+
+class InMemoryDestructionPlanStore:
+    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None: ...
+    def close(self) -> None: ...
+    def save(self, *, plan: DestructionPlan, actor: str) -> None: ...
+    def get(self, *, plan_id: str, actor: str) -> DestructionPlan: ...
+    def mark_reviewed(self, *, plan_id: str, actor: str) -> datetime: ...
+    def reviewed_at(self, *, plan_id: str, actor: str) -> datetime: ...
+    def consume(
+        self, *, plan_id: str, challenge_responses: tuple[str, ...], actor: str
+    ) -> DestructionPlan: ...

@@ -8,7 +8,14 @@ import pytest
 from clickhouse_connect.driver.client import Client
 
 import sqltide._native as _native
-from sqltide._native import analyze_project, plan_destruction
+from sqltide._native import (
+    InMemoryDestructionPlanStore,
+    analyze_project,
+    assemble_destruction_workflow,
+    execute_destruction,
+    plan_destruction,
+    verify_destruction_drift,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -23,19 +30,9 @@ from sqltide.cli.entry._helpers.compiler_profile import (
 from sqltide.compiler.compile.models import CompilerAdapterProfile, LogicalResourceKey
 from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.executor.destruction.classes.in_memory_destruction_plan_store import (
-    InMemoryDestructionPlanStore,
-)
 from sqltide.executor.destruction.exceptions import (
     DestructionDriftError,
     DestructionExternalDependencyError,
-)
-from sqltide.executor.destruction.main.assemble_destruction_workflow import (
-    assemble_destruction_workflow,
-)
-from sqltide.executor.destruction.main.execute_destruction import execute_destruction
-from sqltide.executor.destruction.main.verify_destruction_drift import (
-    verify_destruction_drift,
 )
 from sqltide.executor.destruction.models import (
     DestructionActor,
