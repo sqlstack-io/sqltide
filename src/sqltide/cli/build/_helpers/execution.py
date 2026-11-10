@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import row_error_policy_failure_message
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.cli.build._helpers.confirmation import confirm_build
@@ -34,9 +35,6 @@ from sqltide.executor.direct.models import (
 )
 from sqltide.executor.kafka_admin.main.reset_fresh_landing_offsets import (
     reset_fresh_landing_offsets,
-)
-from sqltide.executor.population.main.row_error_policy_failure_message import (
-    row_error_policy_failure_message,
 )
 from sqltide.executor.workflow.main.target_mutation_lock import target_mutation_lock
 from sqltide.executor.workflow.models import BuildWorkflow, WorkflowExecutionResult

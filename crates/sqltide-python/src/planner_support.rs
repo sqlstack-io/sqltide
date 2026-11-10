@@ -371,7 +371,7 @@ fn physical_table_name<'py>(
 /// A staged physical resource, with its logical table references rewritten onto staged names.
 #[pyfunction]
 #[pyo3(signature = (*, desired_object, physical_name, physical_name_by_key))]
-fn build_shadow_adapter_resource<'py>(
+pub(crate) fn build_shadow_adapter_resource<'py>(
     py: Python<'py>,
     desired_object: &Bound<'py, PyAny>,
     physical_name: &Bound<'py, PyAny>,
@@ -433,7 +433,7 @@ fn build_shadow_adapter_resource<'py>(
 #[pyo3(signature = (
     *, query, database_template = None, source_relation_name, database, physical_relation_mappings
 ))]
-fn build_adapter_replay_query<'py>(
+pub(crate) fn build_adapter_replay_query<'py>(
     py: Python<'py>,
     query: &Bound<'py, PyAny>,
     database_template: Option<Bound<'py, PyAny>>,

@@ -6,21 +6,15 @@ import sqltide._native as _native
 from sqltide._native import (
     build_adapter_resource,
     build_shadow_adapter_resource,
+    row_error_policy_restore_statements,
+    row_error_policy_view_steps,
+    with_metadata_dead_letter_target,
 )
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import CatalogRelation, CatalogSnapshot
 from sqltide.compiler.compile.models import DesiredMaterializedView, DesiredTable, ObjectKey
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
-from sqltide.executor.population.main._row_error_policy_restore_statements import (
-    row_error_policy_restore_statements,
-)
-from sqltide.executor.population.main._row_error_policy_view_steps import (
-    row_error_policy_view_steps,
-)
-from sqltide.executor.population.main._with_metadata_dead_letter_target import (
-    with_metadata_dead_letter_target,
-)
 from sqltide.executor.workflow.types import NativeStatement
 
 _AUDIT_SAMPLE_LIMIT: int = 0

@@ -5,7 +5,16 @@ from __future__ import annotations
 from dataclasses import replace
 
 import sqltide._native as _native
-from sqltide._native import build_adapter_resource
+from sqltide._native import (
+    build_adapter_resource,
+    build_direct_population_plan,
+    build_population_replay_templates,
+    expand_population_plan,
+    plan_population_objects,
+    row_error_policy_restore_statements,
+    row_error_policy_view_steps,
+    with_metadata_dead_letter_target,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterCapturedReplayRequest,
@@ -30,7 +39,6 @@ from sqltide.compiler.planner.models import (
 )
 from sqltide.compiler.planner.types import DirectResourceKind
 from sqltide.executor.auditing.constants import AUDIT_SAMPLE_LIMIT
-from sqltide.executor.direct._helpers.population_plan import build_direct_population_plan
 from sqltide.executor.direct._helpers.preflight import reject_incapable_adapter
 from sqltide.executor.direct._helpers.sources import plan_preserved_managed_sources
 from sqltide.executor.direct.constants import (
@@ -43,20 +51,6 @@ from sqltide.executor.direct.models import (
     DirectBuildWorkflow,
     DirectReplayCapture,
     DirectRuntimeReplay,
-)
-from sqltide.executor.population.main._build_population_replay_templates import (
-    build_population_replay_templates,
-)
-from sqltide.executor.population.main._expand_population_plan import expand_population_plan
-from sqltide.executor.population.main._plan_population_objects import plan_population_objects
-from sqltide.executor.population.main._row_error_policy_restore_statements import (
-    row_error_policy_restore_statements,
-)
-from sqltide.executor.population.main._row_error_policy_view_steps import (
-    row_error_policy_view_steps,
-)
-from sqltide.executor.population.main._with_metadata_dead_letter_target import (
-    with_metadata_dead_letter_target,
 )
 from sqltide.executor.population.models import (
     PopulationManagedSource,

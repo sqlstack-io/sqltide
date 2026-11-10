@@ -7,7 +7,14 @@ from hashlib import sha256
 from importlib.metadata import version
 
 import sqltide._native as _native
-from sqltide._native import build_adapter_resource
+from sqltide._native import (
+    build_adapter_resource,
+    build_population_replay_templates,
+    expand_population_plan,
+    plan_population_objects,
+    plan_population_sources,
+    with_metadata_dead_letter_target,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import (
     METADATA_DEPLOYMENTS_TABLE_NAME,
@@ -39,15 +46,6 @@ from sqltide.executor.backfill._helpers.row_error_policy import (
 from sqltide.executor.backfill.exceptions import BackfillExecutionError
 from sqltide.executor.backfill.models import BackfillBootstrapRequest
 from sqltide.executor.backfill.types import NativeVirtualRoot
-from sqltide.executor.population.main._build_population_replay_templates import (
-    build_population_replay_templates,
-)
-from sqltide.executor.population.main._expand_population_plan import expand_population_plan
-from sqltide.executor.population.main._plan_population_objects import plan_population_objects
-from sqltide.executor.population.main._with_metadata_dead_letter_target import (
-    with_metadata_dead_letter_target,
-)
-from sqltide.executor.population.main.plan_population_sources import plan_population_sources
 from sqltide.executor.population.models import (
     PopulationObject,
     PopulationPlan,

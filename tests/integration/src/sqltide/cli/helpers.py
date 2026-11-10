@@ -12,7 +12,12 @@ from clickhouse_connect.driver.client import Client
 from clickhouse_connect.driver.exceptions import DatabaseError
 
 import sqltide._native as _native
-from sqltide._native import analyze_project, load_clickhouse_catalog, render_direct_plan_json
+from sqltide._native import (
+    analyze_project,
+    load_clickhouse_catalog,
+    render_direct_plan_json,
+    row_error_policy_view_steps,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.constants import METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterWarehouseError
@@ -86,9 +91,6 @@ from sqltide.executor.direct.models import (
     DirectBuildResult,
     DirectBuildWorkflow,
     DirectRuntimeExecution,
-)
-from sqltide.executor.population.main._row_error_policy_view_steps import (
-    row_error_policy_view_steps,
 )
 from sqltide.executor.workflow.models import (
     BuildWorkflow,

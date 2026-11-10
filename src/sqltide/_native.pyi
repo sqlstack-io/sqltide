@@ -1,5 +1,5 @@
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -140,7 +140,14 @@ from sqltide.executor.destruction.models import (
     InactivePipeline,
 )
 from sqltide.executor.destruction.types import DestructionPlanningConnection
-from sqltide.executor.population.models import PopulationSourceRecreation
+from sqltide.executor.population.models import (
+    PopulationPlan,
+    PopulationRealization,
+    PopulationSourcePreparation,
+    PopulationSourceRecreation,
+    PopulationWatermark,
+)
+from sqltide.executor.workflow.types import NativeStatement
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -457,39 +464,53 @@ def audit_schedule_entry(
 ) -> dict[str, object]: ...
 def serialize_destruction_plan(plan: DestructionPlan) -> str: ...
 def deserialize_destruction_plan(payload_json: str) -> DestructionPlan: ...
-def plan_population_replays(
+def expand_population_plan(
+    *, plan: PopulationPlan, desired_state: DesiredState
+) -> PopulationPlan: ...
+def plan_population_objects(
+    *, plan: PopulationPlan, desired_state: DesiredState, default_database: str
+) -> tuple[PopulationRealization, ...]: ...
+def build_population_replay_templates(
+    *, plan: PopulationPlan, desired_state: DesiredState, default_database: str
+) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]: ...
+def build_population_replay_requests(
     *,
-    roots: list[tuple[int, int, str, str, str | None, int | None]],
-    tables: list[tuple[int, str, str | None, list[str], list[tuple[str, str]]]],
-    views: list[tuple[str, str]],
-    key_names: list[str],
-    physical_names: list[tuple[int, str]],
-    external_columns: list[
-        tuple[int, tuple[str | None, str | None, str | None, str | None, str | None]]
-    ],
-    replay_anchor_keys: set[int],
+    plan: PopulationPlan,
+    desired_state: DesiredState,
     default_database: str,
+    watermarks: tuple[PopulationWatermark, ...],
     boundary_time: str,
-    watermarks: list[tuple[int, str, str]] | None,
-) -> tuple[
-    list[tuple[str, str]],
-    list[
-        tuple[
-            int,
-            str,
-            str,
-            tuple[str, str, str, str],
-            int,
-            list[tuple[str, str, str | None]],
-            list[str],
-            tuple[str, str, str | None, int | None],
-            bool,
-            list[str],
-            list[tuple[str, str]],
-            bool,
-        ]
-    ],
-]: ...
+) -> tuple[tuple[ObjectKey, AdapterReplayRequest], ...]: ...
+def plan_population_sources(
+    *,
+    desired_state: DesiredState,
+    default_database: str,
+    existing_relation_names: frozenset[str],
+) -> tuple[PopulationSourcePreparation, tuple[PopulationRealization, ...]]: ...
+def row_error_policy_view_steps(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    database: str,
+    render_view: Callable[[str], str | None],
+) -> tuple[list[tuple[str, bool]], list[tuple[str, str]]]: ...
+def row_error_policy_restore_statements(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    render_restore: Callable[[str], str],
+    database: str,
+) -> list[NativeStatement]: ...
+def row_error_policy_failure_message(
+    *,
+    changes: tuple[DirectRowErrorPolicyChange, ...],
+    failed_step_id: str,
+    cause: BaseException,
+) -> str | None: ...
+def with_metadata_dead_letter_target[ResourceT](
+    *, resource: ResourceT, database: str, metadata_database: str
+) -> ResourceT | AdapterMaterializedView: ...
+def build_direct_population_plan(
+    *, plan: DirectPlan, realized_project: RealizedProject
+) -> PopulationPlan: ...
 def bounded_replay_outcome(
     mode: str | None,
     forced_start_time: bool,
@@ -840,27 +861,6 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
-def population_creation_order(
-    objects: list[tuple[int, list[int]]], planned: set[int]
-) -> list[int]: ...
-def population_fan_in_roots(
-    planned: set[int],
-    roots: list[tuple[int, list[int]]],
-    tables: list[tuple[str, int]],
-    views: list[tuple[int, str, str, list[int]]],
-) -> list[tuple[int, int, tuple[int, int], int]]: ...
-def population_source_actions(
-    objects: list[tuple[str, str, str | None]],
-    raw_prefix: str,
-    existing_names: set[str],
-) -> list[str]: ...
-def direct_population_scope(
-    desired: list[tuple[str, int]],
-    resources: list[list[tuple[str, str]]],
-    execution_scope: list[int],
-    roots: list[tuple[int, list[int], str]],
-    external_tables: list[tuple[str, int]],
-) -> tuple[list[int], list[tuple[int, list[int], int]]]: ...
 def destruction_drop_statements(
     relations: list[tuple[str, str, str]], size_override: int | None
 ) -> list[tuple[str, str, str]]: ...

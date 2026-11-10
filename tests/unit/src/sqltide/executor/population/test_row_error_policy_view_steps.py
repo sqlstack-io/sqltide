@@ -1,11 +1,9 @@
 import pytest
 
+from sqltide._native import row_error_policy_view_steps
 from sqltide.compiler.compile.models import LogicalResourceKey, LogicalResourceType
 from sqltide.compiler.discovery.types import RowErrorPolicy
 from sqltide.compiler.planner.models import DirectRowErrorPolicyChange
-from sqltide.executor.population.main._row_error_policy_view_steps import (
-    row_error_policy_view_steps,
-)
 from tests.unit.src.sqltide.executor.population._test_types import PolicyViewStepsTestCase
 
 _VIEW: str = "mv__orders"
