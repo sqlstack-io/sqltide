@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
+import sqltide._native as _native
 from sqltide.adapter.constants import QUARANTINE_LIVE_VIEW_PATTERN
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import CompiledTableModel
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.discovery.exceptions import PipelineDiscoveryError
 from sqltide.compiler.discovery.models import LoadedPipeline
 from sqltide.compiler.discovery.types import PipelineMode, RowErrorPolicy
@@ -321,7 +321,7 @@ def test_given_invalid_row_error_header_when_loading_then_it_is_rejected(
     )
 
     with pytest.raises(PipelineDiscoveryError, match=test_case.expected_error_fragment):
-        load_pipeline_directory(pipeline_dir)
+        _native.load_pipeline_directory(pipeline_dir)
 
 
 @pytest.mark.parametrize(
@@ -352,7 +352,7 @@ def test_given_pipeline_toml_when_loading_then_row_error_policy_is_read(
     (pipeline_dir / "pipeline.toml").write_text(test_case.pipeline_toml, encoding="utf-8")
 
     assert (
-        load_pipeline_directory(pipeline_dir).pipeline.model_on_row_error
+        _native.load_pipeline_directory(pipeline_dir).pipeline.model_on_row_error
         is test_case.expected_policy
     )
 
@@ -408,7 +408,7 @@ def test_given_quarantine_colliding_with_a_model_view_when_realizing_then_it_err
     (pipeline_dir / "orders_enriched__dead_letters.sql").write_text(
         f"MODEL (); {_ROW_LEVEL_SELECT}", encoding="utf-8"
     )
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     with pytest.raises(PipelineCompileError, match=test_case.expected_error_fragment):
         compile_and_realize_pipeline(loaded)
@@ -437,7 +437,7 @@ def test_given_default_model_named_like_dead_letter_view_when_realizing_then_it_
     (pipeline_dir / "orders_enriched__dead_letters.sql").write_text(
         f"MODEL (); {_ROW_LEVEL_SELECT}", encoding="utf-8"
     )
-    loaded: LoadedPipeline = load_pipeline_directory(pipeline_dir)
+    loaded: LoadedPipeline = _native.load_pipeline_directory(pipeline_dir)
 
     compiled, _ = compile_and_realize_pipeline(loaded)
 

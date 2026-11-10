@@ -12,6 +12,7 @@ from docker.models.containers import Container
 from testcontainers.core.waiting_utils import wait_for
 from testcontainers.postgres import PostgresContainer
 
+import sqltide._native as _native
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.models import (
     AdapterConnectionConfig,
@@ -28,7 +29,6 @@ from sqltide.compiler.compile.models import (
     DesiredMaterializedView,
     DesiredTable,
 )
-from sqltide.compiler.discovery._helpers.load import load_pipeline_directory
 from sqltide.compiler.planner.main.build_adapter_resource import build_adapter_resource
 from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
@@ -79,7 +79,7 @@ def render_create_view_ddl(*, database: str, view_name: str, target_table_name: 
 
 def build_compiled_example_pipeline() -> CompiledPipeline:
     return compile_pipeline(
-        loaded_pipeline=load_pipeline_directory(
+        loaded_pipeline=_native.load_pipeline_directory(
             Path("tests/fixtures/basic_project/pipelines/pl__orders")
         ),
         sql_analyzer=SqlModelAnalyzer(dialect="clickhouse"),

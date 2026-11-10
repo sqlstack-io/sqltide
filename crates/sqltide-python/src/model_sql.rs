@@ -27,7 +27,7 @@ const REF_RELATION: &str = "ref";
 const VIEW_KIND: &str = "view";
 const DISCOVERY_DIAGNOSTIC_CODE: &str = "SQT-DISCOVERY-001";
 
-fn call<'py>(
+pub(crate) fn call<'py>(
     callable: &Bound<'py, PyAny>,
     arguments: &[(&str, Bound<'py, PyAny>)],
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -38,12 +38,15 @@ fn call<'py>(
     callable.call((), Some(&keywords))
 }
 
-fn object<'py, T: IntoPyObjectExt<'py>>(py: Python<'py>, value: T) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn object<'py, T: IntoPyObjectExt<'py>>(
+    py: Python<'py>,
+    value: T,
+) -> PyResult<Bound<'py, PyAny>> {
     value.into_bound_py_any(py)
 }
 
 /// `PipelineDiscoveryError(message)`.
-fn discovery_error(py: Python<'_>, message: String) -> PyErr {
+pub(crate) fn discovery_error(py: Python<'_>, message: String) -> PyErr {
     match py
         .import(DISCOVERY_EXCEPTIONS)
         .and_then(|module| module.getattr("PipelineDiscoveryError"))
@@ -56,7 +59,7 @@ fn discovery_error(py: Python<'_>, message: String) -> PyErr {
 
 /// `error` raised over `context`: `raise error from cause` when `cause` is set, otherwise
 /// `raise error from None`.
-fn chained(
+pub(crate) fn chained(
     error: &Bound<'_, PyAny>,
     context: &Bound<'_, PyAny>,
     cause: Option<&Bound<'_, PyAny>>,
@@ -412,7 +415,7 @@ fn load_transform<'py>(
 /// carries a discovery diagnostic at the start of the file.
 #[pyfunction]
 #[pyo3(signature = (*, file_path, contents=None, macro_registry=None, macro_context=None))]
-fn load_transform_from_sql_file<'py>(
+pub(crate) fn load_transform_from_sql_file<'py>(
     py: Python<'py>,
     file_path: &Bound<'py, PyAny>,
     contents: Option<String>,
