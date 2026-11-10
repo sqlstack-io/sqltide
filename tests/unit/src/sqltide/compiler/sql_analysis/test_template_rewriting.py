@@ -1,8 +1,8 @@
 import pytest
 
+from sqltide._native import rewrite_template_query
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main.rewrite_template_query import rewrite_template_query
 from sqltide.compiler.sql_analysis.models import (
     SqlNamedQuery,
     SqlQueryRewriteResult,

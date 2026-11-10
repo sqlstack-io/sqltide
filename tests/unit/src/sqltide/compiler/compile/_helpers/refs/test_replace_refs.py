@@ -1,10 +1,8 @@
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter
 from sqltide.compiler.compile.exceptions import PipelineCompileError
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from tests.unit.src.sqltide.compiler.compile._helpers.refs._test_types import (
     ReplaceRefsErrorTestCase,
     ReplaceRefsTestCase,

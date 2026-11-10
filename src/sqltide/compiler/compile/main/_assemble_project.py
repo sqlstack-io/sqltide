@@ -1,11 +1,8 @@
 """Apache-2.0: SQLBuild compiler/compile/main/_assemble_project.py@7e3b2f854f05."""
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
 from sqltide.compiler.compile.models import CompiledProject, CompileProjectInputs
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 
 
 def assemble_project(

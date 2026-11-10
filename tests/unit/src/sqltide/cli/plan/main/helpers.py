@@ -9,6 +9,7 @@ from typing import cast
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.models import AdapterDirectFingerprintSnapshot
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
@@ -33,7 +34,6 @@ from sqltide.compiler.discovery.types import ReplayBoundaryMode, SourceKind
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
 from sqltide.compiler.planner.models import DirectWarehouseSnapshot
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.executor.direct.models import DirectBuildRequest
 from tests.unit.src.sqltide.cli.helpers import RecordingAdapterConnection
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer

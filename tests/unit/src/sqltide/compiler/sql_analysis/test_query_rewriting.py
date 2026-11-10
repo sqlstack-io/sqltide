@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import rewrite_query
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main.rewrite_query import rewrite_query
 from sqltide.compiler.sql_analysis.models import (
     SqlNamedQuery,
     SqlQueryRewriteResult,

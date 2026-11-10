@@ -6,6 +6,7 @@ import difflib
 import re
 from collections.abc import Iterable
 
+from sqltide._native import analyze_catalog_sql
 from sqltide.adapter.models import (
     AdapterColumn,
     AdapterMaterializedView,
@@ -19,7 +20,6 @@ from sqltide.adapters.clickhouse.constants import CLICKHOUSE_DEFAULT_INDEX_GRANU
 from sqltide.compiler.compile.models import Column as CompiledColumn
 from sqltide.compiler.compile.models import CompiledModel
 from sqltide.compiler.pipeline.models import CompileAnalysis
-from sqltide.compiler.sql_analysis.main.analyze_catalog_sql import analyze_catalog_sql
 
 _DRIFT_STATUS: str = "drift"
 _IN_SYNC_STATUS: str = "in_sync"

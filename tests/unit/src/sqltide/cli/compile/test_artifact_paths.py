@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from sqltide._native import sql_validate_query
 from sqltide.adapter.models import (
     AdapterSetDifferenceComparisonRequest,
     AdapterSetDifferenceTarget,
@@ -19,7 +20,6 @@ from sqltide.cli.compile._helpers.static_artifacts import _validate_unique_paths
 from sqltide.cli.compile.exceptions import CompileArtifactError
 from sqltide.cli.compile.models import StaticArtifactFile, StaticCompileArtifacts
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.sql_analysis.main._validate_query import validate_query
 from sqltide.compiler.testing.models import SqlTestCase, SqlTestChainStep
 from tests.unit.src.sqltide.cli.compile._test_types import (
     AuditArtifactPathTestCase,
@@ -294,7 +294,7 @@ def test_given_multi_target_test_when_assembling_static_sql_then_emits_one_state
 
     sql: str = static_test_sql(test_case=compiled_test)
 
-    validate_query(sql=sql, dialect="clickhouse")
+    sql_validate_query(sql, "clickhouse")
     assert tuple(fragment in sql for fragment in test_case.expected_fragments) == (
         True,
         True,

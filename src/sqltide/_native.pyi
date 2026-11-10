@@ -66,18 +66,16 @@ from sqltide.compiler.planner.models import (
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.compiler.quality.models import QualityNodeIdentity
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import SqlReferenceRewriter
 from sqltide.compiler.sql_analysis.models import (
-    SqlAggregateFacts,
-    SqlHeaderBlock,
+    SqlCatalogAnalysis,
     SqlModelAnalysis,
     SqlNamedQuery,
     SqlOutputColumn,
+    SqlQueryRewriteResult,
     SqlReference,
     SqlRelationRewrite,
+    SqlResolvedQuery,
     SqlStorageExpression,
-    SqlTopLevelCtes,
 )
 from sqltide.compiler.test_discovery.models import LoadedSqlTest
 from sqltide.compiler.testing.models import SqlTestCase
@@ -144,13 +142,7 @@ def render_clickhouse_run_statement_inserts(
 def render_clickhouse_latest_node_status_query(
     database: str, project_identity: str, target_identity: str, nodes: tuple[object, ...]
 ) -> str: ...
-def skip_trivia(sql: str, start: int) -> int: ...
-def find_matching_parenthesis(sql: str, open_index: int, context: str) -> int: ...
-def find_next_unquoted_character(sql: str, character: str, start: int) -> int | None: ...
-def try_consume_keyword(sql: str, start: int, keyword: str) -> int | None: ...
 def extract_references(sql: str) -> tuple[SqlReference, ...]: ...
-def split_header_blocks(sql: str, keyword: str) -> tuple[SqlHeaderBlock, ...]: ...
-def extract_top_level_ctes(sql: str, context: str) -> SqlTopLevelCtes: ...
 def expand_sql_macros(
     *,
     sql: str,
@@ -243,16 +235,18 @@ def require_quality_identity(identity: QualityNodeIdentity | None) -> QualityNod
 def build_model_audit_instances(
     *, models: tuple[TransformStep | ViewStep, ...]
 ) -> tuple[LoadedGenericSqlAuditInstance, ...]: ...
-def find_next_macro_start(sql: str, start: int) -> int | None: ...
-def rewrite_template_relations(
-    template: str, rewrites: list[SqlRelationRewrite], database_placeholder: str
-) -> str: ...
-def append_template_predicate(template: str, predicate: str) -> str: ...
-def merge_template_ctes(template: str, named_queries: list[SqlNamedQuery]) -> str: ...
+def rewrite_template_query(
+    *,
+    template: str,
+    dialect: str,
+    database_placeholder: str,
+    relation_rewrites: tuple[SqlRelationRewrite, ...] = (),
+    predicate: str | None = None,
+    prepend_ctes: tuple[SqlNamedQuery, ...] = (),
+) -> SqlQueryRewriteResult: ...
 
 class PolyglotError(ValueError): ...
 
-def sql_normalize_data_type(sql: str, dialect_name: str) -> str: ...
 def sql_infer_projection_names(sql: str, dialect_name: str) -> tuple[str, ...]: ...
 
 class SqlTreeError(ValueError):
@@ -282,30 +276,51 @@ class SqlTreeAnalyzer:
     def canonicalize_query(self, sql: str, database_placeholder: str) -> tuple[str, str]: ...
     def storage_column_names(self, expression: str) -> list[str]: ...
 
-def sql_rewrite_query(
+class SqlModelAnalyzer:
+    def __init__(self, *, dialect: str) -> None: ...
+    def analyze(
+        self,
+        *,
+        sql: str,
+        engine: str,
+        order_by: tuple[str, ...],
+        partition_by: str | None,
+        ttl: str | None,
+    ) -> SqlModelAnalysis: ...
+    def resolve(
+        self, *, analysis: SqlModelAnalysis, resolver: Mapping[str, str]
+    ) -> SqlResolvedQuery: ...
+    def uses_prewhere(self, *, analysis: SqlModelAnalysis) -> bool: ...
+    def canonicalize_query(self, *, sql: str) -> SqlResolvedQuery: ...
+    def analyze_storage(
+        self,
+        *,
+        order_by: tuple[str, ...],
+        partition_by: str | None,
+        ttl: str | None,
+        output_columns: tuple[SqlOutputColumn, ...],
+    ) -> tuple[SqlStorageExpression, ...]: ...
+    def is_row_level(self, *, analysis: SqlModelAnalysis) -> bool: ...
+    def quarantine_ineligibility(self, *, analysis: SqlModelAnalysis) -> tuple[str, str] | None: ...
+    def quarantine_split(self, *, sql: str, model_name: str) -> tuple[str, str]: ...
+
+class SqlReferenceRewriter:
+    def __init__(self, *, dialect: str) -> None: ...
+    def rewrite(self, *, sql: str, resolver: Mapping[str, str]) -> str: ...
+
+def rewrite_query(
+    *,
     sql: str,
-    dialect_name: str,
-    rewrites: list[tuple[str, str, list[str | None] | None, bool]],
-    predicate: str | None,
-    ctes: list[tuple[str, str]],
-) -> tuple[str, list[str], bool]: ...
+    dialect: str,
+    relation_rewrites: tuple[SqlRelationRewrite, ...] = (),
+    predicate: str | None = None,
+    prepend_ctes: tuple[SqlNamedQuery, ...] = (),
+) -> SqlQueryRewriteResult: ...
 def sql_quarantine_ineligibility(sql: str, dialect_name: str) -> tuple[str, str] | None: ...
 def sql_quarantine_split(sql: str, model_name: str, dialect_name: str) -> tuple[str, str]: ...
 def sql_select_is_row_level(sql: str, dialect_name: str) -> bool: ...
-def sql_select_aggregate_facts(sql: str, dialect_name: str) -> tuple[list[str], bool]: ...
-def sql_analyze_catalog(
-    sql: str, dialect_name: str
-) -> tuple[
-    str,
-    str | None,
-    list[tuple[str | None, str]],
-    tuple[str | None, str] | None,
-    tuple[str | None, str] | None,
-    str | None,
-    str | None,
-    list[tuple[str, str]],
-]: ...
-def sql_expression_list(sql: str, dialect_name: str) -> list[str]: ...
+def analyze_catalog_sql(*, sql: str, dialect: str) -> SqlCatalogAnalysis: ...
+def parse_expression_list(*, sql: str, dialect: str) -> tuple[str, ...]: ...
 def sql_validate_query(sql: str, dialect_name: str) -> None: ...
 def sql_canonicalize(sql: str, dialect_name: str) -> str: ...
 def sql_render_string_literal(value: str, dialect_name: str) -> str: ...
@@ -1056,26 +1071,6 @@ def load_transform_from_sql_file(
 def load_actual_state_from_snapshot(
     *, snapshot: PlanningWarehouseSnapshot, desired_state: DesiredState, database: str
 ) -> ActualState: ...
-def analyze_model_sql(
-    *,
-    sql: str,
-    engine: str,
-    order_by: tuple[str, ...],
-    partition_by: str | None,
-    ttl: str | None,
-    analyzer: SqlTreeAnalyzer,
-) -> tuple[SqlModelAnalysis, SqlModelTree]: ...
-def analyze_storage_expressions(
-    *,
-    order_by: tuple[str, ...],
-    partition_by: str | None,
-    ttl: str | None,
-    output_columns: tuple[SqlOutputColumn, ...],
-    analyzer: SqlTreeAnalyzer,
-) -> tuple[SqlStorageExpression, ...]: ...
-def build_aggregate_facts(
-    *, function_names: list[str], has_group_by: bool, engine: str
-) -> SqlAggregateFacts: ...
 def compile_pipeline(
     *, loaded_pipeline: LoadedPipeline, sql_analyzer: SqlModelAnalyzer
 ) -> CompiledPipeline: ...

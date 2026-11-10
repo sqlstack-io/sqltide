@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
 from sqltide.compiler.access.main._compile_access_policy import compile_access_policy
 from sqltide.compiler.access.models import CompiledAccessPolicy
 from sqltide.compiler.compile.main._assemble_project import assemble_project
@@ -29,10 +30,6 @@ from sqltide.compiler.pipeline.models import (
     RealizedProject,
 )
 from sqltide.compiler.rules.main._evaluate_project_rules import evaluate_project_rules
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.diagnostics.main.attach_error_diagnostic import attach_error_diagnostic
 from sqltide.diagnostics.models import SourceLocation
 from sqltide.diagnostics.types import DiagnosticPhase

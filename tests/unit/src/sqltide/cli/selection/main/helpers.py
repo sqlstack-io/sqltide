@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.cli.entry._helpers.compiler_profile import build_compiler_adapter_profile
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
@@ -29,7 +30,6 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import ReplayBoundaryMode, ReplayLineageMode, SourceKind
 from sqltide.compiler.pipeline.main._realize_project import realize_project
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis
 from tests.unit.src.sqltide.compiler.compile.helpers import build_realization_analyzer
 

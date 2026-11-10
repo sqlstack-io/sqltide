@@ -90,6 +90,11 @@ rule = "FFR309"
 path = "src/sqltide/compiler/quality/__init__.py"
 reason = "Native bindings own SQL test and audit quality identities and the compiled identity requirement; this package only declares the quality identity model, node kinds and errors they build and raise."
 
+[[targets.python.rule_exceptions]]
+rule = "FFR309"
+path = "src/sqltide/compiler/sql_analysis/__init__.py"
+reason = "Native bindings own model SQL analysis, reference rewriting, query and template rewriting and catalog analysis; this package only declares the SQL analysis models, types and errors they build and raise."
+
 [targets.web]
 analyzer = "svelte"
 root = "ui"

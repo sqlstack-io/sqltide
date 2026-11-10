@@ -5,13 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterError
 from sqltide.adapter.models import AdapterQueryResult
 from sqltide.compiler.audit_discovery.models import LoadedSqlAudit
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.executor.auditing.constants import AUDIT_SAMPLE_LIMIT
 from sqltide.executor.auditing.exceptions import AuditExecutionError
 from sqltide.executor.auditing.models import SqlAuditResult, SqlAuditRunResult

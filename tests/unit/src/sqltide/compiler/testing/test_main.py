@@ -3,10 +3,8 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.compiler.testing.models import SqlTestCase
 from tests.unit.src.sqltide.compiler.testing._test_types import (
     BuildSqlTestCasesErrorTestCase,

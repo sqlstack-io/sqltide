@@ -3,13 +3,10 @@ from pathlib import Path
 import pytest
 
 import sqltide._native as _native
+from sqltide._native import SqlReferenceRewriter, extract_references
 from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import ParsedRef
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
-from sqltide.compiler.sql_analysis.main._extract_references import extract_references
 from sqltide.compiler.sql_analysis.models import SqlReference
 from sqltide.diagnostics.main.attach_error_diagnostic import attach_error_diagnostic
 from sqltide.diagnostics.models import CompilerDiagnostic

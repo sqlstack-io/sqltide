@@ -1,7 +1,7 @@
 import pytest
 
+from sqltide._native import SqlModelAnalyzer
 from sqltide.adapter.constants import ADAPTER_DATABASE_PLACEHOLDER
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 from sqltide.compiler.sql_analysis.exceptions import SqlAnalysisError
 from sqltide.compiler.sql_analysis.models import SqlModelAnalysis, SqlResolvedQuery
 from tests.unit.src.sqltide.compiler.sql_analysis._test_types import (

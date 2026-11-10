@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer, SqlReferenceRewriter
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from sqltide.compiler.compile.main._compile_pipeline import compile_pipeline
 from sqltide.compiler.compile.models import (
@@ -18,10 +19,6 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
 )
 from sqltide.compiler.discovery.types import BoundedReplayFallback, ReplayLineageMode
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
-from sqltide.compiler.sql_analysis.classes.sql_reference_rewriter import (
-    SqlReferenceRewriter,
-)
 from sqltide.compiler.sql_analysis.models import (
     SqlAggregateFacts,
     SqlModelAnalysis,

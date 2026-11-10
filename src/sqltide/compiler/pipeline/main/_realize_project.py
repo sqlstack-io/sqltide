@@ -1,9 +1,9 @@
 """Public logical-project realization entry point."""
 
 import sqltide._native as _native
+from sqltide._native import SqlModelAnalyzer
 from sqltide.compiler.compile.models import CompiledProject, CompilerAdapterProfile
 from sqltide.compiler.pipeline.models import RealizedProject
-from sqltide.compiler.sql_analysis.classes.sql_model_analyzer import SqlModelAnalyzer
 
 
 def realize_project(
