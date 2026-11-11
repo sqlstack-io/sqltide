@@ -386,7 +386,7 @@ fn run_plan<'py>(
             py,
             "prepare_build_workflow",
             &[
-                ("analysis", analysis),
+                ("analysis", analysis.clone()),
                 ("options", preparation_options),
                 ("client", client.clone()),
                 ("adapter_profile", adapter_profile.clone()),
@@ -423,14 +423,21 @@ fn run_plan<'py>(
                 ],
             )?;
         }
-        let rendered: Value<'py> = if options.getattr("json_output")?.is_truthy()? {
-            if mixed {
-                preparation.getattr("plan_json")?
-            } else {
-                preparation.getattr("workflow")?.getattr("plan_json")?
-            }
+        let plan_json: Value<'py> = if mixed {
+            preparation.getattr("plan_json")?
         } else {
-            preparation.getattr("plan_text")?.add("\n")?
+            preparation.getattr("workflow")?.getattr("plan_json")?
+        };
+        let (plan_text, plan_json) = crate::plan_warnings::with_consumer_group_drift_warnings(
+            &analysis,
+            &preparation,
+            preparation.getattr("plan_text")?,
+            plan_json,
+        )?;
+        let rendered: Value<'py> = if options.getattr("json_output")?.is_truthy()? {
+            plan_json
+        } else {
+            plan_text.add("\n")?
         };
         let arguments: Bound<'py, PyDict> = PyDict::new(py);
         arguments.set_item("end", "")?;

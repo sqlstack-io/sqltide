@@ -1,10 +1,16 @@
 //! Planner warnings that need a point-in-time warehouse read: rebuild subtrees whose replay
-//! source is empty. Counts go through the Python adapter connection.
+//! source is empty, and Kafka tables consuming as a different consumer group than the project
+//! declares. Reads go through the Python adapter connection.
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyInt};
+use sqltide_executor::sources::{ConsumerGroupDrift, consumer_group_drift};
+use sqltide_planner::cli_style::CliStyle;
 
 use crate::direct_build::{Value, build, class, items, replace, text, tuple};
+
+const ADAPTER_MODELS: &str = "sqltide.adapter.models";
+const CONSUMER_GROUP_DRIFT: &str = "consumer_group_drift";
 
 const ADAPTER_EXCEPTIONS: &str = "sqltide.adapter.exceptions";
 const PLANNER_MODELS: &str = "sqltide.compiler.planner.models";
@@ -132,6 +138,118 @@ fn add_empty_replay_source_warnings<'py>(
             tuple(py, keyed.into_iter().map(|(_, warning)| warning).collect())?,
         )],
     )
+}
+
+/// `(source name, drift)` for every realized managed source whose live table in `database`
+/// consumes as a different consumer group than the project declares, by source name.
+pub(crate) fn consumer_group_drifts(
+    analysis: &Value<'_>,
+    catalog: &Value<'_>,
+    database: &str,
+) -> PyResult<Vec<(String, ConsumerGroupDrift)>> {
+    let py: Python<'_> = analysis.py();
+    let managed_source: Value<'_> = class(py, ADAPTER_MODELS, "AdapterManagedSource")?;
+    let mut drifts: Vec<(String, ConsumerGroupDrift)> = Vec::new();
+    for entry in analysis
+        .getattr("realized_project")?
+        .getattr("resources_by_logical_key")?
+        .call_method0("items")?
+        .try_iter()?
+    {
+        let entry: Value<'_> = entry?;
+        let source_name: String = entry.get_item(0)?.getattr("name")?.extract()?;
+        for resource in items(&entry.get_item(1)?)? {
+            if !resource.is_instance(&managed_source)? {
+                continue;
+            }
+            let table_name: String = resource.getattr("name")?.extract()?;
+            let relation: Value<'_> = catalog.call_method1("relation", (&table_name,))?;
+            if relation.is_none() {
+                continue;
+            }
+            let settings: Vec<(String, String)> = relation.getattr("settings")?.extract()?;
+            let declared: String = resource.getattr("consumer_group")?.extract()?;
+            if let Some(drift) = consumer_group_drift(&table_name, &declared, database, &settings) {
+                drifts.push((source_name.clone(), drift));
+            }
+        }
+    }
+    drifts.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(drifts)
+}
+
+/// The plan text and JSON with a consumer group drift warning for each Kafka table that
+/// consumes as a different group than the project declares, read from the catalogs the plan
+/// already loaded; unchanged when none does.
+pub(crate) fn with_consumer_group_drift_warnings<'py>(
+    analysis: &Value<'py>,
+    preparation: &Value<'py>,
+    plan_text: Value<'py>,
+    plan_json: Value<'py>,
+) -> PyResult<(Value<'py>, Value<'py>)> {
+    let py: Python<'py> = analysis.py();
+    let previews: Vec<Value<'py>> = if preparation.hasattr("virtual")? {
+        vec![
+            preparation.getattr("virtual")?.getattr("preview")?,
+            preparation.getattr("direct")?.getattr("preview")?,
+        ]
+    } else {
+        vec![preparation.getattr("preview")?]
+    };
+    let mut drifts: Vec<(String, ConsumerGroupDrift)> = Vec::new();
+    for preview in previews {
+        let catalog: Value<'py> = if preview.hasattr("warehouse_snapshot")? {
+            preview.getattr("warehouse_snapshot")?.getattr("catalog")?
+        } else {
+            preview.getattr("target_catalog")?
+        };
+        if catalog.is_none() {
+            continue;
+        }
+        let database: String = preview.getattr("database")?.extract()?;
+        for drift in consumer_group_drifts(analysis, &catalog, &database)? {
+            if !drifts.contains(&drift) {
+                drifts.push(drift);
+            }
+        }
+    }
+    if drifts.is_empty() {
+        return Ok((plan_text, plan_json));
+    }
+    let style = CliStyle {
+        use_color: crate::cli::style::terminal_style(py)?.use_color,
+    };
+    let mut lines: Vec<String> = vec![plan_text.extract()?, String::new()];
+    for (_, drift) in &drifts {
+        lines.push(style.warning(&format!("warning  {}", drift.message())));
+    }
+    let json = py.import("json")?;
+    let payload: Value<'py> = json.getattr("loads")?.call1((&plan_json,))?;
+    let mut warnings: Vec<Value<'py>> = Vec::new();
+    for (source_name, drift) in &drifts {
+        let warning: Bound<'py, PyDict> = PyDict::new(py);
+        warning.set_item("warning_code", CONSUMER_GROUP_DRIFT)?;
+        warning.set_item("message", drift.message())?;
+        warning.set_item("source_name", source_name)?;
+        warning.set_item("table_name", &drift.table_name)?;
+        warning.set_item("live_consumer_group", &drift.live_group)?;
+        warning.set_item("declared_consumer_group", &drift.declared_group)?;
+        warnings.push(warning.into_any());
+    }
+    payload.set_item(
+        "consumer_group_warnings",
+        pyo3::types::PyList::new(py, warnings)?,
+    )?;
+    let keywords: Bound<'py, PyDict> = PyDict::new(py);
+    keywords.set_item("indent", 2)?;
+    let plan_json: String = json
+        .getattr("dumps")?
+        .call((payload,), Some(&keywords))?
+        .extract()?;
+    Ok((
+        lines.join("\n").into_pyobject(py)?.into_any(),
+        format!("{plan_json}\n").into_pyobject(py)?.into_any(),
+    ))
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

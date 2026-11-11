@@ -50,6 +50,14 @@ export type PartitionState = {
 	newestEventAt: string;
 };
 
+/** A live Kafka table consuming as a different consumer group than the project declares. */
+type ConsumerGroupDrift = {
+	tableName: string;
+	liveGroup: string;
+	declaredGroup: string;
+	message: string;
+};
+
 type SourceLiveState = {
 	rowsPerSecond: number;
 	/**
@@ -70,6 +78,8 @@ type SourceLiveState = {
 	throughput: number[];
 	/** The window the throughput buckets cover, from the server query. */
 	throughputWindowSeconds: number | null;
+	/** Set when the live Kafka table's consumer group differs from the declared one. */
+	consumerGroupDrift: ConsumerGroupDrift | null;
 };
 
 export type Source = {

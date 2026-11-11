@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { planFromServer, projectFromServer } from '$lib/api/_helpers/mapping';
-import type { Project } from '$lib/domain/types';
+import type { Project, Source } from '$lib/domain/types';
 import type { Plan } from '$lib/planning/types';
 
 describe('plan mapping', () => {
@@ -132,6 +132,32 @@ describe('project mapping', () => {
 
 		expect(project.sources[0]?.live.freshness).toBeNull();
 		expect(project.models[0]?.status).toBe('unknown');
+	});
+
+	it('given consumer group drift when mapped then both groups and the warning stay intact', () => {
+		const drift: Source['live']['consumerGroupDrift'] = {
+			tableName: 'kafka__orders',
+			liveGroup: 'streambuild_shop_dev_orders_shop_dev',
+			declaredGroup: 'streambuild_storefront_dev_orders_shop_dev',
+			message: 'offsets would not carry over'
+		};
+		const project: Project = projectFromServer(
+			{
+				project: {},
+				sources: [{ name: 'orders' }, { name: 'customers' }],
+				pipelines: [],
+				models: [],
+				audits: [],
+				tests: [],
+				macros: []
+			},
+			{
+				capturedAt: '2026-08-23T10:00:00Z',
+				sources: { orders: { consumerGroupDrift: drift }, customers: {} }
+			}
+		);
+
+		expect(project.sources.map((source) => source.live.consumerGroupDrift)).toEqual([drift, null]);
 	});
 
 	it('given warehouse health when mapped then zero and unknown measurements remain distinct', () => {
