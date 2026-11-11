@@ -85,6 +85,8 @@ pub(crate) struct ShapeSpec {
     pub(crate) qualname: &'static str,
     pub(crate) fields: &'static [FieldSpec],
     pub(crate) post_init: Option<PostInit>,
+    /// Whether the class has the generated repr; false for `@dataclass(repr=False)` shapes.
+    pub(crate) repr: bool,
 }
 
 /// The Python name of a Rust field identifier, without a raw-identifier prefix.
@@ -105,6 +107,8 @@ pub(crate) const fn unraw(name: &'static str) -> &'static str {
 /// repr, as `@dataclass(repr=False)` did, and `@post_init(check)` after the fields runs a
 /// check over the bound values.
 macro_rules! shapes {
+    (@repr) => { true };
+    (@repr no_repr) => { false };
     (@post_init) => { None };
     (@post_init $check:path) => { Some($check) };
     (@methods [] $hash:tt $methods:tt impl $name:ident { $($body:tt)* }) => {
@@ -136,7 +140,7 @@ macro_rules! shapes {
         $(@impl { $($methods:tt)* })?
     )*) => { $(
         $(#[doc = $doc])*
-        #[pyclass(module = $module, frozen, get_all, subclass $(, extends = $base)?)]
+        #[pyclass(module = $module, frozen, get_all, subclass, weakref $(, extends = $base)?)]
         pub(crate) struct $name {
             $(pub(crate) $field: pyo3::Py<pyo3::PyAny>,)*
         }
@@ -150,6 +154,7 @@ macro_rules! shapes {
                     ..$crate::shapes::FieldSpec::BASE
                 }),*],
                 post_init: $crate::shapes::shapes!(@post_init $($check)?),
+                repr: $crate::shapes::shapes!(@repr $($flag)?),
             };
 
             fn values<'py>(&self, py: pyo3::Python<'py>) -> Vec<pyo3::Bound<'py, pyo3::PyAny>> {
@@ -191,7 +196,7 @@ macro_rules! shapes {
 
             #[classattr]
             fn __dataclass_params__(py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
-                $crate::shapes::dataclass_params(py)
+                $crate::shapes::dataclass_params(py, &Self::SPEC)
             }
 
             fn __richcmp__(
@@ -543,9 +548,23 @@ fn field_table(py: Python<'_>, spec: &ShapeSpec) -> PyResult<Py<PyDict>> {
     Ok(table.unbind())
 }
 
-/// The frozen dataclass parameters shared by every shape.
-pub(crate) fn dataclass_params(py: Python<'_>) -> PyResult<Py<PyAny>> {
-    Ok(probe(py)?.1.clone_ref(py))
+/// `__dataclass_params__` of a frozen dataclass declared with `repr=False`.
+static NO_REPR_PARAMS: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+
+/// The frozen dataclass parameters of the shape, with `repr` as the dataclass declared it.
+pub(crate) fn dataclass_params(py: Python<'_>, spec: &ShapeSpec) -> PyResult<Py<PyAny>> {
+    if spec.repr {
+        return Ok(probe(py)?.1.clone_ref(py));
+    }
+    let params: &Py<PyAny> = NO_REPR_PARAMS.get_or_try_init(py, || {
+        let keywords: Bound<'_, PyDict> = [("frozen", true), ("repr", false)].into_py_dict(py)?;
+        let probe: Bound<'_, PyAny> = py
+            .import("dataclasses")?
+            .getattr("make_dataclass")?
+            .call(("Probe", [("value", "object")]), Some(&keywords))?;
+        Ok::<_, PyErr>(probe.getattr("__dataclass_params__")?.unbind())
+    })?;
+    Ok(params.clone_ref(py))
 }
 
 /// `Name(field=value, ...)` over the fields shown in repr, named by the instance's own class
@@ -818,11 +837,15 @@ pub(crate) fn lazy_constants(
                 return Ok(value.unbind());
             }
             let value: Bound<'_, PyAny> = build(py)?;
-            cache.set_item(&name, &value)?;
-            Ok(value.unbind())
+            Ok(cache.call_method1("setdefault", (&name, value))?.unbind())
         },
     )?;
-    add(module, "__getattr__", getattr)
+    if module.hasattr("__getattr__")? {
+        return Err(PyImportError::new_err(
+            "sqltide._native already defines __getattr__",
+        ));
+    }
+    module.setattr("__getattr__", getattr)
 }
 
 /// Registers every native shape, enum, exception and constant. It runs after every other
