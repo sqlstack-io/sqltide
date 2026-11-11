@@ -15,6 +15,8 @@ const ADAPTER_EXCEPTIONS: &str = "sqltide.adapter.exceptions";
 const SECRET_PLACEHOLDER_PREFIX: &str = "__sqltide_secret__";
 const SECRET_PLACEHOLDER_SUFFIX: &str = "__";
 const TIMEOUT_ERROR_MARKERS: [&str; 2] = ["timeout", "timed out"];
+/// How many causes or contexts of a driver error are searched for a connection failure.
+const MAX_CAUSE_DEPTH: usize = 16;
 const DEAD_LETTERS_TABLE: &str = "_sqltide_dead_letters";
 const MATERIALIZED_VIEW_NAME_PREFIX: &str = "mv__";
 const DEAD_LETTERS_VIEW_SUFFIX: &str = "__dead_letters";
@@ -48,7 +50,11 @@ fn translate_clickhouse_driver_error<'py>(error: &Bound<'py, PyAny>) -> PyResult
         .to_string_lossy()
         .into_owned();
     let text: String = message.to_string_lossy().into_owned();
-    let class: &str = if TIMEOUT_ERROR_MARKERS
+    // A refused or unresolved connection never timed out, so it is checked before the timeout
+    // markers, which the request URL in the message can contain as a setting name.
+    let class: &str = if caused_by_unreachable_host(error)? {
+        "AdapterUnavailableError"
+    } else if TIMEOUT_ERROR_MARKERS
         .iter()
         .any(|marker| normalized.contains(marker))
     {
@@ -65,6 +71,33 @@ fn translate_clickhouse_driver_error<'py>(error: &Bound<'py, PyAny>) -> PyResult
     py.import(ADAPTER_EXCEPTIONS)?
         .getattr(class)?
         .call1((message,))
+}
+
+/// Whether the driver error was caused by a refused connection or an unresolvable host, as the
+/// HTTP client chains them under the driver's own error. Like a traceback, it follows
+/// `__context__` only when `__cause__` is unset and the context is not suppressed.
+fn caused_by_unreachable_host(error: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let py: Python<'_> = error.py();
+    let refused: Value<'_> = py.import("builtins")?.getattr("ConnectionRefusedError")?;
+    let unresolved: Value<'_> = py.import("socket")?.getattr("gaierror")?;
+    let mut current: Value<'_> = error.clone();
+    for _ in 0..MAX_CAUSE_DEPTH {
+        if current.is_instance(&refused)? || current.is_instance(&unresolved)? {
+            return Ok(true);
+        }
+        let cause: Value<'_> = current.getattr("__cause__")?;
+        current = if !cause.is_none() {
+            cause
+        } else if current.getattr("__suppress_context__")?.is_truthy()? {
+            return Ok(false);
+        } else {
+            current.getattr("__context__")?
+        };
+        if current.is_none() {
+            return Ok(false);
+        }
+    }
+    Ok(false)
 }
 
 /// The leftmost `__sqltide_secret__NAME__` placeholder as `(placeholder, NAME)`, matching
