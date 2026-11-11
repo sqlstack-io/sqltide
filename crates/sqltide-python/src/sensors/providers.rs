@@ -170,10 +170,8 @@ fn load_provider_module<'py>(file_path: &Any<'py>, project_dir: &Any<'py>) -> Py
             match message {
                 Ok(message) => Err(discovery_error(py, message, Some(error))),
                 Err(failed) => {
-                    let failure: &Bound<'_, pyo3::exceptions::PyBaseException> = failed.value(py);
-                    if failure.getattr("__context__")?.is_none() {
-                        failure.setattr("__context__", error.value(py))?;
-                    }
+                    // As in an `except` block, the import error is the context.
+                    failed.value(py).setattr("__context__", error.value(py))?;
                     Err(failed)
                 }
             }

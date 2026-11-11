@@ -75,6 +75,10 @@ class OrdersWebhook(Provider):
     orders_webhook_timeout: float
 """
 
+FAILING_SENSOR_SOURCE: str = """
+raise RuntimeError("sensor module failed")
+"""
+
 UNPRINTABLE_ERROR_PROVIDER_SOURCE: str = """
 class UnprintableError(Exception):
     def __str__(self) -> str:

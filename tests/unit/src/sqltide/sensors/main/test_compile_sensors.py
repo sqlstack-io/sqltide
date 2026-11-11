@@ -14,6 +14,7 @@ from sqltide.sensors.models import CompiledSensors
 from tests.unit.src.sqltide.sensors.main._test_types import (
     CompileSensorsErrorTestCase,
     CompileSensorsEventTypeTestCase,
+    CompileSensorsLoadContextTestCase,
     CompileSensorsProviderErrorTestCase,
     CompileSensorsProviderPathTestCase,
     CompileSensorsProviderReloadTestCase,
@@ -23,6 +24,7 @@ from tests.unit.src.sqltide.sensors.main.helpers import (
     BROKEN_PROVIDER_SOURCE,
     CATALOG_EVENT_SENSORS_SOURCE,
     DUPLICATE_PROVIDER_SOURCE,
+    FAILING_SENSOR_SOURCE,
     INVALID_NAME_PROVIDER_SOURCE,
     LOOKALIKE_EVENT_SENSOR_SOURCE,
     MIXED_PROVIDER_SOURCE,
@@ -281,6 +283,42 @@ def test_given_unprintable_provider_import_error_when_compiling_then_sys_path_is
 
     assert sys.path == path_before
     assert type(error_info.value.__context__).__name__ == test_case.expected_context_type_name
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        CompileSensorsLoadContextTestCase(
+            description="a failed sensor import is both the cause and the context",
+            sensor_files=(("sensors/failing.py", FAILING_SENSOR_SOURCE),),
+            expected_error_type=SensorError,
+            expected_context_type_name="RuntimeError",
+            expected_context_is_cause=True,
+        ),
+        CompileSensorsLoadContextTestCase(
+            description="an import error whose message cannot be rendered is the context",
+            sensor_files=(("sensors/unprintable.py", UNPRINTABLE_ERROR_PROVIDER_SOURCE),),
+            expected_error_type=ZeroDivisionError,
+            expected_context_type_name="UnprintableError",
+            expected_context_is_cause=False,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_failing_sensor_import_when_compiling_then_errors_chain_as_python_does(
+    test_case: CompileSensorsLoadContextTestCase, tmp_path: Path
+) -> None:
+    write_project_files(project_dir=tmp_path, files=test_case.sensor_files)
+    path_before: list[str] = list(sys.path)
+
+    with pytest.raises(test_case.expected_error_type) as error_info:
+        _ = compile_sensors(project_dir=tmp_path, reserved_names=frozenset())
+
+    assert sys.path == path_before
+    assert type(error_info.value.__context__).__name__ == test_case.expected_context_type_name
+    assert (
+        error_info.value.__context__ is error_info.value.__cause__
+    ) is test_case.expected_context_is_cause
 
 
 @pytest.mark.parametrize(
