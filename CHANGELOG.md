@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.65.20](https://github.com/sqlstack-io/sqltide/compare/v0.65.19...v0.65.20) (2026-11-11)
+
+
+### Refactoring
+
+* define project discovery models natively ([#379](https://github.com/sqlstack-io/sqltide/issues/379)) ([b9aced8](https://github.com/sqlstack-io/sqltide/commit/b9aced8022464e1b530c1549621873f670dac608))
+* move adapter models to the native core ([#381](https://github.com/sqlstack-io/sqltide/issues/381)) ([1acf514](https://github.com/sqlstack-io/sqltide/commit/1acf5140a51941a45c7512af0a075e4339487412))
+
 ## [0.65.19](https://github.com/sqlstack-io/sqltide/compare/v0.65.18...v0.65.19) (2026-11-11)
 
 
