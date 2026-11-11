@@ -1,7 +1,3 @@
 """Build command policy exceptions."""
 
-from sqltide.cli.entry.exceptions import CliUserError
-
-
-class BuildPipelineLimitError(CliUserError):
-    """The final build closure exceeds its committed target limit."""
+from sqltide._native import BuildPipelineLimitError as BuildPipelineLimitError

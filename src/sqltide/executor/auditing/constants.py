@@ -1,3 +1,3 @@
 """Stable constants for SQL audit execution."""
 
-AUDIT_SAMPLE_LIMIT: int = 5
+from sqltide._native import AUDIT_SAMPLE_LIMIT as AUDIT_SAMPLE_LIMIT

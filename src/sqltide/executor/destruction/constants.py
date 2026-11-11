@@ -1,7 +1,5 @@
 """Constants for destructive execution."""
 
-from datetime import timedelta
-
-DEFAULT_DESTRUCTION_PLAN_TTL: timedelta = timedelta(minutes=15)
-DESTRUCTION_PLAN_PAYLOAD_VERSION: int = 1
-PRODUCTION_TARGET_NAMES: frozenset[str] = frozenset({"prod", "production"})
+from sqltide._native import DEFAULT_DESTRUCTION_PLAN_TTL as DEFAULT_DESTRUCTION_PLAN_TTL
+from sqltide._native import DESTRUCTION_PLAN_PAYLOAD_VERSION as DESTRUCTION_PLAN_PAYLOAD_VERSION
+from sqltide._native import PRODUCTION_TARGET_NAMES as PRODUCTION_TARGET_NAMES

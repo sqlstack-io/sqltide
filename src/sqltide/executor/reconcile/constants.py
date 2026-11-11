@@ -1,3 +1,3 @@
 """Constants for reconcile execution."""
 
-RECONCILE_DEPLOYMENT_ID_PREFIX: str = "reconcile_"
+from sqltide._native import RECONCILE_DEPLOYMENT_ID_PREFIX as RECONCILE_DEPLOYMENT_ID_PREFIX

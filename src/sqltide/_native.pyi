@@ -77,36 +77,6 @@ from sqltide.adapter.types import (
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
-from sqltide.auth.models import (
-    AccountAuditRecord,
-    AuthSettings,
-    ProjectRoleAssignment,
-    ResolvedSession,
-    SessionCredentials,
-    UserAccount,
-)
-from sqltide.auth.types import AuthenticationSource
-from sqltide.authorization.models import (
-    AuthorizationDecision,
-    AuthorizationRequest,
-    CapabilityRequest,
-    EffectiveCapabilities,
-)
-from sqltide.cli.build.models import (
-    BuildCommandOptions,
-    BuildProtectionRequirement,
-    DirectBuildPreviewContext,
-    DirectWorkflowPreparation,
-    MixedWorkflowPreparation,
-    VirtualBuildPreviewContext,
-    VirtualWorkflowPreparation,
-    WorkflowPreparationOptions,
-)
-from sqltide.cli.destruction.models import DestructionCommandOptions
-from sqltide.cli.dev.models import DevCommandOptions
-from sqltide.cli.entry.models import CliEntrypointHandlers
-from sqltide.cli.plan.models import PlanCommandOptions
-from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.discovery.models import (
     AllowedCrossPipelineReference,
     AuditDefaults,
@@ -150,69 +120,27 @@ from sqltide.dev_server.models import (
     MessagesQueryRequest,
     ReplayOffsetProgress,
 )
-from sqltide.dev_server.types import (
-    ActivityTone,
-    CompileAuthorizationGuard,
-    DevServerReporter,
-    RunPresentationStatus,
-)
-from sqltide.diagnostics.models import CompilerDiagnostic, RelatedDiagnosticLocation, SourceLocation
+from sqltide.dev_server.types import CompileAuthorizationGuard, DevServerReporter
 from sqltide.events.models import (
     AuditCompleted,
     InvocationObservation,
     NodeResultObservation,
     RunCompleted,
 )
-from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
-from sqltide.executor.auditing.types import QualityResultStatus
-from sqltide.executor.deployment.models import (
-    DeploymentDiffRequest,
-    DeploymentDiffResult,
-    DeploymentInventory,
-    DeploymentSummary,
-)
-from sqltide.executor.destruction.models import (
-    DestructionActor,
-    DestructionExecutionResult,
-    DestructionPlan,
-    DestructionRequest,
-    InactivePipeline,
-)
 from sqltide.executor.destruction.types import (
     DestructionClock,
     DestructionPlanningConnection,
     DestructionPlanStore,
 )
-from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
-from sqltide.executor.janitor.models import (
-    JanitorApplyResult,
-    JanitorPreviewResult,
-    JanitorRequest,
-)
 from sqltide.executor.kafka_admin.models import ConsumerGroupOffsetReset
 from sqltide.executor.kafka_admin.types import KafkaAdminClientFactory
-from sqltide.executor.observability.models import (
-    QualityResultContext,
-    RunStartupTimings,
-    TerminalInvocation,
+from sqltide.executor.workflow.types import (
+    NativeStatement,
+    StatementIntent,
+    WorkflowEventEmitter,
+    WorkflowMode,
+    WorkflowPhase,
 )
-from sqltide.executor.readiness.models import (
-    AuditDeploymentCandidate,
-    DeploymentAuditRequest,
-    DeploymentAuditResult,
-    DeploymentReadinessThresholds,
-    LoadedAuditDeployment,
-    RootAuditResult,
-)
-from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
-from sqltide.executor.testing.models import SqlTestExecutionResult
-from sqltide.executor.workflow.models import (
-    BuildWorkflow,
-    PublishedBuildWorkflow,
-    WarehouseStatement,
-    WorkflowExecutionResult,
-)
-from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter, WorkflowMode
 from sqltide.provider.models import DiscoveredProvider
 from sqltide.sensors.models import (
     CompiledSensors,
@@ -2031,6 +1959,1078 @@ CLICKHOUSE_DIRECT_REBUILD_SUPPORTED: bool
 CLICKHOUSE_CATALOG_RETRY_DELAY_SECONDS: float
 CLICKHOUSE_MODEL_TABLE_NAME_PREFIX: str
 STAGED_SOURCE_NAME_PREFIX: str
+
+# Operational executor shapes: destruction, readiness, deployment, auditing, observability,
+# janitor, reconcile, SQL tests and doctor.
+
+class DestructionOperation(StrEnum):
+    DESTROY_PIPELINES = "destroy_pipelines"
+    RESET_TARGET = "reset_target"
+
+class DestructionRelationKind(StrEnum):
+    VIEW = "view"
+    MATERIALIZED_VIEW = "materialized_view"
+    TABLE = "table"
+    MANAGED_SOURCE = "managed_source"
+
+class DestructionOwnership(StrEnum):
+    CURRENT_MANIFEST = "current_manifest"
+    VIRTUAL_PHYSICAL_MAPPING = "virtual_physical_mapping"
+    PUBLISHED_STABLE_BINDING = "published_stable_binding"
+    OWNERSHIP_LEDGER = "ownership_ledger"
+    HISTORICAL_MANIFEST = "historical_manifest"
+
+class DestructionPlanningErrorCode(StrEnum):
+    SELECTION = "selection"
+    UNKNOWN_PIPELINES = "unknown_pipelines"
+    DEPENDENCY = "dependency"
+    RESOURCE = "resource"
+    UNSUPPORTED_HISTORICAL_KIND = "unsupported_historical_kind"
+    INVALID_OBJECT_TYPE = "invalid_object_type"
+
+class AuditAssessment(StrEnum):
+    READY = "ready"
+    NOT_READY = "not_ready"
+    CAUTION = "caution"
+
+class DeploymentLifecycleState(StrEnum):
+    ACTIVE = "active"
+    STAGED = "staged"
+    SUPERSEDED = "superseded"
+    INCOMPLETE = "incomplete"
+    METADATA_MISSING = "metadata_missing"
+    PHYSICAL_MISSING = "physical_missing"
+
+class DeploymentDiffStatus(StrEnum):
+    ADDED = "added"
+    REMOVED = "removed"
+    CHANGED = "changed"
+    UNCHANGED = "unchanged"
+    PHYSICAL_MISSING = "physical_missing"
+
+class AuditSeverity(StrEnum):
+    ERROR = "error"
+    WARNING = "warning"
+
+class QualityResultStatus(StrEnum):
+    PASSED = "passed"
+    WARNING = "warning"
+    FAILED = "failed"
+    ERROR = "error"
+    DEFERRED = "deferred"
+
+class QualityResultTrigger(StrEnum):
+    BUILD = "build"
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+    DEPLOYMENT = "deployment"
+
+class MaterializationOutcome(StrEnum):
+    APPLIED = "applied"
+    FAILED = "failed"
+
+@final
+@dataclass(frozen=True)
+class DestructionRequest:
+    operation: DestructionOperation | str
+    target: str
+    database: str
+    metadata_database: str
+    pipeline_names: tuple[str, ...] = ()
+    included_dependent_pipeline_names: tuple[str, ...] = ()
+    include_orphans: bool = False
+
+@final
+@dataclass(frozen=True)
+class InactivePipeline:
+    name: str
+    model_count: int
+    resource_count: int
+    last_published_at: str
+
+@final
+@dataclass(frozen=True)
+class DestructionRelationEvidence:
+    database: str
+    name: str
+    kind: DestructionRelationKind | str
+    exists: bool
+    total_bytes: int | None
+    active_parts: int | None
+    catalog_fingerprint: str | None
+    logical_names: tuple[str, ...]
+    pipeline_names: tuple[str, ...]
+    ownership: tuple[DestructionOwnership, ...]
+    dependency_relation_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class DestructionPlan:
+    plan_id: str
+    operation: DestructionOperation
+    target: str
+    database: str
+    metadata_database: str
+    requested_pipeline_names: tuple[str, ...]
+    included_dependent_pipeline_names: tuple[str, ...]
+    affected_pipeline_names: tuple[str, ...]
+    affected_model_names: tuple[str, ...]
+    affected_source_names: tuple[str, ...]
+    relations: tuple[DestructionRelationEvidence, ...]
+    challenges: tuple[str, ...]
+    preserves_sources: bool
+    preserves_replay_data: bool
+    manifest_fingerprint: str
+    plan_fingerprint: str
+    created_at: datetime
+    expires_at: datetime
+    relation_drop_size_limit: int | None = None
+    relation_drop_size_server_limit: int | None = None
+    relation_drop_size_override: int | None = None
+    relation_drop_size_policy_observed: bool = False
+    include_orphans: bool = False
+    @property
+    def estimated_bytes(self) -> int: ...
+
+@final
+@dataclass(frozen=True)
+class DestructionExecutionResult:
+    invocation_id: str
+    outcome: str
+    completed_statement_sequences: tuple[int, ...]
+    pending_statement_sequences: tuple[int, ...]
+    remaining_relation_names: tuple[str, ...] | None
+    error_message: str | None
+    residual_catalog_status: str = "observed"
+    residual_catalog_error: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DestructionActor:
+    actor_id: str
+    actor_name: str
+
+@final
+@dataclass(frozen=True)
+class DestructionRecordingContext:
+    plan: DestructionPlan
+    actor_id: str
+    actor_name: str
+    reviewed_at: datetime
+    confirmed_at: datetime
+    challenge_responses: tuple[str, ...]
+    connection: AdapterConnection
+    observation_connection: AdapterConnection
+    project_dir: Path
+    started: tuple[str, str, int]
+    statements: tuple[WarehouseStatement, ...]
+    sink: RunEventSink
+
+@final
+@dataclass(frozen=True)
+class DeploymentReadinessThresholds:
+    maximum_lag_seconds: float = ...
+    minimum_staged_row_ratio: float = ...
+
+@final
+@dataclass(frozen=True)
+class DeploymentAuditRequest:
+    deployment_id: str | None
+    metadata_database: str
+    default_database: str
+    thresholds: DeploymentReadinessThresholds = field(default_factory=DeploymentReadinessThresholds)
+
+@final
+@dataclass(frozen=True)
+class AuditDeploymentCandidate:
+    deployment_id: str
+    created_at: str | None = None
+    deployment_status: str | None = None
+    root_names: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class LoadedAuditDeployment:
+    deployment_id: str
+    created_at: str
+    status: str
+    replay_lineage_mode: ReplayLineageMode | str | None
+    warning_codes: tuple[str, ...]
+    root_keys: tuple[ObjectKey, ...]
+    prepared_object_mappings: tuple[tuple[ObjectKey, str], ...]
+
+@final
+@dataclass(frozen=True)
+class OffsetCatchupSummary:
+    active_partition_count: int
+    staged_partition_count: int
+    partitions_compared: int
+    missing_staged_partition_count: int
+    missing_freshness_partition_count: int
+    lagging_partition_count: int
+    max_offset_gap: int
+    average_offset_gap: float
+    lag_boundary_column: str | None
+    max_lag_seconds: float | None
+    average_lag_seconds: float | None
+
+@final
+@dataclass(frozen=True)
+class ScalarCatchupSummary:
+    active_min_value: str | None
+    active_max_value: str | None
+    staged_min_value: str | None
+    staged_max_value: str | None
+    lag_seconds: float | None
+
+@final
+@dataclass(frozen=True)
+class RootAuditResult:
+    root_key: ObjectKey
+    staged_physical_name: str
+    staged_exists: bool
+    active_exists: bool
+    active_row_count: int | None
+    staged_row_count: int | None
+    row_delta: int | None
+    row_ratio: float | None
+    assessment: AuditAssessment | str
+    replay_lineage_mode: ReplayLineageMode | str | None
+    offset_catchup_summary: OffsetCatchupSummary | None
+    scalar_catchup_summary: ScalarCatchupSummary | None
+    state: str
+    replay_source_name: str | None
+    replay_source_row_count: int | None
+    warnings: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class DeploymentAuditResult:
+    deployment_id: str
+    deployment_status: str
+    assessment: AuditAssessment | str
+    replay_lineage_mode: ReplayLineageMode | str | None
+    warning_codes: tuple[str, ...]
+    root_results: tuple[RootAuditResult, ...]
+    quality_check_results: tuple[SqlAuditResult, ...] = ()
+    thresholds: DeploymentReadinessThresholds = field(default_factory=DeploymentReadinessThresholds)
+
+@final
+@dataclass(frozen=True)
+class DeploymentSummary:
+    deployment_id: str
+    state: DeploymentLifecycleState
+    created_at: str | None
+    persisted_status: str | None
+    root_names: tuple[str, ...]
+    physical_relation_names: tuple[str, ...]
+    missing_physical_relation_names: tuple[str, ...]
+    active_binding_names: tuple[str, ...]
+    latest_published_at: str | None
+
+@final
+@dataclass(frozen=True)
+class DeploymentInventory:
+    database: str
+    deployments: tuple[DeploymentSummary, ...]
+
+@final
+@dataclass(frozen=True)
+class DeploymentDiffRequest:
+    database: str
+    metadata_database: str
+    comparison: str
+
+@final
+@dataclass(frozen=True)
+class DeploymentDiffColumn:
+    name: str
+    type: str
+    default_expression: str | None
+
+@final
+@dataclass(frozen=True)
+class DeploymentDiffRelation:
+    database: str
+    logical_name: str
+    status: DeploymentDiffStatus | str
+    from_physical_name: str | None
+    to_physical_name: str | None
+    from_columns: tuple[DeploymentDiffColumn, ...]
+    to_columns: tuple[DeploymentDiffColumn, ...]
+    from_row_count: int | None
+    to_row_count: int | None
+
+@final
+@dataclass(frozen=True)
+class DeploymentDiffResult:
+    database: str
+    from_endpoint: str
+    to_endpoint: str
+    relations: tuple[DeploymentDiffRelation, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlAuditResult:
+    file_path: Path
+    referenced_model_names: tuple[str, ...]
+    severity: str
+    passed: bool
+    failing_row_count: int
+    sample_column_names: tuple[str, ...]
+    sample_rows: tuple[tuple[object, ...], ...]
+    description: str | None = None
+    name: str | None = None
+    error_message: str | None = None
+    deferred_until: str | None = None
+    missing_relation_names: tuple[str, ...] = ()
+    @property
+    def deferred(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class SqlAuditRunResult:
+    audit_results: tuple[SqlAuditResult, ...]
+    @property
+    def error_failure_count(self) -> int: ...
+    @property
+    def warning_failure_count(self) -> int: ...
+
+@final
+@dataclass(frozen=True)
+class AuditWarmupState:
+    eligible: bool
+    anchor: str | None
+    eligible_at: str | None
+    missing_model_names: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class RunStartupTimings:
+    compile_ms: int
+    observability_ms: int
+    planning_ms: int
+    @property
+    def total_ms(self) -> int: ...
+
+@final
+@dataclass(frozen=True)
+class TerminalInvocation:
+    project_dir: Path
+    target_identity: str
+    command: str
+    mode: str | None
+    outcome: str
+    exit_code: int
+    materialized_outcome: str | None
+    deployment_id: str | None
+    workflow_id: str | None
+    selected_node_count: int
+    error_message: str | None
+    summary: dict[str, object]
+
+@final
+@dataclass(frozen=True)
+class QualityResultContext:
+    trigger: QualityResultTrigger | str
+    scheduled_for: str | None = None
+    cadence_seconds: int | None = None
+    warmup_seconds: int = 0
+
+@final
+@dataclass(frozen=True)
+class JanitorPreviewCandidate:
+    deployment_id: str
+    created_at: str
+    status: str
+    logical_view_names: tuple[str, ...]
+    physical_object_names: tuple[str, ...]
+    deletable: bool
+    reason: str
+
+@final
+@dataclass(frozen=True)
+class JanitorPreviewResult:
+    database: str
+    retention_days: int
+    minimum_rollback_deployments: int
+    candidates: tuple[JanitorPreviewCandidate, ...]
+
+@final
+@dataclass(frozen=True)
+class JanitorApplyResult:
+    database: str
+    retention_days: int
+    minimum_rollback_deployments: int
+    deleted_deployment_ids: tuple[str, ...]
+    deleted_object_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class JanitorRequest:
+    database: str
+    metadata_database: str
+    retention_days: int
+    apply: bool
+    minimum_rollback_deployments: int = 2
+
+@final
+@dataclass(frozen=True)
+class ReconcileRejectedTarget:
+    target_key: ObjectKey
+    target_name: str
+    reasons: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class ReconcilePreview:
+    database: str
+    reconcile_id: str
+    eligible_records: tuple[ObjectStateRecord, ...]
+    rejected_targets: tuple[ReconcileRejectedTarget, ...]
+
+@final
+@dataclass(frozen=True)
+class ReconcileResult:
+    database: str
+    reconcile_id: str
+    reconciled_records: tuple[ObjectStateRecord, ...]
+    rejected_targets: tuple[ReconcileRejectedTarget, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlTestTargetExecutionResult:
+    target_model_name: str
+    passed: bool
+    column_names: tuple[str, ...]
+    missing_rows: tuple[tuple[object, ...], ...]
+    unexpected_rows: tuple[tuple[object, ...], ...]
+
+@final
+@dataclass(frozen=True)
+class SqlTestExecutionResult:
+    file_path: Path
+    passed: bool
+    target_results: tuple[SqlTestTargetExecutionResult, ...]
+    executed_sql: str
+    warnings: tuple[str, ...] = ()
+    name: str | None = None
+    test_index: int = 1
+    error_message: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DoctorRequest:
+    default_database: str
+
+@final
+@dataclass(frozen=True)
+class ActiveViewStatus:
+    table_name: str
+    state_kind: str
+    active_deployment_id: str | None
+    candidate_deployment_ids: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class DoctorResult:
+    active_views: tuple[ActiveViewStatus, ...]
+
+class DestructionError(RuntimeError): ...
+class DestructionSelectionError(DestructionError): ...
+class DestructionValidationError(DestructionError, ValueError): ...
+class DestructionResourceError(DestructionError, TypeError): ...
+class DestructionConsistencyError(DestructionError): ...
+
+class DestructionDependencyError(DestructionSelectionError):
+    dependent_pipeline_names: tuple[str, ...]
+    def __init__(self, dependent_pipeline_names: tuple[str, ...]) -> None: ...
+
+class DestructionExternalDependencyError(DestructionSelectionError):
+    relation_names: tuple[str, ...]
+    def __init__(self, relation_names: tuple[str, ...]) -> None: ...
+
+class DestructionPlanNotFoundError(DestructionError): ...
+class DestructionPlanExpiredError(DestructionError): ...
+class DestructionPlanNotReviewedError(DestructionError): ...
+class DestructionPlanCorruptError(DestructionError): ...
+class DestructionChallengeError(DestructionError): ...
+class DestructionDriftError(DestructionError): ...
+class DestructionRecordingError(DestructionError): ...
+class DestructionRecoveryError(DestructionError): ...
+class DestructionRecoveryNotFoundError(DestructionRecoveryError): ...
+class DeploymentAuditExecutionError(ValueError): ...
+class DeploymentNotFoundError(ValueError): ...
+class DeploymentDiffError(ValueError): ...
+class AuditExecutionError(ValueError): ...
+class JanitorInputError(ValueError): ...
+class ReconcileError(RuntimeError): ...
+class SqlTestExecutionError(ValueError): ...
+
+DEFAULT_DESTRUCTION_PLAN_TTL: timedelta
+DESTRUCTION_PLAN_PAYLOAD_VERSION: int
+PRODUCTION_TARGET_NAMES: frozenset[str]
+ACCEPTABLE_LAG_SECONDS: float
+MINIMUM_STAGED_ROW_RATIO: float
+ACTIVE_DEPLOYMENT_DIFF_ENDPOINT: str
+EXPLICIT_DEPLOYMENT_DIFF_ENDPOINT_COUNT: int
+AUDIT_SAMPLE_LIMIT: int
+MAX_OBSERVATION_JSON_BYTES: int
+MAX_OBSERVATION_ERROR_LENGTH: int
+HEARTBEAT_INTERVAL_SECONDS: float
+RUN_DISPLAY_COMMAND_ENV_VAR: str
+RUN_INVOCATION_ID_ENV_VAR: str
+PROJECT_REVISION_ENV_VAR: str
+RECONCILE_DEPLOYMENT_ID_PREFIX: str
+
+# CLI, account, authorization, workflow, sensor, dev server and diagnostic shapes.
+
+class AdminCommand(StrEnum):
+    MIGRATE = "migrate"
+    CREATE_USER = "create-user"
+    GRANT_ROLE = "grant-role"
+    REVOKE_ROLE = "revoke-role"
+    ENABLE_USER = "enable-user"
+    DISABLE_USER = "disable-user"
+    RESET_PASSWORD = "reset-password"
+
+class CliCommand(StrEnum):
+    ADMIN = "admin"
+    PLAYGROUND = "playground"
+    DISCOVER = "discover"
+    DEV = "dev"
+    COMPILE = "compile"
+    LINT = "lint"
+    FORMAT = "format"
+    TEST = "test"
+    PLAN = "plan"
+    BUILD = "build"
+    DESTROY = "destroy"
+    RESET_TARGET = "reset-target"
+    DEPLOYMENT = "deployment"
+    AUDIT = "audit"
+    RECONCILE = "reconcile"
+    JANITOR = "janitor"
+    DOCTOR = "doctor"
+    REPAIR = "repair"
+
+class CliSubcommand(StrEnum):
+    ACTIVE_VIEW = "active-view"
+    DIFF = "diff"
+    LIST = "list"
+    SHOW = "show"
+    AUDIT = "audit"
+    PROMOTE = "promote"
+    ROLLBACK = "rollback"
+
+class AuthenticationMode(StrEnum):
+    DISABLED = "disabled"
+    PASSWORD = "password"
+    TRUSTED_PROXY = "trusted_proxy"
+
+class AuthenticationSource(StrEnum):
+    LOCAL = "local"
+    PASSWORD = "password"
+    TRUSTED_PROXY = "trusted_proxy"
+
+class UnknownUserPolicy(StrEnum):
+    AUTO_PROVISION = "auto_provision"
+    DENY = "deny"
+
+class AuthorizationReason(StrEnum):
+    SYSTEM_ADMIN = "system_admin"
+    GRANTED = "granted"
+    POLICY_ABSENT = "policy_absent"
+    NO_MATCHING_ASSIGNMENT = "no_matching_assignment"
+    STALE_ASSIGNMENT = "stale_assignment"
+    EMPTY_PIPELINE_SCOPE = "empty_pipeline_scope"
+    MISSING_PERMISSION = "missing_permission"
+    MISSING_PIPELINES = "missing_pipelines"
+
+class ActivityTone(StrEnum):
+    NEUTRAL = "neutral"
+    GOOD = "good"
+    BAD = "bad"
+    CAUTION = "caution"
+
+class RunPresentationStatus(StrEnum):
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    CANCELLING = "cancelling"
+    CANCELLATION_FAILED = "cancellation_failed"
+    RUNNING = "running"
+    UNRESPONSIVE = "unresponsive"
+    PRESUMED_FAILED = "presumed_failed"
+
+class CompileStateKind(StrEnum):
+    OK = "ok"
+    FAILING = "failing"
+
+class ReplayAnchorReason(StrEnum):
+    ELIGIBLE = "eligible"
+    AGGREGATE = "aggregate"
+    MUTABLE_REF = "mutable_ref"
+    NEVER = "never"
+    LINEAGE_LOSS = "lineage_loss"
+    VIEW = "view"
+
+class Freshness(StrEnum):
+    FRESH = "fresh"
+    LAGGING = "lagging"
+    STALLED = "stalled"
+
+class SensorSchedulerState(StrEnum):
+    DISABLED = "disabled"
+    IDLE = "idle"
+    RUNNING = "running"
+    STANDBY = "standby"
+    BACKING_OFF = "backing_off"
+
+class AuditScheduleState(StrEnum):
+    DISABLED = "disabled"
+    IDLE = "idle"
+    DUE = "due"
+    SCHEDULED = "scheduled"
+    WARMING_UP = "warming_up"
+    NOT_MATERIALIZED = "not_materialized"
+    RUNNING = "running"
+    BLOCKED = "blocked"
+    BACKING_OFF = "backing_off"
+
+@final
+@dataclass(frozen=True)
+class SourceLocation:
+    path: Path
+    line: int
+    column: int
+    end_line: int | None = None
+    end_column: int | None = None
+
+@final
+@dataclass(frozen=True)
+class RelatedDiagnosticLocation:
+    label: str
+    location: SourceLocation
+    message: str | None = None
+
+@final
+@dataclass(frozen=True)
+class CompilerDiagnostic:
+    phase: DiagnosticPhase | str
+    severity: DiagnosticSeverity | str
+    code: str
+    message: str
+    resource_name: str | None = None
+    location: SourceLocation | None = None
+    related_locations: tuple[RelatedDiagnosticLocation, ...] = ()
+    help: str | None = None
+
+@final
+@dataclass(frozen=True)
+class Principal:
+    user_id: UUID
+    username: str
+    display_name: str | None
+    email: str | None
+    authentication_source: AuthenticationSource
+
+@final
+@dataclass(frozen=True, repr=False)
+class AuthSettings:
+    mode: AuthenticationMode
+    control_store_url: str
+    username_header: str = "X-SQLTide-User"
+    display_name_header: str | None = None
+    email_header: str | None = None
+    unknown_user_policy: UnknownUserPolicy = ...
+    default_role: str = "viewer"
+    session_cookie_name: str = "sqltide_session"
+    session_ttl_seconds: int = ...
+    session_cookie_secure: bool = True
+    proxy_logout_url: str | None = None
+    def __repr__(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class UserAccount:
+    user_id: UUID
+    username: str
+    display_name: str | None
+    email: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    roles: tuple[str, ...] = ()
+    authentication_sources: tuple[AuthenticationSource, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class SessionCredentials:
+    token: str
+    csrf_token: str
+    expires_at: datetime
+
+@final
+@dataclass(frozen=True)
+class ResolvedSession:
+    principal: Principal
+    roles: tuple[str, ...]
+    csrf_token: str
+    expires_at: datetime
+
+@final
+@dataclass(frozen=True)
+class AuthenticatedRequest:
+    principal: Principal
+    roles: tuple[str, ...]
+    csrf_token: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AccountAuditRecord:
+    operation: str
+    actor_user_id: UUID | None
+    affected_user_id: UUID | None
+    occurred_at: datetime
+    details: dict[str, object]
+
+@final
+@dataclass(frozen=True)
+class ProjectRoleAssignment:
+    assignment_id: UUID
+    user_id: UUID
+    project_name: str
+    role_name: str
+    target_name: str | None
+    assigned_by: UUID | None
+    assigned_at: datetime
+    revoked_by: UUID | None = None
+    revoked_at: datetime | None = None
+
+@final
+@dataclass(frozen=True)
+class AuthorizationRequest:
+    authenticated: AuthenticatedRequest
+    permission: Permission
+    project_name: str
+    target_name: str | None
+    grant_scope: GrantScope | None
+    affected_pipelines: tuple[str, ...]
+    policy: CompiledAccessPolicy | None
+
+@final
+@dataclass(frozen=True)
+class AuthorizationDecision:
+    allowed: bool
+    reason: AuthorizationReason
+    permission: Permission
+    project_name: str
+    target_name: str | None
+    affected_pipelines: tuple[str, ...]
+    matched_roles: tuple[str, ...] = ()
+    missing_pipelines: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CapabilityRequest:
+    authenticated: AuthenticatedRequest
+    project_name: str
+    target_name: str | None
+    pipeline_names: tuple[str, ...]
+    policy: CompiledAccessPolicy | None
+
+@final
+@dataclass(frozen=True)
+class EffectiveCapabilities:
+    system_admin: bool
+    project_name: str
+    target_name: str | None
+    permissions: tuple[Permission, ...]
+    pipeline_permissions: tuple[tuple[Permission, tuple[str, ...]], ...]
+    stale_roles: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class WarehouseStatement:
+    sequence: int
+    step_id: str
+    phase: WorkflowPhase
+    intent: StatementIntent
+    sql: str
+    continue_on_error: bool = False
+    display_name: str | None = None
+    replay_offset_progress: AdapterReplayOffsetProgressRequest | None = None
+
+@dataclass(frozen=True)
+class BuildWorkflow:
+    mode: WorkflowMode
+    plan_json: str
+    statements: tuple[WarehouseStatement, ...]
+    recovery_statements: tuple[WarehouseStatement, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class PublishedBuildWorkflow:
+    workflow: BuildWorkflow
+    artifact_root: Path
+    workflow_sha256: str
+
+@final
+@dataclass(frozen=True)
+class WorkflowStatementResult:
+    step_id: str
+    query_result: AdapterQueryResult | None
+    mutation_result: AdapterMutationResult | None
+    error_message: str | None = None
+
+@final
+@dataclass(frozen=True)
+class WorkflowExecutionResult:
+    statement_results: tuple[WorkflowStatementResult, ...]
+
+@final
+@dataclass(frozen=True)
+class BuildCommandOptions:
+    pipelines_root: Path
+    database: str | None
+    metadata_database: str | None
+    selectors: tuple[str, ...]
+    json_output: bool
+    verbose: bool
+    auto_approve: bool
+    deployment_id: str | None = None
+    full_refresh: bool = False
+    start_time: str | None = None
+    events_output: bool = False
+    confirmations: tuple[str, ...] = ()
+    changed: bool = False
+    include_missing_upstream: bool = False
+
+@final
+@dataclass(frozen=True)
+class BuildProtectionRequirement:
+    pipeline_name: str
+    warning: str
+    confirmation: str
+
+@final
+@dataclass(frozen=True)
+class WorkflowPreparationOptions:
+    database: str | None
+    metadata_database: str | None
+    selectors: tuple[str, ...]
+    deployment_id: str | None
+    full_refresh: bool
+    start_time: str | None
+    verbose: bool
+    changed: bool = False
+    include_missing_upstream: bool = False
+
+@dataclass(frozen=True)
+class DirectBuildPreviewContext:
+    analysis: CompileAnalysis
+    plan: DirectPlan
+    warehouse_snapshot: DirectWarehouseSnapshot
+    database: str
+    metadata_database: str
+    adapter_name: str
+    effective_start_time: str | None = None
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+
+@dataclass(frozen=True)
+class VirtualBuildPreviewContext:
+    database: str
+    metadata_database: str
+    desired_state: DesiredState
+    plan: DeploymentPlan
+    replay_lineage_mode: ReplayLineageMode
+    deployment_id: str
+    created_at: str
+    root_reports: tuple[RootBackfillReport, ...]
+    existing_relation_names: frozenset[str]
+    target_catalog: CatalogSnapshot
+    metadata_catalog: CatalogSnapshot
+    full_refresh_keys: frozenset[ObjectKey] = frozenset()
+    start_time_keys: frozenset[ObjectKey] = frozenset()
+    start_time: str | None = None
+    execution_logical_model_keys: frozenset[LogicalResourceKey] = frozenset()
+    run_execution_scope: tuple[LogicalResourceKey, ...] = ()
+    run_context_scope: tuple[LogicalResourceKey, ...] = ()
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class DirectWorkflowPreparation:
+    preview: DirectBuildPreviewContext
+    request: DirectBuildRequest
+    workflow: DirectBuildWorkflow
+    plan_text: str
+    protection_requirements: tuple[BuildProtectionRequirement, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class VirtualWorkflowPreparation:
+    preview: VirtualBuildPreviewContext
+    request: BackfillBootstrapRequest
+    workflow: BuildWorkflow
+    plan_text: str
+    protection_requirements: tuple[BuildProtectionRequirement, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class MixedWorkflowPreparation:
+    virtual: VirtualWorkflowPreparation
+    direct: DirectWorkflowPreparation
+    plan_text: str
+    plan_json: str
+    protection_requirements: tuple[BuildProtectionRequirement, ...] = ()
+
+@final
+@dataclass(frozen=True, repr=False)
+class DestructionCommandOptions:
+    operation: DestructionOperation
+    pipelines_root: Path
+    project_dir: Path
+    selected_target: str
+    database: str | None
+    selectors: tuple[str, ...]
+    control_store_url: str
+    include_orphans: bool = False
+    cli_variables: tuple[tuple[str, object], ...] = ()
+    environment: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True, repr=False)
+class DevCommandOptions:
+    pipelines_root: Path
+    database: str | None
+    host: str
+    port: int
+    selected_target: str | None = None
+    cli_variables: tuple[tuple[str, object], ...] = ()
+    environment: Mapping[str, str] | None = None
+    connection_host: str | None = None
+    connection_port: int | None = None
+    connection_username: str | None = None
+    connection_password: str | None = None
+    auth_settings: AuthSettings | None = None
+
+@final
+@dataclass(frozen=True)
+class CliEntrypointHandlers:
+    run_discover: Callable[..., int]
+    run_compile: Callable[..., int]
+    run_test: Callable[..., int]
+    run_audit: Callable[..., int]
+    run_plan: Callable[..., int]
+    run_build: Callable[..., int]
+    run_destruction: Callable[..., int]
+    run_deployment_diff: Callable[..., int]
+    run_deployment_list: Callable[..., int]
+    run_deployment_show: Callable[..., int]
+    run_deployment_audit: Callable[..., int]
+    run_deployment_promote: Callable[..., int]
+    run_deployment_rollback: Callable[..., int]
+    run_reconcile: Callable[..., int]
+    run_janitor: Callable[..., int]
+    run_doctor: Callable[..., int]
+    run_repair_active_view: Callable[..., int]
+    run_dev: Callable[..., int]
+
+@final
+@dataclass(frozen=True)
+class PlanCommandOptions:
+    pipelines_root: Path
+    database: str | None
+    selectors: tuple[str, ...]
+    deployment_id: str | None
+    full_refresh: bool
+    start_time: str | None
+    json_output: bool
+    verbose: bool
+    changed: bool = False
+    include_missing_upstream: bool = False
+
+@final
+@dataclass(frozen=True)
+class SelectionResolution:
+    desired_state: DesiredState
+    selected_logical_model_keys: frozenset[LogicalResourceKey]
+    selected_model_keys: frozenset[ObjectKey]
+    replay_lineage_mode: ReplayLineageMode | None
+    execution_logical_model_keys: frozenset[LogicalResourceKey] = frozenset()
+
+class AuthenticationError(Exception): ...
+class AuthorizationError(Exception): ...
+class ControlStoreError(Exception): ...
+class AuthConfigurationError(ValueError): ...
+class AccountValidationError(ValueError): ...
+class PasswordValidationError(ValueError): ...
+class AccountConflictError(ControlStoreError): ...
+class AccountNotFoundError(ControlStoreError): ...
+class CompileArtifactError(ValueError): ...
+
+class CliUserError(Exception):
+    hint: str | None
+    def __init__(self, message: str, *, hint: str | None = None) -> None: ...
+
+class BuildPipelineLimitError(CliUserError): ...
+
+class SensorError(ValueError):
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic
+    def __init__(
+        self,
+        message: str,
+        *,
+        location: SourceLocation | None = None,
+        related_locations: tuple[RelatedDiagnosticLocation, ...] = (),
+    ) -> None: ...
+
+class SensorStepError(RuntimeError): ...
+class SensorEvaluationTimeoutError(RuntimeError): ...
+class DevServerError(RuntimeError): ...
+class DevConfigurationError(DevServerError): ...
+class KafkaCollectorClosedError(DevServerError): ...
+class ProjectNotCompiledError(DevServerError): ...
+class BuildInProgressError(DevServerError): ...
+class BuildStartError(DevServerError): ...
+class AuditSchedulerPersistenceError(DevServerError): ...
+class MessageQueryValidationError(DevServerError): ...
+class MessageSchemaError(DevServerError): ...
+
+CONTROL_STORE_ENV_VAR: str
+SQLTIDE_TOOL_VERSION: str
+EXPECTED_BUILD_WRITE_SCOPE_ENV_VAR: str
+EXPECTED_BUILD_READ_SCOPE_ENV_VAR: str
+EXPECTED_BUILD_PIPELINE_SCOPE_ENV_VAR: str
+DEV_CLI_VARIABLES_ENV_VAR: str
+COMMANDS_REQUIRING_PIPELINES_ROOT: frozenset[CliCommand]
+COMMANDS_WITHOUT_ADAPTER_CONNECTION: frozenset[CliCommand]
+VIRTUAL_ENVIRONMENT_ONLY_COMMANDS: frozenset[CliCommand]
+DISPLAY_NAME_BY_COMMAND: Mapping[CliCommand, str]
+METADATA_TABLE_NAME_PREFIX: str
+AFFIRMATIVE_RESPONSES: frozenset[str]
+TRUE_ENV_VALUES: frozenset[str]
+ADMIN_ROLE: str
+VIEWER_ROLE: str
+ACCOUNT_SCHEMA_COMPONENT: str
+PASSWORD_MIN_LENGTH: int
+SQLITE_MEMORY_PATH: str
+LOCAL_USER_ID: UUID
+WORKFLOW_PHASE_ORDER: tuple[WorkflowPhase, ...]
+RECOVER_MODEL_VIEW_STEP_PREFIX: str
+RECOVER_SOURCE_STEP_PREFIX: str
+RECOVER_DEAD_LETTERS_STEP_PREFIX: str
+DEFAULT_SENSOR_TIMEOUT_SECONDS: float
+DEFAULT_DEV_SERVER_HOST: str
+DEFAULT_DEV_SERVER_PORT: int
+KAFKA_REUSE_LOG_FIRST_READ_COUNT: int
+KAFKA_REUSE_LOG_INTERVAL: int
+CANCEL_GRACE_SECONDS: float
+TERMINATE_GRACE_SECONDS: float
+ACTIVITY_WINDOW_SECONDS: int
 
 type _Span = tuple[int, int, int, int, int, int]
 

@@ -1,33 +1,10 @@
 """Authentication and account-domain failures."""
 
-
-class AuthenticationError(Exception):
-    """A request could not produce an authenticated principal."""
-
-
-class AuthorizationError(Exception):
-    """An authenticated principal cannot perform an account operation."""
-
-
-class ControlStoreError(Exception):
-    """The account control store is unavailable or incompatible."""
-
-
-class AuthConfigurationError(ValueError):
-    """Authentication runtime configuration is invalid."""
-
-
-class AccountValidationError(ValueError):
-    """Account input violates a stable domain constraint."""
-
-
-class PasswordValidationError(ValueError):
-    """A password does not meet the configured security policy."""
-
-
-class AccountConflictError(ControlStoreError):
-    """An account mutation conflicts with existing identity state."""
-
-
-class AccountNotFoundError(ControlStoreError):
-    """An account or role assignment does not exist."""
+from sqltide._native import AccountConflictError as AccountConflictError
+from sqltide._native import AccountNotFoundError as AccountNotFoundError
+from sqltide._native import AccountValidationError as AccountValidationError
+from sqltide._native import AuthConfigurationError as AuthConfigurationError
+from sqltide._native import AuthenticationError as AuthenticationError
+from sqltide._native import AuthorizationError as AuthorizationError
+from sqltide._native import ControlStoreError as ControlStoreError
+from sqltide._native import PasswordValidationError as PasswordValidationError
