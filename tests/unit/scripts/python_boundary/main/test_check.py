@@ -70,6 +70,16 @@ GUARDED_IMPORT: str = REEXPORT.replace(
 )
 RENAMED_IMPORT: str = REEXPORT.replace("Column as Column", "Column as ColumnSpec")
 EXTRA_EXPORT: str = REEXPORT.replace('"Column", "ObjectKey"', '"Column", "ObjectKey", "Table"')
+DISCOVERY_TYPES: str = (
+    '"""Discovery types, defined natively."""\n'
+    "\n"
+    "from sqltide._native import DiscoveryRefType as RefType\n"
+    "from sqltide._native import PipelineMode as PipelineMode\n"
+)
+UNLISTED_ALIAS: str = DISCOVERY_TYPES.replace(
+    "PipelineMode as PipelineMode", "DiscoveryPipelineMode as PipelineMode"
+)
+WRONG_ALIAS: str = DISCOVERY_TYPES.replace("DiscoveryRefType as RefType", "DiscoveryRefType as Ref")
 STAYS: str = '[[stays]]\npath = "executor"\nrule = 1\nnote = "Rule 1: runs plans."\n'
 REVIEWED: str = (
     '[[handled_native_errors]]\nlocation = "compiler/keys.py::digest"\nnote = "No key."\n'
@@ -86,6 +96,12 @@ REVIEWED: str = (
             expected_messages=(
                 "1 movable Python lines remain; 1 pure native re-export files (6 lines)",
             ),
+        ),
+        PythonBoundaryTestCase(
+            description="a listed native alias in its own module is a pure re-export",
+            source_files={"compiler/discovery/types.py": DISCOVERY_TYPES},
+            policy="remaining_lines = 0\n",
+            expected_messages=("1 pure native re-export files (4 lines)",),
         ),
         PythonBoundaryTestCase(
             description="staying modules are not counted",
@@ -173,6 +189,24 @@ def test_given_policy_matching_source_when_checking_then_passes(
             source_files={"compiler/models.py": RENAMED_IMPORT},
             policy="remaining_lines = 0\n",
             expected_messages=("Movable Python grew to 6 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a re-export module with an unlisted native alias counts",
+            source_files={"compiler/discovery/types.py": UNLISTED_ALIAS},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a listed native alias in another module counts",
+            source_files={"compiler/sql_analysis/types.py": DISCOVERY_TYPES},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="a listed native name under another alias counts",
+            source_files={"compiler/discovery/types.py": WRONG_ALIAS},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
         ),
         PythonBoundaryTestCase(
             description="a re-export module whose __all__ lists another name counts",

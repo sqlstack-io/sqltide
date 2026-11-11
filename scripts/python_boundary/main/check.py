@@ -9,7 +9,7 @@ from pathlib import Path
 from scripts.python_boundary._helpers.lines import count_lines, tracked_python_files
 from scripts.python_boundary._helpers.native_errors import find_native_error_handlers
 from scripts.python_boundary._helpers.policy import get_policy_errors, read_boundary_policy
-from scripts.python_boundary._helpers.reexports import is_pure_reexport
+from scripts.python_boundary._helpers.reexports import split_reexports
 from scripts.python_boundary.constants import POLICY_FILE, SOURCE_ROOT
 from scripts.python_boundary.models import BoundaryPolicy, NativeErrorHandler
 
@@ -23,8 +23,8 @@ def run_python_boundary_check(argv: list[str] | None = None) -> int:
     policy: BoundaryPolicy = read_boundary_policy(root / POLICY_FILE)
     errors: list[str] = list(get_policy_errors(root=root, policy=policy))
     candidates: tuple[Path, ...] = tracked_python_files(root=root, stays=policy.stays)
-    reexports: tuple[Path, ...] = tuple(path for path in candidates if is_pure_reexport(path))
-    tracked: tuple[Path, ...] = tuple(path for path in candidates if path not in reexports)
+    source: Path = root / SOURCE_ROOT
+    reexports, tracked = split_reexports(source=source, candidates=candidates)
     remaining: int = count_lines(tracked)
     if remaining > policy.remaining_lines:
         errors.append(
@@ -39,9 +39,7 @@ def run_python_boundary_check(argv: list[str] | None = None) -> int:
     reviewed: frozenset[str] = frozenset(
         handler.location for handler in policy.handled_native_errors
     )
-    found: tuple[NativeErrorHandler, ...] = find_native_error_handlers(
-        source=root / SOURCE_ROOT, paths=tracked
-    )
+    found: tuple[NativeErrorHandler, ...] = find_native_error_handlers(source=source, paths=tracked)
     for handler in found:
         if handler.location not in reviewed:
             errors.append(

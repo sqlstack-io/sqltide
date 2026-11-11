@@ -5,19 +5,33 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from scripts.python_boundary.constants import EXPORTS_NAME, NATIVE_MODULE
+from scripts.python_boundary.constants import EXPORTS_NAME, NATIVE_ALIASES, NATIVE_MODULE
 
 
-def is_pure_reexport(path: Path) -> bool:
-    """Whether `path` is only native `X as X` imports, a docstring and a matching `__all__`."""
+def split_reexports(
+    *, source: Path, candidates: tuple[Path, ...]
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """The candidates that only re-export native names, and the rest."""
+    reexports: tuple[Path, ...] = tuple(
+        path
+        for path in candidates
+        if is_pure_reexport(path=path, module=path.relative_to(source).as_posix())
+    )
+    return reexports, tuple(path for path in candidates if path not in reexports)
+
+
+def is_pure_reexport(*, path: Path, module: str) -> bool:
+    """Whether `path` holds only native imports allowed for `module` and a matching `__all__`."""
     body: list[ast.stmt] = ast.parse(path.read_text(encoding="utf-8")).body
     if body and _is_docstring(body[0]):
         body = body[1:]
     imported: list[str] = []
     exports: list[ast.stmt] = []
     for statement in body:
-        if isinstance(statement, ast.ImportFrom) and _is_native_reexport(statement):
-            imported.extend(alias.name for alias in statement.names)
+        if isinstance(statement, ast.ImportFrom) and _is_native_reexport(
+            statement=statement, module=module
+        ):
+            imported.extend(alias.asname or alias.name for alias in statement.names)
         elif _assigns_exports(statement):
             exports.append(statement)
         else:
@@ -35,11 +49,14 @@ def _is_docstring(statement: ast.stmt) -> bool:
     )
 
 
-def _is_native_reexport(statement: ast.ImportFrom) -> bool:
+def _is_native_reexport(*, statement: ast.ImportFrom, module: str) -> bool:
     return (
         statement.module == NATIVE_MODULE
         and statement.level == 0
-        and all(alias.asname == alias.name for alias in statement.names)
+        and all(
+            alias.asname == alias.name or NATIVE_ALIASES.get(alias.name) == (alias.asname, module)
+            for alias in statement.names
+        )
     )
 
 
