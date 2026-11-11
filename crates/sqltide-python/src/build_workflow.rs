@@ -232,6 +232,13 @@ fn mixed_preparation<'py>(
         DIRECT,
         json_loads(py, &direct.getattr("workflow")?.getattr("plan_json")?)?,
     )?;
+    // Both phases read the same target, so the direct phase's list stands for the whole plan.
+    payload.set_item(
+        "consumer_group_warnings",
+        payload.get_item(DIRECT)?.map_or(Ok(None), |direct| {
+            direct.get_item("consumer_group_warnings").map(Some)
+        })?,
+    )?;
     let plan_json: String = json_dumps(payload.as_any(), Some(2), false)?;
     let mut requirements: Vec<Value<'py>> = items(&virtual_.getattr("protection_requirements")?)?;
     requirements.extend(items(&direct.getattr("protection_requirements")?)?);
@@ -300,7 +307,22 @@ fn prepare_direct<'py>(
             ("row_error_policy_changes", policy_changes.clone()),
         ],
     )?;
-    let plan_json: Value<'py> = native(
+    let drift_warnings = crate::plan_warnings::consumer_group_warning_items(
+        analysis,
+        &preview.getattr("warehouse_snapshot")?.getattr("catalog")?,
+        &preview.getattr("database")?,
+    )?;
+    let with_warnings = |plan_json: Value<'py>| -> PyResult<Value<'py>> {
+        Ok(PyString::new(
+            py,
+            &crate::plan_warnings::with_consumer_group_warnings_json(
+                &plan_json.extract::<String>()?,
+                &drift_warnings,
+            )?,
+        )
+        .into_any())
+    };
+    let plan_json: Value<'py> = with_warnings(native(
         py,
         "render_direct_plan_json",
         &[
@@ -308,7 +330,7 @@ fn prepare_direct<'py>(
             ("adapter_name", adapter_name.clone()),
             ("row_error_policy_changes", policy_changes.clone()),
         ],
-    )?;
+    )?)?;
     let mut workflow: Value<'py> = native(
         py,
         "assemble_direct_build_workflow",
@@ -320,7 +342,7 @@ fn prepare_direct<'py>(
         ],
     )?;
     if truthy(&workflow, "recreated_sources")? {
-        let plan_json: Value<'py> = native(
+        let plan_json: Value<'py> = with_warnings(native(
             py,
             "render_direct_plan_json",
             &[
@@ -329,7 +351,7 @@ fn prepare_direct<'py>(
                 ("source_recreations", workflow.getattr("recreated_sources")?),
                 ("row_error_policy_changes", policy_changes.clone()),
             ],
-        )?;
+        )?)?;
         let template: Value<'py> =
             replace(&workflow.getattr("template")?, &[("plan_json", plan_json)])?;
         workflow = replace(&workflow, &[("template", template)])?;
@@ -467,6 +489,14 @@ fn prepare_virtual<'py>(
             ),
             ("row_error_policy_changes", policy_changes),
         ],
+    )?;
+    payload.set_item(
+        "consumer_group_warnings",
+        crate::plan_warnings::consumer_group_warning_items(
+            analysis,
+            &preview.getattr("target_catalog")?,
+            &preview.getattr("database")?,
+        )?,
     )?;
     let plan_json: String = json_dumps(&payload, Some(2), false)? + "\n";
     let workflow: Value<'py> = native(

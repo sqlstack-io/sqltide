@@ -1102,6 +1102,10 @@ impl<'py> Compiler<'py> {
                     "allowed_cross_pipeline_references",
                     inputs.getattr("allowed_cross_pipeline_references")?,
                 ),
+                (
+                    "consumer_group_identity",
+                    inputs.getattr("consumer_group_identity")?,
+                ),
             ],
         )?;
         self.validate_relation_names(&project)?;

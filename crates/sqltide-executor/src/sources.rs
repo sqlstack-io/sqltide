@@ -540,6 +540,55 @@ fn settings_drift(resource: &Resource, relation: &Relation) -> Vec<String> {
         .collect()
 }
 
+/// A Kafka table consuming as a different consumer group than the project declares.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConsumerGroupDrift {
+    pub table_name: String,
+    pub live_group: String,
+    pub declared_group: String,
+}
+
+impl ConsumerGroupDrift {
+    /// The warning `sqt plan` and the UI show for this drift.
+    #[must_use]
+    pub fn message(&self) -> String {
+        format!(
+            "{} consumes as Kafka consumer group '{}' but the project declares '{}'. Recreating \
+             it would consume as '{}', and the offsets committed for '{}' would not carry over.",
+            self.table_name,
+            self.live_group,
+            self.declared_group,
+            self.declared_group,
+            self.live_group
+        )
+    }
+}
+
+/// The drift of a live Kafka table's consumer group from `declared_group`, scoped to
+/// `database` as ClickHouse consumes it. `None` when they match or the live group is unknown
+/// or masked.
+#[must_use]
+pub fn consumer_group_drift(
+    table_name: &str,
+    declared_group: &str,
+    database: &str,
+    live_settings: &[(String, String)],
+) -> Option<ConsumerGroupDrift> {
+    let declared_group: String = database_scoped_consumer_group(declared_group, database);
+    let live_group: &str = live_settings
+        .iter()
+        .find(|(name, _)| name == GROUP_NAME_SETTING)
+        .map(|(_, value)| unquoted(value))?;
+    if live_group == declared_group || live_group == MASKED_SETTING_VALUE {
+        return None;
+    }
+    Some(ConsumerGroupDrift {
+        table_name: table_name.to_owned(),
+        live_group: live_group.to_owned(),
+        declared_group,
+    })
+}
+
 fn actual_settings(relation: &Relation) -> HashMap<String, String> {
     relation
         .settings
@@ -556,6 +605,33 @@ fn unquoted(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn consumer_group_drift_names_both_groups_and_ignores_matching_or_masked_groups() {
+        let live = |group: &str| vec![("kafka_group_name".to_owned(), format!("'{group}'"))];
+        assert_eq!(
+            consumer_group_drift("kafka__orders", "g", "shop-dev", &live("g_shop_dev")),
+            None
+        );
+        assert_eq!(
+            consumer_group_drift("kafka__orders", "g", "shop_dev", &live("[HIDDEN]")),
+            None
+        );
+        assert_eq!(
+            consumer_group_drift("kafka__orders", "g", "shop_dev", &[]),
+            None
+        );
+        let drift = consumer_group_drift("kafka__orders", "new", "shop_dev", &live("old_shop_dev"))
+            .unwrap();
+        assert_eq!(drift.live_group, "old_shop_dev");
+        assert_eq!(drift.declared_group, "new_shop_dev");
+        assert_eq!(
+            drift.message(),
+            "kafka__orders consumes as Kafka consumer group 'old_shop_dev' but the project \
+             declares 'new_shop_dev'. Recreating it would consume as 'new_shop_dev', and the \
+             offsets committed for 'old_shop_dev' would not carry over."
+        );
+    }
 
     fn kafka(name: &str, topic: &str) -> Resource {
         Resource::ManagedSource {

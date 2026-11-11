@@ -1685,7 +1685,187 @@ impl ControlStore {
     }
 }
 
+/// What renaming a project would do to its role assignments.
+pub(crate) struct ProjectRenamePreview {
+    /// Assignments, active or revoked, still recorded under the old project name.
+    pub(crate) moving: usize,
+    /// Assignments already recorded under the new project name.
+    pub(crate) existing: usize,
+    /// `user role scope` of each active assignment both names hold.
+    pub(crate) conflicts: Vec<String>,
+}
+
 impl ControlStore {
+    fn project_rename_preview(
+        transaction: &Transaction<'_>,
+        from_project: &str,
+        to_project: &str,
+    ) -> PyResult<ProjectRenamePreview> {
+        let py: Python<'_> = transaction.py();
+        let rows_for = |project: &str| -> PyResult<Vec<(String, String, String, bool)>> {
+            transaction
+                .rows(
+                    &sql::assignments_where(
+                        " WHERE sqltide_project_role_assignments.project_name = :project_name",
+                    ),
+                    &[("project_name", object(py, project)?)],
+                )?
+                .iter()
+                .map(|row| {
+                    Ok((
+                        column(row, "user_id")?.str()?.to_string(),
+                        column(row, "role_name")?.str()?.to_string(),
+                        column(row, "assignment_scope")?.str()?.to_string(),
+                        column(row, "revoked_at")?.is_none(),
+                    ))
+                })
+                .collect()
+        };
+        let moving = rows_for(from_project)?;
+        let existing = rows_for(to_project)?;
+        let mut conflicts: Vec<String> = moving
+            .iter()
+            .filter(|(user, role, scope, active)| {
+                *active
+                    && existing
+                        .iter()
+                        .any(|(other_user, other_role, other_scope, other_active)| {
+                            *other_active
+                                && other_user == user
+                                && other_role == role
+                                && other_scope == scope
+                        })
+            })
+            .map(|(user, role, scope, _)| {
+                let scope: &str = if scope.is_empty() {
+                    "all targets"
+                } else {
+                    scope
+                };
+                format!("user {user} role '{role}' ({scope})")
+            })
+            .collect();
+        conflicts.sort();
+        Ok(ProjectRenamePreview {
+            moving: moving.len(),
+            existing: existing.len(),
+            conflicts,
+        })
+    }
+
+    /// What moving `from_project`'s role assignments to `to_project` would change.
+    pub(crate) fn preview_project_rename(
+        &self,
+        py: Python<'_>,
+        from_project: &str,
+        to_project: &str,
+    ) -> PyResult<ProjectRenamePreview> {
+        self.transaction(py, |transaction| {
+            Self::project_rename_preview(transaction, from_project, to_project)
+        })
+    }
+
+    /// Move every role assignment, active or revoked, from `from_project` to `to_project` in one
+    /// transaction and audit it; the moved assignment ids. Refuses when both names hold the
+    /// same active assignment.
+    pub(crate) fn rename_project(
+        &self,
+        py: Python<'_>,
+        from_project: &str,
+        to_project: &str,
+    ) -> PyResult<Vec<String>> {
+        let now: Any<'_> = now(py)?;
+        let moved: Vec<String> = self.transaction(py, |transaction| {
+            let preview = Self::project_rename_preview(transaction, from_project, to_project)?;
+            if !preview.conflicts.is_empty() {
+                return Err(error(
+                    py,
+                    "AccountConflictError",
+                    format!(
+                        "Project '{to_project}' already holds role assignments that project \
+                         '{from_project}' also holds: {}",
+                        preview.conflicts.join(", ")
+                    ),
+                ));
+            }
+            let ids: Vec<String> = transaction
+                .rows(
+                    &sql::assignments_where(
+                        " WHERE sqltide_project_role_assignments.project_name = :project_name \
+                         ORDER BY sqltide_project_role_assignments.id",
+                    ),
+                    &[("project_name", object(py, from_project)?)],
+                )?
+                .iter()
+                .map(|row| Ok(column(row, "id")?.str()?.to_string()))
+                .collect::<PyResult<_>>()?;
+            if ids.is_empty() {
+                return Ok(ids);
+            }
+            transaction.execute(
+                sql::RENAME_PROJECT_ASSIGNMENTS,
+                &[
+                    ("to_project", object(py, to_project)?),
+                    ("from_project", object(py, from_project)?),
+                ],
+            )?;
+            let details: Bound<'_, PyDict> = PyDict::new(py);
+            details.set_item("fromProjectName", from_project)?;
+            details.set_item("toProjectName", to_project)?;
+            details.set_item("assignmentCount", ids.len())?;
+            self.audit(
+                transaction,
+                "project.renamed",
+                &none(py),
+                &none(py),
+                details,
+                &now,
+            )?;
+            Ok(ids)
+        })?;
+        if !moved.is_empty() {
+            self.invalidate();
+        }
+        Ok(moved)
+    }
+
+    /// Return assignments `rename_project` moved to `to_project` back to `from_project`.
+    pub(crate) fn restore_project_rename(
+        &self,
+        py: Python<'_>,
+        assignment_ids: &[String],
+        from_project: &str,
+        to_project: &str,
+    ) -> PyResult<()> {
+        let now: Any<'_> = now(py)?;
+        self.transaction(py, |transaction| {
+            for id in assignment_ids {
+                transaction.execute(
+                    sql::MOVE_PROJECT_ASSIGNMENT,
+                    &[
+                        ("to_project", object(py, from_project)?),
+                        ("id", object(py, id)?),
+                        ("from_project", object(py, to_project)?),
+                    ],
+                )?;
+            }
+            let details: Bound<'_, PyDict> = PyDict::new(py);
+            details.set_item("fromProjectName", to_project)?;
+            details.set_item("toProjectName", from_project)?;
+            details.set_item("assignmentCount", assignment_ids.len())?;
+            self.audit(
+                transaction,
+                "project.rename_reverted",
+                &none(py),
+                &none(py),
+                details,
+                &now,
+            )
+        })?;
+        self.invalidate();
+        Ok(())
+    }
+
     /// The identity a competing writer linked, or a real conflict.
     fn provisioned_by_competing_writer<'py>(
         &self,

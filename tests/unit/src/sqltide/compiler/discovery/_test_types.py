@@ -351,6 +351,13 @@ class ProjectProductionTargetTestCase:
 
 
 @dataclass(frozen=True)
+class ProjectConsumerGroupIdentityTestCase:
+    description: str
+    identity_toml: str
+    expected_identity: str | None
+
+
+@dataclass(frozen=True)
 class ModelStepErrorTestCase:
     description: str
     step_class: type

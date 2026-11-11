@@ -962,6 +962,7 @@ fn partitions<'py>(warehouse: Option<Any<'py>>, kafka_lag: &Any<'py>) -> PyResul
 fn source_states<'py>(
     analysis: &Any<'py>,
     connection: &Any<'py>,
+    catalog: &Any<'py>,
     database: &str,
     stats: &Any<'py>,
     extents: &Bound<'py, PyDict>,
@@ -1001,6 +1002,20 @@ fn source_states<'py>(
         }
     }
     let throughputs = throughputs(connection, database, &newest_ages)?;
+    let drifts: Bound<'py, PyDict> = PyDict::new(py);
+    for (source_name, drift) in
+        crate::plan_warnings::consumer_group_drifts(analysis, catalog, database)?
+    {
+        drifts.set_item(
+            source_name,
+            py_kwargs!(py;
+                tableName = &drift.table_name,
+                liveGroup = &drift.live_group,
+                declaredGroup = &drift.declared_group,
+                message = drift.message(),
+            )?,
+        )?;
+    }
     let states: Bound<'py, PyDict> = PyDict::new(py);
     for item in inputs {
         let throughput = get(throughputs.as_any(), &item.relation_name)?;
@@ -1016,6 +1031,7 @@ fn source_states<'py>(
             throughput = &throughput,
             rowsPerSecond = rows_per_second(&throughput)?,
             partitions = partitions(warehouse.get_item(&item.relation_name)?, &item.kafka_lag)?,
+            consumerGroupDrift = drifts.get_item(item.source.getattr("key")?.getattr("name")?)?,
         )?;
         states.set_item(item.source.getattr("key")?.getattr("name")?, state)?;
     }
@@ -1103,7 +1119,7 @@ pub(crate) fn build_state_payload<'py>(
         capturedAt = &captured,
         warehouseHealth = warehouse_health_payload(&health, &captured, adapter_name, &database_value)?,
         models = model_states(&analysis, &catalog, &baselines, &stats, &extents, &captured_at, &activity)?,
-        sources = source_states(&analysis, &connection, &database, &stats, &extents, &captured_at, &reader, &warehouse)?,
+        sources = source_states(&analysis, &connection, &catalog, &database, &stats, &extents, &captured_at, &reader, &warehouse)?,
     )?
     .into_any())
 }

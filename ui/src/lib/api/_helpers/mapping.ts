@@ -233,7 +233,8 @@ function sourceFromServer(source: Payload, live: Payload): Source {
 			rows: (live.rows as number) ?? 0,
 			partitions: ((live.partitions ?? []) as Payload[]).map(partitionFromServer),
 			throughput: buckets,
-			throughputWindowSeconds: (throughput?.windowSeconds as number | null) ?? null
+			throughputWindowSeconds: (throughput?.windowSeconds as number | null) ?? null,
+			consumerGroupDrift: (live.consumerGroupDrift as Source['live']['consumerGroupDrift']) ?? null
 		}
 	};
 }

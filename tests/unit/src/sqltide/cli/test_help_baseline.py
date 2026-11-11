@@ -13,7 +13,7 @@ from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
         CliHelpBaselineTestCase(
             description="captures root help",
             argv=("--help",),
-            expected_sha256="b079994e78490e17030dd3f51fe5ec6b0549faab2c0f7030c5c9321c0c72f4bd",
+            expected_sha256="0f958a0704f3fcd2e684d9ac738c547d0785cc4be3aefe90d8291306b78de0ae",
         ),
         CliHelpBaselineTestCase(
             description="captures admin help",
@@ -104,6 +104,11 @@ from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
             description="captures reconcile help",
             argv=("reconcile", "--help"),
             expected_sha256="fc01e63a3e0a2dff1d689e074284bacae7d43d68fa2043bd6c32ca3f3afb9652",
+        ),
+        CliHelpBaselineTestCase(
+            description="captures rename-project help",
+            argv=("rename-project", "--help"),
+            expected_sha256="e5ed515f1e543aa5a750757a63811df4e532d6bc90c21d6ea7e50da214d80d84",
         ),
         CliHelpBaselineTestCase(
             description="captures janitor help",

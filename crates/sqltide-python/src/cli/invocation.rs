@@ -12,7 +12,7 @@ const DEV_CLI_VARIABLES_ENV_VAR: &str = "SQLTIDE_INTERNAL_CLI_VARS";
 const PROJECT_FILE: &str = "sqltide_project.toml";
 const LEGACY_PROJECT_FILE: &str = "streambuild_project.toml";
 const PIPELINES_DIRECTORY: &str = "pipelines";
-const COMMANDS_REQUIRING_PIPELINES_ROOT: [&str; 13] = [
+const COMMANDS_REQUIRING_PIPELINES_ROOT: [&str; 14] = [
     "dev",
     "discover",
     "compile",
@@ -25,6 +25,7 @@ const COMMANDS_REQUIRING_PIPELINES_ROOT: [&str; 13] = [
     "reset-target",
     "deployment",
     "reconcile",
+    "rename-project",
     "audit",
 ];
 const COMMANDS_WITHOUT_ADAPTER_CONNECTION: [&str; 4] = ["discover", "compile", "lint", "format"];

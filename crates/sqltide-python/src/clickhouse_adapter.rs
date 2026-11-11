@@ -307,6 +307,8 @@ fn realize_clickhouse_source<'py>(request: &Bound<'py, PyAny>) -> PyResult<Value
     let format: String = request.getattr("format")?.extract()?;
     let consumer_group: Option<String> = request.getattr("consumer_group")?.extract()?;
     let project_name: Option<String> = request.getattr("project_name")?.extract()?;
+    let consumer_group_identity: Option<String> =
+        request.getattr("consumer_group_identity")?.extract()?;
     let target_name: Option<String> = request.getattr("target_name")?.extract()?;
     let setting_keys: Vec<String> = request
         .getattr("settings")?
@@ -322,6 +324,7 @@ fn realize_clickhouse_source<'py>(request: &Bound<'py, PyAny>) -> PyResult<Value
         format: &format,
         consumer_group: consumer_group.as_deref(),
         project_name: project_name.as_deref(),
+        consumer_group_identity: consumer_group_identity.as_deref(),
         target_name: target_name.as_deref(),
         setting_keys: setting_keys.iter().map(String::as_str).collect(),
     }) {

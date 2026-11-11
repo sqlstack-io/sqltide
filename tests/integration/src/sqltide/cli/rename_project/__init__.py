@@ -1,0 +1,1 @@
+"""Project rename integration checks."""

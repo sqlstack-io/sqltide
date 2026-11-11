@@ -463,6 +463,7 @@ shapes! {
             coerce = Coerce::Enum("ModelReferenceScope"),
         ),
         allowed_cross_pipeline_references(default = Given::EmptyTuple, coerce = Coerce::Tuple),
+        consumer_group_identity(default = Given::None),
     }
 
     /// Current whole-project compile output consumed by every command.
@@ -484,6 +485,7 @@ shapes! {
             coerce = Coerce::Enum("ModelReferenceScope"),
         ),
         allowed_cross_pipeline_references(default = Given::EmptyTuple, coerce = Coerce::Tuple),
+        consumer_group_identity(default = Given::None),
     }
 }
 

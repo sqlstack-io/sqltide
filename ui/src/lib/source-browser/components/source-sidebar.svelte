@@ -24,6 +24,17 @@
 		{#if source.live.throughputWindowSeconds}
 			<div class="text-[var(--sb-text-faint)] pb-2 font-mono text-[10px]">last {formatDuration(source.live.throughputWindowSeconds)}</div>
 		{/if}
+		{#if source.live.consumerGroupDrift}
+			<div
+				class="mb-2 border px-2.5 py-2 font-mono text-[11px]"
+				style:border-color="color-mix(in srgb, var(--sb-warning) 45%, var(--border))"
+				style:background="color-mix(in srgb, var(--sb-warning) 10%, var(--background))"
+				data-testid="consumer-group-drift"
+			>
+				<div class="font-semibold" style:color="var(--sb-warning)">Consumer group drift</div>
+				<div class="mt-0.5 text-foreground">{source.live.consumerGroupDrift.message}</div>
+			</div>
+		{/if}
 		<FactRow label="Rate" value={formatRate(source.live.rowsPerSecond)} />
 		<FactRow label="Kafka lag" value={source.live.kafkaLagMessages === null ? 'unavailable' : `${formatCompact(source.live.kafkaLagMessages)} messages`} />
 		<FactRow label="Last arrival" value={source.live.lastArrivalSeconds === null ? 'unavailable' : `${formatDuration(source.live.lastArrivalSeconds)} ago`} />

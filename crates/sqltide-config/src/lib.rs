@@ -7,6 +7,7 @@ pub mod errors;
 pub mod models;
 pub mod pipelines;
 pub mod project;
+pub mod project_rename;
 pub mod toml;
 pub mod yaml;
 

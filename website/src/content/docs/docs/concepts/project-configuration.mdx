@@ -64,6 +64,50 @@ production = true
 This immutable classification adds the exact `PRODUCTION` challenge to target reset. It is not
 accepted in `sqltide_local.toml`, so a local override cannot weaken or add production status.
 
+## Project identity
+
+`name` identifies the project in three places that outlive a single run:
+
+- the default Kafka consumer group of every managed source without its own `consumer_group`,
+  `streambuild_<name>_<target>_<source>` plus the target database suffix
+- the manifest history `sqt destroy` uses to find relations recorded by earlier builds
+- the project role assignments the UI grants to users
+
+Set `consumer_group_identity` to use another value in place of `name` in default consumer groups:
+
+```toml
+name = "storefront"
+consumer_group_identity = "shop"
+```
+
+It must be a non-empty literal string. A source's own `consumer_group` still takes precedence.
+When the key is unset, default consumer groups use `name`, exactly as before.
+
+### Renaming a project
+
+Rename a project with [`sqt rename-project`](/docs/cli/rename-project/) rather than by editing
+`name`. The command:
+
+- keeps every Kafka consumer group: when a managed source uses the default group, it sets
+  `consumer_group_identity` to the old name, so sources resume from their committed offsets
+- copies the target's manifest history to the new name, so `sqt destroy` still finds relations
+  recorded before the rename
+- moves project role assignments in the control store to the new name
+- edits `name` in `sqltide_project.toml`, keeping comments and formatting
+
+A project with several targets is renamed once and then completed on each other target with
+`sqt rename-project NEW_NAME --from OLD_NAME --target <target>`, usually on that target's own
+host. See [projects with several targets](/docs/cli/rename-project/#projects-with-several-targets).
+
+Editing `name` by hand changes the default consumer group of every managed source that has no
+`consumer_group`. `sqt plan` and the source health panel in the UI then warn that the live Kafka
+table consumes as a different group than the project declares, and that its committed offsets
+would not carry over if the table were recreated. The warning does not block a plan or build.
+
+Renaming the project directory is a separate change. Run history, invocations, and audit and check
+status are keyed by the directory name, not by `name`, so a new directory name starts them afresh.
+No command migrates that history.
+
 Commands that connect to ClickHouse require `host`, `port`, `username`, and `password` after all
 configuration layers are merged. SQLTide supplies no connection defaults. Use `password = ""`
 when the ClickHouse account intentionally has an empty password.

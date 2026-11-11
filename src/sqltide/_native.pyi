@@ -851,6 +851,7 @@ class CompileProjectInputs:
     target_name: str | None = None
     model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
     allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+    consumer_group_identity: str | None = None
 
 @final
 @dataclass(frozen=True)
@@ -869,6 +870,7 @@ class CompiledProject:
     destruction_relation_drop_size_limit: int | None = None
     model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
     allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+    consumer_group_identity: str | None = None
 
 @final
 @dataclass(frozen=True)
@@ -2412,6 +2414,7 @@ class CliCommand(StrEnum):
     DEPLOYMENT = "deployment"
     AUDIT = "audit"
     RECONCILE = "reconcile"
+    RENAME_PROJECT = "rename-project"
     JANITOR = "janitor"
     DOCTOR = "doctor"
     REPAIR = "repair"
@@ -3414,6 +3417,7 @@ class AuthoredProjectConfig:
     build: BuildConfig = ...
     ui: UiConfig = ...
     dependencies: ProjectDependencies = ...
+    consumer_group_identity: str | None = None
 
 @final
 @dataclass(frozen=True, repr=False)
@@ -3451,6 +3455,7 @@ class EffectiveProjectConfiguration:
     ui: UiConfig = ...
     production_target: bool = False
     dependencies: ProjectDependencies = ...
+    consumer_group_identity: str | None = None
 
 @final
 @dataclass(frozen=True, repr=False)
@@ -3754,6 +3759,7 @@ class AdapterManagedSourceRealizationRequest:
     ttl: str | None = None
     settings: tuple[tuple[str, str], ...] = ()
     naming_macro_fingerprint: str | None = None
+    consumer_group_identity: str | None = None
 
 @final
 @dataclass(frozen=True)
@@ -7168,6 +7174,20 @@ def run_deployment_promotion(
     deployment_id: str | None,
     json_output: bool,
     client: AdapterConnection,
+) -> int: ...
+def run_rename_project(
+    *,
+    pipelines_root: Path,
+    project_dir: Path,
+    new_name: str,
+    database: str | None,
+    control_store_url: str | None,
+    apply: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
+    from_name: str | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> int: ...
 def run_reconcile(
     *,

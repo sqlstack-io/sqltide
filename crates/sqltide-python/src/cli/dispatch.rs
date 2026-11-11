@@ -538,6 +538,30 @@ pub(crate) fn dispatch_cli_command<'py>(
                 ("adapter_profile", adapter_profile),
             ],
         ),
+        "rename-project" => {
+            let project_dir: Bound<'py, PyAny> = project_dir(py, invocation)?;
+            build(
+                py,
+                NATIVE,
+                "run_rename_project",
+                vec![
+                    ("pipelines_root", require_pipelines_root(py, invocation)?),
+                    ("project_dir", project_dir),
+                    ("new_name", args.getattr("new_name")?),
+                    ("from_name", getattr_none(args, "from_name")?),
+                    ("environment", invocation.connection.environment.clone()),
+                    ("database", database),
+                    (
+                        "control_store_url",
+                        getattr_none(args, "control_store_url")?,
+                    ),
+                    ("apply", boolean(py, flag(args, "apply")?)),
+                    ("client", client),
+                    ("loaded_project", loaded_project),
+                    ("adapter_profile", adapter_profile),
+                ],
+            )
+        }
         "doctor" => call_handler(
             py,
             handlers,
