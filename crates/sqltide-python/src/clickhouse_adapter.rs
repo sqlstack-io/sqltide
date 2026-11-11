@@ -22,6 +22,7 @@ const DRIVER_HTTP_LOGGER: &str = "clickhouse_connect.driver.httpclient";
 const DRIVER_HTTP_FAILURE_LOG: &str = "Unexpected Http Driver Exception";
 const REFUSED_REASON: &str = "connection refused";
 const UNRESOLVED_REASON: &str = "host not found";
+const TEMPORARY_DNS_REASON: &str = "temporary DNS failure";
 const DEAD_LETTERS_TABLE: &str = "_sqltide_dead_letters";
 const MATERIALIZED_VIEW_NAME_PREFIX: &str = "mv__";
 const DEAD_LETTERS_VIEW_SUFFIX: &str = "__dead_letters";
@@ -57,7 +58,7 @@ fn translate_clickhouse_driver_error<'py>(error: &Bound<'py, PyAny>) -> PyResult
     let text: String = message.to_string_lossy().into_owned();
     // A refused or unresolved connection never timed out, so it is checked before the timeout
     // markers, which the request URL in the message can contain as a setting name.
-    let unreachable: Option<&str> = unreachable_host_reason(error)?;
+    let unreachable: Option<Unreachable> = unreachable_host(error)?;
     let class: &str = if unreachable.is_some() {
         "AdapterUnavailableError"
     } else if TIMEOUT_ERROR_MARKERS
@@ -78,29 +79,54 @@ fn translate_clickhouse_driver_error<'py>(error: &Bound<'py, PyAny>) -> PyResult
         .import(ADAPTER_EXCEPTIONS)?
         .getattr(class)?
         .call1((message,))?;
-    if let Some(reason) = unreachable {
+    if let Some(unreachable) = unreachable {
         // What the driver's own log line used to show, for the operator-facing message.
         translated.setattr("endpoint", connection_endpoint(&text))?;
-        translated.setattr("reason", reason)?;
+        translated.setattr("reason", unreachable.reason)?;
+        translated.setattr("through_proxy", unreachable.through_proxy)?;
     }
     Ok(translated)
 }
 
-/// `refused` or `unresolved` reason when the driver error was caused by a refused connection or
-/// an unresolvable host, as the HTTP client chains them under the driver's own error. Like a
-/// traceback, it follows `__context__` only when `__cause__` is unset and the context is not
-/// suppressed.
-fn unreachable_host_reason(error: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+/// Why a connection could not be opened, and whether the unreachable endpoint is a proxy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct Unreachable {
+    reason: &'static str,
+    /// The failed pool is a configured proxy (urllib3 `ProxyError` in the chain).
+    through_proxy: bool,
+}
+
+/// The refused connection or unresolvable host that caused the driver error, as the HTTP
+/// client chains them under the driver's own error. Like a traceback, it follows `__context__`
+/// only when `__cause__` is unset and the context is not suppressed. A `socket.gaierror` with
+/// errno `EAI_AGAIN` is a temporary DNS failure; any other is a host that was not found.
+fn unreachable_host(error: &Bound<'_, PyAny>) -> PyResult<Option<Unreachable>> {
     let py: Python<'_> = error.py();
     let refused: Value<'_> = py.import("builtins")?.getattr("ConnectionRefusedError")?;
-    let unresolved: Value<'_> = py.import("socket")?.getattr("gaierror")?;
+    let socket: Bound<'_, PyModule> = py.import("socket")?;
+    let unresolved: Value<'_> = socket.getattr("gaierror")?;
+    let temporary: Value<'_> = socket.getattr("EAI_AGAIN")?;
+    let proxy: Value<'_> = py.import("urllib3.exceptions")?.getattr("ProxyError")?;
+    let mut through_proxy: bool = false;
     let mut current: Value<'_> = error.clone();
     for _ in 0..MAX_CAUSE_DEPTH {
-        if current.is_instance(&refused)? {
-            return Ok(Some(REFUSED_REASON));
-        }
-        if current.is_instance(&unresolved)? {
-            return Ok(Some(UNRESOLVED_REASON));
+        through_proxy |= current.is_instance(&proxy)?;
+        let reason: Option<&'static str> = if current.is_instance(&refused)? {
+            Some(REFUSED_REASON)
+        } else if current.is_instance(&unresolved)? {
+            Some(if current.getattr("errno")?.eq(&temporary)? {
+                TEMPORARY_DNS_REASON
+            } else {
+                UNRESOLVED_REASON
+            })
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Ok(Some(Unreachable {
+                reason,
+                through_proxy,
+            }));
         }
         let cause: Value<'_> = current.getattr("__cause__")?;
         current = if !cause.is_none() {
@@ -118,12 +144,20 @@ fn unreachable_host_reason(error: &Bound<'_, PyAny>) -> PyResult<Option<&'static
 }
 
 /// `host:port` of the HTTP connection pool a driver message names, as urllib3 renders it:
-/// `HTTPConnectionPool(host='db.example.com', port=8123)`.
+/// `HTTPConnectionPool(host='db.example.com', port=8123)`. An IPv6 host is bracketed.
 fn connection_endpoint(message: &str) -> Option<String> {
     let rest: &str = &message[message.find("host='")? + "host='".len()..];
     let (host, rest) = rest.split_once("', port=")?;
     let digits: usize = rest.find(|character: char| !character.is_ascii_digit())?;
-    (!host.is_empty() && digits > 0).then(|| format!("{host}:{}", &rest[..digits]))
+    if host.is_empty() || digits == 0 {
+        return None;
+    }
+    let port: &str = &rest[..digits];
+    Some(if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    })
 }
 
 /// Logging filter on clickhouse_connect's HTTP client logger that demotes its generic
@@ -146,7 +180,7 @@ impl UnreachableHostLogFilter {
             return Ok(true);
         }
         let handled: Value<'_> = py.import("sys")?.call_method0("exc_info")?.get_item(1)?;
-        if handled.is_none() || unreachable_host_reason(&handled)?.is_none() {
+        if handled.is_none() || unreachable_host(&handled)?.is_none() {
             return Ok(true);
         }
         let logging: Bound<'_, PyModule> = py.import("logging")?;

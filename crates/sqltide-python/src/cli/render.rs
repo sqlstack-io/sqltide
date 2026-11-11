@@ -370,8 +370,15 @@ pub(crate) fn render_expected_warehouse_error(
                 Ok(Some(value.str()?.to_string()))
             }
         };
-        let endpoint: String =
-            detail("endpoint")?.map_or_else(String::new, |endpoint| format!(" at {endpoint}"));
+        let through_proxy: bool = error
+            .getattr("through_proxy")
+            .map_or(Ok(false), |value| value.is_truthy())?;
+        let endpoint: String = match (detail("endpoint")?, through_proxy) {
+            (Some(endpoint), true) => format!(" through proxy {endpoint}"),
+            (Some(endpoint), false) => format!(" at {endpoint}"),
+            (None, true) => " through a proxy".to_owned(),
+            (None, false) => String::new(),
+        };
         let reason: String = detail("reason")?.unwrap_or_else(|| {
             "the connection was refused or the host could not be resolved".to_owned()
         });

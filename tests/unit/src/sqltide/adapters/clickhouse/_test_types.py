@@ -507,6 +507,7 @@ class UnreachableHostDetailsTestCase:
     driver_error: Exception
     expected_endpoint: str | None
     expected_reason: str
+    expected_through_proxy: bool
 
 
 @dataclass(frozen=True)

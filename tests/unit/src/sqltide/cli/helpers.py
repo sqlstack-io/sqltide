@@ -6,6 +6,7 @@ from pathlib import Path
 from textwrap import dedent
 
 from clickhouse_connect.driver.exceptions import OperationalError
+from urllib3.exceptions import ProxyError
 
 from sqltide._native import (
     render_clickhouse_replay_coverage_query,
@@ -468,6 +469,21 @@ def refused_driver_error() -> OperationalError:
         "executing HTTP request attempt 1 (http://localhost:8123)"
     )
     error.__cause__ = ConnectionRefusedError(111, "Connection refused")
+    return error
+
+
+def proxy_refused_driver_error() -> OperationalError:
+    """The driver error for a configured proxy that refused the connection, chained as urllib3
+    wraps it in a `ProxyError`."""
+    proxy_error: ProxyError = ProxyError(
+        "Unable to connect to proxy", ConnectionRefusedError(111, "Connection refused")
+    )
+    proxy_error.__cause__ = ConnectionRefusedError(111, "Connection refused")
+    error: OperationalError = OperationalError(
+        "Error HTTPConnectionPool(host='proxy.example.com', port=3128): Max retries exceeded "
+        "executing HTTP request attempt 1 (http://warehouse.example.com:8123)"
+    )
+    error.__cause__ = proxy_error
     return error
 
 

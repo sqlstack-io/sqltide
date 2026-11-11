@@ -40,6 +40,8 @@ class AdapterUnavailableError(AdapterWarehouseError):
     """The `host:port` the connection was attempted to, when the adapter knows it."""
     reason: str | None = None
     """A short cause such as `connection refused` or `host not found`."""
+    through_proxy: bool = False
+    """Whether `endpoint` is a configured proxy rather than ClickHouse itself."""
 
 
 class AdapterTimeoutError(AdapterWarehouseError):

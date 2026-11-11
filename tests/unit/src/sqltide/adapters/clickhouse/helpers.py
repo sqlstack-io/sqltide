@@ -3,6 +3,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import cast
 
 from clickhouse_connect.driver.exceptions import OperationalError
+from urllib3.exceptions import ProxyError
 
 from sqltide._native import UnreachableHostLogFilter, sql_canonicalize
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -352,6 +353,18 @@ def connection_failure(
     driver_error: OperationalError = OperationalError(message)
     setattr(driver_error, link, transport_error)
     driver_error.__suppress_context__ = suppress_context
+    return driver_error
+
+
+def proxy_failure(message: str, *, cause: BaseException) -> OperationalError:
+    """A driver error for a configured proxy that could not be reached, chained as urllib3 wraps
+    the proxy's connection failure in a `ProxyError`."""
+    transport_error: OSError = OSError("Failed to establish a new connection")
+    transport_error.__cause__ = cause
+    proxy_error: ProxyError = ProxyError("Unable to connect to proxy", transport_error)
+    proxy_error.__context__ = transport_error
+    driver_error: OperationalError = OperationalError(message)
+    driver_error.__cause__ = proxy_error
     return driver_error
 
 
