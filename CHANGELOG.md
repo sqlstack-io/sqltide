@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.16](https://github.com/sqlstack-io/sqltide/compare/v0.65.15...v0.65.16) (2026-11-11)
+
+
+### Refactoring
+
+* define compiler, planner and execution shapes natively ([#371](https://github.com/sqlstack-io/sqltide/issues/371)) ([3f32753](https://github.com/sqlstack-io/sqltide/commit/3f32753433491b93bac3eab7ef9a4d4b64283ba7))
+
 ## [0.65.15](https://github.com/sqlstack-io/sqltide/compare/v0.65.14...v0.65.15) (2026-11-10)
 
 
