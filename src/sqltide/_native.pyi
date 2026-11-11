@@ -709,15 +709,6 @@ class MacroRegistry:
 
 @final
 @dataclass(frozen=True)
-class PipelineNamingContext:
-    name: str
-    source_name: str | None
-    model_names: tuple[str, ...]
-    relative_directory: str
-    mode: PipelineMode
-
-@final
-@dataclass(frozen=True)
 class ObjectKey:
     database: str | None
     object_type: DesiredObjectType | str

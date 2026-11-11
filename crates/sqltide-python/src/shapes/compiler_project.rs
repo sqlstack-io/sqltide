@@ -527,8 +527,6 @@ shapes! {
         expansions(default = Given::Factory(factory::<PyDict>), compare = false, repr = false),
     }
 
-    /// Immutable authored pipeline metadata supplied to a naming macro.
-    PipelineNamingContext { name, source_name, model_names, relative_directory, mode }
 }
 
 shapes! {
@@ -1338,7 +1336,6 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add_class::<CompiledProject>(module)?;
     add_class::<LoadedMacro>(module)?;
     add_class::<MacroRegistry>(module)?;
-    add_class::<PipelineNamingContext>(module)?;
     add_class::<CompilationTimings>(module)?;
     add_class::<RealizedProject>(module)?;
     add_class::<CompileAnalysis>(module)?;
