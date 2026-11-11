@@ -1,14 +1,26 @@
 """Behavior tests for the authored model step specifications."""
 
+import copy
+import operator
 import re
+from dataclasses import fields
 
 import pytest
 
 from sqltide.compiler.discovery.exceptions import ProjectSpecError
-from sqltide.compiler.discovery.models import KafkaSettings, TransformStep, ViewStep
+from sqltide.compiler.discovery.models import (
+    KafkaLandingStep,
+    KafkaSettings,
+    Pipeline,
+    RawConnectionConfig,
+    TransformStep,
+    ViewStep,
+)
 from tests.unit.src.sqltide.compiler.discovery._test_types import (
     KafkaSettingsReprTestCase,
     ModelStepErrorTestCase,
+    ReplaceTestCase,
+    ShallowCopyTestCase,
 )
 
 QUERY_OR_FILE_MESSAGE: str = "Exactly one of 'query' or 'sql_file' must be provided"
@@ -115,3 +127,106 @@ def test_given_kafka_settings_when_rendering_repr_then_no_field_value_is_shown(
 
     assert re.fullmatch(test_case.expected_repr_pattern, rendered) is not None
     assert not any(value in rendered for value in test_case.expected_hidden_values)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ShallowCopyTestCase(
+            description="connection values keep their frozen configuration pairs",
+            instance=RawConnectionConfig(
+                values=(
+                    ("host", "warehouse.example.com"),
+                    ("settings", {"max_threads": [1, 2]}),
+                )
+            ),
+            expected_type=RawConnectionConfig,
+        ),
+        ShallowCopyTestCase(
+            description="a transform keeps its settings mapping and ORDER BY tuple",
+            instance=TransformStep(
+                name="orders_enriched",
+                source="orders",
+                engine="MergeTree()",
+                order_by=["order_id"],
+                query="SELECT 1 AS order_id",
+                settings={"max_threads": "4"},
+            ),
+            expected_type=TransformStep,
+        ),
+        ShallowCopyTestCase(
+            description="a pipeline keeps its transforms tuple",
+            instance=Pipeline(
+                name="orders",
+                source=KafkaLandingStep(
+                    name="orders",
+                    kafka=KafkaSettings(broker_list="kafka:9092", topic="source.orders"),
+                ),
+                transforms=[
+                    TransformStep(
+                        name="orders_enriched",
+                        source="orders",
+                        engine="MergeTree()",
+                        order_by=("order_id",),
+                        query="SELECT 1 AS order_id",
+                    )
+                ],
+            ),
+            expected_type=Pipeline,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_authored_model_when_shallow_copying_then_the_copy_shares_every_field(
+    test_case: ShallowCopyTestCase,
+) -> None:
+    copied: object = copy.copy(test_case.instance)
+
+    assert type(copied) is test_case.expected_type
+    assert copied == test_case.instance
+    assert all(
+        getattr(copied, field.name) is getattr(test_case.instance, field.name)
+        for field in fields(test_case.instance)
+    )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ReplaceTestCase(
+            description="a transform coerces its replaced ORDER BY and settings again",
+            instance=TransformStep(
+                name="orders_enriched",
+                source="orders",
+                engine="MergeTree()",
+                order_by=("order_id",),
+                query="SELECT 1 AS order_id",
+            ),
+            changes={"order_by": ["customer_id"], "settings": {"max_threads": "8"}},
+            expected_instance=TransformStep(
+                name="orders_enriched",
+                source="orders",
+                engine="MergeTree()",
+                order_by=("customer_id",),
+                query="SELECT 1 AS order_id",
+                settings={"max_threads": "8"},
+            ),
+        ),
+        ReplaceTestCase(
+            description="connection values are replaced as frozen configuration pairs",
+            instance=RawConnectionConfig(values=(("host", "warehouse.example.com"),)),
+            changes={"values": (("host", "replica.example.com"), ("port", 9000))},
+            expected_instance=RawConnectionConfig(
+                values=(("host", "replica.example.com"), ("port", 9000))
+            ),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_authored_model_when_replacing_through_copy_protocol_then_fields_are_rebuilt(
+    test_case: ReplaceTestCase,
+) -> None:
+    replaced: object = operator.methodcaller("__replace__", **test_case.changes)(test_case.instance)
+
+    assert type(replaced) is type(test_case.expected_instance)
+    assert replaced == test_case.expected_instance

@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqltide.compiler.discovery.models import KafkaSettings, SourceFreshnessPolicy
 from sqltide.compiler.discovery.types import ModelReferenceScope, PipelineMode
+
+if TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 
 @dataclass(frozen=True)
@@ -360,3 +364,18 @@ class KafkaSettingsReprTestCase:
     kafka_settings: KafkaSettings
     expected_repr_pattern: str
     expected_hidden_values: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ShallowCopyTestCase:
+    description: str
+    instance: "DataclassInstance"
+    expected_type: type
+
+
+@dataclass(frozen=True)
+class ReplaceTestCase:
+    description: str
+    instance: "DataclassInstance"
+    changes: dict[str, object]
+    expected_instance: "DataclassInstance"
