@@ -20,6 +20,7 @@ jobs:
       e2e: ${{ steps.scope.outputs.e2e }}
       browser: ${{ steps.scope.outputs.browser }}
       packaging: ${{ steps.scope.outputs.packaging }}
+      python: ${{ steps.scope.outputs.python }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,16 +38,18 @@ jobs:
               echo "e2e=$2"
               echo "browser=$3"
               echo "packaging=$4"
+              echo "python=$5"
             } >> "${GITHUB_OUTPUT}"
           }
 
           if [[ "${EVENT_NAME}" != "pull_request" ]]; then
-            write_scope true true true true
+            write_scope true true true true true
             exit 0
           fi
 
           focused=true
           packaging=false
+          python=false
           browser=false
           changed=false
           while IFS= read -r -d '' path; do
@@ -54,6 +57,11 @@ jobs:
             case "${path}" in
               Cargo.*|crates/*|pyproject.toml|src/sqltide/_native.pyi|.github/workflows/build-distributions.yml|.github/workflows/publish.yml)
                 packaging=true
+                ;;
+            esac
+            case "${path}" in
+              Cargo.*|crates/*|pyproject.toml|uv.lock|src/*|tests/unit/*|scripts/*|.github/workflows/verify.yml)
+                python=true
                 ;;
             esac
             case "${path}" in
@@ -74,11 +82,11 @@ jobs:
           done < <(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}")
 
           if [[ "${changed}" != "true" || "${focused}" != "true" ]]; then
-            write_scope true true true "${packaging}"
+            write_scope true true true "${packaging}" "${python}"
             exit 0
           fi
 
-          write_scope false false "${browser}" "${packaging}"
+          write_scope false false "${browser}" "${packaging}" "${python}"
 
   checks:
     name: Static, UI, and unit checks
@@ -111,6 +119,37 @@ jobs:
         run: make check-ci ui-verify
       - name: Run unit tests
         run: make test
+
+  python-latest:
+    name: Native shapes on Python 3.14
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UV_PYTHON: "3.14"
+      MATURIN_PEP517_ARGS: --profile dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.3"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Python
+        run: uv python install "${UV_PYTHON}"
+      - name: Install dependencies
+        run: uv sync --locked --all-groups
+      - name: Confirm the interpreter version
+        run: uv run python -c 'import sys; assert sys.version_info[:2] == (3, 14), sys.version'
+      - name: Check the native shape surface
+        run: make check-shape-surface
+      - name: Run unit tests
+        run: uv run pytest tests/unit -q -n auto
 
   integration:
     name: ClickHouse integration tests
@@ -233,13 +272,14 @@ jobs:
   verify:
     name: Verify
     if: always()
-    needs: [changes, checks, integration, e2e, browser, distributions, website]
+    needs: [changes, checks, python-latest, integration, e2e, browser, distributions, website]
     runs-on: ubuntu-latest
     steps:
       - name: Confirm all required verification jobs passed
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
+          PYTHON_LATEST_RESULT: ${{ needs.python-latest.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
@@ -250,8 +290,8 @@ jobs:
             echo "Required classification, static or website checks did not pass" >&2
             exit 1
           fi
-          for result in "${INTEGRATION_RESULT}" "${E2E_RESULT}" "${BROWSER_RESULT}" \
-            "${DISTRIBUTIONS_RESULT}"; do
+          for result in "${PYTHON_LATEST_RESULT}" "${INTEGRATION_RESULT}" "${E2E_RESULT}" \
+            "${BROWSER_RESULT}" "${DISTRIBUTIONS_RESULT}"; do
             if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
               echo "A selected verification suite did not pass: ${result}" >&2
               exit 1
