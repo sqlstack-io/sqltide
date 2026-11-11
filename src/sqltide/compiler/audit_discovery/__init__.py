@@ -1,1 +1,0 @@
-"""SQL audit discovery package."""

@@ -29,6 +29,44 @@ def kafka_lag_watch(ctx):
     \"\"\"Watch consumer lag.\"\"\"
 """
 
+RETRYING_SENSOR_SOURCE: str = """
+from sqltide.events import RunCompleted
+from sqltide.sensors import (
+    DefaultSensorStatus,
+    SensorRetryPolicy,
+    StepPolicy,
+    event_sensor,
+)
+
+
+@event_sensor(
+    on=RunCompleted,
+    targets={"prod"},
+    default_status=DefaultSensorStatus.STOPPED,
+    retry_policy=SensorRetryPolicy(max_attempts=3, backoff_seconds=30),
+    timeout_seconds=12.5,
+)
+def announce_run(ctx):
+    \"\"\"Announce completed runs.\"\"\"
+    ctx.step("notify", lambda: ctx.event.invocation_id, policy=StepPolicy.AT_MOST_ONCE)
+"""
+
+PAIRED_SENSORS_SOURCE: str = """
+from sqltide.events import AuditCompleted
+from sqltide.sensors import SkipReason, event_sensor, polling_sensor
+
+
+@event_sensor(on=AuditCompleted, maximum_event_age_seconds=60)
+def stale_audits(ctx):
+    \"\"\"Café orders: skip stale audit results.\"\"\"
+    return SkipReason("stale")
+
+
+@polling_sensor(minimum_interval_seconds=5)
+def inventory_poll(ctx):
+    return None
+"""
+
 
 def write_project_files(*, project_dir: Path, files: tuple[tuple[str, str], ...]) -> None:
     for relative_path, contents in files:

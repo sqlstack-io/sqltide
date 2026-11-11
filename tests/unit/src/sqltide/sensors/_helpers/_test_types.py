@@ -28,3 +28,10 @@ class SensorRegistryErrorTestCase:
     files: tuple[tuple[str, str], ...]
     expected_error_fragment: str
     expected_location_line: int | None = None
+
+
+@dataclass(frozen=True)
+class SensorFingerprintTestCase:
+    description: str
+    files: tuple[tuple[str, str], ...]
+    expected_fingerprints: tuple[tuple[str, str], ...]

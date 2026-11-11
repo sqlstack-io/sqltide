@@ -7,12 +7,15 @@ import pytest
 from sqltide.sensors.exceptions import SensorError
 from sqltide.sensors.models import SensorRegistry
 from tests.unit.src.sqltide.sensors._helpers._test_types import (
+    SensorFingerprintTestCase,
     SensorRegistryErrorTestCase,
     SensorRegistryLoadTestCase,
 )
 from tests.unit.src.sqltide.sensors._helpers.helpers import (
     LAG_SENSOR_SOURCE,
+    PAIRED_SENSORS_SOURCE,
     QUALITY_SENSOR_SOURCE,
+    RETRYING_SENSOR_SOURCE,
     load_registry,
     write_project_files,
 )
@@ -85,6 +88,69 @@ def test_given_unchanged_sources_when_reloading_then_fingerprints_are_stable(
     assert tuple(sensor.name for sensor in first.ordered()) == test_case.expected_names
     assert tuple(sensor.identity_fingerprint for sensor in first.ordered()) == tuple(
         sensor.identity_fingerprint for sensor in second.ordered()
+    )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        SensorFingerprintTestCase(
+            description="an event sensor hashes its name, path and module source",
+            files=(("sensors/quality.py", QUALITY_SENSOR_SOURCE),),
+            expected_fingerprints=(
+                (
+                    "quality_alerts",
+                    "b0d8ddb99aa4f7c889765b017e571e215902f120a009d2fbc97e1ae6396bb4fb",
+                ),
+            ),
+        ),
+        SensorFingerprintTestCase(
+            description="a polling sensor hashes its name, path and module source",
+            files=(("sensors/lag.py", LAG_SENSOR_SOURCE),),
+            expected_fingerprints=(
+                (
+                    "kafka_lag_watch",
+                    "4618e4883fc4b13596ee900059f4b3b0a5b1ed8e2b2902fdb37c49b6d6453fa9",
+                ),
+            ),
+        ),
+        SensorFingerprintTestCase(
+            description="a nested sensor with retries, steps and a stopped status",
+            files=(("sensors/alerts/retrying.py", RETRYING_SENSOR_SOURCE),),
+            expected_fingerprints=(
+                (
+                    "announce_run",
+                    "f16b2d3541a1050043ccf0021655fe68e8f410e51d809710339787c618eb20c1",
+                ),
+            ),
+        ),
+        SensorFingerprintTestCase(
+            description="sensors sharing a non-ASCII module differ by name",
+            files=(("sensors/paired.py", PAIRED_SENSORS_SOURCE),),
+            expected_fingerprints=(
+                (
+                    "inventory_poll",
+                    "e49e2925abfe4569ae920de86136b12e9678a2ba2e8456d217d65bfd28c2c8c8",
+                ),
+                (
+                    "stale_audits",
+                    "0fadd05926fc89caf1abf02f8c30657ffcc1d954298279d8bc9cb943201bbadb",
+                ),
+            ),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_authored_sensors_when_loading_then_persisted_fingerprints_are_unchanged(
+    test_case: SensorFingerprintTestCase, tmp_path: Path
+) -> None:
+    write_project_files(project_dir=tmp_path, files=test_case.files)
+
+    registry: SensorRegistry = load_registry(project_dir=tmp_path)
+
+    assert (
+        tuple((sensor.name, sensor.identity_fingerprint) for sensor in registry.ordered())
+        == test_case.expected_fingerprints
     )
 
 

@@ -4,45 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqltide.compiler.quality.types import QualityNodeKind
+from sqltide._native import InvocationObservation as InvocationObservation
+from sqltide._native import NodeResultObservation as NodeResultObservation
 from sqltide.events.types import AuditTransition, ObservedCommand
 from sqltide.executor.auditing.types import QualityResultStatus
-
-
-@dataclass(frozen=True)
-class NodeResultObservation:
-    """One persisted quality node result row viewed by the event catalog."""
-
-    result_id: str
-    invocation_id: str
-    node_kind: QualityNodeKind
-    node_name: str
-    binding_key: str
-    target_identity: str
-    trigger: str
-    status: QualityResultStatus
-    severity: str | None
-    failure_count: int
-    completed_at: str
-    scheduled_for: str | None
-    payload_json: str
-    error_message: str | None
-
-
-@dataclass(frozen=True)
-class InvocationObservation:
-    """One persisted terminal invocation row viewed by the event catalog."""
-
-    invocation_id: str
-    command: str
-    mode: str | None
-    outcome: str
-    exit_code: int
-    target_identity: str
-    deployment_id: str | None
-    selected_node_count: int
-    error_message: str | None
-    completed_at: str
 
 
 @dataclass(frozen=True)

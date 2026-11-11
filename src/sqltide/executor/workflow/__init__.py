@@ -1,1 +1,0 @@
-"""Warehouse workflow authority."""

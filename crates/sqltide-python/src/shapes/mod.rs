@@ -20,6 +20,7 @@ mod compiler_analysis;
 mod compiler_project;
 mod executor_ops;
 mod planner_execution;
+mod sensors_dev;
 
 /// The callable a `default_factory` field calls for each new instance.
 pub(crate) type Factory = for<'py> fn(Python<'py>) -> PyResult<Bound<'py, PyAny>>;
@@ -868,6 +869,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     planner_execution::register(module)?;
     executor_ops::register(module)?;
     cli_service::register(module)?;
+    sensors_dev::register(module)?;
     lazy_constants(
         module,
         &[
