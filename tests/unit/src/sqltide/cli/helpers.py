@@ -1,10 +1,12 @@
 import json
+import socket
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from textwrap import dedent
 
 from clickhouse_connect.driver.exceptions import OperationalError
+from urllib3.exceptions import ProxyError
 
 from sqltide._native import (
     render_clickhouse_replay_coverage_query,
@@ -468,3 +470,31 @@ def refused_driver_error() -> OperationalError:
     )
     error.__cause__ = ConnectionRefusedError(111, "Connection refused")
     return error
+
+
+def proxy_refused_driver_error() -> OperationalError:
+    """The driver error for a configured proxy that refused the connection, chained as urllib3
+    wraps it in a `ProxyError`."""
+    proxy_error: ProxyError = ProxyError(
+        "Unable to connect to proxy", ConnectionRefusedError(111, "Connection refused")
+    )
+    proxy_error.__cause__ = ConnectionRefusedError(111, "Connection refused")
+    error: OperationalError = OperationalError(
+        "Error HTTPConnectionPool(host='proxy.example.com', port=3128): Max retries exceeded "
+        "executing HTTP request attempt 1 (http://warehouse.example.com:8123)"
+    )
+    error.__cause__ = proxy_error
+    return error
+
+
+def closed_local_port() -> int:
+    """A loopback TCP port nothing listens on: bound once by the OS, then released."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port: int = probe.getsockname()[1]
+    return port
+
+
+def default_clickhouse_port() -> int:
+    """ClickHouse's default HTTP port, for hosts that never resolve."""
+    return 8123

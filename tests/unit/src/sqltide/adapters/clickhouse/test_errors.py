@@ -1,4 +1,6 @@
+import logging
 import socket
+from typing import cast
 
 import pytest
 from clickhouse_connect.driver.exceptions import DatabaseError, OperationalError
@@ -14,8 +16,14 @@ from sqltide.adapter.exceptions import (
 )
 from tests.unit.src.sqltide.adapters.clickhouse._test_types import (
     DriverErrorTranslationTestCase,
+    DriverLogFilterTestCase,
+    UnreachableHostDetailsTestCase,
 )
-from tests.unit.src.sqltide.adapters.clickhouse.helpers import connection_failure
+from tests.unit.src.sqltide.adapters.clickhouse.helpers import (
+    connection_failure,
+    filter_driver_record,
+    proxy_failure,
+)
 
 _AUTHENTICATION_FAILED_MESSAGE: str = (
     "Code: 516. DB::Exception: Authentication failed. (AUTHENTICATION_FAILED)"
@@ -31,6 +39,15 @@ _TIMEOUT_MESSAGE: str = (
 )
 _CONNECTION_FAILED_MESSAGE: str = (
     "Error HTTPConnectionPool(host='warehouse.example.com', port=8123): Max retries exceeded "
+    "executing HTTP request attempt 1 (http://warehouse.example.com:8123)"
+)
+_DRIVER_FAILURE_LOG: str = "Unexpected Http Driver Exception"
+_IPV6_CONNECTION_FAILED_MESSAGE: str = (
+    "Error HTTPConnectionPool(host='::1', port=8123): Max retries exceeded "
+    "executing HTTP request attempt 1 (http://[::1]:8123)"
+)
+_PROXY_CONNECTION_FAILED_MESSAGE: str = (
+    "Error HTTPConnectionPool(host='proxy.example.com', port=3128): Max retries exceeded "
     "executing HTTP request attempt 1 (http://warehouse.example.com:8123)"
 )
 _REFUSED_WITH_TIMEOUT_SETTING_MESSAGE: str = (
@@ -127,3 +144,187 @@ def test_given_driver_error_when_translating_then_it_returns_the_neutral_equival
 
     assert type(translated) is test_case.expected_error_type
     assert str(translated) == test_case.expected_message
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        UnreachableHostDetailsTestCase(
+            description="names the endpoint and a refused connection",
+            driver_error=connection_failure(
+                _CONNECTION_FAILED_MESSAGE,
+                cause=ConnectionRefusedError(111, "Connection refused"),
+                link="__cause__",
+            ),
+            expected_endpoint="warehouse.example.com:8123",
+            expected_reason="connection refused",
+            expected_through_proxy=False,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="names the endpoint and an unresolvable host",
+            driver_error=connection_failure(
+                _CONNECTION_FAILED_MESSAGE,
+                cause=socket.gaierror(-2, "Name or service not known"),
+                link="__context__",
+            ),
+            expected_endpoint="warehouse.example.com:8123",
+            expected_reason="host not found",
+            expected_through_proxy=False,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="leaves the endpoint unknown when the message names no pool",
+            driver_error=connection_failure(
+                "Error executing HTTP request attempt 1",
+                cause=ConnectionRefusedError(111, "Connection refused"),
+                link="__cause__",
+            ),
+            expected_endpoint=None,
+            expected_reason="connection refused",
+            expected_through_proxy=False,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="brackets an IPv6 endpoint",
+            driver_error=connection_failure(
+                _IPV6_CONNECTION_FAILED_MESSAGE,
+                cause=ConnectionRefusedError(111, "Connection refused"),
+                link="__cause__",
+            ),
+            expected_endpoint="[::1]:8123",
+            expected_reason="connection refused",
+            expected_through_proxy=False,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="marks a refused configured proxy",
+            driver_error=proxy_failure(
+                _PROXY_CONNECTION_FAILED_MESSAGE,
+                cause=ConnectionRefusedError(111, "Connection refused"),
+            ),
+            expected_endpoint="proxy.example.com:3128",
+            expected_reason="connection refused",
+            expected_through_proxy=True,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="reports EAI_AGAIN as a temporary DNS failure",
+            driver_error=connection_failure(
+                _CONNECTION_FAILED_MESSAGE,
+                cause=socket.gaierror(socket.EAI_AGAIN, "Name or service not known"),
+                link="__cause__",
+            ),
+            expected_endpoint="warehouse.example.com:8123",
+            expected_reason="temporary DNS failure",
+            expected_through_proxy=False,
+        ),
+        UnreachableHostDetailsTestCase(
+            description="reports EAI_NONAME as host not found whatever the message says",
+            driver_error=connection_failure(
+                _CONNECTION_FAILED_MESSAGE,
+                cause=socket.gaierror(socket.EAI_NONAME, "Temporary failure in name resolution"),
+                link="__cause__",
+            ),
+            expected_endpoint="warehouse.example.com:8123",
+            expected_reason="host not found",
+            expected_through_proxy=False,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_unreachable_host_when_translating_then_endpoint_and_reason_are_attached(
+    test_case: UnreachableHostDetailsTestCase,
+) -> None:
+    translated: AdapterUnavailableError = cast(
+        AdapterUnavailableError, translate_clickhouse_driver_error(test_case.driver_error)
+    )
+
+    assert (
+        type(translated),
+        translated.endpoint,
+        translated.reason,
+        translated.through_proxy,
+    ) == (
+        AdapterUnavailableError,
+        test_case.expected_endpoint,
+        test_case.expected_reason,
+        test_case.expected_through_proxy,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DriverLogFilterTestCase(
+            description="hides the driver line for a refused connection without debug logging",
+            message=_DRIVER_FAILURE_LOG,
+            handled_errors=(
+                connection_failure(
+                    _CONNECTION_FAILED_MESSAGE,
+                    cause=ConnectionRefusedError(111, "Connection refused"),
+                    link="__cause__",
+                ),
+            ),
+            logger_level=logging.WARNING,
+            expected_kept=False,
+            expected_level="WARNING",
+        ),
+        DriverLogFilterTestCase(
+            description="demotes the driver line for an unresolvable host to debug",
+            message=_DRIVER_FAILURE_LOG,
+            handled_errors=(
+                connection_failure(
+                    _CONNECTION_FAILED_MESSAGE,
+                    cause=socket.gaierror(-2, "Name or service not known"),
+                    link="__cause__",
+                ),
+            ),
+            logger_level=logging.DEBUG,
+            expected_kept=True,
+            expected_level="DEBUG",
+        ),
+        DriverLogFilterTestCase(
+            description="keeps the driver line for other transport failures",
+            message=_DRIVER_FAILURE_LOG,
+            handled_errors=(
+                connection_failure(
+                    _CONNECTION_FAILED_MESSAGE,
+                    cause=ConnectionResetError(104, "Connection reset by peer"),
+                    link="__cause__",
+                ),
+            ),
+            logger_level=logging.WARNING,
+            expected_kept=True,
+            expected_level="WARNING",
+        ),
+        DriverLogFilterTestCase(
+            description="keeps the driver line when no failure is being handled",
+            message=_DRIVER_FAILURE_LOG,
+            handled_errors=(),
+            logger_level=logging.WARNING,
+            expected_kept=True,
+            expected_level="WARNING",
+        ),
+        DriverLogFilterTestCase(
+            description="keeps other driver warnings during a refused connection",
+            message="Unrecognized setting",
+            handled_errors=(
+                connection_failure(
+                    _CONNECTION_FAILED_MESSAGE,
+                    cause=ConnectionRefusedError(111, "Connection refused"),
+                    link="__cause__",
+                ),
+            ),
+            logger_level=logging.WARNING,
+            expected_kept=True,
+            expected_level="WARNING",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_driver_record_when_filtering_then_only_unreachable_failures_are_demoted(
+    test_case: DriverLogFilterTestCase,
+) -> None:
+    kept, level = filter_driver_record(
+        message=test_case.message,
+        handled_errors=test_case.handled_errors,
+        logger_level=test_case.logger_level,
+    )
+
+    assert (kept, level) == (test_case.expected_kept, test_case.expected_level)

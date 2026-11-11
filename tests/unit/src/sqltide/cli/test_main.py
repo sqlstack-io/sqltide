@@ -55,6 +55,7 @@ from tests.unit.src.sqltide.cli.helpers import (
     FakeCliClickHouseClient,
     handlers_with_overrides,
     normalize_json_output,
+    proxy_refused_driver_error,
     refused_driver_error,
     write_cli_compilation_project,
     write_cli_target_project,
@@ -1307,9 +1308,33 @@ def test_given_apply_flag_when_running_janitor_then_it_passes_apply_to_command(
             ),
             expected_exit_code=1,
             expected_error_fragments=(
-                "Plan could not connect to ClickHouse",
+                "Plan could not connect to ClickHouse at localhost:8123: connection refused",
                 "Database: analytics",
-                "the connection was refused or the host could not be resolved",
+            ),
+        ),
+        CliMainErrorTestCase(
+            description="names a refused proxy as a proxy, not as ClickHouse",
+            argv=(
+                "sqt",
+                "reconcile",
+                "--project-dir",
+                "tests/fixtures/basic_project",
+                "--host",
+                "warehouse.example.com",
+                "--port",
+                "8123",
+                "--username",
+                "sqltide",
+                "--password",
+                "sqltide",
+                "--database",
+                "analytics",
+            ),
+            expected_exit_code=1,
+            expected_error_fragments=(
+                "Reconcile could not connect to ClickHouse through proxy "
+                "proxy.example.com:3128: connection refused\n",
+                "Database: analytics",
             ),
         ),
     ],
@@ -1329,6 +1354,9 @@ def test_given_expected_command_errors_when_running_entrypoint_then_it_prints_cl
             )
         ),
         run_plan=FailingCommandRunner(translate_clickhouse_driver_error(refused_driver_error())),
+        run_reconcile=FailingCommandRunner(
+            translate_clickhouse_driver_error(proxy_refused_driver_error())
+        ),
     )
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 

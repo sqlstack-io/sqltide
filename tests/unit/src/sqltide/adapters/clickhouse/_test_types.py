@@ -499,3 +499,22 @@ class OffsetDedupeRenderTestCase:
     description: str
     dedupe_offsets: bool
     expected_clause_present: bool
+
+
+@dataclass(frozen=True)
+class UnreachableHostDetailsTestCase:
+    description: str
+    driver_error: Exception
+    expected_endpoint: str | None
+    expected_reason: str
+    expected_through_proxy: bool
+
+
+@dataclass(frozen=True)
+class DriverLogFilterTestCase:
+    description: str
+    message: str
+    handled_errors: tuple[BaseException, ...]
+    logger_level: int
+    expected_kept: bool
+    expected_level: str

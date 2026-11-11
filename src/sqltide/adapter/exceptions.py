@@ -36,6 +36,13 @@ class AdapterWarehouseError(AdapterError):
 class AdapterUnavailableError(AdapterWarehouseError):
     """Raised when the warehouse refuses the connection or its host cannot be resolved."""
 
+    endpoint: str | None = None
+    """The `host:port` the connection was attempted to, when the adapter knows it."""
+    reason: str | None = None
+    """A short cause such as `connection refused` or `host not found`."""
+    through_proxy: bool = False
+    """Whether `endpoint` is a configured proxy rather than ClickHouse itself."""
+
 
 class AdapterTimeoutError(AdapterWarehouseError):
     """Raised when a warehouse operation exceeds its available time."""

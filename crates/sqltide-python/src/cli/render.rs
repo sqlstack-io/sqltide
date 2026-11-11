@@ -360,10 +360,31 @@ pub(crate) fn render_expected_warehouse_error(
             "Retry the command after checking warehouse availability.".to_owned(),
         ]
     } else if is("AdapterUnavailableError")? {
+        let detail = |name: &str| -> PyResult<Option<String>> {
+            let value: Bound<'_, PyAny> = error
+                .getattr(name)
+                .unwrap_or_else(|_| py.None().into_bound(py));
+            if value.is_none() {
+                Ok(None)
+            } else {
+                Ok(Some(value.str()?.to_string()))
+            }
+        };
+        let through_proxy: bool = error
+            .getattr("through_proxy")
+            .map_or(Ok(false), |value| value.is_truthy())?;
+        let endpoint: String = match (detail("endpoint")?, through_proxy) {
+            (Some(endpoint), true) => format!(" through proxy {endpoint}"),
+            (Some(endpoint), false) => format!(" at {endpoint}"),
+            (None, true) => " through a proxy".to_owned(),
+            (None, false) => String::new(),
+        };
+        let reason: String = detail("reason")?.unwrap_or_else(|| {
+            "the connection was refused or the host could not be resolved".to_owned()
+        });
         vec![
-            format!("{command} could not connect to ClickHouse"),
+            format!("{command} could not connect to ClickHouse{endpoint}: {reason}"),
             format!("Database: {database}"),
-            "Reason: the connection was refused or the host could not be resolved.".to_owned(),
             String::new(),
             "Check:".to_owned(),
             "- that ClickHouse is running and reachable from this machine".to_owned(),
