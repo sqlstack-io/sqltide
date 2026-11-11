@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.18](https://github.com/sqlstack-io/sqltide/compare/v0.65.17...v0.65.18) (2026-11-11)
+
+
+### Refactoring
+
+* define sensor, event, provider and dev server internals natively ([#375](https://github.com/sqlstack-io/sqltide/issues/375)) ([677ad64](https://github.com/sqlstack-io/sqltide/commit/677ad6472643be9109e5ffaeeb917cd44a90285c))
+
 ## [0.65.17](https://github.com/sqlstack-io/sqltide/compare/v0.65.16...v0.65.17) (2026-11-11)
 
 
