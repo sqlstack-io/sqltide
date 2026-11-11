@@ -962,7 +962,7 @@ fn immutable_config_value<'py>(
 
 /// Freeze nested configuration values while preserving authored key order.
 #[pyfunction]
-fn immutable_config_pairs<'py>(
+pub(crate) fn immutable_config_pairs<'py>(
     py: Python<'py>,
     values: Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyTuple>> {

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqltide.compiler.discovery.models import SourceFreshnessPolicy
+from sqltide.compiler.discovery.models import KafkaSettings, SourceFreshnessPolicy
 from sqltide.compiler.discovery.types import ModelReferenceScope, PipelineMode
 
 
@@ -352,3 +352,11 @@ class ModelStepErrorTestCase:
     step_class: type
     arguments: dict[str, object]
     expected_message: str
+
+
+@dataclass(frozen=True)
+class KafkaSettingsReprTestCase:
+    description: str
+    kafka_settings: KafkaSettings
+    expected_repr_pattern: str
+    expected_hidden_values: tuple[str, ...]

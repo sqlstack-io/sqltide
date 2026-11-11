@@ -18,6 +18,7 @@ use pyo3::types::{
 mod cli_service;
 mod compiler_analysis;
 mod compiler_project;
+mod discovery_models;
 mod executor_ops;
 mod planner_execution;
 mod sensors_dev;
@@ -86,6 +87,8 @@ pub(crate) type PostInit = for<'py> fn(&mut [Bound<'py, PyAny>]) -> PyResult<()>
 
 /// One shape: its class name, fields in declaration order and optional post-init hook.
 pub(crate) struct ShapeSpec {
+    /// The public module path, which with the class name identifies the shape.
+    pub(crate) module: &'static str,
     pub(crate) qualname: &'static str,
     pub(crate) fields: &'static [FieldSpec],
     pub(crate) post_init: Option<PostInit>,
@@ -151,6 +154,7 @@ macro_rules! shapes {
 
         impl $name {
             pub(crate) const SPEC: $crate::shapes::ShapeSpec = $crate::shapes::ShapeSpec {
+                module: $module,
                 qualname: stringify!($name),
                 fields: &[$($crate::shapes::FieldSpec {
                     name: $crate::shapes::unraw(stringify!($field)),
@@ -394,8 +398,9 @@ pub(crate) fn bind<'py>(
     Ok(values)
 }
 
-/// Each shape's plain default values by class name, built once so every instance and the
-/// `dataclasses` field table share one default object, as a dataclass's defaults are shared.
+/// Each shape's plain default values by module path and class name, built once so every
+/// instance and the `dataclasses` field table share one default object, as a dataclass's
+/// defaults are shared.
 static DEFAULTS: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
 
 /// The shape's default values in field order, `None` where a field is required or has a
@@ -404,7 +409,8 @@ fn shared_defaults<'py>(py: Python<'py>, spec: &ShapeSpec) -> PyResult<Bound<'py
     let table: &Bound<'py, PyDict> = DEFAULTS
         .get_or_init(py, || PyDict::new(py).unbind())
         .bind(py);
-    if let Some(found) = table.get_item(spec.qualname)? {
+    let key: (&str, &str) = (spec.module, spec.qualname);
+    if let Some(found) = table.get_item(key)? {
         return Ok(found.cast_into()?);
     }
     let mut values: Vec<Bound<'py, PyAny>> = Vec::with_capacity(spec.fields.len());
@@ -415,7 +421,7 @@ fn shared_defaults<'py>(py: Python<'py>, spec: &ShapeSpec) -> PyResult<Bound<'py
         });
     }
     let defaults: Bound<'py, PyTuple> = PyTuple::new(py, values)?;
-    table.set_item(spec.qualname, &defaults)?;
+    table.set_item(key, &defaults)?;
     Ok(defaults)
 }
 
@@ -870,6 +876,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     executor_ops::register(module)?;
     cli_service::register(module)?;
     sensors_dev::register(module)?;
+    discovery_models::register(module)?;
     lazy_constants(
         module,
         &[
