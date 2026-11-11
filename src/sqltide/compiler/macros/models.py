@@ -9,7 +9,18 @@ from types import MappingProxyType
 import sqltide._native as _native
 from sqltide._native import LoadedMacro as LoadedMacro
 from sqltide._native import MacroRegistry as MacroRegistry
-from sqltide._native import PipelineNamingContext as PipelineNamingContext
+from sqltide.compiler.discovery.types import PipelineMode
+
+
+@dataclass(frozen=True)
+class PipelineNamingContext:
+    """Immutable authored pipeline metadata supplied to a naming macro."""
+
+    name: str
+    source_name: str | None
+    model_names: tuple[str, ...]
+    relative_directory: str
+    mode: PipelineMode
 
 
 @dataclass(frozen=True, repr=False)

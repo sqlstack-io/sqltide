@@ -63,7 +63,7 @@ note = "Rule 2: Executes one project macro file's source as a module, locates lo
 [[stays]]
 path = "compiler/macros/models.py"
 rule = 3
-note = "Rule 3: MacroContext, the documented authored-API context user macros receive as ctx, stays a Python frozen dataclass so vars(), subclassing, dataclasses.fields, annotations and its signature match the public contract; native code constructs it. The other names here are native re-exports."
+note = "Rule 3: MacroContext and PipelineNamingContext, the documented authored-API contexts user macros receive as ctx, stay Python frozen dataclasses so vars(), subclassing, dataclasses.fields, annotations and their signatures match the public contract; native code constructs them. The other names here are native re-exports."
 
 [[stays]]
 path = "compiler/macros/constants.py"
