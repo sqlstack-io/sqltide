@@ -11,7 +11,6 @@ use super::{
     Coerce, Given, add, add_class, base_init, exception, factory, native_enum, path, shapes,
     str_enum,
 };
-use crate::project_discovery::immutable_config_pairs;
 
 const COMPILE_EXCEPTIONS: &str = "sqltide.compiler.compile.exceptions";
 const COMPILE_TYPES: &str = "sqltide.compiler.compile.types";
@@ -488,18 +487,6 @@ shapes! {
     }
 }
 
-/// `MacroContext.variables`: the authored pairs frozen recursively, as a read-only mapping.
-fn frozen_variables<'py>(variables: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    let py: Python<'py> = variables.py();
-    let items: Bound<'py, PyAny> = py
-        .get_type::<PyTuple>()
-        .call1((variables.call_method0("items")?,))?;
-    let pairs: Bound<'py, PyTuple> = immutable_config_pairs(py, items)?;
-    py.import("types")?
-        .getattr("MappingProxyType")?
-        .call1((py.get_type::<PyDict>().call1((pairs,))?,))
-}
-
 shapes! {
     module = "sqltide.compiler.macros.models";
 
@@ -542,17 +529,6 @@ shapes! {
 
     /// Immutable authored pipeline metadata supplied to a naming macro.
     PipelineNamingContext { name, source_name, model_names, relative_directory, mode }
-
-    /// Connection-free immutable context optionally injected into macros.
-    MacroContext @no_repr {
-        adapter_name,
-        dialect,
-        target_name,
-        database,
-        schema,
-        virtual_environments,
-        variables(coerce = Coerce::With(frozen_variables)),
-    }
 }
 
 shapes! {
@@ -1363,7 +1339,6 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add_class::<LoadedMacro>(module)?;
     add_class::<MacroRegistry>(module)?;
     add_class::<PipelineNamingContext>(module)?;
-    add_class::<MacroContext>(module)?;
     add_class::<CompilationTimings>(module)?;
     add_class::<RealizedProject>(module)?;
     add_class::<CompileAnalysis>(module)?;

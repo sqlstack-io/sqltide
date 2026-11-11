@@ -137,6 +137,7 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.models import (
     KafkaSettings as _DiscoveryKafkaSettings,
 )
+from sqltide.compiler.macros.models import MacroContext
 from sqltide.compiler.macros.types import MacroFunction
 from sqltide.dev_server.models import (
     BuildCancellationOutcome,
@@ -750,17 +751,6 @@ class PipelineNamingContext:
     model_names: tuple[str, ...]
     relative_directory: str
     mode: PipelineMode
-
-@final
-@dataclass(frozen=True, repr=False)
-class MacroContext:
-    adapter_name: str
-    dialect: str
-    target_name: str | None
-    database: str | None
-    schema: str | None
-    virtual_environments: bool
-    variables: Mapping[str, object]
 
 @final
 @dataclass(frozen=True)

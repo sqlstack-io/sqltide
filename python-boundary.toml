@@ -61,6 +61,11 @@ rule = 2
 note = "Rule 2: Executes one project macro file's source as a module, locates load failures in the user traceback, and collects its public top-level functions with their def lines and docstrings. Reserved-name and collision checks and registry assembly are native (load_macro_registry)."
 
 [[stays]]
+path = "compiler/macros/models.py"
+rule = 3
+note = "Rule 3: MacroContext, the documented authored-API context user macros receive as ctx, stays a Python frozen dataclass so vars(), subclassing, dataclasses.fields, annotations and its signature match the public contract; native code constructs it. The other names here are native re-exports."
+
+[[stays]]
 path = "compiler/macros/constants.py"
 rule = 2
 note = "Rule 2: Data-only names the user macro loader reads: the reserved macro names and the constants and enums directory names."
