@@ -1,19 +1,6 @@
 """Stable workflow validation constants."""
 
-from sqltide.executor.workflow.types import WorkflowPhase
-
-WORKFLOW_PHASE_ORDER: tuple[WorkflowPhase, ...] = (
-    WorkflowPhase.PREFLIGHT,
-    WorkflowPhase.PREPARATION,
-    WorkflowPhase.TEARDOWN,
-    WorkflowPhase.REALIZATION,
-    WorkflowPhase.STABILIZATION,
-    WorkflowPhase.BOUNDARY,
-    WorkflowPhase.REPLAY,
-    WorkflowPhase.AUDIT,
-    WorkflowPhase.FINALIZATION,
-)
-
-RECOVER_MODEL_VIEW_STEP_PREFIX: str = "recover_view_"
-RECOVER_SOURCE_STEP_PREFIX: str = "recover_source_"
-RECOVER_DEAD_LETTERS_STEP_PREFIX: str = "recover_dead_letters_"
+from sqltide._native import RECOVER_DEAD_LETTERS_STEP_PREFIX as RECOVER_DEAD_LETTERS_STEP_PREFIX
+from sqltide._native import RECOVER_MODEL_VIEW_STEP_PREFIX as RECOVER_MODEL_VIEW_STEP_PREFIX
+from sqltide._native import RECOVER_SOURCE_STEP_PREFIX as RECOVER_SOURCE_STEP_PREFIX
+from sqltide._native import WORKFLOW_PHASE_ORDER as WORKFLOW_PHASE_ORDER

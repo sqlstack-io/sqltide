@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
+
+from sqltide._native import ActivityTone as ActivityTone
+from sqltide._native import AuditScheduleState as AuditScheduleState
+from sqltide._native import CompileStateKind as CompileStateKind
+from sqltide._native import Freshness as Freshness
+from sqltide._native import ReplayAnchorReason as ReplayAnchorReason
+from sqltide._native import RunPresentationStatus as RunPresentationStatus
+from sqltide._native import SensorSchedulerState as SensorSchedulerState
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -15,28 +22,6 @@ type KafkaClientKey = tuple[str, tuple[tuple[str, str], ...]]
 type KafkaLagOffsets = tuple[
     tuple[tuple[str, int, int | None], ...], tuple[int, ...], tuple[tuple[int, int], ...]
 ]
-
-
-class ActivityTone(StrEnum):
-    """How an activity line should read: routine, good news, bad news, or caution."""
-
-    NEUTRAL = "neutral"
-    GOOD = "good"
-    BAD = "bad"
-    CAUTION = "caution"
-
-
-class RunPresentationStatus(StrEnum):
-    """Terminal facts and reversible liveness states shown for a run."""
-
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    CANCELLING = "cancelling"
-    CANCELLATION_FAILED = "cancellation_failed"
-    RUNNING = "running"
-    UNRESPONSIVE = "unresponsive"
-    PRESUMED_FAILED = "presumed_failed"
 
 
 class CompileAuthorizationGuard(Protocol):
@@ -71,53 +56,3 @@ class DevServerReporter(Protocol):
 
     def report_shutdown(self) -> None:
         """Print the shutdown line after the server stops."""
-
-
-class CompileStateKind(StrEnum):
-    """Whether the held project compile is servable or failing."""
-
-    OK = "ok"
-    FAILING = "failing"
-
-
-class ReplayAnchorReason(StrEnum):
-    """Why a model is or is not a replay anchor."""
-
-    ELIGIBLE = "eligible"
-    AGGREGATE = "aggregate"
-    MUTABLE_REF = "mutable_ref"
-    NEVER = "never"
-    LINEAGE_LOSS = "lineage_loss"
-    VIEW = "view"
-
-
-class Freshness(StrEnum):
-    """Derived source or model freshness against its authored policy."""
-
-    FRESH = "fresh"
-    LAGGING = "lagging"
-    STALLED = "stalled"
-
-
-class SensorSchedulerState(StrEnum):
-    """Current lifecycle disposition of the hosted sensor dispatcher."""
-
-    DISABLED = "disabled"
-    IDLE = "idle"
-    RUNNING = "running"
-    STANDBY = "standby"
-    BACKING_OFF = "backing_off"
-
-
-class AuditScheduleState(StrEnum):
-    """Current scheduler disposition of one compiled audit or target."""
-
-    DISABLED = "disabled"
-    IDLE = "idle"
-    DUE = "due"
-    SCHEDULED = "scheduled"
-    WARMING_UP = "warming_up"
-    NOT_MATERIALIZED = "not_materialized"
-    RUNNING = "running"
-    BLOCKED = "blocked"
-    BACKING_OFF = "backing_off"

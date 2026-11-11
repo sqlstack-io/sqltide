@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 3747
+remaining_lines = 2685
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -220,3 +220,13 @@ path = "sensors/classes/polling_sensor_context.py"
 rule = 3
 note = "Rule 3: PollingSensorContext that user polling sensors receive, re-exported by sqltide.sensors; read-only properties."
 
+
+[[stays]]
+path = "auth/models.py"
+rule = 4
+note = "Rule 4: pydantic request bodies LoginRequest, CreateUserRequest, UpdateUserRequest, PasswordResetRequest, RoleRequest and ProjectRoleRequest that FastAPI validates for the account routes, beside native re-exports of the account shapes; no logic."
+
+[[stays]]
+path = "dev_server/types.py"
+rule = 1
+note = "Rule 1: Logic-free protocols CompileAuthorizationGuard (the compile authorization check the dev server runtime calls) and DevServerReporter (the terminal narrator the CLI implements) and the data-only type aliases KafkaClientKey and KafkaLagOffsets the dev server runtime consumes, beside native re-exports of the dev server value enums; no logic."

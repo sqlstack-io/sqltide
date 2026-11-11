@@ -1,3 +1,3 @@
 """Sensor domain constants."""
 
-DEFAULT_SENSOR_TIMEOUT_SECONDS: float = 60.0
+from sqltide._native import DEFAULT_SENSOR_TIMEOUT_SECONDS as DEFAULT_SENSOR_TIMEOUT_SECONDS

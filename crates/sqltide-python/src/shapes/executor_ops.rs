@@ -7,20 +7,12 @@ use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyFrozenSet, PySet, PyTuple};
 
 use super::{
-    Coerce, Given, add, add_class, base_init, exception, factory, native_enum, shapes, str_enum,
+    Coerce, Given, add, add_class, base_init, exception, factory, native_enum, raised, shapes,
+    str_enum,
 };
 
 const DESTRUCTION_EXCEPTIONS: &str = "sqltide.executor.destruction.exceptions";
 const REPLAY_LINEAGE_MODE: Coerce = Coerce::Maybe(&Coerce::Enum("ReplayLineageMode"));
-
-/// The native exception `name` raised with `message`.
-fn raised(py: Python<'_>, name: &str, message: String) -> PyResult<PyErr> {
-    Ok(PyErr::from_value(
-        py.import("sqltide._native")?
-            .getattr(name)?
-            .call1((message,))?,
-    ))
-}
 
 /// `DestructionValidationError(message)`.
 fn invalid_destruction(py: Python<'_>, message: &str) -> PyResult<PyErr> {

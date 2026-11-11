@@ -1,3 +1,3 @@
 """Stable account-administration CLI constants."""
 
-CONTROL_STORE_ENV_VAR: str = "SQLTIDE_CONTROL_STORE_URL"
+from sqltide._native import CONTROL_STORE_ENV_VAR as CONTROL_STORE_ENV_VAR
