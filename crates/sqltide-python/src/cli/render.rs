@@ -360,10 +360,24 @@ pub(crate) fn render_expected_warehouse_error(
             "Retry the command after checking warehouse availability.".to_owned(),
         ]
     } else if is("AdapterUnavailableError")? {
+        let detail = |name: &str| -> PyResult<Option<String>> {
+            let value: Bound<'_, PyAny> = error
+                .getattr(name)
+                .unwrap_or_else(|_| py.None().into_bound(py));
+            if value.is_none() {
+                Ok(None)
+            } else {
+                Ok(Some(value.str()?.to_string()))
+            }
+        };
+        let endpoint: String =
+            detail("endpoint")?.map_or_else(String::new, |endpoint| format!(" at {endpoint}"));
+        let reason: String = detail("reason")?.unwrap_or_else(|| {
+            "the connection was refused or the host could not be resolved".to_owned()
+        });
         vec![
-            format!("{command} could not connect to ClickHouse"),
+            format!("{command} could not connect to ClickHouse{endpoint}: {reason}"),
             format!("Database: {database}"),
-            "Reason: the connection was refused or the host could not be resolved.".to_owned(),
             String::new(),
             "Check:".to_owned(),
             "- that ClickHouse is running and reachable from this machine".to_owned(),

@@ -1,9 +1,10 @@
+import logging
 from collections.abc import Iterator, Mapping, Sequence
 from typing import cast
 
 from clickhouse_connect.driver.exceptions import OperationalError
 
-from sqltide._native import sql_canonicalize
+from sqltide._native import UnreachableHostLogFilter, sql_canonicalize
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
     AdapterManifest,
@@ -352,3 +353,41 @@ def connection_failure(
     setattr(driver_error, link, transport_error)
     driver_error.__suppress_context__ = suppress_context
     return driver_error
+
+
+def filter_driver_record(
+    *, message: str, handled_errors: tuple[BaseException, ...], logger_level: int
+) -> tuple[bool, str]:
+    """Run the driver log filter on one driver record while the first of `handled_errors` (if
+    any) is being handled, as clickhouse_connect logs it, at `logger_level`; return whether the
+    record is kept and its final level name."""
+    logger: logging.Logger = logging.getLogger("clickhouse_connect.driver.httpclient")
+    record: logging.LogRecord = logger.makeRecord(
+        logger.name, logging.WARNING, __file__, 0, message, (), None
+    )
+    previous_level: int = logger.level
+    logger.setLevel(logger_level)
+    outcome: _FilterOutcome = _FilterOutcome(record=record)
+    with outcome:
+        _ = [_raise(error) for error in handled_errors]
+    logger.setLevel(previous_level)
+    return outcome.kept, record.levelname
+
+
+class _FilterOutcome:
+    """Applies the filter in `__exit__`, where the raised error is the one being handled."""
+
+    def __init__(self, *, record: logging.LogRecord) -> None:
+        self.record: logging.LogRecord = record
+        self.kept: bool = False
+
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *_: object) -> bool:
+        self.kept = UnreachableHostLogFilter().filter(self.record)
+        return True
+
+
+def _raise(error: BaseException) -> None:
+    raise error

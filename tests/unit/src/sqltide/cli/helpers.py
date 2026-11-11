@@ -1,4 +1,5 @@
 import json
+import socket
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -468,3 +469,16 @@ def refused_driver_error() -> OperationalError:
     )
     error.__cause__ = ConnectionRefusedError(111, "Connection refused")
     return error
+
+
+def closed_local_port() -> int:
+    """A loopback TCP port nothing listens on: bound once by the OS, then released."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port: int = probe.getsockname()[1]
+    return port
+
+
+def default_clickhouse_port() -> int:
+    """ClickHouse's default HTTP port, for hosts that never resolve."""
+    return 8123

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqltide.adapter.exceptions import AdapterWarehouseError
@@ -295,3 +296,12 @@ class CliAuditBackfillProjectContextTestCase:
     expected_exit_code: int
     expected_project_dir_name: str
     expected_pipelines_root_name: str
+
+
+@dataclass(frozen=True)
+class UnreachableClickHouseStderrTestCase:
+    description: str
+    host: str
+    port: Callable[[], int]
+    logging_prelude: str
+    expected_stderr: str

@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -5728,6 +5729,11 @@ def direct_model_identity_metadata(
         tuple[str, list[str], str | None, str | None, list[tuple[str, str]] | None] | None,
     ],
 ) -> str: ...
+
+class UnreachableHostLogFilter:
+    def __new__(cls) -> Self: ...
+    def filter(self, record: logging.LogRecord) -> bool: ...
+
 def translate_clickhouse_driver_error(error: Exception) -> AdapterWarehouseError: ...
 def render_clickhouse_resource(
     *,

@@ -1119,6 +1119,7 @@ impl ClickHouseAdapterCore {
     /// Open a ClickHouse connection for the resolved configuration.
     fn connect<'py>(slf: &Bound<'py, Self>, config: Any<'py>) -> PyResult<Any<'py>> {
         let py: Python<'py> = slf.py();
+        crate::clickhouse_adapter::install_unreachable_host_log_filter(py)?;
         let raw_client: Any<'py> =
             driver_call(py, || slf.call_method1("_open_raw_client", (config,)))?;
         attr(py, CONNECTION_CLASS, "ClickHouseConnection")?.call1((raw_client,))

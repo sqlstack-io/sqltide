@@ -1307,9 +1307,8 @@ def test_given_apply_flag_when_running_janitor_then_it_passes_apply_to_command(
             ),
             expected_exit_code=1,
             expected_error_fragments=(
-                "Plan could not connect to ClickHouse",
+                "Plan could not connect to ClickHouse at localhost:8123: connection refused",
                 "Database: analytics",
-                "the connection was refused or the host could not be resolved",
             ),
         ),
     ],
