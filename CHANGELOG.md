@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.17](https://github.com/sqlstack-io/sqltide/compare/v0.65.16...v0.65.17) (2026-11-11)
+
+
+### Refactoring
+
+* define executor, CLI, auth and dev server shapes natively ([#373](https://github.com/sqlstack-io/sqltide/issues/373)) ([3ce850f](https://github.com/sqlstack-io/sqltide/commit/3ce850f0f225f8a24cee38af3241372a32945099))
+
 ## [0.65.16](https://github.com/sqlstack-io/sqltide/compare/v0.65.15...v0.65.16) (2026-11-11)
 
 
