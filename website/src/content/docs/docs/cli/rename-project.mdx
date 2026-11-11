@@ -12,7 +12,9 @@ sqt rename-project storefront --target prod
 
 The default is a dry run. It prints the configuration edit, the Kafka consumer groups that stay the
 same, the number of manifests to copy and the number of project role assignments to move, and
-writes nothing.
+writes nothing to the warehouse or the project config. Opening a configured control store that has
+never been initialized creates its tables, and a legacy `.streambuild/` state directory is moved to
+`.sqltide/`, as every command does.
 
 Apply the rename explicitly:
 
@@ -49,14 +51,42 @@ The command refuses to run when:
 | --- | --- |
 | `NEW_NAME` | The new project name |
 | `--apply` | Apply the rename; without it the command is a dry run |
+| `--from OLD_NAME` | Complete a rename on another target after `sqltide_project.toml` already carries `NEW_NAME` |
 | `--target` | Named project target whose warehouse history is copied |
 | `--database` | Target database override |
 | `--control-store-url` | Account control store; defaults to `SQLTIDE_CONTROL_STORE_URL`, then the project's `.sqltide/control.db` when it exists |
 | `--project-dir`, `--host`, `--port`, `--username`, `--password`, `--vars` | As for other commands |
 
-Manifest history is copied for the selected target only. Other targets keep their history under
-the old name, so `sqt destroy` on those targets does not see relations recorded there before the
-rename. The dry run lists those targets.
+## Projects with several targets
+
+Each target has its own warehouse, and usually its own UI host and control store. The first run
+renames the project on one target and edits the configuration; every other target then completes
+the rename with `--from`:
+
+1. On one target, rename and commit the configuration change:
+
+   ```bash
+   sqt rename-project storefront --target dev --apply
+   ```
+
+2. On each other target, typically on that target's own host so its control store is used, complete
+   the rename from the committed configuration:
+
+   ```bash
+   sqt rename-project storefront --from shop --target prod
+   sqt rename-project storefront --from shop --target prod --apply
+   ```
+
+With `--from`, the command leaves `sqltide_project.toml` unchanged. It checks that the target's
+Kafka consumer groups stay the same, copies the target's manifest history from `OLD_NAME`, and moves
+the control store's role assignments from `OLD_NAME`, under the same lock, dry-run default, conflict
+rules and idempotence as the first run. It refuses when `NEW_NAME` is not the name the configuration
+carries, when the configuration is still named `OLD_NAME` (run without `--from` first), or when
+`OLD_NAME` equals the new name.
+
+Until a target is completed, it keeps its manifest history and role assignments under the old
+name: `sqt destroy` there does not see relations recorded before the rename, and the target's UI
+grants still name the old project. The first run's output lists the targets still to complete.
 
 Restart a running `sqt dev` server after a rename. See
 [Renaming a project](/docs/concepts/project-configuration/#renaming-a-project) for what a rename

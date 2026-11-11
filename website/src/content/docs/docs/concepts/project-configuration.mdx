@@ -95,6 +95,10 @@ Rename a project with [`sqt rename-project`](/docs/cli/rename-project/) rather t
 - moves project role assignments in the control store to the new name
 - edits `name` in `sqltide_project.toml`, keeping comments and formatting
 
+A project with several targets is renamed once and then completed on each other target with
+`sqt rename-project NEW_NAME --from OLD_NAME --target <target>`, usually on that target's own
+host. See [projects with several targets](/docs/cli/rename-project/#projects-with-several-targets).
+
 Editing `name` by hand changes the default consumer group of every managed source that has no
 `consumer_group`. `sqt plan` and the source health panel in the UI then warn that the live Kafka
 table consumes as a different group than the project declares, and that its committed offsets
