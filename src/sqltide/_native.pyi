@@ -7180,6 +7180,7 @@ def run_rename_project(
     client: AdapterConnection,
     loaded_project: LoadedProject | None,
     adapter_profile: CompilerAdapterProfile,
+    from_name: str | None = None,
 ) -> int: ...
 def run_reconcile(
     *,

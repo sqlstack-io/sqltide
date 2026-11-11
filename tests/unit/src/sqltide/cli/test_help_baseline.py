@@ -108,7 +108,7 @@ from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
         CliHelpBaselineTestCase(
             description="captures rename-project help",
             argv=("rename-project", "--help"),
-            expected_sha256="7ec7020376f7af22c1b7561474d34cf379d74d325b50e259247fa57fc7f881eb",
+            expected_sha256="e5ed515f1e543aa5a750757a63811df4e532d6bc90c21d6ea7e50da214d80d84",
         ),
         CliHelpBaselineTestCase(
             description="captures janitor help",

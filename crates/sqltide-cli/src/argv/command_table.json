@@ -3487,6 +3487,17 @@
        {
         "kind": "store",
         "options": [
+         "--from"
+        ],
+        "dest": "from_name",
+        "default": null,
+        "help": "Previous project name; complete a rename on this target after sqltide_project.toml already carries the new name",
+        "metavar": "OLD_NAME",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
          "--control-store-url"
         ],
         "dest": "control_store_url",

@@ -548,6 +548,7 @@ pub(crate) fn dispatch_cli_command<'py>(
                     ("pipelines_root", require_pipelines_root(py, invocation)?),
                     ("project_dir", project_dir),
                     ("new_name", args.getattr("new_name")?),
+                    ("from_name", getattr_none(args, "from_name")?),
                     ("database", database),
                     (
                         "control_store_url",

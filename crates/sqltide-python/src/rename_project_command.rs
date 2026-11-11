@@ -56,8 +56,11 @@ struct RolePlan<'py> {
 /// Everything the rename would change, computed without writing anything.
 struct RenamePlan<'py> {
     config_path: PathBuf,
+    /// The name the warehouse and control store still record.
     current_name: String,
     new_name: String,
+    /// Whether this run completes an earlier rename (`--from`) on another target.
+    completing: bool,
     /// The identity to add to the project config, when existing groups need it.
     added_identity: Option<String>,
     /// `(source, database-scoped group)` for every managed source, unchanged by the rename.
@@ -65,7 +68,8 @@ struct RenamePlan<'py> {
     manifests: ManifestPlan,
     roles: Option<RolePlan<'py>>,
     other_targets: Vec<String>,
-    edited_config: String,
+    /// The edited project config, or `None` when the config already carries the new name.
+    edited_config: Option<String>,
 }
 
 fn fail(py: Python<'_>, message: &str) -> PyErr {
@@ -243,11 +247,57 @@ fn other_targets(loaded_project: &Any<'_>, target_name: &str) -> PyResult<Vec<St
     Ok(names)
 }
 
+/// The old and new names when completing an earlier rename on another target: the config
+/// must already carry `new_name`, and `from_name` must be the name it replaced.
+fn completed_names(
+    py: Python<'_>,
+    from_name: &str,
+    new_name: &str,
+    config_name: &str,
+) -> PyResult<(String, String)> {
+    if from_name.trim().is_empty() || from_name.trim() != from_name {
+        return Err(fail(
+            py,
+            "--from must be the previous project name, a non-empty string without surrounding \
+             whitespace",
+        ));
+    }
+    if from_name == new_name {
+        return Err(fail(
+            py,
+            &format!(
+                "--from names the previous project name and cannot be the new name '{new_name}'"
+            ),
+        ));
+    }
+    if from_name == config_name {
+        return Err(fail(
+            py,
+            &format!(
+                "sqltide_project.toml is still named '{config_name}'. Run `sqt rename-project \
+                 {new_name}` without --from first; use --from only on the remaining targets \
+                 after the config is renamed"
+            ),
+        ));
+    }
+    if new_name != config_name {
+        return Err(fail(
+            py,
+            &format!(
+                "With --from, the new name must be the name sqltide_project.toml already \
+                 carries ('{config_name}'), not '{new_name}'"
+            ),
+        ));
+    }
+    Ok((from_name.to_owned(), new_name.to_owned()))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn plan_rename<'py>(
     py: Python<'py>,
     project_dir: &Any<'py>,
     new_name: &str,
+    from_name: Option<&str>,
     database: &str,
     control_store_option: &Any<'py>,
     client: &Any<'py>,
@@ -267,8 +317,15 @@ fn plan_rename<'py>(
     let keys: ProjectIdentityKeys =
         project_identity_keys(&config_text).map_err(|message| fail(py, &message))?;
     let compiled: Any<'py> = analysis.getattr("compiled_project")?;
-    let current_name: String = compiled.getattr("project_name")?.extract()?;
-    let new_name: String = validated_name(py, new_name, &current_name)?;
+    let config_name: String = compiled.getattr("project_name")?.extract()?;
+    let (current_name, new_name): (String, String) = match from_name {
+        Some(from_name) => completed_names(py, from_name, new_name, &config_name)?,
+        None => (
+            config_name.clone(),
+            validated_name(py, new_name, &config_name)?,
+        ),
+    };
+    let completing: bool = from_name.is_some();
     let identity: Option<String> = compiled.getattr("consumer_group_identity")?.extract()?;
     if identity
         != keys
@@ -293,12 +350,14 @@ fn plan_rename<'py>(
     let renamed = |identity: Option<&str>| {
         managed_source_consumer_groups(&compiled, adapter_profile, &new_name, identity)
     };
-    // Keep the old name in the groups only when some group would otherwise change.
-    let added_identity: Option<String> = if identity.is_none() && renamed(None)? != before {
-        Some(current_name.clone())
-    } else {
-        None
-    };
+    // Keep the old name in the groups only when some group would otherwise change. A completing
+    // run never edits the config, so its identity must already keep the groups.
+    let added_identity: Option<String> =
+        if !completing && identity.is_none() && renamed(None)? != before {
+            Some(current_name.clone())
+        } else {
+            None
+        };
     let after: Vec<(String, String)> = renamed(identity.as_deref().or(added_identity.as_deref()))?;
     let changed: Vec<String> = before
         .iter()
@@ -311,8 +370,16 @@ fn plan_rename<'py>(
             py,
             &format!(
                 "Renaming would change Kafka consumer groups, so sources would not resume from \
-                 their committed offsets: {}",
-                changed.join("; ")
+                 their committed offsets: {}{}",
+                changed.join("; "),
+                if completing {
+                    format!(
+                        ". Set consumer_group_identity = {} in sqltide_project.toml first",
+                        quoted(&current_name)
+                    )
+                } else {
+                    String::new()
+                }
             ),
         ));
     }
@@ -321,9 +388,13 @@ fn plan_rename<'py>(
         .map(|(source, group)| (source, database_scoped_consumer_group(&group, database)))
         .collect();
     let target_name: String = compiled.getattr("target_name")?.extract()?;
-    let from_identity: String = attr(py, NATIVE, "resolve_manifest_project_identity")?
-        .call((), Some(&py_kwargs!(py; analysis = analysis)?))?
-        .extract()?;
+    let from_identity: String = if completing {
+        current_name.clone()
+    } else {
+        attr(py, NATIVE, "resolve_manifest_project_identity")?
+            .call((), Some(&py_kwargs!(py; analysis = analysis)?))?
+            .extract()?
+    };
     let manifests: ManifestPlan =
         manifest_plan(client, &from_identity, &new_name, &target_name, database)?;
     let roles: Option<RolePlan<'py>> = role_plan(
@@ -332,13 +403,19 @@ fn plan_rename<'py>(
         &current_name,
         &new_name,
     )?;
-    let edited_config: String =
-        rename_project_text(&config_text, &new_name, added_identity.as_deref())
-            .map_err(|message| fail(py, &message))?;
+    let edited_config: Option<String> = if completing {
+        None
+    } else {
+        Some(
+            rename_project_text(&config_text, &new_name, added_identity.as_deref())
+                .map_err(|message| fail(py, &message))?,
+        )
+    };
     Ok(RenamePlan {
         config_path,
         current_name,
         new_name,
+        completing,
         added_identity,
         groups,
         manifests,
@@ -365,9 +442,17 @@ fn render_plan(plan: &RenamePlan<'_>, applied: bool) -> String {
             "Target: {} (database {})",
             manifests.target_name, manifests.database
         ),
-        format!("Config: {}", plan.config_path.display()),
-        format!("  name = {}", quoted(&plan.new_name)),
     ];
+    if plan.completing {
+        lines.push(format!(
+            "Config: {} already named {}; unchanged",
+            plan.config_path.display(),
+            quoted(&plan.new_name)
+        ));
+    } else {
+        lines.push(format!("Config: {}", plan.config_path.display()));
+        lines.push(format!("  name = {}", quoted(&plan.new_name)));
+    }
     if let Some(identity) = &plan.added_identity {
         lines.push(format!(
             "  consumer_group_identity = {} (added so existing Kafka consumer groups stay the same)",
@@ -410,10 +495,13 @@ fn render_plan(plan: &RenamePlan<'_>, applied: bool) -> String {
             redacted_url(&roles.url)
         )),
     }
-    if !plan.other_targets.is_empty() {
+    if !plan.other_targets.is_empty() && !plan.completing {
         lines.push(format!(
-            "Other targets keep manifest history under '{}': {}",
-            manifests.from_identity,
+            "Other targets keep manifest history and role grants under '{}' until you run \
+             `sqt rename-project {} --from {} --target <target>` there: {}",
+            plan.current_name,
+            plan.new_name,
+            plan.current_name,
             plan.other_targets.join(", ")
         ));
     }
@@ -548,7 +636,10 @@ fn apply_rename(py: Python<'_>, client: &Any<'_>, plan: &RenamePlan<'_>) -> PyRe
             .rename_project(py, &plan.current_name, &plan.new_name)?,
         None => Vec::new(),
     };
-    if let Err(error) = write_config(&plan.config_path, &plan.edited_config) {
+    let Some(edited_config) = &plan.edited_config else {
+        return Ok(());
+    };
+    if let Err(error) = write_config(&plan.config_path, edited_config) {
         let mut message: String = format!(
             "Could not write {}: {error}. The project keeps its old name",
             plan.config_path.display()
@@ -577,7 +668,7 @@ fn apply_rename(py: Python<'_>, client: &Any<'_>, plan: &RenamePlan<'_>) -> PyRe
 #[pyfunction]
 #[pyo3(signature = (
     *, pipelines_root, project_dir, new_name, database, control_store_url, apply, client,
-    loaded_project, adapter_profile,
+    loaded_project, adapter_profile, from_name = None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn run_rename_project<'py>(
@@ -591,6 +682,7 @@ fn run_rename_project<'py>(
     client: Any<'py>,
     loaded_project: Any<'py>,
     adapter_profile: Any<'py>,
+    from_name: Option<String>,
 ) -> PyResult<i64> {
     let analysis: Any<'py> = attr(py, NATIVE, "analyze_project")?.call(
         (),
@@ -615,6 +707,7 @@ fn run_rename_project<'py>(
         py,
         &project_dir,
         &new_name,
+        from_name.as_deref(),
         &database,
         &control_store_url,
         &client,
