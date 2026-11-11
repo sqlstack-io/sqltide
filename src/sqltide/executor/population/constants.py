@@ -1,3 +1,3 @@
 """Replay population constants."""
 
-STAGED_SOURCE_NAME_PREFIX: str = "_sqltide_next__"
+from sqltide._native import STAGED_SOURCE_NAME_PREFIX as STAGED_SOURCE_NAME_PREFIX

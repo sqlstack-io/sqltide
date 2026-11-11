@@ -33,6 +33,13 @@ _NATIVE_INTERCHANGE: str = (
     "exported or in a signature."
 )
 REMOVED: dict[str, str] = {
+    "sqltide.adapter.constants:METADATA_PUBLISH_OPERATION_COLUMN_NAME": _NATIVE_CONSTANT,
+    "sqltide.adapter.constants:METADATA_PUBLISH_PREVIOUS_DEPLOYMENT_COLUMN_NAME": _NATIVE_CONSTANT,
+    "sqltide.adapter.constants:REFRESHABLE_VIEW_SETTING": _NATIVE_CONSTANT,
+    "sqltide.adapter.constants:REPLAY_VALUE_KIND_INTEGER": _NATIVE_CONSTANT,
+    "sqltide.adapter.constants:REPLAY_VALUE_KIND_TIMESTAMP": _NATIVE_CONSTANT,
+    "sqltide.adapter.constants:TARGET_MUTATION_LOCK_TABLE_NAME": _NATIVE_CONSTANT,
+    "sqltide.adapters.clickhouse.constants:CLICKHOUSE_DEFAULT_INDEX_GRANULARITY": _NATIVE_CONSTANT,
     "sqltide.cli.entry.models:CliConnectionOptions": _CLI_INTERNAL,
     "sqltide.cli.entry.models:ResolvedCliInvocation": _CLI_INTERNAL,
     "sqltide.cli.entry.models:ResolvedCliProjectConfig": _CLI_INTERNAL,

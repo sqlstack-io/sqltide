@@ -1,5 +1,3 @@
 """Publish exceptions."""
 
-
-class PublishExecutionError(ValueError):
-    """Raised when publish input or state is invalid."""
+from sqltide._native import PublishExecutionError as PublishExecutionError

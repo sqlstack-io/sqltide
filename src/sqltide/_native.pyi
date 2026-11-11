@@ -70,6 +70,7 @@ from sqltide.adapter.models import (
 from sqltide.adapter.types import (
     AdapterModelRealizer,
     AdapterModelRelationNamer,
+    AdapterReplayBoundaryMode,
     AdapterResourceRenderer,
     AdapterSetDifferenceComparisonRenderer,
     AdapterSourceRealizer,
@@ -137,25 +138,6 @@ from sqltide.compiler.discovery.models import (
     KafkaSettings as _DiscoveryKafkaSettings,
 )
 from sqltide.compiler.macros.types import MacroFunction
-from sqltide.compiler.planner.models import (
-    ActualState,
-    DeploymentPlan,
-    DeploymentRecord,
-    DeploymentWatermarkRecord,
-    DirectPlan,
-    DirectRowErrorPolicyChange,
-    DirectSourceDriftSelection,
-    DirectWarehouseSnapshot,
-    MetadataState,
-    ObjectStateMetadataRow,
-    ObjectStateRecord,
-    PlannedObjectChange,
-    PlanningWarehouseSnapshot,
-    PublishEventRecord,
-    RebuildSubtree,
-    RootDeploymentInspection,
-)
-from sqltide.compiler.planner.types import DirectSelectionMode
 from sqltide.dev_server.models import (
     BuildCancellationOutcome,
     CompileErrorInfo,
@@ -182,12 +164,6 @@ from sqltide.events.models import (
 )
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import QualityResultStatus
-from sqltide.executor.backfill.models import (
-    BackfillBootstrapRequest,
-    BackfillDeploymentIdentity,
-    BackfillExecutionResult,
-    RootBackfillReport,
-)
 from sqltide.executor.deployment.models import (
     DeploymentDiffRequest,
     DeploymentDiffResult,
@@ -206,16 +182,6 @@ from sqltide.executor.destruction.types import (
     DestructionPlanningConnection,
     DestructionPlanStore,
 )
-from sqltide.executor.direct.models import (
-    DirectBuildAudit,
-    DirectBuildExecutionResult,
-    DirectBuildRequest,
-    DirectBuildResult,
-    DirectBuildWorkflow,
-    DirectReplayCapture,
-    DirectRuntimeExecution,
-    DriftedManagedSource,
-)
 from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
 from sqltide.executor.janitor.models import (
     JanitorApplyResult,
@@ -229,20 +195,6 @@ from sqltide.executor.observability.models import (
     RunStartupTimings,
     TerminalInvocation,
 )
-from sqltide.executor.population.models import (
-    PopulationPlan,
-    PopulationRealization,
-    PopulationSourcePreparation,
-    PopulationSourceRecreation,
-    PopulationWatermark,
-)
-from sqltide.executor.promotion.models import (
-    DeploymentPromotionPreview,
-    PublishRequest,
-    PublishResult,
-    RollbackPlan,
-    RollbackRequest,
-)
 from sqltide.executor.readiness.models import (
     AuditDeploymentCandidate,
     DeploymentAuditRequest,
@@ -252,7 +204,6 @@ from sqltide.executor.readiness.models import (
     RootAuditResult,
 )
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
-from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -260,7 +211,7 @@ from sqltide.executor.workflow.models import (
     WarehouseStatement,
     WorkflowExecutionResult,
 )
-from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
+from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter, WorkflowMode
 from sqltide.provider.models import DiscoveredProvider
 from sqltide.sensors.models import (
     CompiledSensors,
@@ -1288,6 +1239,817 @@ REPLAY_LANDED_AT_COLUMN_NAME: str
 REPLAY_CURSOR_COLUMN_NAME: str
 SECONDS_BY_DURATION_UNIT: dict[str, int]
 ACCESS_POLICY_FILE_NAME: str
+
+# Planning and execution shapes: planner, backfill, direct, population, promotion and repair.
+
+class PlannedChangeType(StrEnum):
+    REBUILD = "rebuild"
+    CREATE = "create"
+    REPLACE = "replace"
+    NO_OP = "no_op"
+
+class TableSchemaChangeKind(StrEnum):
+    NON_BREAKING = "non_breaking"
+    BREAKING = "breaking"
+
+class TableSchemaSeedCompatibility(StrEnum):
+    SEEDABLE = "seedable"
+    NON_SEEDABLE = "non_seedable"
+
+class RebuildStrategy(StrEnum):
+    SHADOW_REBUILD = "shadow_rebuild"
+    OFFLINE_REBUILD = "offline_rebuild"
+
+class RebuildExecutionMode(StrEnum):
+    FULL_REBUILD = "full_rebuild"
+    SEEDED_BOUNDED_REBUILD = "seeded_bounded_rebuild"
+    UNSEEDED_BOUNDED_REBUILD = "unseeded_bounded_rebuild"
+
+class DeploymentPhase(StrEnum):
+    PLAN = "plan"
+    BACKFILL = "backfill"
+    AUDIT = "audit"
+    PUBLISH = "publish"
+
+class DeploymentAction(StrEnum):
+    PLAN_SHADOW_TABLE = "plan_shadow_table"
+    PLAN_SHADOW_MATERIALIZED_VIEW = "plan_shadow_materialized_view"
+    PLAN_SHADOW_VIEW = "plan_shadow_view"
+    BACKFILL_SUBTREE = "backfill_subtree"
+    AUDIT_SUBTREE = "audit_subtree"
+    PUBLISH_SUBTREE = "publish_subtree"
+
+class RootDeploymentStateKind(StrEnum):
+    ACTIVE_VIEW_PRESENT = "active_view_present"
+    GREENFIELD = "greenfield"
+    LOGICAL_VIEW_MISSING = "logical_view_missing"
+    INVALID_ACTIVE_VIEW = "invalid_active_view"
+
+class DirectPlanReason(StrEnum):
+    SELECTED = "selected"
+    CHANGED = "changed"
+    SOURCE_DRIFT = "source_drift"
+    DOWNSTREAM_OF_SELECTED = "downstream_of_selected"
+    MISSING_UPSTREAM = "missing_upstream"
+    ALL_MODELS = "all_models"
+
+class DirectSelectionMode(StrEnum):
+    ALL_MODELS = "all_models"
+    EXPLICIT = "explicit"
+    CHANGED = "changed"
+
+class DirectSqlBaselineStatus(StrEnum):
+    FIRST_BASELINE = "first_baseline"
+    QUERY_CHANGED = "query_changed"
+    NO_QUERY_CHANGE = "no_query_change"
+    BASELINE_UNAVAILABLE = "baseline_unavailable"
+
+class DirectRelationAction(StrEnum):
+    DROP = "drop"
+    CREATE = "create"
+
+class DirectResourceKind(StrEnum):
+    TABLE = "table"
+    MATERIALIZED_VIEW = "materialized_view"
+    VIEW = "view"
+
+class PublishOperation(StrEnum):
+    PROMOTE = "promote"
+    ROLLBACK = "rollback"
+
+class PromotionPreviewClassification(StrEnum):
+    INITIAL_PUBLISH = "initial_publish"
+    PROMOTION = "promotion"
+
+@final
+@dataclass(frozen=True)
+class PlanningWarehouseSnapshot:
+    catalog: CatalogSnapshot
+    object_state_records: tuple[ObjectStateRecord, ...]
+
+@final
+@dataclass(frozen=True)
+class ActualKafkaTable:
+    key: ObjectKey
+    spec: KafkaTableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def kafka(self) -> KafkaSettings: ...
+
+@final
+@dataclass(frozen=True)
+class ActualTable:
+    key: ObjectKey
+    spec: TableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def engine(self) -> str: ...
+    @property
+    def order_by(self) -> tuple[str, ...]: ...
+    @property
+    def partition_by(self) -> str | None: ...
+    @property
+    def ttl(self) -> str | None: ...
+    @property
+    def settings(self) -> Mapping[str, str] | None: ...
+
+@final
+@dataclass(frozen=True)
+class ActualMaterializedView:
+    key: ObjectKey
+    spec: MaterializedViewSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def source_table_name(self) -> str: ...
+    @property
+    def target_table_name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class ActualView:
+    key: ObjectKey
+    spec: ViewSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class ActualState:
+    objects: tuple[ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView, ...]
+
+@final
+@dataclass(frozen=True)
+class RootDeploymentInspection:
+    root_key: ObjectKey
+    state_kind: str
+    active_deployment_id: str | None
+
+@final
+@dataclass(frozen=True)
+class ObjectStateMetadataRow:
+    deployment_id: str
+    database_name: str | None
+    object_type: str
+    object_name: str
+    normalized_fingerprint: str
+    normalized_query: str | None
+    recorded_at: str
+    observation_id: str
+    state_kind: str
+
+@final
+@dataclass(frozen=True)
+class PlannedObjectChange:
+    key: ObjectKey
+    change_type: PlannedChangeType | str
+    force_full_refresh: bool = False
+    forced_start_time: str | None = None
+    schema_change_kind: TableSchemaChangeKind | str | None = None
+    seed_compatibility: TableSchemaSeedCompatibility | str | None = None
+
+@final
+@dataclass(frozen=True)
+class PlannedSqlDiff:
+    key: ObjectKey
+    object_type: str
+    name: str
+    diff_lines: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class RebuildSubtree:
+    root_key: ObjectKey
+    affected_keys: tuple[ObjectKey, ...]
+    upstream_boundary_key: ObjectKey
+    strategy: RebuildStrategy | str
+    replay_required: bool = True
+    execution_mode: RebuildExecutionMode | str = RebuildExecutionMode.FULL_REBUILD
+    forced_full_refresh: bool = False
+    forced_start_time: str | None = None
+    requested_start_time: str | None = None
+    configured_backfill_mode: ReplayOnChangeMode | str | None = None
+    execution_lookback_seconds: int | None = None
+    history_preserving_bounded_supported: bool = True
+    resolved_bounded_replay_fallback: BoundedReplayFallback | str | None = None
+
+@final
+@dataclass(frozen=True)
+class DeploymentStep:
+    step_id: str
+    phase: DeploymentPhase | str
+    action: DeploymentAction | str
+    root_key: ObjectKey
+    target_key: ObjectKey | None = None
+    physical_name: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PreparedShadowObject:
+    logical_key: ObjectKey
+    physical_name: str
+    logical_model_name: str
+
+@final
+@dataclass(frozen=True)
+class PlannerWarning:
+    warning_code: str
+    message: str
+    root_key: ObjectKey
+    target_key: ObjectKey | None = None
+
+@final
+@dataclass(frozen=True)
+class DeploymentPlan:
+    deployment_id: str | None
+    object_changes: tuple[PlannedObjectChange, ...]
+    rebuild_subtrees: tuple[RebuildSubtree, ...]
+    steps: tuple[DeploymentStep, ...]
+    prepared_shadow_objects: tuple[PreparedShadowObject, ...]
+    warnings: tuple[PlannerWarning, ...]
+    sql_diffs: tuple[PlannedSqlDiff, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class PreparedObjectMapping:
+    logical_key: ObjectKey
+    physical_name: str
+    logical_model_name: str
+
+@final
+@dataclass(frozen=True)
+class ObjectStateRecord:
+    deployment_id: str
+    key: ObjectKey
+    normalized_fingerprint: str
+    normalized_query: str | None
+    recorded_at: str
+    observation_id: str = ""
+    state_kind: str = "deployment"
+
+@final
+@dataclass(frozen=True)
+class DeploymentRecord:
+    deployment_id: str
+    created_at: str
+    status: str
+    replay_lineage_mode: ReplayLineageMode | str
+    selected_root_keys: tuple[ObjectKey, ...]
+    warning_codes: tuple[str, ...]
+    prepared_object_mappings: tuple[PreparedObjectMapping, ...]
+    workflow_fingerprint: str = ""
+    boundary_time: str | None = None
+    tool_version: str = ""
+
+@final
+@dataclass(frozen=True)
+class DeploymentWatermarkRecord:
+    deployment_id: str
+    root_key: ObjectKey
+    anchor_key: ObjectKey
+    boundary_key: str
+    cutoff_value: str
+
+@final
+@dataclass(frozen=True)
+class PublishEventRecord:
+    deployment_id: str
+    published_at: str
+    logical_view_names: tuple[str, ...]
+    database: str = ""
+    physical_relation_names: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class MetadataState:
+    object_states: tuple[ObjectStateRecord, ...]
+    deployments: tuple[DeploymentRecord, ...]
+    deployment_watermarks: tuple[DeploymentWatermarkRecord, ...]
+    publish_events: tuple[PublishEventRecord, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectWarehouseSnapshot:
+    catalog: CatalogSnapshot
+    fingerprints: AdapterDirectFingerprintSnapshot = ...
+
+@final
+@dataclass(frozen=True)
+class DirectPlanEntry:
+    model_key: LogicalResourceKey
+    reason: DirectPlanReason | str
+    relation_names: tuple[str, ...]
+    resource_kinds: tuple[DirectResourceKind | str, ...]
+    driving_input_key: LogicalResourceKey | None
+    is_replay_root: bool
+    sql_change: DirectSqlChange | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectSqlChange:
+    status: DirectSqlBaselineStatus | str
+    current_sql: str
+    current_hash: str
+    previous_sql: str | None
+    previous_hash: str | None
+    unified_diff: str | None
+    warning: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectPrerequisite:
+    key: LogicalResourceKey
+    relation_names: tuple[str, ...]
+    present: bool
+    framework_managed: bool = False
+
+@final
+@dataclass(frozen=True)
+class DirectReplayRoot:
+    model_key: LogicalResourceKey
+    driving_input_key: LogicalResourceKey
+    driving_input_relation_name: str
+    driving_input_replay_columns: AdapterReplayColumns
+    replay_boundary_mode: ReplayLineageMode | str
+    propagated_model_keys: tuple[LogicalResourceKey, ...]
+    has_aggregate_semantics: bool = False
+    replay_settings: tuple[tuple[str, str], ...] = ()
+
+@final
+@dataclass(frozen=True)
+class DirectRelationOperation:
+    relation_name: str
+    action: DirectRelationAction | str
+    model_key: LogicalResourceKey
+    resource_kind: DirectResourceKind | str
+
+@final
+@dataclass(frozen=True)
+class DirectSourceDriftSelection:
+    source_key: LogicalResourceKey
+    pipeline_name: str
+    reader_pipeline_names: tuple[str, ...]
+    drifted_setting_names: tuple[str, ...]
+    model_keys: tuple[LogicalResourceKey, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectRowErrorPolicyChange:
+    model_key: LogicalResourceKey
+    view_name: str
+    dead_letter_view_name: str
+    desired_policy: RowErrorPolicy
+    landing_view_names: tuple[str, ...]
+    logical_view_name: str = ""
+    logical_dead_letter_view_name: str = ""
+    previous_view_definition: str | None = None
+    landing_repair_only: bool = False
+
+@final
+@dataclass(frozen=True)
+class DirectPlan:
+    database: str
+    user_scope: tuple[LogicalResourceKey, ...]
+    execution_scope: tuple[LogicalResourceKey, ...]
+    prerequisite_scope: tuple[DirectPrerequisite, ...]
+    entries: tuple[DirectPlanEntry, ...]
+    replay_roots: tuple[DirectReplayRoot, ...]
+    teardown_operations: tuple[DirectRelationOperation, ...]
+    creation_operations: tuple[DirectRelationOperation, ...]
+    selection_mode: DirectSelectionMode | str = DirectSelectionMode.EXPLICIT
+    prerequisite_execution_scope: tuple[LogicalResourceKey, ...] = ()
+    warnings: tuple[PlannerWarning, ...] = ()
+    effective_start_time: str | None = None
+    source_drift_selections: tuple[DirectSourceDriftSelection, ...] = ()
+
+@dataclass(frozen=True)
+class BackfillBootstrapRequest:
+    desired_state: DesiredState
+    default_database: str
+    metadata_database: str
+    replay_lineage_mode: ReplayLineageMode | str
+    confirmed_plan: DeploymentPlan | None = None
+    deployment_id: str | None = None
+    full_refresh_keys: frozenset[ObjectKey] = frozenset()
+    start_time_keys: frozenset[ObjectKey] = frozenset()
+    start_time: str | None = None
+    created_at: str | None = None
+    boundary_time: str | None = None
+    stabilization_seconds: float = 5.0
+    confirmed_target_catalog: CatalogSnapshot | None = None
+    confirmed_metadata_catalog: CatalogSnapshot | None = None
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class BackfillBootstrapResult:
+    deployment_id: str
+    created_at: str
+    deployment_plan: DeploymentPlan
+    root_reports: tuple[RootBackfillReport, ...]
+    existing_relation_names: frozenset[str]
+
+@final
+@dataclass(frozen=True)
+class BackfillRootReplayResult:
+    root_key: ObjectKey
+    written_rows: int | None
+
+@final
+@dataclass(frozen=True)
+class BackfillExecutionResult:
+    bootstrap: BackfillBootstrapResult
+    boundary_time: str
+    replay_results: tuple[BackfillRootReplayResult, ...]
+
+@final
+@dataclass(frozen=True)
+class BackfillDeploymentIdentity:
+    deployment_id: str
+    created_at: str
+
+@final
+@dataclass(frozen=True)
+class RootBackfillReport:
+    root_key: ObjectKey
+    state_kind: str
+    replay_strategy: str
+    active_deployment_id: str | None
+
+@dataclass(frozen=True)
+class DirectBuildRequest:
+    plan: DirectPlan
+    realized_project: RealizedProject
+    database: str
+    metadata_database: str
+    tool_version: str
+    workflow_id: str = ...
+    stabilization_seconds: float = 5.0
+    boundary_time: str | None = None
+    audits: tuple[DirectBuildAudit, ...] = ()
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+    @property
+    def effective_start_time(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class DriftedManagedSource:
+    source_key: LogicalResourceKey
+    owner_pipeline_names: tuple[str, ...]
+    drifted_setting_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectBuildAudit:
+    name: str
+    query: str
+    severity: str
+    description: str | None
+
+@final
+@dataclass(frozen=True)
+class DirectReplayRange:
+    partition_value: str | None
+    source_partition_column_name: str | None
+    source_position_column_name: str
+    source_timestamp_column_name: str | None
+    lower_value: str
+    upper_value: str
+    replay_cutoff_value: str
+    cutoff_inclusive: bool
+    anchor_row_count: int | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectReplayCapture:
+    capture_id: str
+    workflow_id: str
+    target_database: str
+    logical_model_name: str
+    driving_input_relation_name: str
+    boundary_mode: ReplayLineageMode | str
+    captured_at: str | None
+    ranges: tuple[DirectReplayRange, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectRuntimeReplay:
+    model_name: str
+    capture_step_id: str
+    replay_step_id: str
+    replay: AdapterReplayRequest
+    boundary_column_type: str | None
+    managed_landing_anchor: bool = False
+
+@dataclass(frozen=True)
+class DirectBuildWorkflow:
+    template: BuildWorkflow
+    runtime_replays: tuple[DirectRuntimeReplay, ...]
+    workflow_id: str
+    source_recovery_statements: tuple[WarehouseStatement, ...] = ()
+    recreated_sources: tuple[PopulationSourceRecreation, ...] = ()
+    @property
+    def mode(self) -> WorkflowMode: ...
+    @property
+    def plan_json(self) -> str: ...
+    @property
+    def statements(self) -> tuple[WarehouseStatement, ...]: ...
+
+@final
+@dataclass(frozen=True)
+class DirectRuntimeExecution:
+    workflow: BuildWorkflow
+    execution: WorkflowExecutionResult
+    captures: tuple[DirectReplayCapture, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectReplayBoundary:
+    model_name: str
+    driving_input_relation_name: str
+    replay_boundary_mode: ReplayLineageMode | str
+    boundary_key: str
+    cutoff_value: str
+    cutoff_inclusive: bool
+
+@final
+@dataclass(frozen=True)
+class DirectRootReplayResult:
+    model_name: str
+    written_rows: int | None
+
+@final
+@dataclass(frozen=True)
+class DirectBuildResult:
+    database: str
+    preserved_source_relation_names: tuple[str, ...]
+    created_source_relation_names: tuple[str, ...]
+    dropped_relation_names: tuple[str, ...]
+    created_relation_names: tuple[str, ...]
+    boundary_time: str
+    boundaries: tuple[DirectReplayBoundary, ...]
+    replay_results: tuple[DirectRootReplayResult, ...]
+    effective_start_time: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectBuildExecutionResult:
+    build_result: DirectBuildResult
+    audit_result: SqlAuditRunResult
+
+@final
+@dataclass(frozen=True)
+class PopulationRoot:
+    root_key: ObjectKey
+    affected_keys: tuple[ObjectKey, ...]
+    upstream_boundary_key: ObjectKey
+    replay_lineage_mode: ReplayLineageMode | str
+    execution_mode: RebuildExecutionMode | str = RebuildExecutionMode.FULL_REBUILD
+    forced_start_time: str | None = None
+    execution_lookback_seconds: int | None = None
+    persist_watermarks: bool = True
+
+@final
+@dataclass(frozen=True)
+class PopulationObject:
+    logical_key: ObjectKey
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PopulationPlan:
+    execution_id: str
+    roots: tuple[PopulationRoot, ...]
+    objects: tuple[PopulationObject, ...]
+
+@final
+@dataclass(frozen=True)
+class PopulationWatermark:
+    root_key: ObjectKey
+    anchor_key: ObjectKey
+    boundary_key: str
+    cutoff_value: str
+
+@final
+@dataclass(frozen=True)
+class PopulationManagedSource:
+    resource: AdapterManagedSource
+    database: str
+
+@final
+@dataclass(frozen=True)
+class PopulationRealization:
+    resource: (
+        AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView
+    )
+    database: str
+
+@final
+@dataclass(frozen=True)
+class PopulationSourceRecreation:
+    managed_source: PopulationManagedSource
+    landing_view_name: str
+    landing_relation_name: str
+    consumer_group: str
+    drifted_setting_names: tuple[str, ...]
+    @property
+    def staged_relation_name(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class PopulationSourcePreparation:
+    preserved_relation_names: tuple[str, ...]
+    created_relation_names: tuple[str, ...]
+    landing_views: tuple[DesiredMaterializedView, ...]
+    managed_sources: tuple[PopulationManagedSource, ...]
+    recreated_sources: tuple[PopulationSourceRecreation, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class PublishRequest:
+    deployment_id: str | None
+    metadata_database: str
+    default_database: str
+    operation: PublishOperation | str = PublishOperation.PROMOTE
+    previous_deployment_id: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PublishedView:
+    view_name: str
+    target_table_name: str
+
+@final
+@dataclass(frozen=True)
+class PublishResult:
+    deployment_id: str
+    published_views: tuple[PublishedView, ...]
+    per_relation_atomic_replace: bool
+    graph_atomic_publish: bool
+    operation: PublishOperation | str = PublishOperation.PROMOTE
+    previous_deployment_id: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingAddition:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingReplacement:
+    database: str
+    logical_name: str
+    from_physical_name: str
+    to_physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingRemoval:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionOrphanedRelation:
+    database: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class DeploymentPromotionPreview:
+    classification: PromotionPreviewClassification
+    additions: tuple[PromotionBindingAddition, ...]
+    replacements: tuple[PromotionBindingReplacement, ...]
+    removals: tuple[PromotionBindingRemoval, ...]
+    orphaned_relations: tuple[PromotionOrphanedRelation, ...]
+
+@final
+@dataclass(frozen=True)
+class RollbackRequest:
+    deployment_id: str | None
+    previous: bool
+    metadata_database: str
+    default_database: str
+
+@final
+@dataclass(frozen=True)
+class RollbackPlan:
+    current_deployment_id: str
+    target_deployment_id: str
+    logical_view_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class RepairActiveViewRequest:
+    default_database: str
+    table_name: str
+    deployment_id: str
+
+@final
+@dataclass(frozen=True)
+class RepairActiveViewResult:
+    table_name: str
+    target_table_name: str
+
+class DeploymentPlanError(ValueError): ...
+class ActualStateError(ValueError): ...
+class DirectPlanError(ValueError): ...
+class BackfillExecutionError(ValueError): ...
+class DirectBuildError(RuntimeError): ...
+
+class DirectWorkflowExecutionError(DirectBuildError):
+    workflow: BuildWorkflow
+    partial_result: WorkflowExecutionResult
+    captures: tuple[DirectReplayCapture, ...]
+    failed_step_id: str
+    cause: BaseException
+    def __init__(
+        self,
+        *,
+        workflow: BuildWorkflow,
+        partial_result: WorkflowExecutionResult,
+        captures: tuple[DirectReplayCapture, ...],
+        failed_step_id: str,
+        cause: BaseException,
+    ) -> None: ...
+
+class PopulationScopeError(LookupError): ...
+class PublishExecutionError(ValueError): ...
+
+PLANNED_CHANGE_TYPE_REBUILD: PlannedChangeType
+PLANNED_CHANGE_TYPE_CREATE: PlannedChangeType
+PLANNED_CHANGE_TYPE_NO_OP: PlannedChangeType
+TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING: TableSchemaChangeKind
+TABLE_SCHEMA_CHANGE_KIND_BREAKING: TableSchemaChangeKind
+TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE: TableSchemaSeedCompatibility
+TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE: TableSchemaSeedCompatibility
+REBUILD_STRATEGY_SHADOW: RebuildStrategy
+REBUILD_EXECUTION_MODE_FULL: RebuildExecutionMode
+REBUILD_EXECUTION_MODE_SEEDED_BOUNDED: RebuildExecutionMode
+REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED: RebuildExecutionMode
+DEPLOYMENT_PHASE_PLAN: DeploymentPhase
+DEPLOYMENT_ACTION_PLAN_SHADOW_TABLE: DeploymentAction
+BLANK_VALUES: tuple[object, ...]
+DIRECT_DEAD_LETTERS_VIEW_SUFFIX: str
+REDACTED_SECRET_PLACEHOLDER: str
+ADAPTER_DATABASE_PLACEHOLDER: str
+METADATA_OBJECT_STATE_TABLE_NAME: str
+METADATA_DEPLOYMENTS_TABLE_NAME: str
+METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME: str
+METADATA_PUBLISH_HISTORY_TABLE_NAME: str
+METADATA_SCHEMA_VERSIONS_TABLE_NAME: str
+METADATA_DIRECT_FINGERPRINTS_TABLE_NAME: str
+METADATA_MANIFESTS_TABLE_NAME: str
+METADATA_DEAD_LETTERS_TABLE_NAME: str
+QUARANTINE_LIVE_VIEW_PATTERN: str
+METADATA_INVOCATIONS_TABLE_NAME: str
+METADATA_NODE_RESULTS_TABLE_NAME: str
+METADATA_RUN_EVENTS_TABLE_NAME: str
+METADATA_RUN_STATEMENTS_TABLE_NAME: str
+METADATA_SENSOR_CHECKPOINTS_TABLE_NAME: str
+METADATA_SENSOR_TICKS_TABLE_NAME: str
+METADATA_SENSOR_STEPS_TABLE_NAME: str
+METADATA_SENSOR_OVERRIDES_TABLE_NAME: str
+METADATA_SENSOR_LEASES_TABLE_NAME: str
+VIRTUAL_OBJECT_STATE_KIND_DEPLOYMENT: str
+VIRTUAL_OBJECT_STATE_KIND_RECONCILE: str
+VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE: str
+MANAGED_SOURCE_KIND_KAFKA: str
+ADAPTER_SECRET_PLACEHOLDER_PREFIX: str
+ADAPTER_SECRET_PLACEHOLDER_SUFFIX: str
+CLICKHOUSE_ADAPTER_NAME: str
+CLICKHOUSE_WRITTEN_ROWS_SUMMARY_KEY: str
+CLICKHOUSE_DEFAULT_DATABASE: str
+CLICKHOUSE_SQL_ANALYSIS_DIALECT: str
+CLICKHOUSE_VIRTUAL_ENVIRONMENTS_SUPPORTED: bool
+CLICKHOUSE_MANAGED_SOURCE_KINDS: frozenset[str]
+CLICKHOUSE_REPLAY_BOUNDARY_MODES: frozenset[AdapterReplayBoundaryMode]
+CLICKHOUSE_HISTORY_PREFIX_SEED_SUPPORTED: bool
+CLICKHOUSE_STABLE_LOGICAL_BINDINGS_SUPPORTED: bool
+CLICKHOUSE_PER_RELATION_ATOMIC_REPLACE: bool
+CLICKHOUSE_GRAPH_ATOMIC_PUBLISH: bool
+CLICKHOUSE_SET_DIFFERENCE_COMPARISON_SUPPORTED: bool
+CLICKHOUSE_DIRECT_REBUILD_SUPPORTED: bool
+CLICKHOUSE_CATALOG_RETRY_DELAY_SECONDS: float
+CLICKHOUSE_MODEL_TABLE_NAME_PREFIX: str
+STAGED_SOURCE_NAME_PREFIX: str
 
 type _Span = tuple[int, int, int, int, int, int]
 

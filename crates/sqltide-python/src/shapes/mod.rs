@@ -11,10 +11,13 @@ use pyo3::exceptions::{
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{IntoPyDict, PyDict, PyFrozenSet, PyString, PyTuple, PyType};
+use pyo3::types::{
+    IntoPyDict, PyCFunction, PyDict, PyFloat, PyFrozenSet, PyString, PyTuple, PyType,
+};
 
 mod compiler_analysis;
 mod compiler_project;
+mod planner_execution;
 
 /// The callable a `default_factory` field calls for each new instance.
 pub(crate) type Factory = for<'py> fn(Python<'py>) -> PyResult<Bound<'py, PyAny>>;
@@ -26,12 +29,16 @@ pub(crate) enum Given {
     None,
     Bool(bool),
     Int(i64),
+    Float(f64),
     Str(&'static str),
     EmptyTuple,
+    EmptyFrozenSet,
     /// A member of a native enum, by its `sqltide._native` attribute and member name.
     Member(&'static str, &'static str),
     /// `field(default_factory=...)`: a fresh value from calling the factory's callable.
     Factory(Factory),
+    /// A shared default built on first use, for a value whose class is still defined in Python.
+    Lazy(Factory),
 }
 
 /// How a constructor argument is normalized, as the dataclass's `__post_init__` did.
@@ -70,10 +77,14 @@ impl FieldSpec {
     };
 }
 
-/// One shape: its class name and fields in declaration order.
+/// A check run on the bound and normalized field values, as the rest of `__post_init__` did.
+pub(crate) type PostInit = for<'py> fn(&[Bound<'py, PyAny>]) -> PyResult<()>;
+
+/// One shape: its class name, fields in declaration order and optional post-init check.
 pub(crate) struct ShapeSpec {
     pub(crate) qualname: &'static str,
     pub(crate) fields: &'static [FieldSpec],
+    pub(crate) post_init: Option<PostInit>,
 }
 
 /// The Python name of a Rust field identifier, without a raw-identifier prefix.
@@ -90,9 +101,12 @@ pub(crate) const fn unraw(name: &'static str) -> &'static str {
 /// Defines frozen shapes under one public module path. Each shape is written as
 /// `Name { field, field(default = Given::None), ... }`, optionally followed by
 /// `@impl { ... }` holding its extra methods and properties. `Name: Base { ... }` subclasses
-/// another shape and lists the base fields first, and `Name @no_repr { ... }` keeps the object
-/// repr, as `@dataclass(repr=False)` did.
+/// another shape and lists the base fields first, `Name @no_repr { ... }` keeps the object
+/// repr, as `@dataclass(repr=False)` did, and `@post_init(check)` after the fields runs a
+/// check over the bound values.
 macro_rules! shapes {
+    (@post_init) => { None };
+    (@post_init $check:path) => { Some($check) };
     (@methods [] $hash:tt $methods:tt impl $name:ident { $($body:tt)* }) => {
         $hash $methods
         impl $name {
@@ -118,6 +132,7 @@ macro_rules! shapes {
         $name:ident $(: $base:ident)? $(@$flag:ident)? {
             $($field:ident $(($($key:ident = $value:expr),* $(,)?))?),* $(,)?
         }
+        $(@post_init($check:path))?
         $(@impl { $($methods:tt)* })?
     )*) => { $(
         $(#[doc = $doc])*
@@ -134,6 +149,7 @@ macro_rules! shapes {
                     $($($key: $value,)*)?
                     ..$crate::shapes::FieldSpec::BASE
                 }),*],
+                post_init: $crate::shapes::shapes!(@post_init $($check)?),
             };
 
             fn values<'py>(&self, py: pyo3::Python<'py>) -> Vec<pyo3::Bound<'py, pyo3::PyAny>> {
@@ -169,9 +185,7 @@ macro_rules! shapes {
             }
 
             #[classattr]
-            fn __dataclass_fields__(
-                py: pyo3::Python<'_>,
-            ) -> pyo3::PyResult<pyo3::Py<pyo3::types::PyDict>> {
+            fn __dataclass_fields__(py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
                 $crate::shapes::dataclass_fields(py, &Self::SPEC)
             }
 
@@ -220,6 +234,18 @@ macro_rules! shapes {
                 name: &pyo3::Bound<'_, pyo3::types::PyString>,
             ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
                 $crate::shapes::missing_attribute(slf.as_any(), name)
+            }
+
+            /// Rebuilds the shape from its field values, so `copy`, `deepcopy` and `pickle`
+            /// work as they did on the dataclass.
+            fn __reduce__<'py>(
+                slf: &pyo3::Bound<'py, Self>,
+            ) -> pyo3::PyResult<(
+                pyo3::Bound<'py, pyo3::types::PyType>,
+                pyo3::Bound<'py, pyo3::types::PyTuple>,
+            )> {
+                let py: pyo3::Python<'py> = slf.py();
+                Ok((slf.get_type(), pyo3::types::PyTuple::new(py, slf.get().values(py))?))
             }
 
             fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
@@ -335,19 +361,53 @@ pub(crate) fn bind<'py>(
             missing_list(&missing)
         )));
     }
+    let defaults: Option<Bound<'py, PyTuple>> = if slots.iter().any(Option::is_none) {
+        Some(shared_defaults(py, spec)?)
+    } else {
+        None
+    };
     let mut values: Vec<Bound<'py, PyAny>> = Vec::with_capacity(total);
-    for (field, slot) in spec.fields.iter().zip(slots) {
-        let value: Bound<'py, PyAny> = match slot {
-            Some(value) => value,
-            None => default_value(py, field.default)?
-                .ok_or_else(|| PyValueError::new_err("required field has no value"))?,
+    for (index, (field, slot)) in spec.fields.iter().zip(slots).enumerate() {
+        let value: Bound<'py, PyAny> = match (slot, field.default, &defaults) {
+            (Some(value), _, _) => value,
+            (None, Given::Factory(factory), _) => factory(py)?.call0()?,
+            (None, _, Some(defaults)) => defaults.get_item(index)?,
+            (None, _, None) => return Err(PyValueError::new_err("required field has no value")),
         };
         values.push(value);
     }
     for (field, value) in spec.fields.iter().zip(values.iter_mut()) {
         *value = coerce(py, field.coerce, value)?;
     }
+    if let Some(check) = spec.post_init {
+        check(&values)?;
+    }
     Ok(values)
+}
+
+/// Each shape's plain default values by class name, built once so every instance and the
+/// `dataclasses` field table share one default object, as a dataclass's defaults are shared.
+static DEFAULTS: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+/// The shape's default values in field order, `None` where a field is required or has a
+/// default factory.
+fn shared_defaults<'py>(py: Python<'py>, spec: &ShapeSpec) -> PyResult<Bound<'py, PyTuple>> {
+    let table: &Bound<'py, PyDict> = DEFAULTS
+        .get_or_init(py, || PyDict::new(py).unbind())
+        .bind(py);
+    if let Some(found) = table.get_item(spec.qualname)? {
+        return Ok(found.cast_into()?);
+    }
+    let mut values: Vec<Bound<'py, PyAny>> = Vec::with_capacity(spec.fields.len());
+    for field in spec.fields {
+        values.push(match field.default {
+            Given::Factory(_) => py.None().into_bound(py),
+            given => default_value(py, given)?.unwrap_or_else(|| py.None().into_bound(py)),
+        });
+    }
+    let defaults: Bound<'py, PyTuple> = PyTuple::new(py, values)?;
+    table.set_item(spec.qualname, &defaults)?;
+    Ok(defaults)
 }
 
 fn default_value(py: Python<'_>, given: Given) -> PyResult<Option<Bound<'_, PyAny>>> {
@@ -356,11 +416,23 @@ fn default_value(py: Python<'_>, given: Given) -> PyResult<Option<Bound<'_, PyAn
         Given::None => py.None().into_bound(py),
         Given::Bool(value) => value.into_pyobject(py)?.to_owned().into_any(),
         Given::Int(value) => value.into_pyobject(py)?.into_any(),
+        Given::Float(value) => PyFloat::new(py, value).into_any(),
         Given::Str(value) => PyString::new(py, value).into_any(),
         Given::EmptyTuple => PyTuple::empty(py).into_any(),
+        Given::EmptyFrozenSet => PyFrozenSet::empty(py)?.into_any(),
         Given::Member(class, member) => native_enum(py, class)?.getattr(member)?,
         Given::Factory(factory) => factory(py)?.call0()?,
+        Given::Lazy(build) => build(py)?,
     }))
+}
+
+/// `value.first.second...`, read one attribute at a time, as a property's attribute chain.
+pub(crate) fn path(py: Python<'_>, value: &Py<PyAny>, names: &[&str]) -> PyResult<Py<PyAny>> {
+    let mut current: Bound<'_, PyAny> = value.bind(py).clone();
+    for name in names {
+        current = current.getattr(*name)?;
+    }
+    Ok(current.unbind())
 }
 
 /// The class a `default_factory` field calls, such as `dict` or a native shape.
@@ -411,18 +483,58 @@ fn probe(py: Python<'_>) -> PyResult<&(Py<PyAny>, Py<PyAny>)> {
     })
 }
 
-/// The `__dataclass_fields__` table that `dataclasses.fields`, `replace` and `asdict` read.
-pub(crate) fn dataclass_fields(py: Python<'_>, spec: &ShapeSpec) -> PyResult<Py<PyDict>> {
+/// The `__dataclass_fields__` table that `dataclasses.fields`, `replace` and `asdict` read. A
+/// shape with a lazy default gets a descriptor that builds the table on first read instead, so
+/// the native module never imports the Python class behind that default while it loads.
+pub(crate) fn dataclass_fields(py: Python<'_>, spec: &'static ShapeSpec) -> PyResult<Py<PyAny>> {
+    if spec
+        .fields
+        .iter()
+        .any(|field| matches!(field.default, Given::Lazy(_)))
+    {
+        let lazy: LazyDataclassFields = LazyDataclassFields {
+            spec,
+            table: PyOnceLock::new(),
+        };
+        return Ok(Bound::new(py, lazy)?.into_any().unbind());
+    }
+    Ok(field_table(py, spec)?.into_any())
+}
+
+/// `__dataclass_fields__` of a shape with a lazy default, built when first read.
+#[pyclass(frozen)]
+pub(crate) struct LazyDataclassFields {
+    spec: &'static ShapeSpec,
+    table: PyOnceLock<Py<PyDict>>,
+}
+
+#[pymethods]
+impl LazyDataclassFields {
+    fn __get__(
+        &self,
+        py: Python<'_>,
+        _instance: Option<&Bound<'_, PyAny>>,
+        _owner: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyDict>> {
+        Ok(self
+            .table
+            .get_or_try_init(py, || field_table(py, self.spec))?
+            .clone_ref(py))
+    }
+}
+
+fn field_table(py: Python<'_>, spec: &ShapeSpec) -> PyResult<Py<PyDict>> {
     let template: &Bound<'_, PyAny> = probe(py)?.0.bind(py);
     let copy: Bound<'_, PyAny> = py.import("copy")?.getattr("copy")?;
+    let defaults: Bound<'_, PyTuple> = shared_defaults(py, spec)?;
     let table: Bound<'_, PyDict> = PyDict::new(py);
-    for field in spec.fields {
+    for (index, field) in spec.fields.iter().enumerate() {
         let entry: Bound<'_, PyAny> = copy.call1((template,))?;
         entry.setattr("name", field.name)?;
-        if let Given::Factory(factory) = field.default {
-            entry.setattr("default_factory", factory(py)?)?;
-        } else if let Some(value) = default_value(py, field.default)? {
-            entry.setattr("default", value)?;
+        match field.default {
+            Given::Required => {}
+            Given::Factory(factory) => entry.setattr("default_factory", factory(py)?)?,
+            _ => entry.setattr("default", defaults.get_item(index)?)?,
         }
         entry.setattr("compare", field.compare)?;
         entry.setattr("repr", field.repr)?;
@@ -657,9 +769,66 @@ pub(crate) fn add_class<T: pyo3::PyTypeInfo>(module: &Bound<'_, PyModule>) -> Py
     add(module, name.to_str()?, class)
 }
 
+/// Constants built on first read, by name.
+static LAZY_VALUES: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+/// Serves `constants` from `sqltide._native.__getattr__`, each built on first read and kept, for
+/// values made from a class still defined in Python so the native module never imports it while
+/// it loads. Every other missing name raises the `AttributeError` a module raises.
+pub(crate) fn lazy_constants(
+    module: &Bound<'_, PyModule>,
+    constants: &'static [(&'static str, Factory)],
+) -> PyResult<()> {
+    for (name, _) in constants {
+        if module.hasattr(*name)? {
+            return Err(PyImportError::new_err(format!(
+                "sqltide._native already defines {name}; register the constant under a \
+                 distinct name"
+            )));
+        }
+    }
+    let owner: Py<PyModule> = module.clone().unbind();
+    let getattr = PyCFunction::new_closure(
+        module.py(),
+        Some(c"__getattr__"),
+        None,
+        move |args: &Bound<'_, PyTuple>,
+              _kwargs: Option<&Bound<'_, PyDict>>|
+              -> PyResult<Py<PyAny>> {
+            let py: Python<'_> = args.py();
+            let name: Bound<'_, PyString> = args.get_item(0)?.cast_into()?;
+            let Some((_, build)) = constants
+                .iter()
+                .find(|(key, _)| name.to_str().is_ok_and(|text| text == *key))
+            else {
+                let module: &Bound<'_, PyModule> = owner.bind(py);
+                let message: String =
+                    format!("module '{}' has no attribute '{name}'", module.name()?);
+                let keywords: Bound<'_, PyDict> =
+                    [("name", name.as_any()), ("obj", module.as_any())].into_py_dict(py)?;
+                return Err(PyErr::from_value(
+                    py.get_type::<PyAttributeError>()
+                        .call((message,), Some(&keywords))?,
+                ));
+            };
+            let cache: &Bound<'_, PyDict> = LAZY_VALUES
+                .get_or_init(py, || PyDict::new(py).unbind())
+                .bind(py);
+            if let Some(value) = cache.get_item(&name)? {
+                return Ok(value.unbind());
+            }
+            let value: Bound<'_, PyAny> = build(py)?;
+            cache.set_item(&name, &value)?;
+            Ok(value.unbind())
+        },
+    )?;
+    add(module, "__getattr__", getattr)
+}
+
 /// Registers every native shape, enum, exception and constant. It runs after every other
 /// registration so the name guard sees the whole module.
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compiler_analysis::register(module)?;
-    compiler_project::register(module)
+    compiler_project::register(module)?;
+    planner_execution::register(module)
 }

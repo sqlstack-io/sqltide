@@ -8,7 +8,8 @@ use pyo3::types::{PyBytes, PyDict, PyFrozenSet, PyString, PyTuple};
 use sha2::{Digest, Sha256};
 
 use super::{
-    Coerce, Given, add, add_class, base_init, exception, factory, native_enum, shapes, str_enum,
+    Coerce, Given, add, add_class, base_init, exception, factory, native_enum, path, shapes,
+    str_enum,
 };
 use crate::project_discovery::immutable_config_pairs;
 
@@ -19,15 +20,6 @@ const DISCOVERY_TYPES: &str = "sqltide.compiler.discovery.types";
 const ACCESS_TYPES: &str = "sqltide.compiler.access.types";
 
 const READ_ONLY_MAPPING: Coerce = Coerce::Maybe(&Coerce::ReadOnlyMapping);
-
-/// `value.first.second...`, read one attribute at a time.
-fn path(py: Python<'_>, value: &Py<PyAny>, names: &[&str]) -> PyResult<Py<PyAny>> {
-    let mut current: Bound<'_, PyAny> = value.bind(py).clone();
-    for name in names {
-        current = current.getattr(*name)?;
-    }
-    Ok(current.unbind())
-}
 
 fn truthy(value: &Bound<'_, PyAny>, other: &Bound<'_, PyAny>, op: CompareOp) -> PyResult<bool> {
     value.rich_compare(other, op)?.is_truthy()
