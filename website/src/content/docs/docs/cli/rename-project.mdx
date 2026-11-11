@@ -1,0 +1,63 @@
+---
+title: "sqt rename-project"
+description: "Rename a project while keeping its Kafka consumer groups, manifest history and role grants."
+---
+
+Preview a project rename for the selected target:
+
+```bash
+sqt rename-project storefront
+sqt rename-project storefront --target prod
+```
+
+The default is a dry run. It prints the configuration edit, the Kafka consumer groups that stay the
+same, the number of manifests to copy and the number of project role assignments to move, and
+writes nothing.
+
+Apply the rename explicitly:
+
+```bash
+sqt rename-project storefront --apply
+```
+
+`--apply` does not prompt. It runs these steps in order:
+
+1. Copies the target's manifest history from the old name to the new one under the target mutation
+   lock, so [`sqt destroy`](/docs/cli/destruction/) keeps finding relations recorded before the
+   rename.
+2. Moves project role assignments, active and revoked, from the old name to the new one in the
+   control store.
+3. Edits `sqltide_project.toml` in place: sets `name` and, when a managed Kafka source uses the
+   default consumer group, adds `consumer_group_identity` set to the old name. Comments and
+   formatting are kept.
+
+The configuration is edited last, so a failure leaves the old name working, and running the same
+command again completes the rename. Steps that already ran are not repeated: manifests already
+copied are skipped and assignments already moved are not moved again.
+
+The command refuses to run when:
+
+- the new name equals the current name, is empty or blank-padded, or contains `${`
+- a build or other run holds the target mutation lock
+- the target already records manifests for the new name that did not come from the old name
+- both names hold the same active role assignment for the same user, role and target scope
+- the rename would change any Kafka consumer group
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `NEW_NAME` | The new project name |
+| `--apply` | Apply the rename; without it the command is a dry run |
+| `--target` | Named project target whose warehouse history is copied |
+| `--database` | Target database override |
+| `--control-store-url` | Account control store; defaults to `SQLTIDE_CONTROL_STORE_URL`, then the project's `.sqltide/control.db` when it exists |
+| `--project-dir`, `--host`, `--port`, `--username`, `--password`, `--vars` | As for other commands |
+
+Manifest history is copied for the selected target only. Other targets keep their history under
+the old name, so `sqt destroy` on those targets does not see relations recorded there before the
+rename. The dry run lists those targets.
+
+Restart a running `sqt dev` server after a rename. See
+[Renaming a project](/docs/concepts/project-configuration/#renaming-a-project) for what a rename
+changes.

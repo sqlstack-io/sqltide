@@ -17,6 +17,10 @@ The Sources index summarizes every authored source. Open a managed Kafka source 
 - the effective consumer group
 - landed, committed, and broker-end offsets by partition
 
+When the live Kafka table consumes as a different consumer group than the project declares, the
+source shows a consumer group drift warning naming both groups. Lag is read for the declared group.
+See [Project identity](/docs/concepts/project-configuration/#project-identity).
+
 Kafka lag and last arrival are different signals:
 
 - **Kafka lag** is the broker high-water offset minus the effective consumer group's committed

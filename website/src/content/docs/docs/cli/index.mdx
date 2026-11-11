@@ -19,6 +19,7 @@ SQLTide 0.60.0. Run from inside a project or pass `--project-dir PATH`.
 | Inspect stable bindings | `sqt doctor` | Read-only warehouse inspection |
 | Repair one stable view | `sqt repair active-view` | Explicit mutation |
 | Adopt compatible metadata baseline | `sqt reconcile` | Preview; `--apply` confirms and writes metadata |
+| Rename the project | `sqt rename-project` | Preview; `--apply` copies metadata, moves role grants and edits `sqltide_project.toml` |
 | Clean deployment physicals | `sqt janitor` | Preview; `--apply` drops without another prompt |
 | Destroy/reset owned relations | `sqt destroy`, `sqt reset-target` | Interactive frozen-plan review and typed challenges |
 | Manage accounts | `sqt admin` | Control-store mutation; no warehouse required |
