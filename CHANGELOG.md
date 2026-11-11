@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.21](https://github.com/sqlstack-io/sqltide/compare/v0.65.20...v0.65.21) (2026-11-11)
+
+
+### Bug Fixes
+
+* report an unreachable warehouse without a traceback ([#383](https://github.com/sqlstack-io/sqltide/issues/383)) ([7bbd8a3](https://github.com/sqlstack-io/sqltide/commit/7bbd8a3224c02a608680b06f4e7468b9a18500a4))
+
 ## [0.65.20](https://github.com/sqlstack-io/sqltide/compare/v0.65.19...v0.65.20) (2026-11-11)
 
 
