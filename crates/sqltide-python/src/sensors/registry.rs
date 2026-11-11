@@ -18,7 +18,8 @@ const DEFAULT_SENSOR_TIMEOUT_SECONDS: f64 = 60.0;
 
 type Any<'py> = Bound<'py, PyAny>;
 
-/// `SensorError(message, location=..., related_locations=...)`, chained to `cause` if given.
+/// `SensorError(message, location=..., related_locations=...)` raised `from cause` when one is
+/// given, otherwise chained to the exception being handled, as a Python `raise` is.
 fn located_error(
     py: Python<'_>,
     message: String,
@@ -38,8 +39,14 @@ fn located_error(
     match built() {
         Ok(error) => {
             let error: PyErr = PyErr::from_value(error);
-            if let Some(cause) = cause {
-                error.set_cause(py, Some(cause));
+            let Some(cause) = cause else {
+                return chained_to_handled(py, error);
+            };
+            // `raise ... from cause` inside `except` sets both the cause and the context.
+            let context: Any<'_> = cause.value(py).clone().into_any();
+            error.set_cause(py, Some(cause));
+            if let Err(failed) = error.value(py).setattr("__context__", context) {
+                return failed;
             }
             error
         }
@@ -162,9 +169,30 @@ fn load_sensor_module<'py>(file_path: &Any<'py>, project_dir: &Any<'py>) -> PyRe
         Ok(())
     })();
     let restored: PyResult<()> = sys.setattr("path", old_path);
-    let outcome: PyResult<()> = match loaded {
-        Ok(()) => Ok(()),
-        Err(error) if error.is_instance_of::<PySyntaxError>(py) => {
+    let outcome: PyResult<()> = loaded.map_err(|error| load_failure(file_path, error));
+    outcome?;
+    restored?;
+    Ok(module)
+}
+
+/// The error to raise when a sensor file failed to import. As in an `except` block, a failure
+/// while describing the import error has it as context.
+fn load_failure(file_path: &Any<'_>, error: PyErr) -> PyErr {
+    let py: Python<'_> = file_path.py();
+    let original: Any<'_> = error.value(py).clone().into_any();
+    match described_load_failure(file_path, error) {
+        Ok(described) => described,
+        Err(failed) => match failed.value(py).setattr("__context__", original) {
+            Ok(()) => failed,
+            Err(set) => set,
+        },
+    }
+}
+
+fn described_load_failure<'py>(file_path: &Any<'py>, error: PyErr) -> PyResult<PyErr> {
+    let py: Python<'py> = file_path.py();
+    Ok(match error {
+        error if error.is_instance_of::<PySyntaxError>(py) => {
             let value: Any<'py> = error.value(py).clone().into_any();
             let location: Any<'py> = source_location(
                 py,
@@ -172,22 +200,20 @@ fn load_sensor_module<'py>(file_path: &Any<'py>, project_dir: &Any<'py>) -> PyRe
                 or_one(value.getattr("lineno")?)?,
                 or_one(value.getattr("offset")?)?,
             )?;
-            Err(located_error(
+            located_error(
                 py,
                 format!("Failed to load {}: {}", text(file_path)?, text(&value)?),
                 Some(location),
                 Vec::new(),
                 Some(error),
-            ))
+            )
         }
-        Err(error) if error.is_instance(py, &attr(py, SENSOR_EXCEPTIONS, "SensorError")?) => {
-            Err(error)
-        }
-        Err(error) if error.is_instance_of::<PyException>(py) => {
+        error if error.is_instance(py, &attr(py, SENSOR_EXCEPTIONS, "SensorError")?) => error,
+        error if error.is_instance_of::<PyException>(py) => {
             let line: Any<'py> = exception_line(py, &error, file_path)?;
             let location: Any<'py> =
                 source_location(py, file_path, line, 1_i64.into_pyobject(py)?.into_any())?;
-            Err(located_error(
+            located_error(
                 py,
                 format!(
                     "Failed to load {}: {}",
@@ -197,13 +223,10 @@ fn load_sensor_module<'py>(file_path: &Any<'py>, project_dir: &Any<'py>) -> PyRe
                 Some(location),
                 Vec::new(),
                 Some(error),
-            ))
+            )
         }
-        Err(error) => Err(error),
-    };
-    outcome?;
-    restored?;
-    Ok(module)
+        error => error,
+    })
 }
 
 /// The first paragraph of the handler's docstring, or `None`.
@@ -584,21 +607,15 @@ fn polling_sensor<'py>(
 fn validate_sensor_retry_policy(max_attempts: Any<'_>, backoff_seconds: Any<'_>) -> PyResult<()> {
     let py: Python<'_> = max_attempts.py();
     if max_attempts.lt(1)? {
-        return Err(chained_to_handled(
+        return Err(plain_error(
             py,
-            plain_error(
-                py,
-                "SensorRetryPolicy.max_attempts must be at least 1".to_owned(),
-            ),
+            "SensorRetryPolicy.max_attempts must be at least 1".to_owned(),
         ));
     }
     if backoff_seconds.lt(0)? {
-        return Err(chained_to_handled(
+        return Err(plain_error(
             py,
-            plain_error(
-                py,
-                "SensorRetryPolicy.backoff_seconds must not be negative".to_owned(),
-            ),
+            "SensorRetryPolicy.backoff_seconds must not be negative".to_owned(),
         ));
     }
     Ok(())
