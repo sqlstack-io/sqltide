@@ -17,6 +17,7 @@ use pyo3::types::{
 
 mod compiler_analysis;
 mod compiler_project;
+mod executor_ops;
 mod planner_execution;
 
 /// The callable a `default_factory` field calls for each new instance.
@@ -77,10 +78,11 @@ impl FieldSpec {
     };
 }
 
-/// A check run on the bound and normalized field values, as the rest of `__post_init__` did.
-pub(crate) type PostInit = for<'py> fn(&[Bound<'py, PyAny>]) -> PyResult<()>;
+/// The rest of `__post_init__`, run on the bound and normalized field values: it may reject them
+/// or replace them in place.
+pub(crate) type PostInit = for<'py> fn(&mut [Bound<'py, PyAny>]) -> PyResult<()>;
 
-/// One shape: its class name, fields in declaration order and optional post-init check.
+/// One shape: its class name, fields in declaration order and optional post-init hook.
 pub(crate) struct ShapeSpec {
     pub(crate) qualname: &'static str,
     pub(crate) fields: &'static [FieldSpec],
@@ -104,8 +106,8 @@ pub(crate) const fn unraw(name: &'static str) -> &'static str {
 /// `Name { field, field(default = Given::None), ... }`, optionally followed by
 /// `@impl { ... }` holding its extra methods and properties. `Name: Base { ... }` subclasses
 /// another shape and lists the base fields first, `Name @no_repr { ... }` keeps the object
-/// repr, as `@dataclass(repr=False)` did, and `@post_init(check)` after the fields runs a
-/// check over the bound values.
+/// repr, as `@dataclass(repr=False)` did, and `@post_init(hook)` after the fields runs a hook
+/// that may reject or replace the bound values.
 macro_rules! shapes {
     (@repr) => { true };
     (@repr no_repr) => { false };
@@ -385,7 +387,7 @@ pub(crate) fn bind<'py>(
         *value = coerce(py, field.coerce, value)?;
     }
     if let Some(check) = spec.post_init {
-        check(&values)?;
+        check(&mut values)?;
     }
     Ok(values)
 }
@@ -853,5 +855,6 @@ pub(crate) fn lazy_constants(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compiler_analysis::register(module)?;
     compiler_project::register(module)?;
-    planner_execution::register(module)
+    planner_execution::register(module)?;
+    executor_ops::register(module)
 }

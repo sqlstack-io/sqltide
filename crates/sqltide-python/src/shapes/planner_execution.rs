@@ -84,7 +84,7 @@ fn publish_operation<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAn
 }
 
 /// `RollbackRequest`: exactly one of a deployment ID and `previous` names the target.
-fn rollback_target(values: &[Bound<'_, PyAny>]) -> PyResult<()> {
+fn rollback_target(values: &mut [Bound<'_, PyAny>]) -> PyResult<()> {
     let [deployment_id, previous, ..] = values else {
         return Err(PyValueError::new_err(
             "rollback request bound too few values",

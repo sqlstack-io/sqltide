@@ -1,5 +1,3 @@
 """Janitor input errors."""
 
-
-class JanitorInputError(ValueError):
-    """Raised when janitor retention input is invalid."""
+from sqltide._native import JanitorInputError as JanitorInputError

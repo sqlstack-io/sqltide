@@ -1,5 +1,3 @@
 """Testing exceptions."""
 
-
-class SqlTestExecutionError(ValueError):
-    """Raised when testing input or state is invalid."""
+from sqltide._native import SqlTestExecutionError as SqlTestExecutionError

@@ -1,5 +1,3 @@
 """Auditing exceptions."""
 
-
-class AuditExecutionError(ValueError):
-    """Raised when auditing input or state is invalid."""
+from sqltide._native import AuditExecutionError as AuditExecutionError
