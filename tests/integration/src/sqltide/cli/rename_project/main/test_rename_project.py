@@ -22,6 +22,7 @@ from sqltide.auth.models import ProjectRoleAssignment
 from tests.integration.src.sqltide.cli.helpers import build_managed_clickhouse_client
 from tests.integration.src.sqltide.cli.rename_project.main._test_types import (
     ConsumerGroupDriftTestCase,
+    MultiTargetRenameTestCase,
     ProjectRenameConflictTestCase,
     ProjectRenameTestCase,
     RoleAssignmentConflictTestCase,
@@ -29,11 +30,16 @@ from tests.integration.src.sqltide.cli.rename_project.main._test_types import (
 )
 from tests.integration.src.sqltide.cli.rename_project.main.helpers import (
     PROJECT_CONFIG,
+    TWO_TARGET_PROJECT_CONFIG,
     built_shop_project,
     catalog_definitions,
+    destroy_history_ids,
     kafka_group_name,
     manifest_ids,
     plan_json,
+    role_names,
+    target_arguments,
+    write_shop_project,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
@@ -361,3 +367,170 @@ def test_given_live_group_differs_when_planning_then_drift_is_reported_without_b
     )
     assert sources["orders"]["consumerGroupDrift"]["liveGroup"] == live_group
     assert kafka_group_name(clickhouse_client, database=clickhouse_database) == live_group
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        MultiTargetRenameTestCase(
+            description="renames on one target, then completes with --from on the other",
+            new_name="storefront",
+            role_name="operator",
+            expected_config=TWO_TARGET_PROJECT_CONFIG.replace(
+                'name = "shop"\n',
+                'name = "storefront"\n'
+                "# Keeps the Kafka consumer groups this project used before it was renamed.\n"
+                'consumer_group_identity = "shop"\n',
+            ),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_two_targets_when_completing_rename_with_from_then_each_target_carries_over(
+    test_case: MultiTargetRenameTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    request: pytest.FixtureRequest,
+) -> None:
+    monkeypatch.delenv("SQLTIDE_CONTROL_STORE_URL", raising=False)
+    west_database: str = f"{clickhouse_database}_west"
+    request.addfinalizer(
+        lambda: clickhouse_client.command(f"DROP DATABASE IF EXISTS {west_database} SYNC")
+    )
+    project_dir: Path = write_shop_project(tmp_path / "shop", TWO_TARGET_PROJECT_CONFIG)
+    config_path: Path = project_dir / "sqltide_project.toml"
+    databases: dict[str, str] = {"east": clickhouse_database, "west": west_database}
+    stores: dict[str, ControlStore] = {
+        target: ControlStore(url=f"sqlite:///{tmp_path / target / 'control.db'}")
+        for target in databases
+    }
+    build_arguments: dict[str, tuple[str, ...]] = {
+        target: target_arguments(
+            settings=clickhouse_connection_settings,
+            project_dir=project_dir,
+            target=target,
+            database=database,
+        )
+        for target, database in databases.items()
+    }
+    arguments: dict[str, tuple[str, ...]] = {
+        target: (*build_arguments[target], "--control-store-url", str(stores[target].url))
+        for target in databases
+    }
+    user_ids: dict[str, UUID] = {
+        target: store.create_user(username="ada").user_id for target, store in stores.items()
+    }
+    _ = [
+        store.grant_project_role(
+            user_id=user_ids[target],
+            project_name="shop",
+            role_name=test_case.role_name,
+            target_name=target,
+            actor_user_id=None,
+        )
+        for target, store in stores.items()
+    ]
+    assert [
+        run_cli(("sqt", "build", "--auto-approve", *build_arguments[target]))
+        for target in databases
+    ] == [0, 0]
+    groups: dict[str, str] = {
+        target: kafka_group_name(clickhouse_client, database=database)
+        for target, database in databases.items()
+    }
+    recorded: dict[str, tuple[str, ...]] = {
+        target: manifest_ids(clickhouse_client, database=database, identity="shop")
+        for target, database in databases.items()
+    }
+
+    assert (
+        run_cli(("sqt", "rename-project", test_case.new_name, "--from", "shop", *arguments["west"]))
+        == 1
+    )
+    assert "sqltide_project.toml is still named 'shop'" in capsys.readouterr().err
+    assert (
+        run_cli(("sqt", "rename-project", test_case.new_name, "--apply", *arguments["east"])) == 0
+    )
+    renamed_config: str = config_path.read_text(encoding="utf-8")
+    assert run_cli(("sqt", "rename-project", "outlet", "--from", "shop", *arguments["west"])) == 1
+    assert "the new name must be the name sqltide_project.toml already carries" in (
+        capsys.readouterr().err
+    )
+    assert (
+        run_cli(
+            (
+                "sqt",
+                "rename-project",
+                test_case.new_name,
+                "--from",
+                test_case.new_name,
+                *arguments["west"],
+            )
+        )
+        == 1
+    )
+    assert "cannot be the new name 'storefront'" in capsys.readouterr().err
+    assert (
+        run_cli(("sqt", "rename-project", test_case.new_name, "--from", "shop", *arguments["west"]))
+        == 0
+    )
+    dry_run: str = capsys.readouterr().out
+    assert (
+        manifest_ids(clickhouse_client, database=west_database, identity=test_case.new_name) == ()
+    )
+    assert (
+        run_cli(
+            (
+                "sqt",
+                "rename-project",
+                test_case.new_name,
+                "--from",
+                "shop",
+                "--apply",
+                *arguments["west"],
+            )
+        )
+        == 0
+    )
+    assert (
+        run_cli(
+            (
+                "sqt",
+                "rename-project",
+                test_case.new_name,
+                "--from",
+                "shop",
+                "--apply",
+                *arguments["west"],
+            )
+        )
+        == 0
+    )
+
+    assert renamed_config == test_case.expected_config
+    assert config_path.read_text(encoding="utf-8") == renamed_config
+    assert 'already named "storefront"; unchanged' in dry_run
+    assert "Kafka consumer groups: 1 unchanged" in dry_run
+    assert {
+        target: kafka_group_name(clickhouse_client, database=database)
+        for target, database in databases.items()
+    } == groups
+    destroy_history: dict[str, tuple[str, ...]] = {
+        target: destroy_history_ids(
+            settings=clickhouse_connection_settings,
+            database=database,
+            identity=test_case.new_name,
+            target=target,
+        )
+        for target, database in databases.items()
+    }
+    assert destroy_history == recorded
+    assert {
+        target: role_names(store, user_id=user_ids[target], project_name=test_case.new_name)
+        for target, store in stores.items()
+    } == {target: (test_case.role_name,) for target in databases}

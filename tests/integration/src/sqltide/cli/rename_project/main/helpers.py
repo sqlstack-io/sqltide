@@ -1,11 +1,14 @@
 """Build one managed Kafka project and run `sqt` against a real ClickHouse target."""
 
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide._native import run_cli
+from sqltide._native import ControlStore, run_cli
+from sqltide.adapter.models import AdapterManifestSnapshot
+from tests.integration.src.sqltide.cli.helpers import build_managed_clickhouse_client
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
 PROJECT_CONFIG: str = (
@@ -19,6 +22,19 @@ PROJECT_CONFIG: str = (
     "[targets.test]\n"
     "# Overridden with --database in tests.\n"
     'database = "analytics"\n'
+)
+TWO_TARGET_PROJECT_CONFIG: str = (
+    'name = "shop"\n'
+    'default_target = "east"\n'
+    "\n"
+    "[defaults]\n"
+    'pipeline_mode = "direct"\n'
+    "\n"
+    "[targets.east]\n"
+    'database = "shop_east"\n'
+    "\n"
+    "[targets.west]\n"
+    'database = "shop_west"\n'
 )
 SOURCE_CONFIG: str = (
     "sources:\n"
@@ -42,10 +58,10 @@ MODEL_SQL: str = (
 )
 
 
-def write_shop_project(project_dir: Path) -> Path:
+def write_shop_project(project_dir: Path, project_config: str = PROJECT_CONFIG) -> Path:
     """Write a direct-mode project with one managed Kafka source and one model."""
     project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "sqltide_project.toml").write_text(PROJECT_CONFIG, encoding="utf-8")
+    (project_dir / "sqltide_project.toml").write_text(project_config, encoding="utf-8")
     (project_dir / "sources").mkdir()
     (project_dir / "sources" / "orders.yml").write_text(SOURCE_CONFIG, encoding="utf-8")
     pipeline_dir: Path = project_dir / "pipelines" / "pl__orders"
@@ -95,6 +111,45 @@ def plan_json(arguments: tuple[str, ...], capsys: pytest.CaptureFixture[str]) ->
     _ = capsys.readouterr()
     assert run_cli(("sqt", "plan", "--json", *arguments)) == 0
     return capsys.readouterr().out
+
+
+def target_arguments(
+    *,
+    settings: ClickHouseConnectionSettings,
+    project_dir: Path,
+    target: str,
+    database: str,
+) -> tuple[str, ...]:
+    """Connection arguments for one target with its own database."""
+    return (
+        *connection_arguments(settings=settings, project_dir=project_dir, database=database),
+        "--target",
+        target,
+    )
+
+
+def destroy_history_ids(
+    *, settings: ClickHouseConnectionSettings, database: str, identity: str, target: str
+) -> tuple[str, ...]:
+    """The manifest ids destroy planning reads for one project target."""
+    snapshot: AdapterManifestSnapshot = build_managed_clickhouse_client(
+        settings, database=database
+    ).load_manifests(
+        database=database,
+        project_identity=identity,
+        target_name=target,
+        target_database=database,
+    )
+    return tuple(sorted(manifest.manifest_id for manifest in snapshot.manifests))
+
+
+def role_names(store: ControlStore, *, user_id: UUID, project_name: str) -> tuple[str, ...]:
+    return tuple(
+        assignment.role_name
+        for assignment in store.list_project_role_assignments(
+            user_id=user_id, project_name=project_name
+        )
+    )
 
 
 def manifest_ids(client: Client, *, database: str, identity: str) -> tuple[str, ...]:

@@ -39,3 +39,11 @@ class ConsumerGroupDriftTestCase:
     renamed_config: str
     expected_live_group_prefix: str
     expected_declared_group_prefix: str
+
+
+@dataclass(frozen=True)
+class MultiTargetRenameTestCase:
+    description: str
+    new_name: str
+    role_name: str
+    expected_config: str
