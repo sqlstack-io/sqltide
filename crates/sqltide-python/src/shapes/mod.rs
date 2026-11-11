@@ -261,6 +261,17 @@ macro_rules! shapes {
                 $crate::shapes::shallow_copy(slf.as_any(), slf.get().values(slf.py()))
             }
 
+            /// `copy.replace` on Python 3.13 and later, through `dataclasses.replace` as the
+            /// dataclass's own `__replace__` did.
+            #[pyo3(signature = (**changes))]
+            fn __replace__<'py>(
+                slf: &pyo3::Bound<'py, Self>,
+                changes: Option<&pyo3::Bound<'py, pyo3::types::PyDict>>,
+            ) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::PyAny>> {
+                use pyo3::types::PyAnyMethods;
+                slf.py().import("dataclasses")?.getattr("replace")?.call((slf,), changes)
+            }
+
             /// Rebuilds the shape from its field values, so `deepcopy` and `pickle` work as they
             /// did on the dataclass.
             fn __reduce__<'py>(
