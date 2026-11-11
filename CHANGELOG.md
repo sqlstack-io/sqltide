@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.66.0](https://github.com/sqlstack-io/sqltide/compare/v0.65.21...v0.66.0) (2026-11-11)
+
+
+### Features
+
+* rename a project safely with sqt rename-project ([#386](https://github.com/sqlstack-io/sqltide/issues/386)) ([e5621a5](https://github.com/sqlstack-io/sqltide/commit/e5621a55227e6510eaf6db4bbe4779e470a061cc))
+
+
+### Bug Fixes
+
+* **cli:** report an unreachable ClickHouse endpoint without the driver's log line ([#385](https://github.com/sqlstack-io/sqltide/issues/385)) ([1cf96b8](https://github.com/sqlstack-io/sqltide/commit/1cf96b8fadae5736c0d2d8529d560e7a0eb28cd5))
+
 ## [0.65.21](https://github.com/sqlstack-io/sqltide/compare/v0.65.20...v0.65.21) (2026-11-11)
 
 
