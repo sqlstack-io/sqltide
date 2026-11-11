@@ -9,7 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sqltide._native import parse_cli_arguments, run_cli, run_dev
+from sqltide._native import (
+    parse_cli_arguments,
+    run_cli,
+    run_dev,
+    translate_clickhouse_driver_error,
+)
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterAuthenticationError, AdapterTimeoutError
 from sqltide.adapter.models import AdapterConnectionConfig
@@ -50,6 +55,7 @@ from tests.unit.src.sqltide.cli.helpers import (
     FakeCliClickHouseClient,
     handlers_with_overrides,
     normalize_json_output,
+    refused_driver_error,
     write_cli_compilation_project,
     write_cli_target_project,
 )
@@ -1281,6 +1287,31 @@ def test_given_apply_flag_when_running_janitor_then_it_passes_apply_to_command(
                 "ClickHouse rejected the supplied credentials",
             ),
         ),
+        CliMainErrorTestCase(
+            description="renders a refused clickhouse connection without a traceback",
+            argv=(
+                "sqt",
+                "plan",
+                "--project-dir",
+                "tests/fixtures/basic_project",
+                "--host",
+                "localhost",
+                "--port",
+                "8123",
+                "--username",
+                "sqltide",
+                "--password",
+                "sqltide",
+                "--database",
+                "analytics",
+            ),
+            expected_exit_code=1,
+            expected_error_fragments=(
+                "Plan could not connect to ClickHouse",
+                "Database: analytics",
+                "the connection was refused or the host could not be resolved",
+            ),
+        ),
     ],
     ids=lambda case: case.description,
 )
@@ -1297,6 +1328,7 @@ def test_given_expected_command_errors_when_running_entrypoint_then_it_prints_cl
                 "Code: 516. DB::Exception: Authentication failed. (AUTHENTICATION_FAILED)"
             )
         ),
+        run_plan=FailingCommandRunner(translate_clickhouse_driver_error(refused_driver_error())),
     )
     clickhouse_client: AdapterConnection = cast(AdapterConnection, FakeCliClickHouseClient())
 

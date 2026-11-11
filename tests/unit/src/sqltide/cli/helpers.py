@@ -4,6 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 from textwrap import dedent
 
+from clickhouse_connect.driver.exceptions import OperationalError
+
 from sqltide._native import (
     render_clickhouse_replay_coverage_query,
     render_clickhouse_replay_from_capture,
@@ -456,3 +458,13 @@ OUTPUT_NORMALIZERS: dict[bool, Callable[[str], str]] = {
     True: normalize_json_output,
     False: passthrough_output,
 }
+
+
+def refused_driver_error() -> OperationalError:
+    """The driver error for a refused connection, chained as the HTTP client raises it."""
+    error: OperationalError = OperationalError(
+        "Error HTTPConnectionPool(host='localhost', port=8123): Max retries exceeded "
+        "executing HTTP request attempt 1 (http://localhost:8123)"
+    )
+    error.__cause__ = ConnectionRefusedError(111, "Connection refused")
+    return error
