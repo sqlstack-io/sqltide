@@ -26,7 +26,8 @@ The effective project mode chooses the planner:
 In both modes, a warning follows the plan when a live Kafka table consumes as a different consumer
 group than the project declares, for example after `name` was edited by hand. It names both groups
 and notes that offsets would not carry over if the table were recreated. `--json` lists these
-warnings under `consumer_group_warnings`. The warning does not change or block the plan.
+warnings under `consumer_group_warnings`, an empty list when there are none; the same key is in
+the published plan artifact. The warning does not change or block the plan.
 
 Use `--deployment-id` in virtual-environment mode to inspect exact deployment-specific physical
 names. Its timestamp prefix also fixes the deployment creation timestamp, so unchanged warehouse

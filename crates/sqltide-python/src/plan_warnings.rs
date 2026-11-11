@@ -3,7 +3,7 @@
 //! declares. Reads go through the Python adapter connection.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyInt};
+use pyo3::types::{PyDict, PyInt, PyList};
 use sqltide_executor::sources::{ConsumerGroupDrift, consumer_group_drift};
 use sqltide_planner::cli_style::CliStyle;
 
@@ -11,6 +11,7 @@ use crate::direct_build::{Value, build, class, items, replace, text, tuple};
 
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const CONSUMER_GROUP_DRIFT: &str = "consumer_group_drift";
+const CONSUMER_GROUP_WARNINGS_KEY: &str = "consumer_group_warnings";
 
 const ADAPTER_EXCEPTIONS: &str = "sqltide.adapter.exceptions";
 const PLANNER_MODELS: &str = "sqltide.compiler.planner.models";
@@ -178,55 +179,22 @@ pub(crate) fn consumer_group_drifts(
     Ok(drifts)
 }
 
-/// The plan text and JSON with a consumer group drift warning for each Kafka table that
-/// consumes as a different group than the project declares, read from the catalogs the plan
-/// already loaded; unchanged when none does.
-pub(crate) fn with_consumer_group_drift_warnings<'py>(
+/// The `consumer_group_warnings` entries for one plan: each managed Kafka table in the
+/// catalog the plan read that consumes as a different group than the project declares. Empty
+/// when there is none or the plan read no catalog.
+pub(crate) fn consumer_group_warning_items<'py>(
     analysis: &Value<'py>,
-    preparation: &Value<'py>,
-    plan_text: Value<'py>,
-    plan_json: Value<'py>,
-) -> PyResult<(Value<'py>, Value<'py>)> {
+    catalog: &Value<'py>,
+    database: &Value<'py>,
+) -> PyResult<Bound<'py, PyList>> {
     let py: Python<'py> = analysis.py();
-    let previews: Vec<Value<'py>> = if preparation.hasattr("virtual")? {
-        vec![
-            preparation.getattr("virtual")?.getattr("preview")?,
-            preparation.getattr("direct")?.getattr("preview")?,
-        ]
-    } else {
-        vec![preparation.getattr("preview")?]
-    };
-    let mut drifts: Vec<(String, ConsumerGroupDrift)> = Vec::new();
-    for preview in previews {
-        let catalog: Value<'py> = if preview.hasattr("warehouse_snapshot")? {
-            preview.getattr("warehouse_snapshot")?.getattr("catalog")?
-        } else {
-            preview.getattr("target_catalog")?
-        };
-        if catalog.is_none() {
-            continue;
-        }
-        let database: String = preview.getattr("database")?.extract()?;
-        for drift in consumer_group_drifts(analysis, &catalog, &database)? {
-            if !drifts.contains(&drift) {
-                drifts.push(drift);
-            }
-        }
+    let items: Bound<'py, PyList> = PyList::empty(py);
+    if catalog.is_none() || database.is_none() {
+        return Ok(items);
     }
-    if drifts.is_empty() {
-        return Ok((plan_text, plan_json));
-    }
-    let style = CliStyle {
-        use_color: crate::cli::style::terminal_style(py)?.use_color,
-    };
-    let mut lines: Vec<String> = vec![plan_text.extract()?, String::new()];
-    for (_, drift) in &drifts {
-        lines.push(style.warning(&format!("warning  {}", drift.message())));
-    }
-    let json = py.import("json")?;
-    let payload: Value<'py> = json.getattr("loads")?.call1((&plan_json,))?;
-    let mut warnings: Vec<Value<'py>> = Vec::new();
-    for (source_name, drift) in &drifts {
+    for (source_name, drift) in
+        consumer_group_drifts(analysis, catalog, &database.extract::<String>()?)?
+    {
         let warning: Bound<'py, PyDict> = PyDict::new(py);
         warning.set_item("warning_code", CONSUMER_GROUP_DRIFT)?;
         warning.set_item("message", drift.message())?;
@@ -234,24 +202,132 @@ pub(crate) fn with_consumer_group_drift_warnings<'py>(
         warning.set_item("table_name", &drift.table_name)?;
         warning.set_item("live_consumer_group", &drift.live_group)?;
         warning.set_item("declared_consumer_group", &drift.declared_group)?;
-        warnings.push(warning.into_any());
+        items.append(warning)?;
     }
-    payload.set_item(
-        "consumer_group_warnings",
-        pyo3::types::PyList::new(py, warnings)?,
-    )?;
-    let keywords: Bound<'py, PyDict> = PyDict::new(py);
-    keywords.set_item("indent", 2)?;
-    let plan_json: String = json
+    Ok(items)
+}
+
+/// A rendered plan JSON object with `consumer_group_warnings` appended as its last member and
+/// every other byte unchanged.
+pub(crate) fn with_consumer_group_warnings_json(
+    plan_json: &str,
+    warnings: &Bound<'_, PyList>,
+) -> PyResult<String> {
+    let py: Python<'_> = warnings.py();
+    let indent: usize = top_level_indent(plan_json);
+    let keywords: Bound<'_, PyDict> = PyDict::new(py);
+    if indent > 0 {
+        keywords.set_item("indent", indent)?;
+    }
+    let value: String = py
+        .import("json")?
         .getattr("dumps")?
-        .call((payload,), Some(&keywords))?
+        .call((warnings,), Some(&keywords))?
         .extract()?;
-    Ok((
-        lines.join("\n").into_pyobject(py)?.into_any(),
-        format!("{plan_json}\n").into_pyobject(py)?.into_any(),
+    Ok(with_top_level_key(
+        plan_json,
+        CONSUMER_GROUP_WARNINGS_KEY,
+        &value,
     ))
+}
+
+/// The plan text followed by a warning line for each consumer group drift the plan's JSON
+/// records under `consumer_group_warnings`; unchanged when there is none.
+pub(crate) fn with_consumer_group_drift_text<'py>(
+    plan_text: Value<'py>,
+    plan_json: &Value<'py>,
+) -> PyResult<Value<'py>> {
+    let py: Python<'py> = plan_text.py();
+    let payload: Value<'py> = py.import("json")?.getattr("loads")?.call1((plan_json,))?;
+    let mut messages: Vec<String> = Vec::new();
+    let mut lists: Vec<Value<'py>> = vec![payload.clone()];
+    for mode in ["virtual", "direct"] {
+        if let Some(nested) = payload.downcast::<PyDict>()?.get_item(mode)? {
+            lists.push(nested);
+        }
+    }
+    for holder in lists {
+        let Ok(holder) = holder.downcast_into::<PyDict>() else {
+            continue;
+        };
+        let Some(warnings) = holder.get_item(CONSUMER_GROUP_WARNINGS_KEY)? else {
+            continue;
+        };
+        for warning in warnings.try_iter()? {
+            let message: String = warning?.get_item("message")?.extract()?;
+            if !messages.contains(&message) {
+                messages.push(message);
+            }
+        }
+    }
+    if messages.is_empty() {
+        return Ok(plan_text);
+    }
+    let style = CliStyle {
+        use_color: crate::cli::style::terminal_style(py)?.use_color,
+    };
+    let mut lines: Vec<String> = vec![plan_text.extract()?, String::new()];
+    for message in &messages {
+        lines.push(style.warning(&format!("warning  {message}")));
+    }
+    Ok(lines.join("\n").into_pyobject(py)?.into_any())
+}
+
+/// The indentation of a JSON object's top-level keys: the leading spaces of its second line, or
+/// 0 when the object is on one line.
+fn top_level_indent(json: &str) -> usize {
+    json.lines()
+        .nth(1)
+        .map_or(0, |line| line.len() - line.trim_start_matches(' ').len())
+}
+
+/// `json`, a JSON object, with `"key": value` appended as its last member. Every existing byte
+/// is kept; `value` is already rendered at the object's indentation for its first line, and
+/// its later lines are shifted one level so they nest under the key.
+fn with_top_level_key(json: &str, key: &str, value: &str) -> String {
+    let Some(end) = json.rfind('}') else {
+        return json.to_owned();
+    };
+    let indent: usize = top_level_indent(json);
+    let head: &str = json[..end].trim_end();
+    let tail: &str = &json[end..];
+    let separator: &str = if head.ends_with('{') { "" } else { "," };
+    let nested: String = value.replace('\n', &format!("\n{}", " ".repeat(indent)));
+    if indent == 0 {
+        let space: &str = if separator.is_empty() { "" } else { " " };
+        return format!("{head}{separator}{space}\"{key}\": {nested}{tail}");
+    }
+    format!(
+        "{head}{separator}\n{}\"{key}\": {nested}\n{tail}",
+        " ".repeat(indent)
+    )
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(add_empty_replay_source_warnings, module)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_top_level_key;
+
+    #[test]
+    fn appends_a_key_and_keeps_every_existing_byte() {
+        assert_eq!(
+            with_top_level_key("{\n  \"mode\": \"direct\"\n}\n", "warnings", "[]"),
+            "{\n  \"mode\": \"direct\",\n  \"warnings\": []\n}\n"
+        );
+        assert_eq!(
+            with_top_level_key(
+                "{\n  \"mode\": \"direct\"\n}\n",
+                "warnings",
+                "[\n  {\n    \"a\": 1\n  }\n]"
+            ),
+            "{\n  \"mode\": \"direct\",\n  \"warnings\": [\n    {\n      \"a\": 1\n    }\n  ]\n}\n"
+        );
+        assert_eq!(
+            with_top_level_key("{\"mode\": \"direct\"}", "warnings", "[]"),
+            "{\"mode\": \"direct\", \"warnings\": []}"
+        );
+    }
 }

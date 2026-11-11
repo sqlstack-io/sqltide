@@ -549,6 +549,7 @@ pub(crate) fn dispatch_cli_command<'py>(
                     ("project_dir", project_dir),
                     ("new_name", args.getattr("new_name")?),
                     ("from_name", getattr_none(args, "from_name")?),
+                    ("environment", invocation.connection.environment.clone()),
                     ("database", database),
                     (
                         "control_store_url",

@@ -12,9 +12,10 @@ sqt rename-project storefront --target prod
 
 The default is a dry run. It prints the configuration edit, the Kafka consumer groups that stay the
 same, the number of manifests to copy and the number of project role assignments to move, and
-writes nothing to the warehouse or the project config. Opening a configured control store that has
-never been initialized creates its tables, and a legacy `.streambuild/` state directory is moved to
-`.sqltide/`, as every command does.
+writes nothing to the warehouse or the project config. As with every command, a few legacy
+migrations can still run: connecting renames legacy `_streambuild_*` metadata tables to
+`_sqltide_*`, opening a configured control store that has never been initialized creates its
+tables, and a legacy `.streambuild/` state directory is moved to `.sqltide/`.
 
 Apply the rename explicitly:
 
@@ -44,6 +45,9 @@ The command refuses to run when:
 - the target already records manifests for the new name that did not come from the old name
 - both names hold the same active role assignment for the same user, role and target scope
 - the rename would change any Kafka consumer group
+- a managed Kafka table on the target already consumes as a different consumer group than the
+  project declares, which `sqt plan` reports as consumer group drift; resolve that first, for
+  example by restoring the name or `consumer_group_identity` the live tables were created with
 
 ## Options
 
@@ -80,13 +84,22 @@ the rename with `--from`:
 With `--from`, the command leaves `sqltide_project.toml` unchanged. It checks that the target's
 Kafka consumer groups stay the same, copies the target's manifest history from `OLD_NAME`, and moves
 the control store's role assignments from `OLD_NAME`, under the same lock, dry-run default, conflict
-rules and idempotence as the first run. It refuses when `NEW_NAME` is not the name the configuration
-carries, when the configuration is still named `OLD_NAME` (run without `--from` first), or when
-`OLD_NAME` equals the new name.
+rules and idempotence as the first run. The target may already have been built under the new name:
+its own new manifests are kept and the old history is merged in, so `sqt destroy` sees both. It
+refuses when `NEW_NAME` is not the name the configuration carries, when the configuration is still
+named `OLD_NAME` (run without `--from` first), when `OLD_NAME` equals the new name, or when nothing
+on the target records `OLD_NAME`: no manifests and no role assignments, which usually means a
+mistyped name.
 
-Until a target is completed, it keeps its manifest history and role assignments under the old
-name: `sqt destroy` there does not see relations recorded before the rename, and the target's UI
-grants still name the old project. The first run's output lists the targets still to complete.
+Until a target is completed, it keeps its manifest history under the old name, so `sqt destroy`
+there does not see relations recorded before the rename. The first run's output lists the targets
+still to complete.
+
+Role assignments move for the whole control store a run uses. When several targets share one
+control store, the first run moves every target's grants, and UI users of targets still running
+the old configuration lose those grants until the targets get the renamed configuration. Role
+assignments are keyed by project name only, so two projects with the same name in one shared
+control store cannot be told apart.
 
 Restart a running `sqt dev` server after a rename. See
 [Renaming a project](/docs/concepts/project-configuration/#renaming-a-project) for what a rename

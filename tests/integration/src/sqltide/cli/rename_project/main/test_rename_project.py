@@ -475,13 +475,25 @@ def test_given_two_targets_when_completing_rename_with_from_then_each_target_car
         == 1
     )
     assert "cannot be the new name 'storefront'" in capsys.readouterr().err
+    assert run_cli(("sqt", "build", "--auto-approve", *build_arguments["west"])) == 0
+    built_under_new_name: tuple[str, ...] = manifest_ids(
+        clickhouse_client, database=west_database, identity=test_case.new_name
+    )
+    assert (
+        run_cli(
+            ("sqt", "rename-project", test_case.new_name, "--from", "shopp", *arguments["west"])
+        )
+        == 1
+    )
+    assert "Nothing on target 'west' records project 'shopp'" in capsys.readouterr().err
     assert (
         run_cli(("sqt", "rename-project", test_case.new_name, "--from", "shop", *arguments["west"]))
         == 0
     )
     dry_run: str = capsys.readouterr().out
     assert (
-        manifest_ids(clickhouse_client, database=west_database, identity=test_case.new_name) == ()
+        manifest_ids(clickhouse_client, database=west_database, identity=test_case.new_name)
+        == built_under_new_name
     )
     assert (
         run_cli(
@@ -529,8 +541,57 @@ def test_given_two_targets_when_completing_rename_with_from_then_each_target_car
         )
         for target, database in databases.items()
     }
-    assert destroy_history == recorded
+    assert len(built_under_new_name) == 1
+    assert destroy_history == {
+        "east": recorded["east"],
+        "west": tuple(sorted(recorded["west"] + built_under_new_name)),
+    }
     assert {
         target: role_names(store, user_id=user_ids[target], project_name=test_case.new_name)
         for target, store in stores.items()
     } == {target: (test_case.role_name,) for target in databases}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ConsumerGroupDriftTestCase(
+            description="refuses to rename while live groups differ from the declaration",
+            renamed_config=PROJECT_CONFIG.replace('name = "shop"', 'name = "storefront"'),
+            expected_live_group_prefix="streambuild_shop_test_orders_",
+            expected_declared_group_prefix="streambuild_storefront_test_orders_",
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_live_group_drift_when_renaming_then_rename_is_refused(
+    test_case: ConsumerGroupDriftTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project_dir, arguments = built_shop_project(
+        tmp_path=tmp_path,
+        settings=clickhouse_connection_settings,
+        database=clickhouse_database,
+        monkeypatch=monkeypatch,
+    )
+    config_path: Path = project_dir / "sqltide_project.toml"
+    config_path.write_text(test_case.renamed_config, encoding="utf-8")
+    _ = capsys.readouterr()
+
+    assert run_cli(("sqt", "rename-project", "outlet", "--apply", *arguments)) == 1
+
+    error: str = capsys.readouterr().err
+    assert (
+        f"kafka__orders consumes as '{test_case.expected_live_group_prefix}{clickhouse_database}' "
+        "but the project declares "
+        f"'{test_case.expected_declared_group_prefix}{clickhouse_database}'"
+    ) in error
+    assert "consumer group drift warning" in error
+    assert config_path.read_text(encoding="utf-8") == test_case.renamed_config
+    assert manifest_ids(clickhouse_client, database=clickhouse_database, identity="outlet") == ()

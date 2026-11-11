@@ -428,11 +428,9 @@ fn run_plan<'py>(
         } else {
             preparation.getattr("workflow")?.getattr("plan_json")?
         };
-        let (plan_text, plan_json) = crate::plan_warnings::with_consumer_group_drift_warnings(
-            &analysis,
-            &preparation,
+        let plan_text: Value<'py> = crate::plan_warnings::with_consumer_group_drift_text(
             preparation.getattr("plan_text")?,
-            plan_json,
+            &plan_json,
         )?;
         let rendered: Value<'py> = if options.getattr("json_output")?.is_truthy()? {
             plan_json

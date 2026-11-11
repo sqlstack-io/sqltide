@@ -44,6 +44,9 @@ struct ManifestPlan {
     to_copy: usize,
     /// Manifests recorded under the old identity.
     recorded: usize,
+    /// Whether the new identity may already hold manifests of its own, as it does once a
+    /// target being completed with `--from` has built under the new name.
+    allow_existing: bool,
 }
 
 /// The role assignments the rename moves, and where they live.
@@ -149,12 +152,13 @@ fn manifest_plan(
     to_identity: &str,
     target_name: &str,
     database: &str,
+    allow_existing: bool,
 ) -> PyResult<ManifestPlan> {
     let py: Python<'_> = client.py();
     let recorded: BTreeSet<String> = manifest_ids(client, database, from_identity, target_name)?;
     let copied: BTreeSet<String> = manifest_ids(client, database, to_identity, target_name)?;
     let foreign: Vec<&String> = copied.difference(&recorded).collect();
-    if !foreign.is_empty() {
+    if !foreign.is_empty() && !allow_existing {
         return Err(fail(
             py,
             &format!(
@@ -172,20 +176,20 @@ fn manifest_plan(
         database: database.to_owned(),
         to_copy: recorded.difference(&copied).count(),
         recorded: recorded.len(),
+        allow_existing,
     })
 }
 
-/// The control store the project uses: `--control-store-url`, then the environment, then the
-/// project-local store when it exists.
+/// The control store the project uses: `--control-store-url`, then `SQLTIDE_CONTROL_STORE_URL`
+/// in the invocation's environment, then the project-local store when it exists.
 fn control_store_url(
-    py: Python<'_>,
     project_dir: &Any<'_>,
     option: &Any<'_>,
+    environment: &Any<'_>,
 ) -> PyResult<Option<String>> {
     if option.is_truthy()? {
         return Ok(Some(option.extract()?));
     }
-    let environment: Any<'_> = attr(py, "os", "environ")?;
     let configured: Any<'_> = environment.call_method1("get", (CONTROL_STORE_ENV_VAR,))?;
     if configured.is_truthy()? {
         return Ok(Some(configured.extract()?));
@@ -300,6 +304,7 @@ fn plan_rename<'py>(
     from_name: Option<&str>,
     database: &str,
     control_store_option: &Any<'py>,
+    environment: &Any<'py>,
     client: &Any<'py>,
     loaded_project: &Any<'py>,
     analysis: &Any<'py>,
@@ -341,6 +346,7 @@ fn plan_rename<'py>(
             ),
         ));
     }
+    refuse_live_group_drift(py, client, analysis, database)?;
     let before: Vec<(String, String)> = managed_source_consumer_groups(
         &compiled,
         adapter_profile,
@@ -395,14 +401,31 @@ fn plan_rename<'py>(
             .call((), Some(&py_kwargs!(py; analysis = analysis)?))?
             .extract()?
     };
-    let manifests: ManifestPlan =
-        manifest_plan(client, &from_identity, &new_name, &target_name, database)?;
+    let manifests: ManifestPlan = manifest_plan(
+        client,
+        &from_identity,
+        &new_name,
+        &target_name,
+        database,
+        completing,
+    )?;
     let roles: Option<RolePlan<'py>> = role_plan(
         py,
-        control_store_url(py, project_dir, control_store_option)?,
+        control_store_url(project_dir, control_store_option, environment)?,
         &current_name,
         &new_name,
     )?;
+    let moving_roles: usize = roles.as_ref().map_or(0, |roles| roles.preview.moving);
+    if completing && manifests.recorded == 0 && moving_roles == 0 {
+        return Err(fail(
+            py,
+            &format!(
+                "Nothing on target '{target_name}' records project '{current_name}': it has no \
+                 manifests in database '{database}' and no role assignments in the control \
+                 store. Check the name passed to --from."
+            ),
+        ));
+    }
     let edited_config: Option<String> = if completing {
         None
     } else {
@@ -423,6 +446,47 @@ fn plan_rename<'py>(
         other_targets: other_targets(loaded_project, &target_name)?,
         edited_config,
     })
+}
+
+/// Refuse when a managed Kafka table on the target already consumes as a different consumer
+/// group than the project declares: pinning `consumer_group_identity` to the current name would
+/// then keep a group the live tables do not use.
+fn refuse_live_group_drift(
+    py: Python<'_>,
+    client: &Any<'_>,
+    analysis: &Any<'_>,
+    database: &str,
+) -> PyResult<()> {
+    if !client
+        .call_method1("database_exists", (database,))?
+        .is_truthy()?
+    {
+        return Ok(());
+    }
+    let catalog: Any<'_> = client.call_method1("load_catalog", (database,))?;
+    let drifts = crate::plan_warnings::consumer_group_drifts(analysis, &catalog, database)?;
+    if drifts.is_empty() {
+        return Ok(());
+    }
+    let tables: Vec<String> = drifts
+        .iter()
+        .map(|(_, drift)| {
+            format!(
+                "{} consumes as '{}' but the project declares '{}'",
+                drift.table_name, drift.live_group, drift.declared_group
+            )
+        })
+        .collect();
+    Err(fail(
+        py,
+        &format!(
+            "Kafka consumer groups on database '{database}' already differ from the project \
+             declaration: {}. `sqt plan` shows this as a consumer group drift warning. Resolve \
+             the drift before renaming, for example by restoring the name or \
+             consumer_group_identity the live tables were created with.",
+            tables.join("; ")
+        ),
+    ))
 }
 
 fn quoted(value: &str) -> String {
@@ -497,13 +561,18 @@ fn render_plan(plan: &RenamePlan<'_>, applied: bool) -> String {
     }
     if !plan.other_targets.is_empty() && !plan.completing {
         lines.push(format!(
-            "Other targets keep manifest history and role grants under '{}' until you run \
+            "Other targets keep manifest history under '{}' until you run \
              `sqt rename-project {} --from {} --target <target>` there: {}",
             plan.current_name,
             plan.new_name,
             plan.current_name,
             plan.other_targets.join(", ")
         ));
+        lines.push(
+            "Role grants move for this whole control store. If other targets share it, their \
+             UI users lose those grants until those targets run the renamed config."
+                .to_owned(),
+        );
     }
     lines.push(
         "Unchanged: run history and audit and check status follow the project directory name, \
@@ -553,6 +622,7 @@ fn copy_manifests(client: &Any<'_>, plan: &ManifestPlan) -> PyResult<usize> {
             &plan.to_identity,
             &plan.target_name,
             &plan.database,
+            plan.allow_existing,
         )?;
         if fresh.to_copy == 0 {
             return Ok(0);
@@ -577,6 +647,7 @@ fn copy_manifests(client: &Any<'_>, plan: &ManifestPlan) -> PyResult<usize> {
             &plan.to_identity,
             &plan.target_name,
             &plan.database,
+            plan.allow_existing,
         )?;
         if after.to_copy != 0 {
             return Err(fail(
@@ -668,7 +739,7 @@ fn apply_rename(py: Python<'_>, client: &Any<'_>, plan: &RenamePlan<'_>) -> PyRe
 #[pyfunction]
 #[pyo3(signature = (
     *, pipelines_root, project_dir, new_name, database, control_store_url, apply, client,
-    loaded_project, adapter_profile, from_name = None,
+    loaded_project, adapter_profile, from_name = None, environment = None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn run_rename_project<'py>(
@@ -683,7 +754,12 @@ fn run_rename_project<'py>(
     loaded_project: Any<'py>,
     adapter_profile: Any<'py>,
     from_name: Option<String>,
+    environment: Option<Any<'py>>,
 ) -> PyResult<i64> {
+    let environment: Any<'py> = match environment {
+        Some(environment) if environment.is_truthy()? => environment,
+        _ => pyo3::types::PyDict::new(py).into_any(),
+    };
     let analysis: Any<'py> = attr(py, NATIVE, "analyze_project")?.call(
         (),
         Some(&py_kwargs!(py;
@@ -710,6 +786,7 @@ fn run_rename_project<'py>(
         from_name.as_deref(),
         &database,
         &control_store_url,
+        &environment,
         &client,
         &loaded_project,
         &analysis,
