@@ -43,6 +43,15 @@ class CompileSensorsProviderPathTestCase:
 
 
 @dataclass(frozen=True)
+class CompileSensorsLoadContextTestCase:
+    description: str
+    sensor_files: tuple[tuple[str, str], ...]
+    expected_error_type: type[BaseException]
+    expected_context_type_name: str
+    expected_context_is_cause: bool
+
+
+@dataclass(frozen=True)
 class CompileSensorsProviderReloadTestCase:
     description: str
     project_provider_names: tuple[tuple[str, str], ...]
