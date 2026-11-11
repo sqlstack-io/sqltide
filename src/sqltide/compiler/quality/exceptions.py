@@ -1,5 +1,3 @@
 """Compiled quality identity exceptions."""
 
-
-class QualityIdentityError(ValueError):
-    """Raised when a quality node lacks required compiled identity."""
+from sqltide._native import QualityIdentityError as QualityIdentityError

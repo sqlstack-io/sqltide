@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from sqltide.compiler.sql_analysis.models import SqlNamedQuery, SqlRelationRewrite
 
@@ -217,3 +218,47 @@ class SqlStringLiteralTestCase:
     description: str
     value: str
     expected_literal: str
+
+
+@dataclass(frozen=True)
+class NativeShapeConstructorErrorTestCase:
+    description: str
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+    expected_message: str
+
+
+@dataclass(frozen=True)
+class NativeShapeProtocolTestCase:
+    description: str
+    expected_repr: str
+    expected_fields: tuple[str, ...]
+    expected_astuple: tuple[object, ...]
+    expected_replaced_repr: str
+
+
+@dataclass(frozen=True)
+class NativeShapeNormalizationTestCase:
+    description: str
+    relation_type: str
+    expected_relation_type: str
+    expected_invalid_message: str
+    expected_attachment_kind: str
+    expected_edges: dict[str, tuple[object, ...]]
+
+
+@dataclass(frozen=True)
+class NativeShapeIdentityTestCase:
+    description: str
+    missing_attribute: str
+    expected_frozen_message: str
+    expected_missing_message: str
+
+
+@dataclass(frozen=True)
+class NativeShapeExceptionTestCase:
+    description: str
+    unknown_column_names: tuple[str, ...]
+    expected_args: tuple[str, ...]
+    expected_repr: str
+    expected_rules_notice_prefix: str

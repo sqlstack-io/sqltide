@@ -24,6 +24,10 @@ _CLI_INTERNAL: str = (
 _NATIVE_CONSTANT: str = (
     "Internal constant now owned by the native core; not documented, exported or in a signature."
 )
+_UNUSED_SHAPE: str = (
+    "Unused internal shape with no reader or writer anywhere; not documented, exported, raised or "
+    "in a signature."
+)
 _NATIVE_INTERCHANGE: str = (
     "Internal shape exchanged with native code that the native core now owns; not documented, "
     "exported or in a signature."
@@ -47,6 +51,7 @@ REMOVED: dict[str, str] = {
     "sqltide.cli.presentation.models:CliTheme": _CLI_INTERNAL,
     "sqltide.cli.presentation.models:TextStyle": _CLI_INTERNAL,
     "sqltide.cli.workflow_artifacts.types:WorkflowArtifactOwner": _CLI_INTERNAL,
+    "sqltide.compiler.test_discovery.models:SqlTestHeader": _UNUSED_SHAPE,
     "sqltide.executor.deployment.types:NativeDeploymentSummary": _NATIVE_INTERCHANGE,
     "sqltide.executor.deployment.types:NativeInventoryRecord": _NATIVE_INTERCHANGE,
     "sqltide.executor.destruction.models:RelationalStoredDestructionPlan": _NATIVE_INTERCHANGE,

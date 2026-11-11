@@ -2,7 +2,9 @@ import argparse
 import os
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Protocol, Self, TextIO, final
 from uuid import UUID
@@ -99,7 +101,6 @@ from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
 from sqltide.compiler.access.models import CompiledAccessPolicy
-from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
 from sqltide.compiler.compile.models import (
     CompiledModel,
     CompiledPipeline,
@@ -148,8 +149,7 @@ from sqltide.compiler.discovery.types import (
     PipelineMode,
     ReplayLineageMode,
 )
-from sqltide.compiler.graph.models import ProjectGraph
-from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
+from sqltide.compiler.discovery.types import SqlRelationType as _DiscoverySqlRelationType
 from sqltide.compiler.macros.models import MacroContext, MacroRegistry
 from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
 from sqltide.compiler.planner.models import (
@@ -171,21 +171,6 @@ from sqltide.compiler.planner.models import (
     RootDeploymentInspection,
 )
 from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.compiler.quality.models import QualityNodeIdentity
-from sqltide.compiler.rules.models import FormattedSource
-from sqltide.compiler.sql_analysis.models import (
-    SqlCatalogAnalysis,
-    SqlModelAnalysis,
-    SqlNamedQuery,
-    SqlOutputColumn,
-    SqlQueryRewriteResult,
-    SqlReference,
-    SqlRelationRewrite,
-    SqlResolvedQuery,
-    SqlStorageExpression,
-)
-from sqltide.compiler.test_discovery.models import LoadedSqlTest
-from sqltide.compiler.testing.models import SqlTestCase
 from sqltide.dev_server.models import (
     BuildCancellationOutcome,
     CompileErrorInfo,
@@ -204,7 +189,6 @@ from sqltide.dev_server.types import (
     RunPresentationStatus,
 )
 from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
-from sqltide.diagnostics.types import DiagnosticPhase
 from sqltide.events.models import (
     AuditCompleted,
     InvocationObservation,
@@ -315,6 +299,379 @@ from sqltide.sensors.types import (
     SensorTickStatus,
     StepPolicy,
 )
+
+# Compiler analysis shapes: SQL analysis, graph, Rules, quality, audit and test discovery.
+
+class RefType(StrEnum):
+    REFERENCE = "reference"
+    MUTABLE = "mutable"
+
+class SqlRelationType(StrEnum):
+    SOURCE = "source"
+    REF = "ref"
+
+class SqlQueryShape(StrEnum):
+    SELECT = "select"
+
+class SqlStorageExpressionKind(StrEnum):
+    ORDER_BY = "order_by"
+    PARTITION_BY = "partition_by"
+    TTL = "ttl"
+
+class DependencyEdgeType(StrEnum):
+    DRIVING_INPUT = "driving_input"
+    REFERENCE = "reference"
+    MUTABLE_REFERENCE = "mutable_reference"
+
+class GraphTraversalDirection(StrEnum):
+    UPSTREAM = "upstream"
+    DOWNSTREAM = "downstream"
+
+class QualityNodeKind(StrEnum):
+    AUDIT = "audit"
+    TEST = "test"
+
+class AuditAttachmentKind(StrEnum):
+    STANDALONE = "standalone"
+    MODEL = "model"
+    COLUMN = "column"
+
+class SqlTestMode(StrEnum):
+    MODEL = "model"
+    MACRO = "macro"
+
+class DiagnosticPhase(StrEnum):
+    DISCOVERY = "discovery"
+    COMPILATION = "compilation"
+    GRAPH = "graph"
+    REALIZATION = "realization"
+    RUNTIME = "runtime"
+
+class DiagnosticSeverity(StrEnum):
+    ERROR = "error"
+    WARNING = "warning"
+
+@final
+@dataclass(frozen=True)
+class SqlSourceSpan:
+    start: int
+    end: int
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+
+@final
+@dataclass(frozen=True)
+class SqlReference:
+    name: str
+    relation_type: SqlRelationType | str
+    span: SqlSourceSpan
+    ref_type: RefType | None = None
+
+@final
+@dataclass(frozen=True)
+class SqlOutputColumn:
+    name: str
+    type: str
+
+@final
+@dataclass(frozen=True)
+class SqlProjection:
+    index: int
+    output: SqlOutputColumn
+    span: SqlSourceSpan
+
+@final
+@dataclass(frozen=True)
+class SqlStorageExpression:
+    kind: SqlStorageExpressionKind | str
+    sql: str
+    referenced_column_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlAggregateFacts:
+    has_group_by: bool
+    function_names: tuple[str, ...]
+    engine_name: str
+    engine_has_aggregate_semantics: bool
+    @property
+    def has_semantics(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class SqlModelAnalysis:
+    authored_sql: str
+    shape: SqlQueryShape | str
+    projections: tuple[SqlProjection, ...]
+    references: tuple[SqlReference, ...]
+    storage_expressions: tuple[SqlStorageExpression, ...]
+    aggregate_facts: SqlAggregateFacts
+    @property
+    def output_columns(self) -> tuple[SqlOutputColumn, ...]: ...
+
+@final
+@dataclass(frozen=True)
+class SqlResolvedQuery:
+    canonical_sql: str
+    database_template: str
+
+@final
+@dataclass(frozen=True)
+class SqlRelationRewrite:
+    source_name: str
+    target_relation: str
+    source_databases: tuple[str | None, ...] | None = None
+    preserve_source_database: bool = False
+
+@final
+@dataclass(frozen=True)
+class SqlNamedQuery:
+    name: str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlQueryRewriteResult:
+    query: str
+    has_aggregate_semantics: bool
+
+@final
+@dataclass(frozen=True)
+class SqlRelationIdentity:
+    database: str | None
+    name: str
+
+@final
+@dataclass(frozen=True)
+class SqlCatalogAnalysis:
+    canonical_sql: str
+    query_sql: str | None
+    source_relations: tuple[SqlRelationIdentity, ...]
+    direct_source: SqlRelationIdentity | None
+    target_relation: SqlRelationIdentity | None
+    engine: str | None
+    ttl: str | None
+    settings: tuple[tuple[str, str], ...]
+    @property
+    def first_source(self) -> SqlRelationIdentity | None: ...
+
+@final
+@dataclass(frozen=True)
+class DependencyEdge:
+    upstream_key: LogicalResourceKey
+    downstream_key: LogicalResourceKey
+    edge_type: DependencyEdgeType
+
+@final
+@dataclass(frozen=True)
+class ProjectGraph:
+    project: CompiledProject
+    upstream_edges_by_key: Mapping[LogicalResourceKey, tuple[DependencyEdge, ...]]
+    downstream_edges_by_key: Mapping[LogicalResourceKey, tuple[DependencyEdge, ...]]
+    ordered_keys: tuple[LogicalResourceKey, ...]
+
+@final
+@dataclass(frozen=True)
+class FormattedSource:
+    path: Path
+    original: str
+    formatted: str
+    diagnostics: tuple[CompilerDiagnostic, ...] = ()
+    error: str | None = None
+
+@final
+@dataclass(frozen=True)
+class QualityNodeIdentity:
+    node_kind: str
+    node_name: str
+    binding_key: str
+    definition_fingerprint: str
+    execution_fingerprint: str
+
+@final
+@dataclass(frozen=True)
+class LoadedSqlAudit:
+    file_path: Path
+    query: str
+    referenced_model_names: tuple[str, ...]
+    severity: str = "error"
+    description: str | None = None
+    name: str | None = None
+    audit_index: int = 1
+    generic_definition_name: str | None = None
+    attachment_kind: AuditAttachmentKind | str = AuditAttachmentKind.STANDALONE
+    attached_model: str | None = None
+    attached_column: str | None = None
+    quality_identity: QualityNodeIdentity | None = None
+    severity_is_explicit: bool = False
+    cadence_seconds: int | None = None
+    warmup_seconds: int = 0
+    scheduled: bool = False
+    cadence_seconds_override: int | None = None
+    warmup_seconds_override: int | None = None
+    scheduled_override: bool | None = None
+
+@final
+@dataclass(frozen=True)
+class LoadedGenericSqlAuditDefinition:
+    file_path: Path
+    query: str
+    raw_parameter_names: tuple[str, ...]
+    quoted_parameter_names: tuple[str, ...]
+    name: str
+
+@final
+@dataclass(frozen=True)
+class LoadedGenericSqlAuditInstance:
+    file_path: Path
+    definition_name: str
+    arguments: dict[str, object]
+    name: str
+    severity: str = "error"
+    description: str | None = None
+    severity_is_explicit: bool = False
+    cadence_seconds_override: int | None = None
+    warmup_seconds_override: int | None = None
+    scheduled_override: bool | None = None
+
+@final
+@dataclass(frozen=True)
+class SqlTestMock:
+    cte_name: str
+    name: str
+    relation_type: _DiscoverySqlRelationType | str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestCte:
+    name: str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestModelPayload:
+    mocks: tuple[SqlTestMock, ...]
+    expected_targets: tuple[SqlTestCte, ...]
+    assertions: tuple[SqlTestCte, ...]
+    assertion_reference_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlTestMacroPayload:
+    actual: SqlTestCte
+    expected: SqlTestCte
+
+@final
+@dataclass(frozen=True)
+class LoadedSqlTest:
+    file_path: Path
+    mode: SqlTestMode
+    authored_ctes: tuple[SqlTestCte, ...]
+    payload: SqlTestModelPayload | SqlTestMacroPayload
+    name: str | None = None
+    test_index: int = 1
+
+@final
+@dataclass(frozen=True)
+class SqlTestChainStep:
+    target_model_name: str
+    expected_column_names: tuple[str, ...]
+    ctes: tuple[tuple[str, str], ...]
+    actual_query: str
+    expected_query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestAssertionStep:
+    name: str
+    column_names: tuple[str, ...]
+    ctes: tuple[tuple[str, str], ...]
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestCase:
+    file_path: Path
+    query: str
+    target_cases: tuple[SqlTestChainStep, ...]
+    assertion_cases: tuple[SqlTestAssertionStep, ...] = ()
+    warnings: tuple[str, ...] = ()
+    name: str | None = None
+    test_index: int = 1
+    quality_identity: QualityNodeIdentity | None = None
+
+class SqlAnalysisError(ValueError):
+    span: SqlSourceSpan | None
+    def __init__(self, message: str, *, span: SqlSourceSpan | None = None) -> None: ...
+
+class SqlMissingWithClauseError(SqlAnalysisError):
+    context: str
+    def __init__(self, *, context: str, span: SqlSourceSpan) -> None: ...
+
+class SqlStatementCountError(SqlAnalysisError):
+    statement_count: int
+    def __init__(self, statement_count: int) -> None: ...
+
+class SqlQueryShapeError(SqlAnalysisError):
+    statement_type: str
+    statement_sql: str
+    is_set_operation: bool
+    def __init__(
+        self, *, statement_type: str, statement_sql: str, is_set_operation: bool
+    ) -> None: ...
+
+class SqlStarProjectionError(SqlAnalysisError):
+    column_index: int
+    def __init__(self, *, column_index: int, span: SqlSourceSpan) -> None: ...
+
+class SqlUntypedProjectionError(SqlAnalysisError):
+    column_index: int
+    projection_sql: str
+    def __init__(self, *, column_index: int, projection_sql: str, span: SqlSourceSpan) -> None: ...
+
+class SqlDuplicateAliasError(SqlAnalysisError):
+    alias: str
+    def __init__(self, *, alias: str, span: SqlSourceSpan) -> None: ...
+
+class SqlStorageReferenceError(SqlAnalysisError):
+    kind: str
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        *,
+        kind: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class GraphInputError(ValueError):
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, message: str, *, location: SourceLocation | None = None) -> None: ...
+
+class SqlRulesError(ValueError): ...
+
+class RulesError(ValueError):
+    findings: tuple[RuleFinding, ...]
+    def __init__(self, *, findings: tuple[RuleFinding, ...], defaults: bool = False) -> None: ...
+
+class QualityIdentityError(ValueError): ...
+class SqlAuditParseError(ValueError): ...
+class SqlTestParseError(ValueError): ...
+class SqlTestAssemblyError(ValueError): ...
+
+UPSTREAM_SELECTOR_PREFIX: str
+SELECTOR_NAMESPACE_SEPARATOR: str
+PIPELINE_SELECTOR_NAMESPACE: str
+MODEL_SELECTOR_NAMESPACE: str
+ALL_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
+DRIVING_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
 
 type _Span = tuple[int, int, int, int, int, int]
 
