@@ -77,36 +77,6 @@ from sqltide.adapter.types import (
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
-from sqltide.compiler.discovery.models import (
-    AllowedCrossPipelineReference,
-    AuditDefaults,
-    DiscoveredPipelineDirectory,
-    DiscoveredProjectFile,
-    DiscoveredProjectInputs,
-    DiscoveredSourceFile,
-    EffectiveProjectConfiguration,
-    ExecutionSettings,
-    ExternalTableSourceStep,
-    KafkaLandingStep,
-    KafkaRetentionPolicy,
-    LoadedPipeline,
-    LoadedProject,
-    LoadedProjectConfiguration,
-    ModelRetentionPolicy,
-    Pipeline,
-    PipelineNaming,
-    PipelineProtection,
-    PostgresRefreshSourceStep,
-    Project,
-    ProjectNaming,
-    ReplayOnChangePolicy,
-    SourceFreshnessPolicy,
-    TransformStep,
-    ViewStep,
-)
-from sqltide.compiler.discovery.models import (
-    KafkaSettings as _DiscoveryKafkaSettings,
-)
 from sqltide.compiler.macros.models import MacroContext
 from sqltide.compiler.macros.types import MacroFunction
 from sqltide.dev_server.models import (
@@ -3284,6 +3254,445 @@ class BuildCancellationOutcome:
     warehouse_termination_confirmed: bool | None
     error_message: str | None = None
 
+# Authored project specification and discovery shapes.
+
+@final
+@dataclass(frozen=True, repr=False)
+class DiscoveredProjectFile:
+    file_path: Path
+    relative_path: Path
+    contents: str
+
+@final
+@dataclass(frozen=True, repr=False)
+class RawConnectionConfig:
+    values: tuple[tuple[str, object], ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AuditSchedulerConfig:
+    enabled: bool = False
+
+@final
+@dataclass(frozen=True)
+class AuditSchedulerOverride:
+    enabled: bool | None = None
+
+@final
+@dataclass(frozen=True)
+class SensorAutomationConfig:
+    enabled: bool = False
+    tick_retention_days: int = 0
+    maximum_event_age_seconds: int | None = None
+
+@final
+@dataclass(frozen=True)
+class SensorAutomationOverride:
+    enabled: bool | None = None
+    tick_retention_days: int | None = None
+    maximum_event_age_seconds: int | None = None
+
+@final
+@dataclass(frozen=True)
+class BuildConfig:
+    max_pipelines: int | None = None
+
+@final
+@dataclass(frozen=True)
+class DestructionConfig:
+    max_table_size_to_drop_bytes: int | None = None
+
+@final
+@dataclass(frozen=True)
+class UiConfig:
+    timezone: str = "UTC"
+
+@final
+@dataclass(frozen=True)
+class AllowedCrossPipelineReference:
+    upstream_pipeline: str
+    downstream_pipeline: str
+
+@final
+@dataclass(frozen=True)
+class ProjectDependencies:
+    model_reference_scope: ModelReferenceScope | str = ...
+    allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+
+@final
+@dataclass(frozen=True, repr=False)
+class ProjectTarget:
+    database: str | None = None
+    connection: RawConnectionConfig = ...
+    variables: tuple[tuple[str, object], ...] = ()
+    audit_scheduler: AuditSchedulerOverride = ...
+    sensors: SensorAutomationOverride = ...
+    build: BuildConfig = ...
+    destruction: DestructionConfig = ...
+    production: bool = False
+
+@final
+@dataclass(frozen=True, repr=False)
+class LocalProjectTarget:
+    database: str | None = None
+    connection: RawConnectionConfig = ...
+    variables: tuple[tuple[str, object], ...] = ()
+    audit_scheduler: AuditSchedulerOverride = ...
+    sensors: SensorAutomationOverride = ...
+
+@final
+@dataclass(frozen=True)
+class ReplayOnChangeRule:
+    mode: ReplayOnChangeMode | str
+    lookback_seconds: int | None = None
+
+@final
+@dataclass(frozen=True)
+class ReplayOnChangePolicy:
+    breaking: ReplayOnChangeRule | None = None
+    non_breaking: ReplayOnChangeRule | None = None
+
+@final
+@dataclass(frozen=True)
+class SourceFreshnessPolicy:
+    warn_after: str | None = None
+    error_after: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AuditDefaults:
+    severity: str | None = None
+    cadence_seconds: int | None = None
+    warmup_seconds: int | None = None
+
+@final
+@dataclass(frozen=True)
+class DeploymentReadinessDefaults:
+    maximum_lag_seconds: float = 30.0
+    minimum_staged_row_ratio: float = 0.5
+
+@final
+@dataclass(frozen=True)
+class KafkaSourceDefaults:
+    naming_macro: str | None = None
+    retention: KafkaRetentionPolicy | Literal[False] | None = None
+    retention_template: object | None = field(default=None, repr=False, compare=False)
+
+@final
+@dataclass(frozen=True)
+class ModelRetentionPolicy:
+    duration_seconds: int
+    timestamp_column: str
+    cap_at_column: str | None = None
+    when_missing: RetentionMissingBehavior | str = ...
+
+@final
+@dataclass(frozen=True)
+class KafkaRetentionPolicy:
+    duration_seconds: int
+    timestamp: KafkaRetentionReference | str = ...
+    fallback: KafkaRetentionReference | str = ...
+    cap_at: KafkaRetentionReference | str | None = None
+
+@final
+@dataclass(frozen=True)
+class ModelDefaults:
+    retention: ModelRetentionPolicy | Literal[False] | None = None
+    retention_template: object | None = field(default=None, repr=False, compare=False)
+    on_row_error: RowErrorPolicy | str | None = None
+
+@final
+@dataclass(frozen=True)
+class SourceDefaults:
+    kafka: KafkaSourceDefaults = ...
+
+@final
+@dataclass(frozen=True)
+class ProjectDefaults:
+    managed_source_ttl: str | None = None
+    model_ttl: str | None = None
+    kafka_broker_list: str | None = None
+    pipeline_mode: PipelineMode | str = ...
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback | None = None
+    run_presumed_failed_after_seconds: int = ...
+    freshness: SourceFreshnessPolicy | None = None
+    audits: AuditDefaults = ...
+    deployment_readiness: DeploymentReadinessDefaults = ...
+    sources: SourceDefaults = ...
+    models: ModelDefaults = ...
+
+@final
+@dataclass(frozen=True)
+class LocalProjectDefaults:
+    pipeline_mode: PipelineMode | str | None = None
+
+@final
+@dataclass(frozen=True)
+class ProjectNaming:
+    pipeline_prefix: str = ...
+    pipeline_naming_macro: str | None = None
+    table_prefix: str = ...
+    view_prefix: str = ...
+
+@final
+@dataclass(frozen=True)
+class PipelineNaming:
+    table_prefix: str | None = None
+    view_prefix: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PipelineProtection:
+    warning: str
+    confirmation: str
+
+@final
+@dataclass(frozen=True, repr=False)
+class AuthoredProjectConfig:
+    name: str
+    adapter: str
+    default_target: str
+    connection: RawConnectionConfig
+    variables: tuple[tuple[str, object], ...]
+    targets: tuple[tuple[str, ProjectTarget], ...]
+    defaults: ProjectDefaults = ...
+    naming: ProjectNaming = ...
+    audit_scheduler: AuditSchedulerConfig = ...
+    sensors: SensorAutomationConfig = ...
+    build: BuildConfig = ...
+    ui: UiConfig = ...
+    dependencies: ProjectDependencies = ...
+
+@final
+@dataclass(frozen=True, repr=False)
+class LocalProjectConfig:
+    target: str | None = None
+    adapter: str | None = None
+    defaults: LocalProjectDefaults = ...
+    connection: RawConnectionConfig = ...
+    variables: tuple[tuple[str, object], ...] = ()
+    targets: tuple[tuple[str, LocalProjectTarget], ...] = ()
+
+@final
+@dataclass(frozen=True, repr=False)
+class LoadedProjectConfiguration:
+    project: AuthoredProjectConfig
+    local: LocalProjectConfig
+    project_source: DiscoveredProjectFile
+    local_source: DiscoveredProjectFile | None
+
+@final
+@dataclass(frozen=True, repr=False)
+class EffectiveProjectConfiguration:
+    name: str
+    adapter: str
+    target_name: str
+    database: str | None
+    connection: RawConnectionConfig
+    variables: tuple[tuple[str, object], ...]
+    defaults: ProjectDefaults
+    naming: ProjectNaming = ...
+    audit_scheduler: AuditSchedulerConfig = ...
+    sensors: SensorAutomationConfig = ...
+    build: BuildConfig = ...
+    destruction: DestructionConfig = ...
+    ui: UiConfig = ...
+    production_target: bool = False
+    dependencies: ProjectDependencies = ...
+
+@final
+@dataclass(frozen=True, repr=False)
+class DiscoveryKafkaSettings:
+    broker_list: str
+    topic: str
+    consumer_group: str | None = None
+    format: str = ...
+    ttl: str | None = None
+    settings: Mapping[str, str] | None = None
+    retention: KafkaRetentionPolicy | Literal[False] | None = None
+    retention_origin: KafkaRetentionOrigin | str | None = None
+
+@final
+@dataclass(frozen=True, repr=False)
+class KafkaLandingStep:
+    name: str
+    kafka: DiscoveryKafkaSettings
+    replay_boundary: ReplayBoundary | None = None
+    freshness: SourceFreshnessPolicy | None = None
+    name_origin: SourceNameOrigin | str = ...
+    naming_macro: str | None = None
+    naming_macro_fingerprint: str | None = None
+
+@final
+@dataclass(frozen=True)
+class ReplayBoundaryColumns:
+    partition: str | None = None
+    offset: str | None = None
+    timestamp: str | None = None
+    landed_at: str | None = None
+    cursor: str | None = None
+
+@final
+@dataclass(frozen=True)
+class ReplayBoundary:
+    mode: ReplayBoundaryMode | str
+    columns: ReplayBoundaryColumns
+
+@final
+@dataclass(frozen=True)
+class ExternalTableSourceStep:
+    name: str
+    kind: SourceKind | str
+    table_name: str
+    replay_boundary: ReplayBoundary
+    freshness: SourceFreshnessPolicy | None = None
+    name_origin: SourceNameOrigin | str = ...
+
+@final
+@dataclass(frozen=True)
+class PostgresRefreshSourceStep:
+    name: str
+    kind: SourceKind | str
+    host: str
+    database: str
+    table: str
+    user: str
+    refresh: str
+    port: int = ...
+    password_env: str | None = None
+    append: bool = True
+    freshness: SourceFreshnessPolicy | None = None
+    name_origin: SourceNameOrigin | str = ...
+
+@final
+@dataclass(frozen=True)
+class ModelColumnSpec:
+    name: str
+    description: str | None = None
+    audits: tuple[object, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class ExecutionSettings:
+    replay: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True)
+class TransformStep:
+    name: str
+    source: str
+    engine: str
+    order_by: Sequence[str]
+    relation_name: str | None = None
+    description: str | None = None
+    columns: tuple[ModelColumnSpec, ...] = ()
+    audits: tuple[object, ...] = ()
+    query: str | None = None
+    sql_file: str | None = None
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: Mapping[str, str] | None = None
+    execution_settings: ExecutionSettings = ...
+    replay_anchor: ReplayAnchorMode | str = ...
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback | str | None = None
+    source_file_path: Path | None = None
+    source_line: int = 1
+    source_column: int = 1
+    retention: ModelRetentionPolicy | Literal[False] | None = None
+    on_row_error: RowErrorPolicy | str | None = None
+
+@final
+@dataclass(frozen=True)
+class ViewStep:
+    name: str
+    query: str | None = None
+    sql_file: str | None = None
+    relation_name: str | None = None
+    description: str | None = None
+    columns: tuple[ModelColumnSpec, ...] = ()
+    audits: tuple[object, ...] = ()
+    source_file_path: Path | None = None
+    source_line: int = 1
+    source_column: int = 1
+
+@final
+@dataclass(frozen=True)
+class Project:
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback | str | None = None
+    model_ttl: str | None = None
+    default_database: str | None = None
+    adapter: str = ...
+    naming: ProjectNaming = ...
+    audit_defaults: AuditDefaults = ...
+    audit_scheduler: AuditSchedulerConfig = ...
+    model_retention: ModelRetentionPolicy | Literal[False] | None = None
+    dependencies: ProjectDependencies = ...
+    model_on_row_error: RowErrorPolicy | str | None = None
+
+@final
+@dataclass(frozen=True)
+class Pipeline:
+    name: str
+    source: KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep | None
+    transforms: Sequence[TransformStep | ViewStep] = ...
+    mode: PipelineMode | str = ...
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback | str | None = None
+    naming: PipelineNaming = ...
+    protection: PipelineProtection | None = None
+    audit_defaults: AuditDefaults = ...
+    execution_settings: ExecutionSettings = ...
+    model_retention: ModelRetentionPolicy | Literal[False] | None = None
+    model_on_row_error: RowErrorPolicy | str | None = None
+
+@final
+@dataclass(frozen=True)
+class LoadedPipeline:
+    pipeline: Pipeline
+    file_path: Path
+    project: Project | None = None
+
+@final
+@dataclass(frozen=True, repr=False)
+class LoadedProject:
+    project: Project
+    source_file: DiscoveredProjectFile
+    configuration: LoadedProjectConfiguration | None = None
+    effective_configuration: EffectiveProjectConfiguration | None = None
+    source_files: tuple[DiscoveredSourceFile, ...] = ()
+    macro_files: tuple[DiscoveredProjectFile, ...] = ()
+    macro_registry: MacroRegistry | None = None
+
+@final
+@dataclass(frozen=True, repr=False)
+class DiscoveredSourceFile:
+    source_file: DiscoveredProjectFile
+    sources: tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...]
+
+@final
+@dataclass(frozen=True, repr=False)
+class DiscoveredPipelineDirectory:
+    pipeline_dir: Path
+    config_file: DiscoveredProjectFile | None = None
+
+@final
+@dataclass(frozen=True, repr=False)
+class DiscoveredProjectInputs:
+    project_dir: Path
+    loaded_project: LoadedProject | None
+    source_files: tuple[DiscoveredSourceFile, ...]
+    pipeline_directories: tuple[DiscoveredPipelineDirectory, ...]
+    model_files: tuple[DiscoveredProjectFile, ...]
+    test_files: tuple[DiscoveredProjectFile, ...]
+    audit_files: tuple[DiscoveredProjectFile, ...]
+    macro_files: tuple[DiscoveredProjectFile, ...]
+    access_file: DiscoveredProjectFile | None = None
+    constant_files: tuple[DiscoveredProjectFile, ...] = ()
+    enum_files: tuple[DiscoveredProjectFile, ...] = ()
+
 type _Span = tuple[int, int, int, int, int, int]
 
 class SqlScanError(ValueError):
@@ -5513,16 +5922,16 @@ def ensure_header_columns(
 class KafkaLagSource(Protocol):
     """Cached consumer-group lag for one managed Kafka source."""
 
-    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
 
 class KafkaTopicSource(Protocol):
     """Cached topic inventory for one broker configuration."""
 
-    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
 
-def build_kafka_client_config(*, kafka: _DiscoveryKafkaSettings) -> dict[str, object]: ...
+def build_kafka_client_config(*, kafka: DiscoveryKafkaSettings) -> dict[str, object]: ...
 def kafka_client_key(
-    *, kafka: _DiscoveryKafkaSettings
+    *, kafka: DiscoveryKafkaSettings
 ) -> tuple[str, tuple[tuple[str, str], ...]]: ...
 def build_kafka_lag_snapshot(
     *,
@@ -5542,7 +5951,7 @@ class KafkaLagReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
     def close(self) -> None: ...
 
 @final
@@ -5555,7 +5964,7 @@ class KafkaTopicReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
     def close(self) -> None: ...
 
 @final
