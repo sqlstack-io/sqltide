@@ -33,6 +33,10 @@ class AdapterWarehouseError(AdapterError):
     """Raised when the warehouse itself rejects a connection or statement."""
 
 
+class AdapterUnavailableError(AdapterWarehouseError):
+    """Raised when the warehouse refuses the connection or its host cannot be resolved."""
+
+
 class AdapterTimeoutError(AdapterWarehouseError):
     """Raised when a warehouse operation exceeds its available time."""
 

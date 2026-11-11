@@ -359,6 +359,16 @@ pub(crate) fn render_expected_warehouse_error(
             String::new(),
             "Retry the command after checking warehouse availability.".to_owned(),
         ]
+    } else if is("AdapterUnavailableError")? {
+        vec![
+            format!("{command} could not connect to ClickHouse"),
+            format!("Database: {database}"),
+            "Reason: the connection was refused or the host could not be resolved.".to_owned(),
+            String::new(),
+            "Check:".to_owned(),
+            "- that ClickHouse is running and reachable from this machine".to_owned(),
+            "- the host and port in your connection settings".to_owned(),
+        ]
     } else if is("AdapterAuthenticationError")? {
         vec![
             format!("{command} could not start"),

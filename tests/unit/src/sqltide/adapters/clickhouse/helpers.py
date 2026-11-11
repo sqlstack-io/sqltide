@@ -1,6 +1,8 @@
 from collections.abc import Iterator, Mapping, Sequence
 from typing import cast
 
+from clickhouse_connect.driver.exceptions import OperationalError
+
 from sqltide._native import sql_canonicalize
 from sqltide.adapter.exceptions import AdapterWarehouseError
 from sqltide.adapter.models import (
@@ -337,3 +339,13 @@ def build_metadata_state() -> MetadataState:
 
 def normalize_clickhouse_sql(sql: str) -> str:
     return sql_canonicalize(sql, "clickhouse")
+
+
+def connection_failure(message: str, *, cause: BaseException, link: str) -> OperationalError:
+    """A driver error whose `link` (`__cause__` or `__context__`) leads to `cause` one level down,
+    as the HTTP client chains them."""
+    transport_error: OSError = OSError("Failed to establish a new connection")
+    transport_error.__cause__ = cause
+    driver_error: OperationalError = OperationalError(message)
+    setattr(driver_error, link, transport_error)
+    return driver_error
