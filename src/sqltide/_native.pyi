@@ -12,68 +12,18 @@ from uuid import UUID
 from sqltide.adapter.classes.adapter import Adapter
 from sqltide.adapter.classes.adapter_connection import AdapterConnection
 from sqltide.adapter.exceptions import AdapterWarehouseError
-from sqltide.adapter.models import (
-    AdapterAdoptedSourceRealizationRequest,
-    AdapterBindingReplacementRequest,
-    AdapterCapabilities,
-    AdapterCapturedReplayRequest,
-    AdapterConnectionConfig,
-    AdapterCurrentQualityNode,
-    AdapterDeploymentInventory,
-    AdapterDeploymentReplayRequest,
-    AdapterDirectFingerprintRecord,
-    AdapterDirectFingerprintSnapshot,
-    AdapterIdentity,
-    AdapterInvocationRecord,
-    AdapterManagedSource,
-    AdapterManagedSourceRealizationRequest,
-    AdapterManifest,
-    AdapterManifestSnapshot,
-    AdapterMaterializedView,
-    AdapterMetadataState,
-    AdapterModelRealization,
-    AdapterModelRealizationRequest,
-    AdapterMutationResult,
-    AdapterNodeResultRecord,
-    AdapterPhysicalRelationMapping,
-    AdapterQueryCancellation,
-    AdapterQueryResult,
-    AdapterReadinessRequest,
-    AdapterReadinessRootObservation,
-    AdapterRefreshState,
-    AdapterRelationCleanupRequest,
-    AdapterReplayColumns,
-    AdapterReplayCoverageRequest,
-    AdapterReplayOffsetFrontier,
-    AdapterReplayOffsetProgressRequest,
-    AdapterReplayQuery,
-    AdapterReplayRequest,
-    AdapterRunEventRecord,
-    AdapterRunStatementRecord,
-    AdapterSensorState,
-    AdapterSensorStepRecord,
-    AdapterSensorTickRecord,
-    AdapterSetDifferenceComparisonRequest,
-    AdapterSourceRealization,
-    AdapterStableView,
-    AdapterStatementProgress,
-    AdapterTable,
-    AdapterTargetMutationLock,
-    AdapterView,
-    AdapterViewRealizationRequest,
-    AdapterWarehouseHealth,
-    CatalogRelation,
-    CatalogSnapshot,
-    InspectedActiveTableBinding,
-    InspectedManagedTableState,
-)
 from sqltide.adapter.types import (
     AdapterModelRealizer,
     AdapterModelRelationNamer,
+    AdapterOptionalStateStatus,
     AdapterReplayBoundaryMode,
+    AdapterReplayLowerBoundMode,
+    AdapterReplaySeedMode,
     AdapterResourceRenderer,
     AdapterSetDifferenceComparisonRenderer,
     AdapterSourceRealizer,
+    AdapterWarehouseHealthAvailability,
+    AdapterWarehouseHealthStatus,
 )
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
@@ -3692,6 +3642,846 @@ class DiscoveredProjectInputs:
     access_file: DiscoveredProjectFile | None = None
     constant_files: tuple[DiscoveredProjectFile, ...] = ()
     enum_files: tuple[DiscoveredProjectFile, ...] = ()
+
+# Neutral adapter identity, connection, catalog, metadata and result shapes.
+
+@final
+@dataclass(frozen=True)
+class AdapterIdentity:
+    name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterCapabilities:
+    virtual_environments: bool
+    managed_source_kinds: frozenset[str]
+    replay_boundary_modes: frozenset[AdapterReplayBoundaryMode]
+    history_prefix_seed: bool
+    stable_logical_bindings: bool
+    per_relation_atomic_replace: bool
+    graph_atomic_publish: bool
+    set_difference_comparison: bool
+    direct_rebuild: bool
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayCoverageRange:
+    driving_input_relation_name: str
+    replay_boundary_mode: AdapterReplayBoundaryMode | str
+    boundary_key: str
+    source_partition_column_name: str | None
+    source_position_column_name: str
+    source_timestamp_column_name: str | None
+    lower_value: str
+    upper_value: str
+
+@final
+@dataclass(frozen=True)
+class AdapterSetDifferenceTarget:
+    name: str
+    column_names: tuple[str, ...]
+    ctes: tuple[tuple[str, str], ...]
+    actual_query: str
+    expected_query: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterSetDifferenceComparisonRequest:
+    targets: tuple[AdapterSetDifferenceTarget, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterColumn:
+    name: str
+    type: str
+    default_expression: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterManagedSource:
+    source_kind: str
+    name: str
+    columns: tuple[AdapterColumn, ...]
+    broker_list: str
+    topic: str
+    consumer_group: str
+    format: str
+    settings: tuple[tuple[str, str], ...] = ()
+    naming_macro_fingerprint: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterTable:
+    name: str
+    columns: tuple[AdapterColumn, ...]
+    engine: str
+    order_by: tuple[str, ...]
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: tuple[tuple[str, str], ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AdapterMaterializedView:
+    name: str
+    source_relation_name: str
+    target_relation_name: str
+    query: str
+    database_template: str
+    refresh: str | None = None
+    append: bool = True
+    dead_letters: bool = False
+
+@final
+@dataclass(frozen=True)
+class AdapterView:
+    name: str
+    query: str
+    database_template: str
+
+@final
+@dataclass(frozen=True)
+class AdapterManagedSourceRealizationRequest:
+    logical_name: str
+    source_kind: str
+    broker_list: str
+    topic: str
+    consumer_group: str | None
+    format: str
+    project_name: str | None = None
+    target_name: str | None = None
+    ttl: str | None = None
+    settings: tuple[tuple[str, str], ...] = ()
+    naming_macro_fingerprint: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterAdoptedSourceRealizationRequest:
+    logical_name: str
+    relation_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterSourceRealization:
+    relation_name: str
+    resources: tuple[AdapterManagedSource | AdapterTable | AdapterMaterializedView, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterRefreshState:
+    view_name: str
+    status: str
+    last_refresh_at: str | None
+    last_success_at: str | None
+    next_refresh_at: str | None
+    exception: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterModelRealizationRequest:
+    logical_name: str
+    target_relation_name: str
+    source_relation_name: str
+    resolved_query: str
+    resolved_database_template: str
+    columns: tuple[AdapterColumn, ...]
+    engine: str
+    order_by: tuple[str, ...]
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: tuple[tuple[str, str], ...] = ()
+    refresh: str | None = None
+    append: bool = True
+    dead_letter_query: str | None = None
+    dead_letter_database_template: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterViewRealizationRequest:
+    logical_name: str
+    target_relation_name: str
+    resolved_query: str
+    resolved_database_template: str
+
+@final
+@dataclass(frozen=True)
+class AdapterModelRealization:
+    relation_name: str
+    resources: tuple[AdapterTable | AdapterMaterializedView | AdapterView, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterStableView:
+    name: str
+    target_relation_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterStableBinding:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterStableBindingRemoval:
+    database: str
+    logical_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterBindingReplacementRequest:
+    bindings: tuple[AdapterStableBinding, ...]
+    removals: tuple[AdapterStableBindingRemoval, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AdapterRelationCleanupRequest:
+    database: str
+    relation_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterTargetMutationLock:
+    database: str
+    owner_id: str
+
+@final
+@dataclass(frozen=True)
+class AdapterReadinessRootRequest:
+    database: str
+    logical_name: str
+    staged_relation_name: str
+    active_exists: bool
+
+@final
+@dataclass(frozen=True)
+class AdapterReadinessRequest:
+    roots: tuple[AdapterReadinessRootRequest, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterReadinessOffsetSummary:
+    active_partition_count: int
+    staged_partition_count: int
+    partitions_compared: int
+    missing_staged_partition_count: int
+    missing_freshness_partition_count: int
+    lagging_partition_count: int
+    max_offset_gap: int
+    average_offset_gap: float
+    lag_boundary_column: str | None
+    max_lag_seconds: float | None
+    average_lag_seconds: float | None
+
+@final
+@dataclass(frozen=True)
+class AdapterReadinessScalarSummary:
+    active_min_value: str | None
+    active_max_value: str | None
+    staged_min_value: str | None
+    staged_max_value: str | None
+    lag_seconds: float | None
+
+@final
+@dataclass(frozen=True)
+class AdapterReadinessRootObservation:
+    root: AdapterReadinessRootRequest
+    staged_exists: bool
+    active_row_count: int | None
+    staged_row_count: int | None
+    replay_source_name: str | None
+    replay_source_row_count: int | None
+    replay_boundary_mode: AdapterReplayBoundaryMode | None
+    offset_summary: AdapterReadinessOffsetSummary | None
+    scalar_summary: AdapterReadinessScalarSummary | None
+
+@final
+@dataclass(frozen=True)
+class AdapterPhysicalRelationMapping:
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayQuery:
+    query: str
+    physical_relation_mappings: tuple[AdapterPhysicalRelationMapping, ...]
+    aggregate_semantics: bool
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayBoundary:
+    boundary_key: str
+    cutoff_value: str
+    cutoff_inclusive: bool
+    partition_value: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayColumns:
+    partition: str
+    offset: str
+    timestamp: str
+    landed_at: str
+    cursor: str
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayWindow:
+    lower_bound_mode: AdapterReplayLowerBoundMode
+    lower_bound_inclusive: bool
+    boundary_time: str
+    forced_start_time: str | None
+    lookback_seconds: int | None
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayRelations:
+    root: str
+    source: str
+    anchor: str
+    target: str
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayRequest:
+    mode: AdapterReplayBoundaryMode
+    database: str
+    relations: AdapterReplayRelations
+    replay_query: AdapterReplayQuery
+    boundaries: tuple[AdapterReplayBoundary, ...]
+    columns: AdapterReplayColumns
+    window: AdapterReplayWindow
+    seed_mode: AdapterReplaySeedMode
+    target_column_names: tuple[str, ...]
+    settings: tuple[tuple[str, str], ...] = ()
+    filter_boundaries_at_source: bool = False
+    dedupe_offsets: bool = False
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayCoverageRequest:
+    replay: AdapterReplayRequest
+    boundary_column_type: str | None
+    count_anchor_rows: bool = False
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayLowerBound:
+    value: str
+    partition_value: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterCapturedReplayRequest:
+    replay: AdapterReplayRequest
+    boundary_column_type: str | None
+    lower_bounds: tuple[AdapterReplayLowerBound, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterDirectFingerprintRecord:
+    fingerprint_id: str
+    logical_model_identity: str
+    definition_sql: str
+    definition_hash: str
+    identity_metadata: str
+    workflow_id: str
+    tool_version: str
+    applied_at: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterDirectFingerprintSnapshot:
+    status: AdapterOptionalStateStatus | str
+    baselines: tuple[AdapterDirectFingerprintRecord, ...]
+    warning: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterManifestResource:
+    pipeline_name: str
+    logical_type: str
+    logical_name: str
+    resource_role: str
+    resource_database: str
+    resource_name: str
+    resource_kind: str
+
+@final
+@dataclass(frozen=True)
+class AdapterManifest:
+    manifest_id: str
+    invocation_id: str
+    project_identity: str
+    target_name: str
+    target_database: str
+    is_production: bool
+    project_revision: str | None
+    manifest_fingerprint: str
+    manifest_version: int
+    pipelines: tuple[str, ...]
+    resources: tuple[AdapterManifestResource, ...]
+    tool_version: str
+    published_at: str
+
+@final
+@dataclass(frozen=True)
+class AdapterManifestSnapshot:
+    status: AdapterOptionalStateStatus | str
+    manifests: tuple[AdapterManifest, ...]
+    warning: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterDeploymentReplayRequest:
+    replay: AdapterReplayRequest
+    metadata_database: str
+    deployment_id: str
+    boundary_column_type: str | None
+    active_relation_name: str
+    active_column_names: tuple[str, ...]
+    anchor_column_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterMetadataObjectKey:
+    database: str | None
+    object_type: str
+    name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterPreparedObjectMapping:
+    logical_key: AdapterMetadataObjectKey
+    physical_name: str
+    logical_model_name: str
+
+@final
+@dataclass(frozen=True)
+class AdapterObjectStateRecord:
+    deployment_id: str
+    key: AdapterMetadataObjectKey
+    normalized_fingerprint: str
+    normalized_query: str | None
+    recorded_at: str
+    observation_id: str = ""
+    state_kind: str = "deployment"
+    physical_database_name: str | None = None
+    physical_relation_name: str | None = None
+    logical_model_database: str | None = None
+    logical_model_name: str | None = None
+    is_selected_root: bool = False
+
+@final
+@dataclass(frozen=True)
+class AdapterDeploymentRecord:
+    deployment_id: str
+    created_at: str
+    status: str
+    replay_lineage_mode: str
+    selected_root_keys: tuple[AdapterMetadataObjectKey, ...]
+    warning_codes: tuple[str, ...]
+    prepared_object_mappings: tuple[AdapterPreparedObjectMapping, ...]
+    workflow_fingerprint: str = ""
+    boundary_time: str | None = None
+    tool_version: str = ""
+
+@final
+@dataclass(frozen=True)
+class AdapterDeploymentWatermarkRecord:
+    deployment_id: str
+    root_key: AdapterMetadataObjectKey
+    anchor_key: AdapterMetadataObjectKey
+    boundary_key: str
+    cutoff_value: str
+    lower_value: str | None = None
+    cutoff_inclusive: bool = True
+    captured_at: str = "1970-01-01 00:00:00.000"
+
+@final
+@dataclass(frozen=True)
+class AdapterPublishEventRecord:
+    deployment_id: str
+    published_at: str
+    logical_view_names: tuple[str, ...]
+    publication_id: str = ""
+    bindings: tuple[AdapterStableBinding, ...] = ()
+    operation: str = "promote"
+    previous_deployment_id: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterInvocationRecord:
+    invocation_id: str
+    project_identity: str
+    target_identity: str
+    command: str
+    mode: str | None
+    outcome: str
+    exit_code: int
+    materialized_outcome: str | None
+    deployment_id: str | None
+    workflow_id: str | None
+    selected_node_count: int
+    started_at: str
+    completed_at: str
+    duration_ms: int
+    error_message: str | None
+    summary_json: str
+    tool_version: str
+    artifact_project_dir: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterNodeResultRecord:
+    result_id: str
+    invocation_id: str
+    node_kind: str
+    node_name: str
+    binding_key: str
+    definition_fingerprint: str
+    execution_fingerprint: str
+    target_identity: str
+    trigger: str
+    scheduled_for: str | None
+    cadence_seconds: int | None
+    warmup_seconds: int
+    status: str
+    severity: str | None
+    failure_count: int
+    completed_at: str
+    payload_json: str
+    error_message: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterRunEventRecord:
+    invocation_id: str
+    sequence: int
+    event_kind: str
+    step_id: str | None
+    phase: str | None
+    payload_json: str
+
+@final
+@dataclass(frozen=True)
+class AdapterRunStatementRecord:
+    invocation_id: str
+    statement_sequence: int
+    step_id: str
+    phase: str
+    intent: str
+    sql: str
+    sql_sha256: str
+    workflow_sha256: str
+    workflow_revision: int
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorCheckpointRecord:
+    sensor_name: str
+    source: str
+    position_completed_at: str
+    position_result_id: str
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorTickRecord:
+    tick_id: str
+    sensor_name: str
+    definition_fingerprint: str
+    kind: str
+    event_id: str | None
+    event_kind: str | None
+    attempt: int
+    status: str
+    started_at: str
+    completed_at: str | None
+    error_message: str | None
+    skip_reason: str | None
+    cursor: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorStepRecord:
+    sensor_name: str
+    event_id: str
+    step_key: str
+    policy: str
+    status: str
+    attempt: int
+    result_json: str | None
+    error_message: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorOverrideRecord:
+    override_id: str
+    sensor_name: str
+    status: str
+    actor: str | None
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorLeaseRecord:
+    lease_name: str
+    owner_id: str
+    acquired_at: str
+    expires_at: str
+
+@final
+@dataclass(frozen=True)
+class AdapterSensorState:
+    checkpoints: tuple[AdapterSensorCheckpointRecord, ...] = ()
+    ticks: tuple[AdapterSensorTickRecord, ...] = ()
+    steps: tuple[AdapterSensorStepRecord, ...] = ()
+    overrides: tuple[AdapterSensorOverrideRecord, ...] = ()
+    leases: tuple[AdapterSensorLeaseRecord, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AdapterCurrentQualityNode:
+    node_kind: str
+    node_name: str
+    binding_key: str
+    definition_fingerprint: str
+    execution_fingerprint: str
+    cadence_seconds: int | None = None
+    warmup_seconds: int = 0
+
+@final
+@dataclass(frozen=True)
+class AdapterDeploymentInventory:
+    deployments: tuple[AdapterDeploymentRecord, ...]
+    publish_events: tuple[AdapterPublishEventRecord, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterMetadataState:
+    object_states: tuple[AdapterObjectStateRecord, ...]
+    deployments: tuple[AdapterDeploymentRecord, ...]
+    deployment_watermarks: tuple[AdapterDeploymentWatermarkRecord, ...]
+    publish_events: tuple[AdapterPublishEventRecord, ...]
+    invocations: tuple[AdapterInvocationRecord, ...] = ()
+    node_results: tuple[AdapterNodeResultRecord, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CatalogIdentity:
+    adapter: AdapterIdentity
+    database: str
+
+@final
+@dataclass(frozen=True)
+class CatalogColumn:
+    name: str
+    type: str
+    default_expression: str | None = None
+
+@final
+@dataclass(frozen=True)
+class CatalogRelation:
+    name: str
+    engine: str
+    columns: tuple[CatalogColumn, ...]
+    full_engine: str | None = None
+    order_by: tuple[str, ...] = ()
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: tuple[tuple[str, str], ...] = ()
+    definition_sql: str | None = None
+    query_sql: str | None = None
+    source_relation_names: tuple[str, ...] = ()
+    target_relation_name: str | None = None
+    stable_binding_name: str | None = None
+    ownership_generation: str | None = None
+    @property
+    def storage_engine(self) -> str: ...
+    @property
+    def source_relation_name(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class CatalogSnapshot:
+    identity: CatalogIdentity
+    warehouse_timezone: str
+    relations: tuple[CatalogRelation, ...]
+    def relation(self, name: str) -> CatalogRelation | None: ...
+    def relation_names(self) -> frozenset[str]: ...
+
+@final
+@dataclass(frozen=True)
+class InspectedActiveTableBinding:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class InspectedPhysicalTableCandidate:
+    database: str
+    logical_name: str
+    physical_name: str
+    object_type: str = "table"
+
+@final
+@dataclass(frozen=True)
+class InspectedManagedTableState:
+    active_bindings: tuple[InspectedActiveTableBinding, ...]
+    physical_candidates: tuple[InspectedPhysicalTableCandidate, ...]
+
+@final
+@dataclass(frozen=True, repr=False)
+class AdapterConnectionConfig:
+    host: str
+    port: int
+    username: str
+    password: str
+    database: str | None = None
+    settings: tuple[tuple[str, str], ...] = ()
+    def __repr__(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class AdapterQueryResult:
+    rows: tuple[tuple[object, ...], ...]
+    column_names: tuple[str, ...] = ()
+    def named_rows(self) -> tuple[Mapping[str, object], ...]: ...
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseDisk:
+    name: str
+    path: str | None
+    disk_type: str | None
+    total_bytes: int | None
+    free_bytes: int | None
+    unreserved_bytes: int | None
+    keep_free_bytes: int | None
+    status: AdapterWarehouseHealthStatus | str
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseMemory:
+    resident_bytes: int | None
+    host_total_bytes: int | None
+    cgroup_used_bytes: int | None
+    cgroup_limit_bytes: int | None
+    basis: str
+    pressure_fraction: float | None
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseActivity:
+    active_queries: int | None
+    active_merges: int | None
+    incomplete_mutations: int | None
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseStuckKafkaConsumer:
+    table: str
+    stuck_seconds: int | None
+    recent_errors: int
+    latest_error: str
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseKafkaConsumers:
+    configured_tables: int
+    materialized_tables: int
+    materialized_table_names: tuple[str, ...]
+    polling_tables: int
+    exception_tables: int
+    stuck_consumers: tuple[AdapterWarehouseStuckKafkaConsumer, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseDeadLetterModel:
+    model_name: str
+    row_count: int
+    latest_failed_columns: tuple[str, ...]
+    latest_payload: str
+    latest_quarantined_at: str
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseTable:
+    name: str
+    rows: int | None
+    bytes_on_disk: int | None
+    active_parts: int | None
+
+@final
+@dataclass(frozen=True)
+class AdapterWarehouseHealth:
+    availability: AdapterWarehouseHealthAvailability | str
+    status: AdapterWarehouseHealthStatus | str
+    version: str | None
+    uptime_seconds: int | None
+    disks: tuple[AdapterWarehouseDisk, ...]
+    inode_total: int | None
+    inode_free: int | None
+    inode_status: AdapterWarehouseHealthStatus | str
+    memory: AdapterWarehouseMemory | None
+    activity: AdapterWarehouseActivity | None
+    tables: tuple[AdapterWarehouseTable, ...] | None
+    collection_duration_ms: int
+    kafka_consumers: AdapterWarehouseKafkaConsumers | None = None
+    dead_letters: tuple[AdapterWarehouseDeadLetterModel, ...] | None = None
+    capacity_warning_fraction: float | None = None
+    capacity_critical_fraction: float | None = None
+    warnings: tuple[str, ...] = ()
+    stale: bool = False
+    measured_at: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterMutationResult:
+    written_rows: int | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterStatementProgress:
+    elapsed_seconds: float
+    read_rows: int
+    read_bytes: int
+    total_rows_approx: int
+    memory_usage_bytes: int
+    settings: tuple[tuple[str, str], ...] = ()
+
+@final
+@dataclass(frozen=True)
+class AdapterQueryCancellation:
+    query_id: str
+    supported: bool
+    query_found: bool
+    termination_confirmed: bool
+    detail: str | None = None
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayOffsetRange:
+    partition: int
+    lower_offset: int
+    upper_offset: int
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayOffsetProgressRequest:
+    database: str
+    relation: str
+    partition_column: str
+    offset_column: str
+    ranges: tuple[AdapterReplayOffsetRange, ...]
+
+@final
+@dataclass(frozen=True)
+class AdapterReplayOffsetFrontier:
+    partition: int
+    completed_offset: int
 
 type _Span = tuple[int, int, int, int, int, int]
 

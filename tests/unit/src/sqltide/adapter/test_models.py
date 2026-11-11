@@ -6,6 +6,7 @@ from sqltide.adapter.exceptions import AdapterResultError
 from sqltide.adapter.models import AdapterConnectionConfig, AdapterQueryResult
 from tests.unit.src.sqltide.adapter._test_types import (
     AdapterConnectionConfigRedactionTestCase,
+    AdapterConnectionConfigReprTestCase,
     AdapterQueryResultDecodingTestCase,
     AdapterQueryResultErrorTestCase,
 )
@@ -97,3 +98,46 @@ def test_given_resolved_connection_config_when_rendering_then_it_redacts_the_pas
     expected_fragment: str
     for expected_fragment in test_case.expected_present_fragments:
         assert expected_fragment in rendered
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        AdapterConnectionConfigReprTestCase(
+            description="renders every field but the password with default database and settings",
+            config=AdapterConnectionConfig(
+                host="localhost",
+                port=8123,
+                username="sqltide",
+                password="super-secret-password",
+            ),
+            expected_repr=(
+                "AdapterConnectionConfig(host='localhost', port=8123, username='sqltide', "
+                "password='***', database=None, settings=())"
+            ),
+        ),
+        AdapterConnectionConfigReprTestCase(
+            description="renders the database and settings and still hides a quoted password",
+            config=AdapterConnectionConfig(
+                host="warehouse.example.com",
+                port=9440,
+                username="orders_reader",
+                password="orders-'secret\"-value",
+                database="orders",
+                settings=(("max_threads", "4"),),
+            ),
+            expected_repr=(
+                "AdapterConnectionConfig(host='warehouse.example.com', port=9440, "
+                "username='orders_reader', password='***', database='orders', "
+                "settings=(('max_threads', '4'),))"
+            ),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_resolved_connection_config_when_rendering_then_repr_and_str_match_exactly(
+    test_case: AdapterConnectionConfigReprTestCase,
+) -> None:
+    rendered: tuple[str, str] = (repr(test_case.config), str(test_case.config))
+
+    assert rendered == (test_case.expected_repr, test_case.expected_repr)

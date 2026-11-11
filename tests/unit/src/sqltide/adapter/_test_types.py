@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from sqltide.adapter.models import AdapterConnectionConfig
+
 
 @dataclass(frozen=True)
 class ResolveAdapterTestCase:
@@ -50,3 +52,10 @@ class AdapterConnectionConfigRedactionTestCase:
     password: str
     expected_absent_fragment: str
     expected_present_fragments: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AdapterConnectionConfigReprTestCase:
+    description: str
+    config: AdapterConnectionConfig
+    expected_repr: str
