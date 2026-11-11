@@ -4,7 +4,7 @@ use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple, PyType};
 
-use super::support::text;
+use super::support::{chained_to_handled, text};
 use crate::dev_server::support::attr;
 use crate::py_kwargs;
 
@@ -23,12 +23,13 @@ fn discovery_error(py: Python<'_>, message: String, cause: Option<PyErr>) -> PyE
         Ok(error) => PyErr::from_value(error),
         Err(error) => return error,
     };
-    if let Some(cause) = cause {
-        let context: Any<'_> = cause.value(py).clone().into_any();
-        error.set_cause(py, Some(cause));
-        if let Err(failed) = error.value(py).setattr("__context__", context) {
-            return failed;
-        }
+    let Some(cause) = cause else {
+        return chained_to_handled(py, error);
+    };
+    let context: Any<'_> = cause.value(py).clone().into_any();
+    error.set_cause(py, Some(cause));
+    if let Err(failed) = error.value(py).setattr("__context__", context) {
+        return failed;
     }
     error
 }
@@ -156,18 +157,29 @@ fn load_provider_module<'py>(file_path: &Any<'py>, project_dir: &Any<'py>) -> Py
             .call_method1("exec_module", (&module,))?;
         Ok(())
     })();
+    let restored: PyResult<()> = sys.setattr("path", old_path);
     let loaded: PyResult<()> = match loaded {
         Err(error) if error.is_instance_of::<PyException>(py) => {
-            let message: String = format!(
-                "Failed to import provider file {}: {}",
-                text(&relative(file_path, project_dir)?)?,
-                text(error.value(py).as_any())?
-            );
-            Err(discovery_error(py, message, Some(error)))
+            let message: PyResult<String> = (|| {
+                Ok(format!(
+                    "Failed to import provider file {}: {}",
+                    text(&relative(file_path, project_dir)?)?,
+                    text(error.value(py).as_any())?
+                ))
+            })();
+            match message {
+                Ok(message) => Err(discovery_error(py, message, Some(error))),
+                Err(failed) => {
+                    let failure: &Bound<'_, pyo3::exceptions::PyBaseException> = failed.value(py);
+                    if failure.getattr("__context__")?.is_none() {
+                        failure.setattr("__context__", error.value(py))?;
+                    }
+                    Err(failed)
+                }
+            }
         }
         outcome => outcome,
     };
-    let restored: PyResult<()> = sys.setattr("path", old_path);
     loaded?;
     restored?;
     Ok(module)

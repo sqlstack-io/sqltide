@@ -1,5 +1,6 @@
 """Behavior tests for compiling project sensors and providers."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from tests.unit.src.sqltide.sensors.main._test_types import (
     CompileSensorsErrorTestCase,
     CompileSensorsEventTypeTestCase,
     CompileSensorsProviderErrorTestCase,
+    CompileSensorsProviderPathTestCase,
     CompileSensorsProviderReloadTestCase,
     CompileSensorsTestCase,
 )
@@ -26,6 +28,7 @@ from tests.unit.src.sqltide.sensors.main.helpers import (
     MIXED_PROVIDER_SOURCE,
     PROVIDER_SOURCE,
     QUALITY_SENSOR_SOURCE,
+    UNPRINTABLE_ERROR_PROVIDER_SOURCE,
     UNSET_SETTINGS_PROVIDER_SOURCE,
     UNSUPPORTED_EVENT_SENSOR_SOURCE,
     compile_provider_names_in_turn,
@@ -253,6 +256,31 @@ def test_given_invalid_providers_when_compiling_then_discovery_error_explains_th
 
     assert error_info.value.args == (test_case.expected_message,)
     assert type(error_info.value.__cause__) is test_case.expected_cause_type
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        CompileSensorsProviderPathTestCase(
+            description="an import error whose message cannot be rendered still restores sys.path",
+            provider_files=(("providers/unprintable.py", UNPRINTABLE_ERROR_PROVIDER_SOURCE),),
+            expected_error_type=ZeroDivisionError,
+            expected_context_type_name="UnprintableError",
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_unprintable_provider_import_error_when_compiling_then_sys_path_is_restored(
+    test_case: CompileSensorsProviderPathTestCase, tmp_path: Path
+) -> None:
+    write_project_files(project_dir=tmp_path, files=test_case.provider_files)
+    path_before: list[str] = list(sys.path)
+
+    with pytest.raises(test_case.expected_error_type) as error_info:
+        _ = compile_sensors(project_dir=tmp_path, reserved_names=frozenset())
+
+    assert sys.path == path_before
+    assert type(error_info.value.__context__).__name__ == test_case.expected_context_type_name
 
 
 @pytest.mark.parametrize(

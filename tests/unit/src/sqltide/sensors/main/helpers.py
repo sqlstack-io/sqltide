@@ -75,6 +75,15 @@ class OrdersWebhook(Provider):
     orders_webhook_timeout: float
 """
 
+UNPRINTABLE_ERROR_PROVIDER_SOURCE: str = """
+class UnprintableError(Exception):
+    def __str__(self) -> str:
+        raise ZeroDivisionError("unprintable")
+
+
+raise UnprintableError()
+"""
+
 BROKEN_PROVIDER_SOURCE: str = """
 VALUE = 1
 raise RuntimeError("cannot import")

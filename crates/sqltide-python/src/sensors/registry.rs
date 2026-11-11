@@ -7,7 +7,7 @@ use pyo3::types::{PyCFunction, PyDict, PyFrozenSet, PyList, PyTuple};
 
 use super::dispatch::event_source_for;
 use super::providers::discover_provider_classes;
-use super::support::{SENSOR_EXCEPTIONS, SENSOR_MODELS, SENSOR_TYPES, text};
+use super::support::{SENSOR_EXCEPTIONS, SENSOR_MODELS, SENSOR_TYPES, chained_to_handled, text};
 use crate::dev_server::support::attr;
 use crate::py_kwargs;
 
@@ -584,15 +584,21 @@ fn polling_sensor<'py>(
 fn validate_sensor_retry_policy(max_attempts: Any<'_>, backoff_seconds: Any<'_>) -> PyResult<()> {
     let py: Python<'_> = max_attempts.py();
     if max_attempts.lt(1)? {
-        return Err(plain_error(
+        return Err(chained_to_handled(
             py,
-            "SensorRetryPolicy.max_attempts must be at least 1".to_owned(),
+            plain_error(
+                py,
+                "SensorRetryPolicy.max_attempts must be at least 1".to_owned(),
+            ),
         ));
     }
     if backoff_seconds.lt(0)? {
-        return Err(plain_error(
+        return Err(chained_to_handled(
             py,
-            "SensorRetryPolicy.backoff_seconds must not be negative".to_owned(),
+            plain_error(
+                py,
+                "SensorRetryPolicy.backoff_seconds must not be negative".to_owned(),
+            ),
         ));
     }
     Ok(())

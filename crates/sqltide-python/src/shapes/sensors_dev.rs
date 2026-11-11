@@ -26,10 +26,13 @@ shapes! {
         /// Fingerprint the sensor identity and retained implementation source.
         #[getter]
         fn identity_fingerprint(&self, py: Python<'_>) -> PyResult<String> {
-            let parts: [Bound<'_, PyString>; 3] = [
-                self.name.bind(py).str()?,
-                self.relative_path.bind(py).call_method0("as_posix")?.str()?,
-                self.source.bind(py).str()?,
+            // An f-string formats each part with `format(part, "")`, which a `str` subclass may
+            // override independently of `__str__`.
+            let format: Bound<'_, PyAny> = py.import("builtins")?.getattr("format")?;
+            let parts: [Bound<'_, PyAny>; 3] = [
+                format.call1((self.name.bind(py),))?,
+                format.call1((self.relative_path.bind(py).call_method0("as_posix")?,))?,
+                format.call1((self.source.bind(py),))?,
             ];
             let payload: Bound<'_, PyAny> = PyString::new(py, "\0")
                 .call_method1("join", (parts,))?
