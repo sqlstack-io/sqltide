@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.19](https://github.com/sqlstack-io/sqltide/compare/v0.65.18...v0.65.19) (2026-11-11)
+
+
+### Bug Fixes
+
+* chain sensor load errors as the previous release did ([#377](https://github.com/sqlstack-io/sqltide/issues/377)) ([a2787b9](https://github.com/sqlstack-io/sqltide/commit/a2787b9b6704d9ae2c12b3f0811db455e6f7171f))
+
 ## [0.65.18](https://github.com/sqlstack-io/sqltide/compare/v0.65.17...v0.65.18) (2026-11-11)
 
 
