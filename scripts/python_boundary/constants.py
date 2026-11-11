@@ -20,4 +20,5 @@ EXPORTS_NAME: str = "__all__"
 NATIVE_ALIASES: dict[str, tuple[str, str]] = {
     "DiscoveryRefType": ("RefType", "compiler/discovery/types.py"),
     "DiscoverySqlRelationType": ("SqlRelationType", "compiler/discovery/types.py"),
+    "DiscoveryKafkaSettings": ("KafkaSettings", "compiler/discovery/models.py"),
 }

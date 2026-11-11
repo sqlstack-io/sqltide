@@ -80,6 +80,18 @@ UNLISTED_ALIAS: str = DISCOVERY_TYPES.replace(
     "PipelineMode as PipelineMode", "DiscoveryPipelineMode as PipelineMode"
 )
 WRONG_ALIAS: str = DISCOVERY_TYPES.replace("DiscoveryRefType as RefType", "DiscoveryRefType as Ref")
+DISCOVERY_MODELS: str = (
+    '"""Discovery models, defined natively."""\n'
+    "\n"
+    "from sqltide._native import DiscoveryKafkaSettings as KafkaSettings\n"
+    "from sqltide._native import Project as Project\n"
+)
+UNLISTED_MODEL_ALIAS: str = DISCOVERY_MODELS.replace(
+    "Project as Project", "DiscoveryProject as Project"
+)
+WRONG_MODEL_ALIAS: str = DISCOVERY_MODELS.replace(
+    "DiscoveryKafkaSettings as KafkaSettings", "DiscoveryKafkaSettings as Settings"
+)
 STAYS: str = '[[stays]]\npath = "executor"\nrule = 1\nnote = "Rule 1: runs plans."\n'
 REVIEWED: str = (
     '[[handled_native_errors]]\nlocation = "compiler/keys.py::digest"\nnote = "No key."\n'
@@ -100,6 +112,12 @@ REVIEWED: str = (
         PythonBoundaryTestCase(
             description="a listed native alias in its own module is a pure re-export",
             source_files={"compiler/discovery/types.py": DISCOVERY_TYPES},
+            policy="remaining_lines = 0\n",
+            expected_messages=("1 pure native re-export files (4 lines)",),
+        ),
+        PythonBoundaryTestCase(
+            description="the discovery Kafka settings alias in its own module is a pure re-export",
+            source_files={"compiler/discovery/models.py": DISCOVERY_MODELS},
             policy="remaining_lines = 0\n",
             expected_messages=("1 pure native re-export files (4 lines)",),
         ),
@@ -205,6 +223,24 @@ def test_given_policy_matching_source_when_checking_then_passes(
         PythonBoundaryTestCase(
             description="a listed native name under another alias counts",
             source_files={"compiler/discovery/types.py": WRONG_ALIAS},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="an unlisted native alias beside the Kafka settings alias counts",
+            source_files={"compiler/discovery/models.py": UNLISTED_MODEL_ALIAS},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="the discovery Kafka settings alias in the compile models counts",
+            source_files={"compiler/compile/models.py": DISCOVERY_MODELS},
+            policy="remaining_lines = 0\n",
+            expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
+        ),
+        PythonBoundaryTestCase(
+            description="the discovery Kafka settings under another alias counts",
+            source_files={"compiler/discovery/models.py": WRONG_MODEL_ALIAS},
             policy="remaining_lines = 0\n",
             expected_messages=("Movable Python grew to 4 lines (policy: 0)",),
         ),
