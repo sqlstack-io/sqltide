@@ -5,7 +5,9 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyString, PyTuple};
 
-use super::{Coerce, Given, all_members, base_init, exception, member_set, shapes, str_enum};
+use super::{
+    Coerce, Given, add, add_class, all_members, base_init, exception, member_set, shapes, str_enum,
+};
 use crate::cli::render::render_diagnostic_text;
 
 const ANALYSIS_TYPES: &str = "sqltide.compiler.sql_analysis.types";
@@ -221,7 +223,7 @@ shapes! {
     SqlTestMock {
         cte_name,
         name,
-        relation_type(coerce = Coerce::Class("sqltide.compiler.discovery.types", "SqlRelationType")),
+        relation_type(coerce = Coerce::Enum("DiscoverySqlRelationType")),
         query,
     }
 
@@ -578,6 +580,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "Raised when SQL cannot be scanned, parsed, rewritten, or generated safely.",
         std::slice::from_ref(&value_error),
         Some(wrap_pyfunction!(sql_analysis_error_init, module)?.into_any()),
+        None,
     )?;
     let subclasses: [(&str, &str, Bound<'_, PyAny>); 7] = [
         (
@@ -624,6 +627,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
             doc,
             std::slice::from_ref(&analysis),
             Some(init),
+            None,
         )?;
     }
     exception(
@@ -633,6 +637,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "Raised when compiled dependencies do not form a valid project graph.",
         std::slice::from_ref(&value_error),
         Some(wrap_pyfunction!(graph_input_init, module)?.into_any()),
+        None,
     )?;
     exception(
         module,
@@ -640,6 +645,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "SqlRulesError",
         "Invalid Rules configuration, SQL adaptation or unsafe formatting candidate.",
         std::slice::from_ref(&value_error),
+        None,
         None,
     )?;
     exception(
@@ -649,6 +655,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "All findings from one compile, with the default-selection migration notice.",
         std::slice::from_ref(&value_error),
         Some(wrap_pyfunction!(rules_init, module)?.into_any()),
+        None,
     )?;
     let plain: [(&str, &str, &str); 4] = [
         (
@@ -680,6 +687,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
             doc,
             std::slice::from_ref(&value_error),
             None,
+            None,
         )?;
     }
     Ok(())
@@ -687,15 +695,17 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 fn constants(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let py: Python<'_> = module.py();
-    module.add("UPSTREAM_SELECTOR_PREFIX", "+")?;
-    module.add("SELECTOR_NAMESPACE_SEPARATOR", ":")?;
-    module.add("PIPELINE_SELECTOR_NAMESPACE", "pipeline")?;
-    module.add("MODEL_SELECTOR_NAMESPACE", "model")?;
-    module.add(
+    add(module, "UPSTREAM_SELECTOR_PREFIX", "+")?;
+    add(module, "SELECTOR_NAMESPACE_SEPARATOR", ":")?;
+    add(module, "PIPELINE_SELECTOR_NAMESPACE", "pipeline")?;
+    add(module, "MODEL_SELECTOR_NAMESPACE", "model")?;
+    add(
+        module,
         "ALL_DEPENDENCY_EDGE_TYPES",
         all_members(py, "DependencyEdgeType")?,
     )?;
-    module.add(
+    add(
+        module,
         "DRIVING_DEPENDENCY_EDGE_TYPES",
         member_set(py, "DependencyEdgeType", &["DRIVING_INPUT"])?,
     )
@@ -705,32 +715,32 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     enums(module)?;
     exceptions(module)?;
     constants(module)?;
-    module.add_class::<SqlSourceSpan>()?;
-    module.add_class::<SqlReference>()?;
-    module.add_class::<SqlOutputColumn>()?;
-    module.add_class::<SqlProjection>()?;
-    module.add_class::<SqlStorageExpression>()?;
-    module.add_class::<SqlAggregateFacts>()?;
-    module.add_class::<SqlModelAnalysis>()?;
-    module.add_class::<SqlResolvedQuery>()?;
-    module.add_class::<SqlRelationRewrite>()?;
-    module.add_class::<SqlNamedQuery>()?;
-    module.add_class::<SqlQueryRewriteResult>()?;
-    module.add_class::<SqlRelationIdentity>()?;
-    module.add_class::<SqlCatalogAnalysis>()?;
-    module.add_class::<DependencyEdge>()?;
-    module.add_class::<ProjectGraph>()?;
-    module.add_class::<FormattedSource>()?;
-    module.add_class::<QualityNodeIdentity>()?;
-    module.add_class::<LoadedSqlAudit>()?;
-    module.add_class::<LoadedGenericSqlAuditDefinition>()?;
-    module.add_class::<LoadedGenericSqlAuditInstance>()?;
-    module.add_class::<SqlTestMock>()?;
-    module.add_class::<SqlTestCte>()?;
-    module.add_class::<SqlTestModelPayload>()?;
-    module.add_class::<SqlTestMacroPayload>()?;
-    module.add_class::<LoadedSqlTest>()?;
-    module.add_class::<SqlTestChainStep>()?;
-    module.add_class::<SqlTestAssertionStep>()?;
-    module.add_class::<SqlTestCase>()
+    add_class::<SqlSourceSpan>(module)?;
+    add_class::<SqlReference>(module)?;
+    add_class::<SqlOutputColumn>(module)?;
+    add_class::<SqlProjection>(module)?;
+    add_class::<SqlStorageExpression>(module)?;
+    add_class::<SqlAggregateFacts>(module)?;
+    add_class::<SqlModelAnalysis>(module)?;
+    add_class::<SqlResolvedQuery>(module)?;
+    add_class::<SqlRelationRewrite>(module)?;
+    add_class::<SqlNamedQuery>(module)?;
+    add_class::<SqlQueryRewriteResult>(module)?;
+    add_class::<SqlRelationIdentity>(module)?;
+    add_class::<SqlCatalogAnalysis>(module)?;
+    add_class::<DependencyEdge>(module)?;
+    add_class::<ProjectGraph>(module)?;
+    add_class::<FormattedSource>(module)?;
+    add_class::<QualityNodeIdentity>(module)?;
+    add_class::<LoadedSqlAudit>(module)?;
+    add_class::<LoadedGenericSqlAuditDefinition>(module)?;
+    add_class::<LoadedGenericSqlAuditInstance>(module)?;
+    add_class::<SqlTestMock>(module)?;
+    add_class::<SqlTestCte>(module)?;
+    add_class::<SqlTestModelPayload>(module)?;
+    add_class::<SqlTestMacroPayload>(module)?;
+    add_class::<LoadedSqlTest>(module)?;
+    add_class::<SqlTestChainStep>(module)?;
+    add_class::<SqlTestAssertionStep>(module)?;
+    add_class::<SqlTestCase>(module)
 }

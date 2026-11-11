@@ -206,12 +206,12 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     plan_warnings::register(module)?;
     rules::register(module)?;
     selection::register(module)?;
-    shapes::register(module)?;
     sensors::register(module)?;
     sources::register(module)?;
     sql_scan::register(module)?;
     test_discovery::register(module)?;
     testing::register(module)?;
     timestamps::register(module)?;
-    toml::register(module)
+    toml::register(module)?;
+    shapes::register(module)
 }

@@ -2,7 +2,7 @@ import argparse
 import os
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -67,7 +67,13 @@ from sqltide.adapter.models import (
     InspectedActiveTableBinding,
     InspectedManagedTableState,
 )
-from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.adapter.types import (
+    AdapterModelRealizer,
+    AdapterModelRelationNamer,
+    AdapterResourceRenderer,
+    AdapterSetDifferenceComparisonRenderer,
+    AdapterSourceRealizer,
+)
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
 from sqltide.auth.models import (
@@ -100,24 +106,8 @@ from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
-from sqltide.compiler.access.models import CompiledAccessPolicy
-from sqltide.compiler.compile.models import (
-    CompiledModel,
-    CompiledPipeline,
-    CompiledProject,
-    CompileProjectInputs,
-    CompilerAdapterProfile,
-    DesiredKafkaTable,
-    DesiredMaterializedView,
-    DesiredState,
-    DesiredTable,
-    DesiredView,
-    ExternalSourceReplayConfig,
-    LogicalResourceKey,
-    ObjectKey,
-    ParsedRef,
-)
 from sqltide.compiler.discovery.models import (
+    AllowedCrossPipelineReference,
     AuditDefaults,
     DiscoveredPipelineDirectory,
     DiscoveredProjectFile,
@@ -128,7 +118,6 @@ from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
-    KafkaSettings,
     LoadedPipeline,
     LoadedProject,
     LoadedProjectConfiguration,
@@ -144,14 +133,10 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import (
-    BoundedReplayFallback,
-    PipelineMode,
-    ReplayLineageMode,
+from sqltide.compiler.discovery.models import (
+    KafkaSettings as _DiscoveryKafkaSettings,
 )
-from sqltide.compiler.discovery.types import SqlRelationType as _DiscoverySqlRelationType
-from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
+from sqltide.compiler.macros.types import MacroFunction
 from sqltide.compiler.planner.models import (
     ActualState,
     DeploymentPlan,
@@ -188,7 +173,7 @@ from sqltide.dev_server.types import (
     DevServerReporter,
     RunPresentationStatus,
 )
-from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
+from sqltide.diagnostics.models import CompilerDiagnostic, RelatedDiagnosticLocation, SourceLocation
 from sqltide.events.models import (
     AuditCompleted,
     InvocationObservation,
@@ -541,7 +526,7 @@ class LoadedGenericSqlAuditInstance:
 class SqlTestMock:
     cte_name: str
     name: str
-    relation_type: _DiscoverySqlRelationType | str
+    relation_type: DiscoverySqlRelationType | str
     query: str
 
 @final
@@ -672,6 +657,637 @@ PIPELINE_SELECTOR_NAMESPACE: str
 MODEL_SELECTOR_NAMESPACE: str
 ALL_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
 DRIVING_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
+
+# Compiled project shapes: compile models, macros, the compilation lifecycle and access policy.
+
+class PipelineMode(StrEnum):
+    DIRECT = "direct"
+    VIRTUAL = "virtual"
+
+class RetentionMissingBehavior(StrEnum):
+    ERROR = "error"
+    SKIP = "skip"
+
+class KafkaRetentionReference(StrEnum):
+    BROKER = "broker"
+    LANDED = "landed"
+
+class KafkaRetentionOrigin(StrEnum):
+    SOURCE = "source"
+    PROJECT = "project"
+
+class ModelReferenceScope(StrEnum):
+    PROJECT = "project"
+    PIPELINE = "pipeline"
+
+class RowErrorPolicy(StrEnum):
+    FAIL = "fail"
+    QUARANTINE = "quarantine"
+
+class ReplayAnchorMode(StrEnum):
+    AUTO = "auto"
+    NEVER = "never"
+
+class ReplayLineageMode(StrEnum):
+    OFFSETS = "offsets"
+    TIMESTAMP = "timestamp"
+    LANDED_AT = "landed_at"
+    CURSOR = "cursor"
+
+class SourceKind(StrEnum):
+    KAFKA = "kafka"
+    STREAM_TABLE = "stream_table"
+    POSTGRES = "postgres"
+
+class SourceNameOrigin(StrEnum):
+    EXPLICIT = "explicit"
+    DERIVED = "derived"
+
+class ModelKind(StrEnum):
+    TABLE = "table"
+    VIEW = "view"
+
+class ReplayBoundaryMode(StrEnum):
+    OFFSETS = "offsets"
+    TIMESTAMP = "timestamp"
+    LANDED_AT = "landed_at"
+    CURSOR = "cursor"
+
+class BoundedReplayFallback(StrEnum):
+    FULL = "full"
+    BOUNDED_WITHOUT_HISTORY = "bounded_without_history"
+
+class DiscoveryRefType(StrEnum):
+    REFERENCE = "reference"
+    MUTABLE = "mutable"
+
+class DiscoverySqlRelationType(StrEnum):
+    SOURCE = "source"
+    REF = "ref"
+
+class ReplayOnChangeMode(StrEnum):
+    FULL = "full"
+    BOUNDED = "bounded"
+
+class SchemaChangeKind(StrEnum):
+    BREAKING = "breaking"
+    NON_BREAKING = "non_breaking"
+
+class DesiredObjectType(StrEnum):
+    KAFKA_TABLE = "kafka_table"
+    TABLE = "table"
+    MATERIALIZED_VIEW = "materialized_view"
+    VIEW = "view"
+
+class LogicalResourceType(StrEnum):
+    SOURCE = "source"
+    MODEL = "model"
+
+class RetentionOrigin(StrEnum):
+    MODEL = "model"
+    PIPELINE = "pipeline"
+    PROJECT = "project"
+
+class Permission(StrEnum):
+    PROJECT_RELOAD = "project.reload"
+    SOURCE_MESSAGES_READ = "source.messages.read"
+    QUALITY_TEST_RUN = "quality.test.run"
+    QUALITY_AUDIT_RUN = "quality.audit.run"
+    BUILD_DIRECT_RUN = "build.direct.run"
+    DEPLOYMENT_CREATE = "deployment.create"
+    BUILD_CANCEL = "build.cancel"
+    BUILD_KILL = "build.kill"
+    DEPLOYMENT_PROMOTE = "deployment.promote"
+    DEPLOYMENT_CLEANUP = "deployment.cleanup"
+    PIPELINE_DESTROY = "pipeline.destroy"
+    TARGET_RESET = "target.reset"
+    AUTOMATION_MANAGE = "automation.manage"
+    ACCOUNT_MANAGE = "account.manage"
+    ROLE_ASSIGN = "role.assign"
+
+class GrantScope(StrEnum):
+    PROJECT = "project"
+    TARGET = "target"
+
+@final
+@dataclass(frozen=True)
+class LoadedMacro:
+    name: str
+    file_path: Path
+    relative_path: Path
+    source: str
+    definition_line: int
+    function: MacroFunction
+    description: str | None = None
+    @property
+    def identity_fingerprint(self) -> str: ...
+
+@final
+@dataclass(frozen=True, repr=False)
+class MacroRegistry:
+    macros: Mapping[str, LoadedMacro] = field(default_factory=dict)
+    declarations: Declarations | None = None
+    expansions: dict[tuple[Path, str, int, int], tuple[str, list[tuple[int, int, int, int]]]] = (
+        field(default_factory=dict, compare=False, repr=False)
+    )
+
+@final
+@dataclass(frozen=True)
+class PipelineNamingContext:
+    name: str
+    source_name: str | None
+    model_names: tuple[str, ...]
+    relative_directory: str
+    mode: PipelineMode
+
+@final
+@dataclass(frozen=True, repr=False)
+class MacroContext:
+    adapter_name: str
+    dialect: str
+    target_name: str | None
+    database: str | None
+    schema: str | None
+    virtual_environments: bool
+    variables: Mapping[str, object]
+
+@final
+@dataclass(frozen=True)
+class ObjectKey:
+    database: str | None
+    object_type: DesiredObjectType | str
+    name: str
+
+@final
+@dataclass(frozen=True)
+class Column:
+    name: str
+    type: str
+    default: str | None = None
+
+@final
+@dataclass(frozen=True)
+class KafkaSettings:
+    broker_list: str
+    topic: str
+    consumer_group: str
+    format: str
+    settings: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True)
+class KafkaTableSpec:
+    columns: tuple[Column, ...]
+    kafka: KafkaSettings
+    naming_macro_fingerprint: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class TableStorage:
+    engine: str
+    order_by: tuple[str, ...]
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True)
+class TableSpec:
+    columns: tuple[Column, ...]
+    storage: TableStorage
+
+@final
+@dataclass(frozen=True)
+class MaterializedViewSpec:
+    source_table_name: str
+    target_table_name: str
+    query: str
+    database_template: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class ViewSpec:
+    query: str
+    database_template: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class DesiredKafkaTable:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: KafkaTableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def kafka(self) -> KafkaSettings: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredTable:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: TableSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback = BoundedReplayFallback.FULL
+    replay_settings: Mapping[str, str] | None = field(default=None, compare=False)
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def engine(self) -> str: ...
+    @property
+    def order_by(self) -> tuple[str, ...]: ...
+    @property
+    def partition_by(self) -> str | None: ...
+    @property
+    def ttl(self) -> str | None: ...
+    @property
+    def settings(self) -> Mapping[str, str] | None: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredMaterializedView:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: MaterializedViewSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    refresh: str | None = field(default=None, compare=False)
+    append: bool = field(default=True, compare=False)
+    filters_row_errors: bool = field(default=False, compare=False)
+    dead_letters: bool = field(default=False, compare=False)
+    authored_query: str | None = field(default=None, compare=False)
+    authored_database_template: str | None = field(default=None, compare=False)
+    @property
+    def comparison_spec(self) -> MaterializedViewSpec: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def source_table_name(self) -> str: ...
+    @property
+    def target_table_name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+    @property
+    def database_template(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredView:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: ViewSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    @property
+    def name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+    @property
+    def database_template(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class ParsedRef:
+    name: str
+    relation_type: DiscoverySqlRelationType | str
+    ref_type: DiscoveryRefType | None = None
+    span: SqlSourceSpan | None = None
+
+@final
+@dataclass(frozen=True)
+class LogicalResourceKey:
+    resource_type: LogicalResourceType | str
+    name: str
+
+@final
+@dataclass(frozen=True)
+class CompiledSource:
+    key: LogicalResourceKey
+    source: KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
+    effective_replay_lineage_mode: ReplayLineageMode
+
+@final
+@dataclass(frozen=True)
+class ModelRetentionResolution:
+    value: ModelRetentionPolicy | Literal[False] | None = None
+    origin: RetentionOrigin | str | None = None
+
+@dataclass(frozen=True)
+class CompiledModel:
+    key: LogicalResourceKey
+    pipeline_name: str
+    relation_name: str
+    kind: ModelKind | str
+    sql_analysis: SqlModelAnalysis
+    @property
+    def query(self) -> str: ...
+    @property
+    def output_columns(self) -> tuple[Column, ...]: ...
+    @property
+    def parsed_refs(self) -> tuple[ParsedRef, ...]: ...
+    @property
+    def refs(self) -> tuple[str, ...]: ...
+    @property
+    def has_aggregate_semantics(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompiledTableModel(CompiledModel):
+    transform: TransformStep
+    preserves_required_lineage: bool
+    replay_anchor_eligible: bool
+    effective_bounded_replay_fallback: BoundedReplayFallback
+    replay_on_change: ReplayOnChangePolicy | None = None
+    retention: ModelRetentionResolution = field(default_factory=ModelRetentionResolution)
+    retention_applied: bool = False
+    on_row_error: RowErrorPolicy = RowErrorPolicy.FAIL
+    @property
+    def has_mutable_refs(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompiledViewModel(CompiledModel):
+    view: ViewStep
+
+@final
+@dataclass(frozen=True)
+class ExternalSourceReplayConfig:
+    key: ObjectKey
+    table_name: str
+    source_kind: SourceKind | str
+    replay_boundary_mode: ReplayBoundaryMode | str
+    partition_column_name: str | None = None
+    offset_column_name: str | None = None
+    timestamp_column_name: str | None = None
+    landed_at_column_name: str | None = None
+    cursor_column_name: str | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledPipeline:
+    pipeline: Pipeline
+    project: Project | None
+    file_path: Path
+    effective_replay_lineage_mode: ReplayLineageMode | None
+    source: CompiledSource | None
+    models: tuple[CompiledModel, ...]
+
+@final
+@dataclass(frozen=True)
+class DesiredState:
+    objects: tuple[DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView, ...]
+    replay_anchor_keys: frozenset[ObjectKey]
+    mutable_ref_warning_keys: frozenset[ObjectKey]
+    external_source_replay_configs: tuple[ExternalSourceReplayConfig, ...] = ()
+    def is_managed_landing_table(self, name: str) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompilerExpressionInferenceProfile:
+    sql_analysis_dialect: str
+
+@final
+@dataclass(frozen=True)
+class CompilerTargetMetadata:
+    default_database: str | None
+    default_schema: str | None
+    production_target: bool = False
+    destruction_relation_drop_size_limit: int | None = None
+
+@final
+@dataclass(frozen=True)
+class CompilerAdapterProfile:
+    identity: AdapterIdentity
+    sql_analysis_dialect: str
+    type_inference_profile: CompilerExpressionInferenceProfile
+    target_metadata: CompilerTargetMetadata
+    realize_source: AdapterSourceRealizer
+    model_relation_name: AdapterModelRelationNamer
+    realize_model: AdapterModelRealizer
+    render_resource: AdapterResourceRenderer
+    render_set_difference_comparison: AdapterSetDifferenceComparisonRenderer
+    run_sql_rules: bool = True
+
+@final
+@dataclass(frozen=True)
+class CompileProjectInputs:
+    discovered_inputs: DiscoveredProjectInputs
+    adapter_profile: CompilerAdapterProfile
+    effective_target: CompilerTargetMetadata
+    variables: tuple[tuple[str, object], ...]
+    macro_registry: MacroRegistry
+    macro_context: MacroContext
+    pipelines: tuple[LoadedPipeline, ...]
+    tests: tuple[LoadedSqlTest, ...]
+    audits: tuple[LoadedSqlAudit, ...]
+    sources: tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...] = ()
+    virtual_environments: bool = False
+    project_name: str | None = None
+    target_name: str | None = None
+    model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
+    allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CompiledProject:
+    sources: tuple[CompiledSource, ...]
+    models: tuple[CompiledModel, ...]
+    pipelines: tuple[CompiledPipeline, ...]
+    tests: tuple[LoadedSqlTest, ...]
+    test_cases: tuple[SqlTestCase, ...]
+    audits: tuple[LoadedSqlAudit, ...]
+    macro_registry: MacroRegistry = field(default_factory=MacroRegistry)
+    macro_context: MacroContext | None = None
+    project_name: str | None = None
+    target_name: str | None = None
+    production_target: bool = False
+    destruction_relation_drop_size_limit: int | None = None
+    model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
+    allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CompilationTimings:
+    discovery_ms: int
+    compile_inputs_ms: int
+    assembly_ms: int
+    graph_ms: int
+    realization_ms: int
+    rules_ms: int = 0
+
+@final
+@dataclass(frozen=True)
+class RealizedProject:
+    project: CompiledProject
+    resources_by_logical_key: Mapping[
+        LogicalResourceKey,
+        tuple[AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView, ...],
+    ]
+    relation_name_by_logical_key: Mapping[LogicalResourceKey, str]
+    resolved_query_by_model_key: Mapping[LogicalResourceKey, str]
+    desired_state: DesiredState
+
+@final
+@dataclass(frozen=True)
+class CompileAnalysis:
+    discovered_inputs: DiscoveredProjectInputs
+    compile_inputs: CompileProjectInputs
+    adapter_profile: CompilerAdapterProfile
+    compiled_project: CompiledProject
+    realized_project: RealizedProject
+    graph: ProjectGraph
+    diagnostics: tuple[CompilerDiagnostic, ...]
+    timings: CompilationTimings
+    access_policy: CompiledAccessPolicy | None = None
+    sensors: CompiledSensors | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessGrant:
+    permissions: tuple[Permission, ...]
+    pipelines: tuple[str, ...] = ()
+    scope: GrantScope | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessRole:
+    name: str
+    description: str | None
+    grants: tuple[CompiledAccessGrant, ...]
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessPolicy:
+    roles: tuple[CompiledAccessRole, ...]
+    fingerprint: str
+
+class PipelineCompileError(ValueError):
+    span: SqlSourceSpan | None
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(
+        self,
+        message: str,
+        *,
+        span: SqlSourceSpan | None = None,
+        location: SourceLocation | None = None,
+    ) -> None: ...
+
+class AuditCompileError(ValueError): ...
+
+class TransformSqlContractError(Exception):
+    transform_name: str
+    span: SqlSourceSpan | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, transform_name: str) -> None: ...
+
+class TransformSqlParseError(TransformSqlContractError):
+    query: str
+    details: str
+    def __init__(self, transform_name: str, query: str, details: str) -> None: ...
+
+class TransformSqlMultipleStatementsError(TransformSqlContractError):
+    statement_count: int
+    def __init__(self, transform_name: str, statement_count: int) -> None: ...
+
+class TransformSqlFinalQueryShapeError(TransformSqlContractError):
+    statement_type: str
+    def __init__(self, transform_name: str, statement_type: str) -> None: ...
+
+class TransformSqlTopLevelSetOperationError(TransformSqlContractError):
+    statement_sql: str
+    def __init__(self, transform_name: str, statement_sql: str) -> None: ...
+
+class TransformSqlStarProjectionError(TransformSqlContractError):
+    column_index: int
+    def __init__(self, transform_name: str, column_index: int) -> None: ...
+
+class TransformSqlDuplicateAliasError(TransformSqlContractError):
+    alias: str
+    def __init__(self, transform_name: str, alias: str) -> None: ...
+
+class TransformSqlUntypedProjectionError(TransformSqlContractError):
+    column_index: int
+    projection_sql: str
+    def __init__(self, transform_name: str, column_index: int, projection_sql: str) -> None: ...
+
+class TransformOrderByUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class TransformPartitionByUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class TransformTtlUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class MacroError(ValueError):
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic
+    def __init__(
+        self,
+        message: str,
+        *,
+        location: SourceLocation | None = None,
+        related_locations: tuple[RelatedDiagnosticLocation, ...] = (),
+    ) -> None: ...
+
+class PipelineDiscoveryError(ValueError):
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, message: str) -> None: ...
+
+class ModelHeaderSyntaxError(ValueError): ...
+class ProjectSpecError(ValueError): ...
+class ProjectConfigError(ProjectSpecError): ...
+class DurationParseError(ProjectSpecError): ...
+class RetentionConfigError(ProjectSpecError): ...
+
+class AccessPolicyError(ValueError):
+    location: SourceLocation
+    def __init__(self, message: str, *, location: SourceLocation) -> None: ...
+
+DESIRED_OBJECT_TYPE_KAFKA_TABLE: DesiredObjectType
+DESIRED_OBJECT_TYPE_TABLE: DesiredObjectType
+DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW: DesiredObjectType
+DESIRED_OBJECT_TYPE_VIEW: DesiredObjectType
+RAW_TABLE_NAME_PREFIX: str
+MATERIALIZED_VIEW_NAME_PREFIX: str
+REPLAY_PARTITION_COLUMN_NAME: str
+REPLAY_OFFSET_COLUMN_NAME: str
+REPLAY_TIMESTAMP_COLUMN_NAME: str
+REPLAY_LANDED_AT_COLUMN_NAME: str
+REPLAY_CURSOR_COLUMN_NAME: str
+SECONDS_BY_DURATION_UNIT: dict[str, int]
+ACCESS_POLICY_FILE_NAME: str
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -2900,15 +3516,17 @@ def ensure_header_columns(
 class KafkaLagSource(Protocol):
     """Cached consumer-group lag for one managed Kafka source."""
 
-    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
 
 class KafkaTopicSource(Protocol):
     """Cached topic inventory for one broker configuration."""
 
-    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
 
-def build_kafka_client_config(*, kafka: KafkaSettings) -> dict[str, object]: ...
-def kafka_client_key(*, kafka: KafkaSettings) -> tuple[str, tuple[tuple[str, str], ...]]: ...
+def build_kafka_client_config(*, kafka: _DiscoveryKafkaSettings) -> dict[str, object]: ...
+def kafka_client_key(
+    *, kafka: _DiscoveryKafkaSettings
+) -> tuple[str, tuple[tuple[str, str], ...]]: ...
 def build_kafka_lag_snapshot(
     *,
     partition_ids: frozenset[int],
@@ -2927,7 +3545,7 @@ class KafkaLagReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
     def close(self) -> None: ...
 
 @final
@@ -2940,7 +3558,7 @@ class KafkaTopicReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
     def close(self) -> None: ...
 
 @final

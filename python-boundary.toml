@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 7459
+remaining_lines = 6113
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -74,6 +74,11 @@ note = "Rule 2: Entry point the native registry loader calls to execute one user
 path = "compiler/macros/types.py"
 rule = 2
 note = "Rule 2: Data-only alias for the live user macro functions the loader holds."
+
+[[stays]]
+path = "compiler/pipeline/types.py"
+rule = 1
+note = "Rule 1: Data-only type aliases AdapterResource (the adapter managed source, table, materialized view and view resources) and DesiredObject (the desired Kafka table, table, materialized view and view objects) the runtime consumes; no logic."
 
 [[stays]]
 path = "dev_server/classes/kafka_lag_collector.py"

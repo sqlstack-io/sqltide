@@ -5,13 +5,19 @@
 //! `dataclasses.replace`, `fields` and `asdict` keep working on it. Enums are real `StrEnum`s and
 //! exceptions are ordinary exception classes, both built when the native module loads.
 
-use pyo3::exceptions::{PyAttributeError, PyBaseException, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyAttributeError, PyBaseException, PyImportError, PyTypeError, PyValueError,
+};
 use pyo3::prelude::*;
 use pyo3::pyclass::CompareOp;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{IntoPyDict, PyDict, PyFrozenSet, PyString, PyTuple, PyType};
 
 mod compiler_analysis;
+mod compiler_project;
+
+/// The callable a `default_factory` field calls for each new instance.
+pub(crate) type Factory = for<'py> fn(Python<'py>) -> PyResult<Bound<'py, PyAny>>;
 
 /// A field default, as plain data so each shape's field table is a constant.
 #[derive(Clone, Copy)]
@@ -24,6 +30,8 @@ pub(crate) enum Given {
     EmptyTuple,
     /// A member of a native enum, by its `sqltide._native` attribute and member name.
     Member(&'static str, &'static str),
+    /// `field(default_factory=...)`: a fresh value from calling the factory's callable.
+    Factory(Factory),
 }
 
 /// How a constructor argument is normalized, as the dataclass's `__post_init__` did.
@@ -32,10 +40,14 @@ pub(crate) enum Coerce {
     Keep,
     /// Call the native enum registered as this `sqltide._native` attribute with the value.
     Enum(&'static str),
-    /// Call the class at `module.name`, for an enum that is still defined in Python.
-    Class(&'static str, &'static str),
     /// Freeze a mapping as `MappingProxyType(dict(value))`.
     ReadOnlyMapping,
+    /// `tuple(value)`.
+    Tuple,
+    /// Keep `None` and normalize any other value with the inner rule.
+    Maybe(&'static Coerce),
+    /// Normalize with a native function.
+    With(for<'py> fn(&Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>),
 }
 
 /// One dataclass field: its name, default, normalization and `compare`/`repr` flags.
@@ -77,17 +89,39 @@ pub(crate) const fn unraw(name: &'static str) -> &'static str {
 
 /// Defines frozen shapes under one public module path. Each shape is written as
 /// `Name { field, field(default = Given::None), ... }`, optionally followed by
-/// `@impl { ... }` holding its extra methods and properties.
+/// `@impl { ... }` holding its extra methods and properties. `Name: Base { ... }` subclasses
+/// another shape and lists the base fields first, and `Name @no_repr { ... }` keeps the object
+/// repr, as `@dataclass(repr=False)` did.
 macro_rules! shapes {
+    (@methods [] $hash:tt $methods:tt impl $name:ident { $($body:tt)* }) => {
+        $hash $methods
+        impl $name {
+            fn __repr__(slf: &pyo3::Bound<'_, Self>) -> pyo3::PyResult<String> {
+                $crate::shapes::repr(slf.as_any(), &Self::SPEC, &slf.get().values(slf.py()))
+            }
+
+            $($body)*
+        }
+    };
+    (@methods [no_repr] $($item:tt)*) => {
+        $($item)*
+    };
+    (@init $values:ident) => {
+        pyo3::PyClassInitializer::from(Self::from_values(&$values)?)
+    };
+    (@init $values:ident $base:ident) => {
+        pyo3::PyClassInitializer::from($base::from_values(&$values)?)
+            .add_subclass(Self::from_values(&$values)?)
+    };
     (module = $module:literal; $(
         $(#[doc = $doc:literal])*
-        $name:ident {
+        $name:ident $(: $base:ident)? $(@$flag:ident)? {
             $($field:ident $(($($key:ident = $value:expr),* $(,)?))?),* $(,)?
         }
         $(@impl { $($methods:tt)* })?
     )*) => { $(
         $(#[doc = $doc])*
-        #[pyclass(module = $module, frozen, get_all)]
+        #[pyclass(module = $module, frozen, get_all, subclass $(, extends = $base)?)]
         pub(crate) struct $name {
             $(pub(crate) $field: pyo3::Py<pyo3::PyAny>,)*
         }
@@ -105,8 +139,15 @@ macro_rules! shapes {
             fn values<'py>(&self, py: pyo3::Python<'py>) -> Vec<pyo3::Bound<'py, pyo3::PyAny>> {
                 vec![$(self.$field.bind(py).clone()),*]
             }
+
+            /// The shape over the leading bound values, in field order.
+            fn from_values(values: &[pyo3::Bound<'_, pyo3::PyAny>]) -> pyo3::PyResult<Self> {
+                let mut values = values.iter().cloned();
+                Ok(Self { $($field: $crate::shapes::next(&mut values)?,)* })
+            }
         }
 
+        $crate::shapes::shapes! { @methods [$($flag)?]
         #[pymethods]
         impl $name {
             #[new]
@@ -114,9 +155,10 @@ macro_rules! shapes {
             fn __new__(
                 args: &pyo3::Bound<'_, pyo3::types::PyTuple>,
                 kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
-            ) -> pyo3::PyResult<Self> {
-                let mut values = $crate::shapes::bind(&Self::SPEC, args, kwargs)?.into_iter();
-                Ok(Self { $($field: $crate::shapes::next(&mut values)?,)* })
+            ) -> pyo3::PyResult<pyo3::PyClassInitializer<Self>> {
+                let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> =
+                    $crate::shapes::bind(&Self::SPEC, args, kwargs)?;
+                Ok($crate::shapes::shapes!(@init values $($base)?))
             }
 
             #[classattr]
@@ -136,10 +178,6 @@ macro_rules! shapes {
             #[classattr]
             fn __dataclass_params__(py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
                 $crate::shapes::dataclass_params(py)
-            }
-
-            fn __repr__(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<String> {
-                $crate::shapes::repr(&Self::SPEC, &self.values(py))
             }
 
             fn __richcmp__(
@@ -181,7 +219,7 @@ macro_rules! shapes {
                 slf: &pyo3::Bound<'_, Self>,
                 name: &pyo3::Bound<'_, pyo3::types::PyString>,
             ) -> pyo3::PyResult<pyo3::Py<pyo3::PyAny>> {
-                Err($crate::shapes::no_attribute(slf.as_any(), Self::SPEC.qualname, name))
+                $crate::shapes::missing_attribute(slf.as_any(), name)
             }
 
             fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
@@ -190,6 +228,7 @@ macro_rules! shapes {
             }
 
             $($($methods)*)?
+        }
         }
     )* };
 }
@@ -320,7 +359,13 @@ fn default_value(py: Python<'_>, given: Given) -> PyResult<Option<Bound<'_, PyAn
         Given::Str(value) => PyString::new(py, value).into_any(),
         Given::EmptyTuple => PyTuple::empty(py).into_any(),
         Given::Member(class, member) => native_enum(py, class)?.getattr(member)?,
+        Given::Factory(factory) => factory(py)?.call0()?,
     }))
+}
+
+/// The class a `default_factory` field calls, such as `dict` or a native shape.
+pub(crate) fn factory<T: pyo3::PyTypeInfo>(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    Ok(py.get_type::<T>().into_any())
 }
 
 fn coerce<'py>(
@@ -331,11 +376,14 @@ fn coerce<'py>(
     match coerce {
         Coerce::Keep => Ok(value.clone()),
         Coerce::Enum(class) => native_enum(py, class)?.call1((value,)),
-        Coerce::Class(module, name) => py.import(module)?.getattr(name)?.call1((value,)),
         Coerce::ReadOnlyMapping => py
             .import("types")?
             .getattr("MappingProxyType")?
             .call1((py.get_type::<PyDict>().call1((value,))?,)),
+        Coerce::Tuple => py.get_type::<PyTuple>().call1((value,)),
+        Coerce::Maybe(inner) if !value.is_none() => self::coerce(py, *inner, value),
+        Coerce::Maybe(_) => Ok(value.clone()),
+        Coerce::With(normalize) => normalize(value),
     }
 }
 
@@ -371,7 +419,9 @@ pub(crate) fn dataclass_fields(py: Python<'_>, spec: &ShapeSpec) -> PyResult<Py<
     for field in spec.fields {
         let entry: Bound<'_, PyAny> = copy.call1((template,))?;
         entry.setattr("name", field.name)?;
-        if let Some(value) = default_value(py, field.default)? {
+        if let Given::Factory(factory) = field.default {
+            entry.setattr("default_factory", factory(py)?)?;
+        } else if let Some(value) = default_value(py, field.default)? {
             entry.setattr("default", value)?;
         }
         entry.setattr("compare", field.compare)?;
@@ -386,15 +436,21 @@ pub(crate) fn dataclass_params(py: Python<'_>) -> PyResult<Py<PyAny>> {
     Ok(probe(py)?.1.clone_ref(py))
 }
 
-/// `Name(field=value, ...)` over the fields shown in repr, as the dataclass repr reads.
-pub(crate) fn repr(spec: &ShapeSpec, values: &[Bound<'_, PyAny>]) -> PyResult<String> {
+/// `Name(field=value, ...)` over the fields shown in repr, named by the instance's own class
+/// as the dataclass repr reads, so a subclass shows its name.
+pub(crate) fn repr(
+    instance: &Bound<'_, PyAny>,
+    spec: &ShapeSpec,
+    values: &[Bound<'_, PyAny>],
+) -> PyResult<String> {
     let mut parts: Vec<String> = Vec::with_capacity(values.len());
     for (field, value) in spec.fields.iter().zip(values) {
         if field.repr {
             parts.push(format!("{}={}", field.name, value.repr()?.to_str()?));
         }
     }
-    Ok(format!("{}({})", spec.qualname, parts.join(", ")))
+    let qualname: Bound<'_, PyString> = instance.get_type().qualname()?;
+    Ok(format!("{qualname}({})", parts.join(", ")))
 }
 
 /// The tuple of compared fields that the dataclass compares and hashes.
@@ -443,6 +499,27 @@ pub(crate) fn frozen(py: Python<'_>, action: &str, name: &str) -> PyErr {
     }
 }
 
+/// The attribute lookup that failed with `AttributeError`, as the dataclass reported it: a class
+/// attribute found on the MRO, such as a property, is read again so its own error surfaces, and
+/// any other name gets the missing-attribute error naming the instance's class by its bare name.
+pub(crate) fn missing_attribute(
+    instance: &Bound<'_, PyAny>,
+    name: &Bound<'_, PyString>,
+) -> PyResult<Py<PyAny>> {
+    let class: Bound<'_, PyType> = instance.get_type();
+    for owner in class.getattr("__mro__")?.try_iter()? {
+        let namespace: Bound<'_, PyAny> = owner?.getattr("__dict__")?;
+        if namespace.contains(name)? {
+            let attribute: Bound<'_, PyAny> = namespace.get_item(name)?;
+            if let Ok(get) = attribute.get_type().getattr("__get__") {
+                return Ok(get.call1((attribute, instance, class))?.unbind());
+            }
+            break;
+        }
+    }
+    Err(no_attribute(instance, &class.name()?.to_string(), name))
+}
+
 /// The `AttributeError` CPython raises for a missing attribute, naming the bare class as it did
 /// for the dataclass, with `name` and `obj` set so tracebacks still suggest close field names.
 pub(crate) fn no_attribute(
@@ -484,12 +561,12 @@ pub(crate) fn str_enum(
         .get_or_init(py, || PyDict::new(py).unbind())
         .bind(py)
         .set_item(attribute, &class)?;
-    module.add(attribute, class)
+    add(module, attribute, class)
 }
 
 /// Builds the exception class `qualname` under the public module `public_module`, with `bases`
-/// and, when given, a native `__init__` that receives the instance first, and registers it in
-/// `sqltide._native` under the same name.
+/// and, when given, a native `__init__` and `__str__` that receive the instance first, and
+/// registers it in `sqltide._native` under the same name.
 pub(crate) fn exception<'py>(
     module: &Bound<'py, PyModule>,
     public_module: &str,
@@ -497,23 +574,23 @@ pub(crate) fn exception<'py>(
     doc: &str,
     bases: &[Bound<'py, PyAny>],
     init: Option<Bound<'py, PyAny>>,
+    str: Option<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = module.py();
     let namespace: Bound<'py, PyDict> = PyDict::new(py);
     namespace.set_item("__module__", public_module)?;
     namespace.set_item("__qualname__", qualname)?;
     namespace.set_item("__doc__", doc)?;
-    if let Some(init) = init {
-        let method: Bound<'py, PyAny> = py
-            .import("functools")?
-            .getattr("partialmethod")?
-            .call1((init,))?;
-        namespace.set_item("__init__", method)?;
+    let partialmethod: Bound<'py, PyAny> = py.import("functools")?.getattr("partialmethod")?;
+    for (slot, method) in [("__init__", init), ("__str__", str)] {
+        if let Some(method) = method {
+            namespace.set_item(slot, partialmethod.call1((method,))?)?;
+        }
     }
     let class: Bound<'py, PyAny> =
         py.get_type::<PyType>()
             .call1((qualname, PyTuple::new(py, bases)?, namespace))?;
-    module.add(qualname, &class)?;
+    add(module, qualname, &class)?;
     Ok(class)
 }
 
@@ -556,6 +633,33 @@ pub(crate) fn member_set<'py>(
     PyFrozenSet::new(py, &items)
 }
 
+/// Adds `value` to `sqltide._native` as `name`, refusing a name the module already defines so
+/// a shape, enum, exception or constant never silently replaces another native name.
+pub(crate) fn add<'py>(
+    module: &Bound<'py, PyModule>,
+    name: &str,
+    value: impl IntoPyObject<'py>,
+) -> PyResult<()> {
+    if module.hasattr(name)? {
+        return Err(PyImportError::new_err(format!(
+            "sqltide._native already defines {name}; register the shape, enum, exception or \
+             constant under a distinct name"
+        )));
+    }
+    module.add(name, value)
+}
+
+/// Adds the native shape class `T` to `sqltide._native` under its class name, refusing a name
+/// the module already defines.
+pub(crate) fn add_class<T: pyo3::PyTypeInfo>(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let class: Bound<'_, PyType> = module.py().get_type::<T>();
+    let name: Bound<'_, PyString> = class.name()?;
+    add(module, name.to_str()?, class)
+}
+
+/// Registers every native shape, enum, exception and constant. It runs after every other
+/// registration so the name guard sees the whole module.
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    compiler_analysis::register(module)
+    compiler_analysis::register(module)?;
+    compiler_project::register(module)
 }
