@@ -291,6 +291,10 @@ impl<'py> Realizer<'py> {
                 ("consumer_group", kafka.getattr("consumer_group")?),
                 ("format", kafka.getattr("format")?),
                 ("project_name", project.getattr("project_name")?),
+                (
+                    "consumer_group_identity",
+                    project.getattr("consumer_group_identity")?,
+                ),
                 ("target_name", project.getattr("target_name")?),
                 ("ttl", ttl),
                 ("settings", settings),

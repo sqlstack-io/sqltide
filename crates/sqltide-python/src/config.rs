@@ -298,6 +298,10 @@ impl<'py> Document<'py> {
                         ],
                     )?,
                 ),
+                (
+                    "consumer_group_identity",
+                    self.object(config.consumer_group_identity.as_deref())?,
+                ),
             ],
         )
     }
@@ -1081,6 +1085,10 @@ impl<'py> Document<'py> {
                             ),
                         ],
                     )?,
+                ),
+                (
+                    "consumer_group_identity",
+                    self.object(config.consumer_group_identity.as_deref())?,
                 ),
             ],
         )

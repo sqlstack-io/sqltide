@@ -130,6 +130,7 @@ shapes! {
         ttl(default = Given::None),
         settings(default = Given::EmptyTuple),
         naming_macro_fingerprint(default = Given::None),
+        consumer_group_identity(default = Given::None),
     }
 
     /// Logical adopted-source fields needed for adapter realization.

@@ -16,8 +16,9 @@ use crate::retention::{
 use crate::text::python_strip;
 use crate::value::{Kind, Value};
 
-const PROJECT_CONFIG_KEYS: [&str; 15] = [
+const PROJECT_CONFIG_KEYS: [&str; 16] = [
     "name",
+    "consumer_group_identity",
     "adapter",
     "default_target",
     "connection",
@@ -116,6 +117,9 @@ pub type Pairs = Vec<(String, usize)>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProjectConfig {
     pub name: String,
+    /// Replaces `name` in default Kafka consumer group names, so a renamed project keeps
+    /// consuming from its committed offsets.
+    pub consumer_group_identity: Option<String>,
     pub adapter: String,
     pub default_target: String,
     pub connection: Pairs,
@@ -337,6 +341,17 @@ impl Parser<'_> {
             return self
                 .error("project.name must be a committed literal and cannot be interpolated");
         }
+        let consumer_group_identity: Option<String> =
+            self.optional_non_empty(payload, "consumer_group_identity", "project")?;
+        if consumer_group_identity
+            .as_deref()
+            .is_some_and(|identity| identity.contains(INTERPOLATION_TOKEN_START))
+        {
+            return self.error(
+                "project.consumer_group_identity must be a committed literal and cannot be \
+                 interpolated",
+            );
+        }
         let adapter: String = self
             .optional_non_empty(payload, "adapter", "project")?
             .unwrap_or_else(|| DEFAULT_ADAPTER_NAME.to_owned());
@@ -354,6 +369,7 @@ impl Parser<'_> {
         let dependencies: Dependencies = self.dependencies(field(payload, "dependencies"))?;
         Ok(ProjectConfig {
             name,
+            consumer_group_identity,
             adapter,
             default_target,
             connection,

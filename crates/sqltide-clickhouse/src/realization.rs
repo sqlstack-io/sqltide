@@ -49,6 +49,9 @@ pub struct ManagedSourceRequest<'a> {
     pub format: &'a str,
     pub consumer_group: Option<&'a str>,
     pub project_name: Option<&'a str>,
+    /// The project's `consumer_group_identity`, which replaces `project_name` in the default
+    /// consumer group when set.
+    pub consumer_group_identity: Option<&'a str>,
     pub target_name: Option<&'a str>,
     pub setting_keys: Vec<&'a str>,
 }
@@ -99,18 +102,11 @@ pub fn realize_managed_source(
     let kafka_table_name: String = format!("{KAFKA_TABLE_PREFIX}{}", request.logical_name);
     let consumer_group: String = match request.consumer_group {
         Some(group) if !group.is_empty() => group.to_owned(),
-        // The pre-rename group, so existing sources resume from their committed offsets.
-        _ => {
-            let segments: Vec<&str> = [
-                request.project_name,
-                request.target_name,
-                Some(request.logical_name),
-            ]
-            .into_iter()
-            .flatten()
-            .collect();
-            format!("streambuild_{}", segments.join("_"))
-        }
+        _ => default_consumer_group(
+            request.consumer_group_identity.or(request.project_name),
+            request.target_name,
+            request.logical_name,
+        ),
     };
     Ok(ManagedSourceRealization {
         raw_table_name: format!("{RAW_TABLE_PREFIX}{}", request.logical_name),
@@ -119,6 +115,22 @@ pub fn realize_managed_source(
         landing_query: landing_query(&kafka_table_name),
         kafka_table_name,
     })
+}
+
+/// The consumer group a Kafka source uses when it declares none: the project identity (its
+/// `consumer_group_identity`, else its name), target and logical name. The `streambuild_`
+/// prefix is the pre-rename one, so existing sources resume from their committed offsets.
+#[must_use]
+pub fn default_consumer_group(
+    identity: Option<&str>,
+    target_name: Option<&str>,
+    logical_name: &str,
+) -> String {
+    let segments: Vec<&str> = [identity, target_name, Some(logical_name)]
+        .into_iter()
+        .flatten()
+        .collect();
+    format!("streambuild_{}", segments.join("_"))
 }
 
 fn landing_query(kafka_table_name: &str) -> String {
@@ -183,6 +195,7 @@ mod tests {
             format: "JSONAsString",
             consumer_group,
             project_name: Some("shop"),
+            consumer_group_identity: None,
             target_name: None,
             setting_keys: vec!["kafka_num_consumers"],
         }
@@ -201,6 +214,31 @@ mod tests {
                 .unwrap()
                 .consumer_group,
             "group"
+        );
+    }
+
+    #[test]
+    fn consumer_group_identity_replaces_the_project_name_in_the_default_group_only() {
+        let mut renamed = request(None);
+        renamed.project_name = Some("storefront");
+        renamed.target_name = Some("dev");
+        assert_eq!(
+            realize_managed_source(&renamed).unwrap().consumer_group,
+            "streambuild_storefront_dev_orders"
+        );
+        renamed.consumer_group_identity = Some("shop");
+        assert_eq!(
+            realize_managed_source(&renamed).unwrap().consumer_group,
+            "streambuild_shop_dev_orders"
+        );
+        renamed.consumer_group = Some("orders-reader");
+        assert_eq!(
+            realize_managed_source(&renamed).unwrap().consumer_group,
+            "orders-reader"
+        );
+        assert_eq!(
+            default_consumer_group(None, None, "orders"),
+            "streambuild_orders"
         );
     }
 

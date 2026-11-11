@@ -33,6 +33,7 @@ from tests.unit.src.sqltide.compiler.discovery._test_types import (
     ProjectBuildLimitResolutionTestCase,
     ProjectConfigurationErrorTestCase,
     ProjectConnectionSettingsTestCase,
+    ProjectConsumerGroupIdentityTestCase,
     ProjectDependencyScopeTestCase,
     ProjectDeploymentReadinessDefaultsTestCase,
     ProjectDestructionLimitResolutionTestCase,
@@ -156,6 +157,46 @@ def test_given_committed_production_target_when_resolving_then_classification_is
     )
 
     assert effective.production_target is test_case.expected_production_target
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ProjectConsumerGroupIdentityTestCase(
+            description="leaves the consumer group identity unset by default",
+            identity_toml="",
+            expected_identity=None,
+        ),
+        ProjectConsumerGroupIdentityTestCase(
+            description="retains a committed consumer group identity",
+            identity_toml='consumer_group_identity = "shop"\n',
+            expected_identity="shop",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_consumer_group_identity_when_resolving_then_it_reaches_effective_configuration(
+    test_case: ProjectConsumerGroupIdentityTestCase,
+    tmp_path: Path,
+) -> None:
+    write_project_toml(
+        project_dir=tmp_path,
+        contents=(
+            f'name = "storefront"\n{test_case.identity_toml}default_target = "dev"\n'
+            '[targets.dev]\ndatabase = "storefront_dev"\n'
+        ),
+    )
+    loaded: LoadedProjectConfiguration = load_project_configuration(project_dir=tmp_path)
+
+    effective: EffectiveProjectConfiguration = resolve_effective_project_configuration(
+        loaded=loaded,
+        selected_target="dev",
+        cli_variables={},
+        environment={},
+    )
+
+    assert loaded.project.consumer_group_identity == test_case.expected_identity
+    assert effective.consumer_group_identity == test_case.expected_identity
 
 
 @pytest.mark.parametrize(
@@ -990,6 +1031,22 @@ def test_given_absent_local_toml_when_loading_then_returns_typed_defaults(
             description="rejects interpolation of committed project identity",
             project_contents=('name = "${project_name}"\ndefault_target = "dev"\n[targets.dev]\n'),
             expected_error_fragment="project.name must be a committed literal",
+        ),
+        ProjectConfigurationErrorTestCase(
+            description="rejects interpolation of the consumer group identity",
+            project_contents=(
+                'name = "analytics"\nconsumer_group_identity = "${identity}"\n'
+                'default_target = "dev"\n[targets.dev]\n'
+            ),
+            expected_error_fragment="project.consumer_group_identity must be a committed literal",
+        ),
+        ProjectConfigurationErrorTestCase(
+            description="rejects an empty consumer group identity",
+            project_contents=(
+                'name = "analytics"\nconsumer_group_identity = " "\n'
+                'default_target = "dev"\n[targets.dev]\n'
+            ),
+            expected_error_fragment="project.consumer_group_identity must be a non-empty string",
         ),
         ProjectConfigurationErrorTestCase(
             description="rejects invalid deployment readiness lag",

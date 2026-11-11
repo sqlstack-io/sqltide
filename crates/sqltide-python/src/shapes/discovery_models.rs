@@ -271,6 +271,7 @@ shapes! {
         build(default = Given::Factory(factory::<BuildConfig>)),
         ui(default = Given::Factory(factory::<UiConfig>)),
         dependencies(default = Given::Factory(factory::<ProjectDependencies>)),
+        consumer_group_identity(default = Given::None),
     }
 
     /// Optional local TOML overrides before invocation resolution.
@@ -303,6 +304,7 @@ shapes! {
         ui(default = Given::Factory(factory::<UiConfig>)),
         production_target(default = Given::Bool(false)),
         dependencies(default = Given::Factory(factory::<ProjectDependencies>)),
+        consumer_group_identity(default = Given::None),
     }
 
     /// Kafka engine settings for a landing step.

@@ -26,6 +26,7 @@ pub struct Naming {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EffectiveConfig {
     pub name: String,
+    pub consumer_group_identity: Option<String>,
     pub adapter: String,
     pub target_name: String,
     pub production_target: bool,
@@ -163,6 +164,7 @@ pub fn resolve_effective_config(
     let project_sensors = project_side.map(|target| target.sensors);
     Ok(EffectiveConfig {
         name: project_config.name.clone(),
+        consumer_group_identity: project_config.consumer_group_identity.clone(),
         adapter,
         target_name,
         production_target: project_target.is_some_and(|target| target.production),

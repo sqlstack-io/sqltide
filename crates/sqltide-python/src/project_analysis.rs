@@ -347,6 +347,10 @@ fn build_compile_inputs<'py>(
                 "allowed_cross_pipeline_references",
                 allowed_cross_pipeline_references,
             ),
+            (
+                "consumer_group_identity",
+                optional(&configuration, "consumer_group_identity")?,
+            ),
         ],
     )
 }
