@@ -224,9 +224,9 @@ note = "Rule 3: PollingSensorContext that user polling sensors receive, re-expor
 [[stays]]
 path = "auth/models.py"
 rule = 4
-note = "Rule 4: pydantic request bodies LoginRequest, CreateUserRequest, UpdateUserRequest, PasswordResetRequest, RoleRequest and ProjectRoleRequest that the native dev server validates with pydantic for the account routes, beside native re-exports of the account shapes; no logic."
+note = "Rule 4: pydantic request bodies LoginRequest, CreateUserRequest, UpdateUserRequest, PasswordResetRequest, RoleRequest and ProjectRoleRequest, which the native dev server validates with pydantic for the account routes. They hold only field declarations with Field constraints and defaults and no custom validators or model config; the other names here are native re-exports of the account shapes."
 
 [[stays]]
 path = "dev_server/types.py"
 rule = 1
-note = "Rule 1: Logic-free protocols CompileAuthorizationGuard (the compile authorization check the dev server runtime calls) and DevServerReporter (the terminal narrator the CLI implements) and the data-only type aliases KafkaClientKey and KafkaLagOffsets the dev server runtime consumes, beside native re-exports of the dev server value enums; no logic."
+note = "Rule 1: Logic-free protocols CompileAuthorizationGuard, the reload guard native DevServerState.reload_guarded calls, and DevServerReporter, the terminal narrator native create_dev_app, run_dev_server and BuildProcessManager call; and the data-only type aliases KafkaClientKey, used by the rule-4 Kafka topic and lag collectors, and KafkaLagOffsets, used by the lag collector. The other names here are native re-exports of the dev server value enums; no logic."
