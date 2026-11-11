@@ -70,6 +70,7 @@ mod promotion_command;
 mod realization;
 mod reconcile_command;
 mod recovery;
+mod rename_project_command;
 mod row_error_policy;
 mod rules;
 mod run_events;
@@ -172,6 +173,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     deployment_command::register(module)?;
     promotion_command::register(module)?;
     reconcile_command::register(module)?;
+    rename_project_command::register(module)?;
     maintenance_command::register(module)?;
     sql_tests_command::register(module)?;
     audit_execution::register(module)?;

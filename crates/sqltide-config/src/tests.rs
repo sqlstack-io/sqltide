@@ -6,3 +6,6 @@ mod toml;
 
 #[path = "tests/test_pipelines.rs"]
 mod pipelines;
+
+#[path = "tests/test_project_rename.rs"]
+mod project_rename;

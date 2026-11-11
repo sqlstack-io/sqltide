@@ -3374,6 +3374,151 @@
      }
     },
     {
+     "name": "rename-project",
+     "parser": {
+      "prog": "sqt rename-project",
+      "description": "Rename the project while keeping its Kafka consumer groups, manifest history and project role grants. Dry-run by default; use --apply to rename.",
+      "groups": [
+       {
+        "title": "positional arguments"
+       },
+       {
+        "title": "options"
+       }
+      ],
+      "actions": [
+       {
+        "kind": "help",
+        "options": [
+         "-h",
+         "--help"
+        ],
+        "dest": "help",
+        "nargs": 0,
+        "default": {
+         "suppress": true
+        },
+        "help": "show this help message and exit",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [],
+        "dest": "new_name",
+        "default": null,
+        "required": true,
+        "help": "New project name",
+        "group": 0
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Path to the project root containing pipelines/",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--host"
+        ],
+        "dest": "host",
+        "default": null,
+        "help": "ClickHouse host",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--port"
+        ],
+        "dest": "port",
+        "default": null,
+        "type": "int",
+        "help": "ClickHouse HTTP port",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--username"
+        ],
+        "dest": "username",
+        "default": null,
+        "help": "ClickHouse username",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--password"
+        ],
+        "dest": "password",
+        "default": null,
+        "help": "ClickHouse password",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--database"
+        ],
+        "dest": "database",
+        "default": null,
+        "help": "Target ClickHouse database",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--apply"
+        ],
+        "dest": "apply",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Apply the rename (dry-run by default)",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--control-store-url"
+        ],
+        "dest": "control_store_url",
+        "default": null,
+        "help": "SQLite/PostgreSQL account control-store URL",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--target"
+        ],
+        "dest": "target",
+        "default": null,
+        "help": "Named project target to use",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--vars"
+        ],
+        "dest": "vars",
+        "default": {},
+        "type": "parse_cli_vars",
+        "help": "Project variable overrides as one JSON object",
+        "group": 1
+       }
+      ]
+     }
+    },
+    {
      "name": "janitor",
      "parser": {
       "prog": "sqt janitor",
@@ -3928,6 +4073,10 @@
     {
      "metavar": "reconcile",
      "help": "Reconcile live metadata baseline"
+    },
+    {
+     "metavar": "rename-project",
+     "help": "Rename the project and keep its live state"
     },
     {
      "metavar": "janitor",

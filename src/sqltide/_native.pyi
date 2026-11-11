@@ -2413,6 +2413,7 @@ class CliCommand(StrEnum):
     DEPLOYMENT = "deployment"
     AUDIT = "audit"
     RECONCILE = "reconcile"
+    RENAME_PROJECT = "rename-project"
     JANITOR = "janitor"
     DOCTOR = "doctor"
     REPAIR = "repair"
@@ -7167,6 +7168,18 @@ def run_deployment_promotion(
     deployment_id: str | None,
     json_output: bool,
     client: AdapterConnection,
+) -> int: ...
+def run_rename_project(
+    *,
+    pipelines_root: Path,
+    project_dir: Path,
+    new_name: str,
+    database: str | None,
+    control_store_url: str | None,
+    apply: bool,
+    client: AdapterConnection,
+    loaded_project: LoadedProject | None,
+    adapter_profile: CompilerAdapterProfile,
 ) -> int: ...
 def run_reconcile(
     *,

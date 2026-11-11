@@ -715,6 +715,38 @@ pub fn manifest_history_query(
     )
 }
 
+/// Copy one project target's manifest history from `from_identity` to `to_identity`, row for
+/// row, skipping manifests the new identity already holds, so applying it twice is a no-op.
+#[must_use]
+pub fn manifest_identity_copy(
+    database: &str,
+    from_identity: &str,
+    to_identity: &str,
+    target_name: &str,
+    target_database: &str,
+) -> String {
+    let table: &str = MANIFESTS_TABLE.0;
+    let target: String = format!(
+        "manifest.target_name = {} AND manifest.target_database = {}",
+        text_literal(target_name),
+        text_literal(target_database)
+    );
+    format!(
+        "INSERT INTO {database}.{table} (manifest_id, invocation_id, project_identity, \
+         target_name, target_database, is_production, project_revision, manifest_fingerprint, \
+         manifest_version, pipelines, resources, tool_version, published_at) SELECT \
+         manifest.manifest_id, manifest.invocation_id, {to}, manifest.target_name, \
+         manifest.target_database, manifest.is_production, manifest.project_revision, \
+         manifest.manifest_fingerprint, manifest.manifest_version, manifest.pipelines, \
+         manifest.resources, manifest.tool_version, manifest.published_at FROM \
+         {database}.{table} AS manifest WHERE manifest.project_identity = {from} AND {target} \
+         AND manifest.manifest_id NOT IN (SELECT manifest.manifest_id FROM {database}.{table} \
+         AS manifest WHERE manifest.project_identity = {to} AND {target});",
+        from = text_literal(from_identity),
+        to = text_literal(to_identity),
+    )
+}
+
 /// One append containing a complete immutable manifest.
 #[must_use]
 pub fn manifest_publication(database: &str, manifest: &Manifest) -> String {

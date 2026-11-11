@@ -10,7 +10,7 @@ mod entry;
 pub(crate) mod invocation;
 pub(crate) mod output;
 mod playground;
-mod python;
+pub(crate) mod python;
 mod readiness;
 pub(crate) mod render;
 mod sql;

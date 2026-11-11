@@ -953,6 +953,44 @@ impl<'py> Realizer<'py> {
     }
 }
 
+/// `(source name, consumer group)` for every managed source the adapter realizes for `project`,
+/// in source order, with the project name and consumer group identity replaced as given.
+pub(crate) fn managed_source_consumer_groups<'py>(
+    project: &Bound<'py, PyAny>,
+    adapter_profile: &Bound<'py, PyAny>,
+    project_name: &str,
+    consumer_group_identity: Option<&str>,
+) -> PyResult<Vec<(String, String)>> {
+    let py: Python<'py> = project.py();
+    let realizer: Realizer<'py> = Realizer::import(py)?;
+    let project: Bound<'py, PyAny> = realizer.replace(
+        project.clone(),
+        &[
+            ("project_name", project_name.into_pyobject(py)?.into_any()),
+            (
+                "consumer_group_identity",
+                consumer_group_identity.into_pyobject(py)?.into_any(),
+            ),
+        ],
+    )?;
+    let realize_source: Bound<'py, PyAny> = adapter_profile.getattr("realize_source")?;
+    let mut groups: Vec<(String, String)> = Vec::new();
+    for source in realizer.items(&project.getattr("sources")?)? {
+        let request: Bound<'py, PyAny> = realizer.source_request(&source, &project)?;
+        let realization: Bound<'py, PyAny> =
+            realizer.call(&realize_source, &[("request", request)])?;
+        for resource in realizer.items(&realization.getattr("resources")?)? {
+            if resource.is_instance(&realizer.managed_source)? {
+                groups.push((
+                    source.getattr("key")?.getattr("name")?.extract()?,
+                    resource.getattr("consumer_group")?.extract()?,
+                ));
+            }
+        }
+    }
+    Ok(groups)
+}
+
 /// Map one complete logical project to adapter resources and planner desired state through
 /// the adapter profile's connection-free callbacks.
 #[pyfunction]
