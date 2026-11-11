@@ -1,13 +1,5 @@
 """Planner exceptions."""
 
-
-class DeploymentPlanError(ValueError):
-    """Raised when planner input or state is invalid."""
-
-
-class ActualStateError(ValueError):
-    """Raised when actual-state input or state is invalid."""
-
-
-class DirectPlanError(ValueError):
-    """Raised when a direct-mode plan cannot be built safely."""
+from sqltide._native import ActualStateError as ActualStateError
+from sqltide._native import DeploymentPlanError as DeploymentPlanError
+from sqltide._native import DirectPlanError as DirectPlanError

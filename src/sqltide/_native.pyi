@@ -2,7 +2,9 @@ import argparse
 import os
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Protocol, Self, TextIO, final
 from uuid import UUID
@@ -65,7 +67,14 @@ from sqltide.adapter.models import (
     InspectedActiveTableBinding,
     InspectedManagedTableState,
 )
-from sqltide.adapter.types import AdapterResourceRenderer, AdapterSetDifferenceComparisonRenderer
+from sqltide.adapter.types import (
+    AdapterModelRealizer,
+    AdapterModelRelationNamer,
+    AdapterReplayBoundaryMode,
+    AdapterResourceRenderer,
+    AdapterSetDifferenceComparisonRenderer,
+    AdapterSourceRealizer,
+)
 from sqltide.adapters.clickhouse.classes.clickhouse_connection import ClickHouseConnection
 from sqltide.adapters.clickhouse.types import RawClickHouseClient
 from sqltide.auth.models import (
@@ -98,25 +107,8 @@ from sqltide.cli.dev.models import DevCommandOptions
 from sqltide.cli.entry.models import CliEntrypointHandlers
 from sqltide.cli.plan.models import PlanCommandOptions
 from sqltide.cli.selection.models import SelectionResolution
-from sqltide.compiler.access.models import CompiledAccessPolicy
-from sqltide.compiler.audit_discovery.models import LoadedGenericSqlAuditInstance, LoadedSqlAudit
-from sqltide.compiler.compile.models import (
-    CompiledModel,
-    CompiledPipeline,
-    CompiledProject,
-    CompileProjectInputs,
-    CompilerAdapterProfile,
-    DesiredKafkaTable,
-    DesiredMaterializedView,
-    DesiredState,
-    DesiredTable,
-    DesiredView,
-    ExternalSourceReplayConfig,
-    LogicalResourceKey,
-    ObjectKey,
-    ParsedRef,
-)
 from sqltide.compiler.discovery.models import (
+    AllowedCrossPipelineReference,
     AuditDefaults,
     DiscoveredPipelineDirectory,
     DiscoveredProjectFile,
@@ -127,7 +119,6 @@ from sqltide.compiler.discovery.models import (
     ExternalTableSourceStep,
     KafkaLandingStep,
     KafkaRetentionPolicy,
-    KafkaSettings,
     LoadedPipeline,
     LoadedProject,
     LoadedProjectConfiguration,
@@ -143,49 +134,11 @@ from sqltide.compiler.discovery.models import (
     TransformStep,
     ViewStep,
 )
-from sqltide.compiler.discovery.types import (
-    BoundedReplayFallback,
-    PipelineMode,
-    ReplayLineageMode,
+from sqltide.compiler.discovery.models import (
+    KafkaSettings as _DiscoveryKafkaSettings,
 )
-from sqltide.compiler.graph.models import ProjectGraph
-from sqltide.compiler.graph.types import DependencyEdgeType, GraphTraversalDirection
-from sqltide.compiler.macros.models import MacroContext, MacroRegistry
-from sqltide.compiler.pipeline.models import CompileAnalysis, RealizedProject
-from sqltide.compiler.planner.models import (
-    ActualState,
-    DeploymentPlan,
-    DeploymentRecord,
-    DeploymentWatermarkRecord,
-    DirectPlan,
-    DirectRowErrorPolicyChange,
-    DirectSourceDriftSelection,
-    DirectWarehouseSnapshot,
-    MetadataState,
-    ObjectStateMetadataRow,
-    ObjectStateRecord,
-    PlannedObjectChange,
-    PlanningWarehouseSnapshot,
-    PublishEventRecord,
-    RebuildSubtree,
-    RootDeploymentInspection,
-)
-from sqltide.compiler.planner.types import DirectSelectionMode
-from sqltide.compiler.quality.models import QualityNodeIdentity
-from sqltide.compiler.rules.models import FormattedSource
-from sqltide.compiler.sql_analysis.models import (
-    SqlCatalogAnalysis,
-    SqlModelAnalysis,
-    SqlNamedQuery,
-    SqlOutputColumn,
-    SqlQueryRewriteResult,
-    SqlReference,
-    SqlRelationRewrite,
-    SqlResolvedQuery,
-    SqlStorageExpression,
-)
-from sqltide.compiler.test_discovery.models import LoadedSqlTest
-from sqltide.compiler.testing.models import SqlTestCase
+from sqltide.compiler.macros.models import MacroContext
+from sqltide.compiler.macros.types import MacroFunction
 from sqltide.dev_server.models import (
     BuildCancellationOutcome,
     CompileErrorInfo,
@@ -203,8 +156,7 @@ from sqltide.dev_server.types import (
     DevServerReporter,
     RunPresentationStatus,
 )
-from sqltide.diagnostics.models import CompilerDiagnostic, SourceLocation
-from sqltide.diagnostics.types import DiagnosticPhase
+from sqltide.diagnostics.models import CompilerDiagnostic, RelatedDiagnosticLocation, SourceLocation
 from sqltide.events.models import (
     AuditCompleted,
     InvocationObservation,
@@ -213,12 +165,6 @@ from sqltide.events.models import (
 )
 from sqltide.executor.auditing.models import AuditWarmupState, SqlAuditResult, SqlAuditRunResult
 from sqltide.executor.auditing.types import QualityResultStatus
-from sqltide.executor.backfill.models import (
-    BackfillBootstrapRequest,
-    BackfillDeploymentIdentity,
-    BackfillExecutionResult,
-    RootBackfillReport,
-)
 from sqltide.executor.deployment.models import (
     DeploymentDiffRequest,
     DeploymentDiffResult,
@@ -237,16 +183,6 @@ from sqltide.executor.destruction.types import (
     DestructionPlanningConnection,
     DestructionPlanStore,
 )
-from sqltide.executor.direct.models import (
-    DirectBuildAudit,
-    DirectBuildExecutionResult,
-    DirectBuildRequest,
-    DirectBuildResult,
-    DirectBuildWorkflow,
-    DirectReplayCapture,
-    DirectRuntimeExecution,
-    DriftedManagedSource,
-)
 from sqltide.executor.doctor.models import DoctorRequest, DoctorResult
 from sqltide.executor.janitor.models import (
     JanitorApplyResult,
@@ -260,20 +196,6 @@ from sqltide.executor.observability.models import (
     RunStartupTimings,
     TerminalInvocation,
 )
-from sqltide.executor.population.models import (
-    PopulationPlan,
-    PopulationRealization,
-    PopulationSourcePreparation,
-    PopulationSourceRecreation,
-    PopulationWatermark,
-)
-from sqltide.executor.promotion.models import (
-    DeploymentPromotionPreview,
-    PublishRequest,
-    PublishResult,
-    RollbackPlan,
-    RollbackRequest,
-)
 from sqltide.executor.readiness.models import (
     AuditDeploymentCandidate,
     DeploymentAuditRequest,
@@ -283,7 +205,6 @@ from sqltide.executor.readiness.models import (
     RootAuditResult,
 )
 from sqltide.executor.reconcile.models import ReconcilePreview, ReconcileResult
-from sqltide.executor.repair.models import RepairActiveViewRequest, RepairActiveViewResult
 from sqltide.executor.testing.models import SqlTestExecutionResult
 from sqltide.executor.workflow.models import (
     BuildWorkflow,
@@ -291,7 +212,7 @@ from sqltide.executor.workflow.models import (
     WarehouseStatement,
     WorkflowExecutionResult,
 )
-from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter
+from sqltide.executor.workflow.types import NativeStatement, WorkflowEventEmitter, WorkflowMode
 from sqltide.provider.models import DiscoveredProvider
 from sqltide.sensors.models import (
     CompiledSensors,
@@ -315,6 +236,1801 @@ from sqltide.sensors.types import (
     SensorTickStatus,
     StepPolicy,
 )
+
+# Compiler analysis shapes: SQL analysis, graph, Rules, quality, audit and test discovery.
+
+class RefType(StrEnum):
+    REFERENCE = "reference"
+    MUTABLE = "mutable"
+
+class SqlRelationType(StrEnum):
+    SOURCE = "source"
+    REF = "ref"
+
+class SqlQueryShape(StrEnum):
+    SELECT = "select"
+
+class SqlStorageExpressionKind(StrEnum):
+    ORDER_BY = "order_by"
+    PARTITION_BY = "partition_by"
+    TTL = "ttl"
+
+class DependencyEdgeType(StrEnum):
+    DRIVING_INPUT = "driving_input"
+    REFERENCE = "reference"
+    MUTABLE_REFERENCE = "mutable_reference"
+
+class GraphTraversalDirection(StrEnum):
+    UPSTREAM = "upstream"
+    DOWNSTREAM = "downstream"
+
+class QualityNodeKind(StrEnum):
+    AUDIT = "audit"
+    TEST = "test"
+
+class AuditAttachmentKind(StrEnum):
+    STANDALONE = "standalone"
+    MODEL = "model"
+    COLUMN = "column"
+
+class SqlTestMode(StrEnum):
+    MODEL = "model"
+    MACRO = "macro"
+
+class DiagnosticPhase(StrEnum):
+    DISCOVERY = "discovery"
+    COMPILATION = "compilation"
+    GRAPH = "graph"
+    REALIZATION = "realization"
+    RUNTIME = "runtime"
+
+class DiagnosticSeverity(StrEnum):
+    ERROR = "error"
+    WARNING = "warning"
+
+@final
+@dataclass(frozen=True)
+class SqlSourceSpan:
+    start: int
+    end: int
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+
+@final
+@dataclass(frozen=True)
+class SqlReference:
+    name: str
+    relation_type: SqlRelationType | str
+    span: SqlSourceSpan
+    ref_type: RefType | None = None
+
+@final
+@dataclass(frozen=True)
+class SqlOutputColumn:
+    name: str
+    type: str
+
+@final
+@dataclass(frozen=True)
+class SqlProjection:
+    index: int
+    output: SqlOutputColumn
+    span: SqlSourceSpan
+
+@final
+@dataclass(frozen=True)
+class SqlStorageExpression:
+    kind: SqlStorageExpressionKind | str
+    sql: str
+    referenced_column_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlAggregateFacts:
+    has_group_by: bool
+    function_names: tuple[str, ...]
+    engine_name: str
+    engine_has_aggregate_semantics: bool
+    @property
+    def has_semantics(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class SqlModelAnalysis:
+    authored_sql: str
+    shape: SqlQueryShape | str
+    projections: tuple[SqlProjection, ...]
+    references: tuple[SqlReference, ...]
+    storage_expressions: tuple[SqlStorageExpression, ...]
+    aggregate_facts: SqlAggregateFacts
+    @property
+    def output_columns(self) -> tuple[SqlOutputColumn, ...]: ...
+
+@final
+@dataclass(frozen=True)
+class SqlResolvedQuery:
+    canonical_sql: str
+    database_template: str
+
+@final
+@dataclass(frozen=True)
+class SqlRelationRewrite:
+    source_name: str
+    target_relation: str
+    source_databases: tuple[str | None, ...] | None = None
+    preserve_source_database: bool = False
+
+@final
+@dataclass(frozen=True)
+class SqlNamedQuery:
+    name: str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlQueryRewriteResult:
+    query: str
+    has_aggregate_semantics: bool
+
+@final
+@dataclass(frozen=True)
+class SqlRelationIdentity:
+    database: str | None
+    name: str
+
+@final
+@dataclass(frozen=True)
+class SqlCatalogAnalysis:
+    canonical_sql: str
+    query_sql: str | None
+    source_relations: tuple[SqlRelationIdentity, ...]
+    direct_source: SqlRelationIdentity | None
+    target_relation: SqlRelationIdentity | None
+    engine: str | None
+    ttl: str | None
+    settings: tuple[tuple[str, str], ...]
+    @property
+    def first_source(self) -> SqlRelationIdentity | None: ...
+
+@final
+@dataclass(frozen=True)
+class DependencyEdge:
+    upstream_key: LogicalResourceKey
+    downstream_key: LogicalResourceKey
+    edge_type: DependencyEdgeType
+
+@final
+@dataclass(frozen=True)
+class ProjectGraph:
+    project: CompiledProject
+    upstream_edges_by_key: Mapping[LogicalResourceKey, tuple[DependencyEdge, ...]]
+    downstream_edges_by_key: Mapping[LogicalResourceKey, tuple[DependencyEdge, ...]]
+    ordered_keys: tuple[LogicalResourceKey, ...]
+
+@final
+@dataclass(frozen=True)
+class FormattedSource:
+    path: Path
+    original: str
+    formatted: str
+    diagnostics: tuple[CompilerDiagnostic, ...] = ()
+    error: str | None = None
+
+@final
+@dataclass(frozen=True)
+class QualityNodeIdentity:
+    node_kind: str
+    node_name: str
+    binding_key: str
+    definition_fingerprint: str
+    execution_fingerprint: str
+
+@final
+@dataclass(frozen=True)
+class LoadedSqlAudit:
+    file_path: Path
+    query: str
+    referenced_model_names: tuple[str, ...]
+    severity: str = "error"
+    description: str | None = None
+    name: str | None = None
+    audit_index: int = 1
+    generic_definition_name: str | None = None
+    attachment_kind: AuditAttachmentKind | str = AuditAttachmentKind.STANDALONE
+    attached_model: str | None = None
+    attached_column: str | None = None
+    quality_identity: QualityNodeIdentity | None = None
+    severity_is_explicit: bool = False
+    cadence_seconds: int | None = None
+    warmup_seconds: int = 0
+    scheduled: bool = False
+    cadence_seconds_override: int | None = None
+    warmup_seconds_override: int | None = None
+    scheduled_override: bool | None = None
+
+@final
+@dataclass(frozen=True)
+class LoadedGenericSqlAuditDefinition:
+    file_path: Path
+    query: str
+    raw_parameter_names: tuple[str, ...]
+    quoted_parameter_names: tuple[str, ...]
+    name: str
+
+@final
+@dataclass(frozen=True)
+class LoadedGenericSqlAuditInstance:
+    file_path: Path
+    definition_name: str
+    arguments: dict[str, object]
+    name: str
+    severity: str = "error"
+    description: str | None = None
+    severity_is_explicit: bool = False
+    cadence_seconds_override: int | None = None
+    warmup_seconds_override: int | None = None
+    scheduled_override: bool | None = None
+
+@final
+@dataclass(frozen=True)
+class SqlTestMock:
+    cte_name: str
+    name: str
+    relation_type: DiscoverySqlRelationType | str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestCte:
+    name: str
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestModelPayload:
+    mocks: tuple[SqlTestMock, ...]
+    expected_targets: tuple[SqlTestCte, ...]
+    assertions: tuple[SqlTestCte, ...]
+    assertion_reference_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class SqlTestMacroPayload:
+    actual: SqlTestCte
+    expected: SqlTestCte
+
+@final
+@dataclass(frozen=True)
+class LoadedSqlTest:
+    file_path: Path
+    mode: SqlTestMode
+    authored_ctes: tuple[SqlTestCte, ...]
+    payload: SqlTestModelPayload | SqlTestMacroPayload
+    name: str | None = None
+    test_index: int = 1
+
+@final
+@dataclass(frozen=True)
+class SqlTestChainStep:
+    target_model_name: str
+    expected_column_names: tuple[str, ...]
+    ctes: tuple[tuple[str, str], ...]
+    actual_query: str
+    expected_query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestAssertionStep:
+    name: str
+    column_names: tuple[str, ...]
+    ctes: tuple[tuple[str, str], ...]
+    query: str
+
+@final
+@dataclass(frozen=True)
+class SqlTestCase:
+    file_path: Path
+    query: str
+    target_cases: tuple[SqlTestChainStep, ...]
+    assertion_cases: tuple[SqlTestAssertionStep, ...] = ()
+    warnings: tuple[str, ...] = ()
+    name: str | None = None
+    test_index: int = 1
+    quality_identity: QualityNodeIdentity | None = None
+
+class SqlAnalysisError(ValueError):
+    span: SqlSourceSpan | None
+    def __init__(self, message: str, *, span: SqlSourceSpan | None = None) -> None: ...
+
+class SqlMissingWithClauseError(SqlAnalysisError):
+    context: str
+    def __init__(self, *, context: str, span: SqlSourceSpan) -> None: ...
+
+class SqlStatementCountError(SqlAnalysisError):
+    statement_count: int
+    def __init__(self, statement_count: int) -> None: ...
+
+class SqlQueryShapeError(SqlAnalysisError):
+    statement_type: str
+    statement_sql: str
+    is_set_operation: bool
+    def __init__(
+        self, *, statement_type: str, statement_sql: str, is_set_operation: bool
+    ) -> None: ...
+
+class SqlStarProjectionError(SqlAnalysisError):
+    column_index: int
+    def __init__(self, *, column_index: int, span: SqlSourceSpan) -> None: ...
+
+class SqlUntypedProjectionError(SqlAnalysisError):
+    column_index: int
+    projection_sql: str
+    def __init__(self, *, column_index: int, projection_sql: str, span: SqlSourceSpan) -> None: ...
+
+class SqlDuplicateAliasError(SqlAnalysisError):
+    alias: str
+    def __init__(self, *, alias: str, span: SqlSourceSpan) -> None: ...
+
+class SqlStorageReferenceError(SqlAnalysisError):
+    kind: str
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        *,
+        kind: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class GraphInputError(ValueError):
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, message: str, *, location: SourceLocation | None = None) -> None: ...
+
+class SqlRulesError(ValueError): ...
+
+class RulesError(ValueError):
+    findings: tuple[RuleFinding, ...]
+    def __init__(self, *, findings: tuple[RuleFinding, ...], defaults: bool = False) -> None: ...
+
+class QualityIdentityError(ValueError): ...
+class SqlAuditParseError(ValueError): ...
+class SqlTestParseError(ValueError): ...
+class SqlTestAssemblyError(ValueError): ...
+
+UPSTREAM_SELECTOR_PREFIX: str
+SELECTOR_NAMESPACE_SEPARATOR: str
+PIPELINE_SELECTOR_NAMESPACE: str
+MODEL_SELECTOR_NAMESPACE: str
+ALL_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
+DRIVING_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType]
+
+# Compiled project shapes: compile models, macros, the compilation lifecycle and access policy.
+
+class PipelineMode(StrEnum):
+    DIRECT = "direct"
+    VIRTUAL = "virtual"
+
+class RetentionMissingBehavior(StrEnum):
+    ERROR = "error"
+    SKIP = "skip"
+
+class KafkaRetentionReference(StrEnum):
+    BROKER = "broker"
+    LANDED = "landed"
+
+class KafkaRetentionOrigin(StrEnum):
+    SOURCE = "source"
+    PROJECT = "project"
+
+class ModelReferenceScope(StrEnum):
+    PROJECT = "project"
+    PIPELINE = "pipeline"
+
+class RowErrorPolicy(StrEnum):
+    FAIL = "fail"
+    QUARANTINE = "quarantine"
+
+class ReplayAnchorMode(StrEnum):
+    AUTO = "auto"
+    NEVER = "never"
+
+class ReplayLineageMode(StrEnum):
+    OFFSETS = "offsets"
+    TIMESTAMP = "timestamp"
+    LANDED_AT = "landed_at"
+    CURSOR = "cursor"
+
+class SourceKind(StrEnum):
+    KAFKA = "kafka"
+    STREAM_TABLE = "stream_table"
+    POSTGRES = "postgres"
+
+class SourceNameOrigin(StrEnum):
+    EXPLICIT = "explicit"
+    DERIVED = "derived"
+
+class ModelKind(StrEnum):
+    TABLE = "table"
+    VIEW = "view"
+
+class ReplayBoundaryMode(StrEnum):
+    OFFSETS = "offsets"
+    TIMESTAMP = "timestamp"
+    LANDED_AT = "landed_at"
+    CURSOR = "cursor"
+
+class BoundedReplayFallback(StrEnum):
+    FULL = "full"
+    BOUNDED_WITHOUT_HISTORY = "bounded_without_history"
+
+class DiscoveryRefType(StrEnum):
+    REFERENCE = "reference"
+    MUTABLE = "mutable"
+
+class DiscoverySqlRelationType(StrEnum):
+    SOURCE = "source"
+    REF = "ref"
+
+class ReplayOnChangeMode(StrEnum):
+    FULL = "full"
+    BOUNDED = "bounded"
+
+class SchemaChangeKind(StrEnum):
+    BREAKING = "breaking"
+    NON_BREAKING = "non_breaking"
+
+class DesiredObjectType(StrEnum):
+    KAFKA_TABLE = "kafka_table"
+    TABLE = "table"
+    MATERIALIZED_VIEW = "materialized_view"
+    VIEW = "view"
+
+class LogicalResourceType(StrEnum):
+    SOURCE = "source"
+    MODEL = "model"
+
+class RetentionOrigin(StrEnum):
+    MODEL = "model"
+    PIPELINE = "pipeline"
+    PROJECT = "project"
+
+class Permission(StrEnum):
+    PROJECT_RELOAD = "project.reload"
+    SOURCE_MESSAGES_READ = "source.messages.read"
+    QUALITY_TEST_RUN = "quality.test.run"
+    QUALITY_AUDIT_RUN = "quality.audit.run"
+    BUILD_DIRECT_RUN = "build.direct.run"
+    DEPLOYMENT_CREATE = "deployment.create"
+    BUILD_CANCEL = "build.cancel"
+    BUILD_KILL = "build.kill"
+    DEPLOYMENT_PROMOTE = "deployment.promote"
+    DEPLOYMENT_CLEANUP = "deployment.cleanup"
+    PIPELINE_DESTROY = "pipeline.destroy"
+    TARGET_RESET = "target.reset"
+    AUTOMATION_MANAGE = "automation.manage"
+    ACCOUNT_MANAGE = "account.manage"
+    ROLE_ASSIGN = "role.assign"
+
+class GrantScope(StrEnum):
+    PROJECT = "project"
+    TARGET = "target"
+
+@final
+@dataclass(frozen=True)
+class LoadedMacro:
+    name: str
+    file_path: Path
+    relative_path: Path
+    source: str
+    definition_line: int
+    function: MacroFunction
+    description: str | None = None
+    @property
+    def identity_fingerprint(self) -> str: ...
+
+@final
+@dataclass(frozen=True, repr=False)
+class MacroRegistry:
+    macros: Mapping[str, LoadedMacro] = field(default_factory=dict)
+    declarations: Declarations | None = None
+    expansions: dict[tuple[Path, str, int, int], tuple[str, list[tuple[int, int, int, int]]]] = (
+        field(default_factory=dict, compare=False, repr=False)
+    )
+
+@final
+@dataclass(frozen=True)
+class ObjectKey:
+    database: str | None
+    object_type: DesiredObjectType | str
+    name: str
+
+@final
+@dataclass(frozen=True)
+class Column:
+    name: str
+    type: str
+    default: str | None = None
+
+@final
+@dataclass(frozen=True)
+class KafkaSettings:
+    broker_list: str
+    topic: str
+    consumer_group: str
+    format: str
+    settings: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True)
+class KafkaTableSpec:
+    columns: tuple[Column, ...]
+    kafka: KafkaSettings
+    naming_macro_fingerprint: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class TableStorage:
+    engine: str
+    order_by: tuple[str, ...]
+    partition_by: str | None = None
+    ttl: str | None = None
+    settings: Mapping[str, str] | None = None
+
+@final
+@dataclass(frozen=True)
+class TableSpec:
+    columns: tuple[Column, ...]
+    storage: TableStorage
+
+@final
+@dataclass(frozen=True)
+class MaterializedViewSpec:
+    source_table_name: str
+    target_table_name: str
+    query: str
+    database_template: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class ViewSpec:
+    query: str
+    database_template: str | None = field(default=None, compare=False)
+
+@final
+@dataclass(frozen=True)
+class DesiredKafkaTable:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: KafkaTableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def kafka(self) -> KafkaSettings: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredTable:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: TableSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    replay_on_change: ReplayOnChangePolicy | None = None
+    bounded_replay_fallback: BoundedReplayFallback = BoundedReplayFallback.FULL
+    replay_settings: Mapping[str, str] | None = field(default=None, compare=False)
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def engine(self) -> str: ...
+    @property
+    def order_by(self) -> tuple[str, ...]: ...
+    @property
+    def partition_by(self) -> str | None: ...
+    @property
+    def ttl(self) -> str | None: ...
+    @property
+    def settings(self) -> Mapping[str, str] | None: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredMaterializedView:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: MaterializedViewSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    refresh: str | None = field(default=None, compare=False)
+    append: bool = field(default=True, compare=False)
+    filters_row_errors: bool = field(default=False, compare=False)
+    dead_letters: bool = field(default=False, compare=False)
+    authored_query: str | None = field(default=None, compare=False)
+    authored_database_template: str | None = field(default=None, compare=False)
+    @property
+    def comparison_spec(self) -> MaterializedViewSpec: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def source_table_name(self) -> str: ...
+    @property
+    def target_table_name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+    @property
+    def database_template(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class DesiredView:
+    key: ObjectKey
+    deps: tuple[ObjectKey, ...]
+    spec: ViewSpec
+    logical_model_name: str | None = field(default=None, compare=False)
+    @property
+    def name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+    @property
+    def database_template(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class ParsedRef:
+    name: str
+    relation_type: DiscoverySqlRelationType | str
+    ref_type: DiscoveryRefType | None = None
+    span: SqlSourceSpan | None = None
+
+@final
+@dataclass(frozen=True)
+class LogicalResourceKey:
+    resource_type: LogicalResourceType | str
+    name: str
+
+@final
+@dataclass(frozen=True)
+class CompiledSource:
+    key: LogicalResourceKey
+    source: KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep
+    effective_replay_lineage_mode: ReplayLineageMode
+
+@final
+@dataclass(frozen=True)
+class ModelRetentionResolution:
+    value: ModelRetentionPolicy | Literal[False] | None = None
+    origin: RetentionOrigin | str | None = None
+
+@dataclass(frozen=True)
+class CompiledModel:
+    key: LogicalResourceKey
+    pipeline_name: str
+    relation_name: str
+    kind: ModelKind | str
+    sql_analysis: SqlModelAnalysis
+    @property
+    def query(self) -> str: ...
+    @property
+    def output_columns(self) -> tuple[Column, ...]: ...
+    @property
+    def parsed_refs(self) -> tuple[ParsedRef, ...]: ...
+    @property
+    def refs(self) -> tuple[str, ...]: ...
+    @property
+    def has_aggregate_semantics(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompiledTableModel(CompiledModel):
+    transform: TransformStep
+    preserves_required_lineage: bool
+    replay_anchor_eligible: bool
+    effective_bounded_replay_fallback: BoundedReplayFallback
+    replay_on_change: ReplayOnChangePolicy | None = None
+    retention: ModelRetentionResolution = field(default_factory=ModelRetentionResolution)
+    retention_applied: bool = False
+    on_row_error: RowErrorPolicy = RowErrorPolicy.FAIL
+    @property
+    def has_mutable_refs(self) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompiledViewModel(CompiledModel):
+    view: ViewStep
+
+@final
+@dataclass(frozen=True)
+class ExternalSourceReplayConfig:
+    key: ObjectKey
+    table_name: str
+    source_kind: SourceKind | str
+    replay_boundary_mode: ReplayBoundaryMode | str
+    partition_column_name: str | None = None
+    offset_column_name: str | None = None
+    timestamp_column_name: str | None = None
+    landed_at_column_name: str | None = None
+    cursor_column_name: str | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledPipeline:
+    pipeline: Pipeline
+    project: Project | None
+    file_path: Path
+    effective_replay_lineage_mode: ReplayLineageMode | None
+    source: CompiledSource | None
+    models: tuple[CompiledModel, ...]
+
+@final
+@dataclass(frozen=True)
+class DesiredState:
+    objects: tuple[DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView, ...]
+    replay_anchor_keys: frozenset[ObjectKey]
+    mutable_ref_warning_keys: frozenset[ObjectKey]
+    external_source_replay_configs: tuple[ExternalSourceReplayConfig, ...] = ()
+    def is_managed_landing_table(self, name: str) -> bool: ...
+
+@final
+@dataclass(frozen=True)
+class CompilerExpressionInferenceProfile:
+    sql_analysis_dialect: str
+
+@final
+@dataclass(frozen=True)
+class CompilerTargetMetadata:
+    default_database: str | None
+    default_schema: str | None
+    production_target: bool = False
+    destruction_relation_drop_size_limit: int | None = None
+
+@final
+@dataclass(frozen=True)
+class CompilerAdapterProfile:
+    identity: AdapterIdentity
+    sql_analysis_dialect: str
+    type_inference_profile: CompilerExpressionInferenceProfile
+    target_metadata: CompilerTargetMetadata
+    realize_source: AdapterSourceRealizer
+    model_relation_name: AdapterModelRelationNamer
+    realize_model: AdapterModelRealizer
+    render_resource: AdapterResourceRenderer
+    render_set_difference_comparison: AdapterSetDifferenceComparisonRenderer
+    run_sql_rules: bool = True
+
+@final
+@dataclass(frozen=True)
+class CompileProjectInputs:
+    discovered_inputs: DiscoveredProjectInputs
+    adapter_profile: CompilerAdapterProfile
+    effective_target: CompilerTargetMetadata
+    variables: tuple[tuple[str, object], ...]
+    macro_registry: MacroRegistry
+    macro_context: MacroContext
+    pipelines: tuple[LoadedPipeline, ...]
+    tests: tuple[LoadedSqlTest, ...]
+    audits: tuple[LoadedSqlAudit, ...]
+    sources: tuple[KafkaLandingStep | ExternalTableSourceStep | PostgresRefreshSourceStep, ...] = ()
+    virtual_environments: bool = False
+    project_name: str | None = None
+    target_name: str | None = None
+    model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
+    allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CompiledProject:
+    sources: tuple[CompiledSource, ...]
+    models: tuple[CompiledModel, ...]
+    pipelines: tuple[CompiledPipeline, ...]
+    tests: tuple[LoadedSqlTest, ...]
+    test_cases: tuple[SqlTestCase, ...]
+    audits: tuple[LoadedSqlAudit, ...]
+    macro_registry: MacroRegistry = field(default_factory=MacroRegistry)
+    macro_context: MacroContext | None = None
+    project_name: str | None = None
+    target_name: str | None = None
+    production_target: bool = False
+    destruction_relation_drop_size_limit: int | None = None
+    model_reference_scope: ModelReferenceScope | str = ModelReferenceScope.PROJECT
+    allowed_cross_pipeline_references: tuple[AllowedCrossPipelineReference, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class CompilationTimings:
+    discovery_ms: int
+    compile_inputs_ms: int
+    assembly_ms: int
+    graph_ms: int
+    realization_ms: int
+    rules_ms: int = 0
+
+@final
+@dataclass(frozen=True)
+class RealizedProject:
+    project: CompiledProject
+    resources_by_logical_key: Mapping[
+        LogicalResourceKey,
+        tuple[AdapterManagedSource | AdapterTable | AdapterMaterializedView | AdapterView, ...],
+    ]
+    relation_name_by_logical_key: Mapping[LogicalResourceKey, str]
+    resolved_query_by_model_key: Mapping[LogicalResourceKey, str]
+    desired_state: DesiredState
+
+@final
+@dataclass(frozen=True)
+class CompileAnalysis:
+    discovered_inputs: DiscoveredProjectInputs
+    compile_inputs: CompileProjectInputs
+    adapter_profile: CompilerAdapterProfile
+    compiled_project: CompiledProject
+    realized_project: RealizedProject
+    graph: ProjectGraph
+    diagnostics: tuple[CompilerDiagnostic, ...]
+    timings: CompilationTimings
+    access_policy: CompiledAccessPolicy | None = None
+    sensors: CompiledSensors | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessGrant:
+    permissions: tuple[Permission, ...]
+    pipelines: tuple[str, ...] = ()
+    scope: GrantScope | None = None
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessRole:
+    name: str
+    description: str | None
+    grants: tuple[CompiledAccessGrant, ...]
+
+@final
+@dataclass(frozen=True)
+class CompiledAccessPolicy:
+    roles: tuple[CompiledAccessRole, ...]
+    fingerprint: str
+
+class PipelineCompileError(ValueError):
+    span: SqlSourceSpan | None
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(
+        self,
+        message: str,
+        *,
+        span: SqlSourceSpan | None = None,
+        location: SourceLocation | None = None,
+    ) -> None: ...
+
+class AuditCompileError(ValueError): ...
+
+class TransformSqlContractError(Exception):
+    transform_name: str
+    span: SqlSourceSpan | None
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, transform_name: str) -> None: ...
+
+class TransformSqlParseError(TransformSqlContractError):
+    query: str
+    details: str
+    def __init__(self, transform_name: str, query: str, details: str) -> None: ...
+
+class TransformSqlMultipleStatementsError(TransformSqlContractError):
+    statement_count: int
+    def __init__(self, transform_name: str, statement_count: int) -> None: ...
+
+class TransformSqlFinalQueryShapeError(TransformSqlContractError):
+    statement_type: str
+    def __init__(self, transform_name: str, statement_type: str) -> None: ...
+
+class TransformSqlTopLevelSetOperationError(TransformSqlContractError):
+    statement_sql: str
+    def __init__(self, transform_name: str, statement_sql: str) -> None: ...
+
+class TransformSqlStarProjectionError(TransformSqlContractError):
+    column_index: int
+    def __init__(self, transform_name: str, column_index: int) -> None: ...
+
+class TransformSqlDuplicateAliasError(TransformSqlContractError):
+    alias: str
+    def __init__(self, transform_name: str, alias: str) -> None: ...
+
+class TransformSqlUntypedProjectionError(TransformSqlContractError):
+    column_index: int
+    projection_sql: str
+    def __init__(self, transform_name: str, column_index: int, projection_sql: str) -> None: ...
+
+class TransformOrderByUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class TransformPartitionByUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class TransformTtlUnknownColumnError(TransformSqlContractError):
+    expression: str
+    unknown_column_names: tuple[str, ...]
+    available_column_names: tuple[str, ...]
+    def __init__(
+        self,
+        transform_name: str,
+        expression: str,
+        unknown_column_names: tuple[str, ...],
+        available_column_names: tuple[str, ...],
+    ) -> None: ...
+
+class MacroError(ValueError):
+    location: SourceLocation | None
+    diagnostic: CompilerDiagnostic
+    def __init__(
+        self,
+        message: str,
+        *,
+        location: SourceLocation | None = None,
+        related_locations: tuple[RelatedDiagnosticLocation, ...] = (),
+    ) -> None: ...
+
+class PipelineDiscoveryError(ValueError):
+    diagnostic: CompilerDiagnostic | None
+    def __init__(self, message: str) -> None: ...
+
+class ModelHeaderSyntaxError(ValueError): ...
+class ProjectSpecError(ValueError): ...
+class ProjectConfigError(ProjectSpecError): ...
+class DurationParseError(ProjectSpecError): ...
+class RetentionConfigError(ProjectSpecError): ...
+
+class AccessPolicyError(ValueError):
+    location: SourceLocation
+    def __init__(self, message: str, *, location: SourceLocation) -> None: ...
+
+DESIRED_OBJECT_TYPE_KAFKA_TABLE: DesiredObjectType
+DESIRED_OBJECT_TYPE_TABLE: DesiredObjectType
+DESIRED_OBJECT_TYPE_MATERIALIZED_VIEW: DesiredObjectType
+DESIRED_OBJECT_TYPE_VIEW: DesiredObjectType
+RAW_TABLE_NAME_PREFIX: str
+MATERIALIZED_VIEW_NAME_PREFIX: str
+REPLAY_PARTITION_COLUMN_NAME: str
+REPLAY_OFFSET_COLUMN_NAME: str
+REPLAY_TIMESTAMP_COLUMN_NAME: str
+REPLAY_LANDED_AT_COLUMN_NAME: str
+REPLAY_CURSOR_COLUMN_NAME: str
+SECONDS_BY_DURATION_UNIT: dict[str, int]
+ACCESS_POLICY_FILE_NAME: str
+
+# Planning and execution shapes: planner, backfill, direct, population, promotion and repair.
+
+class PlannedChangeType(StrEnum):
+    REBUILD = "rebuild"
+    CREATE = "create"
+    REPLACE = "replace"
+    NO_OP = "no_op"
+
+class TableSchemaChangeKind(StrEnum):
+    NON_BREAKING = "non_breaking"
+    BREAKING = "breaking"
+
+class TableSchemaSeedCompatibility(StrEnum):
+    SEEDABLE = "seedable"
+    NON_SEEDABLE = "non_seedable"
+
+class RebuildStrategy(StrEnum):
+    SHADOW_REBUILD = "shadow_rebuild"
+    OFFLINE_REBUILD = "offline_rebuild"
+
+class RebuildExecutionMode(StrEnum):
+    FULL_REBUILD = "full_rebuild"
+    SEEDED_BOUNDED_REBUILD = "seeded_bounded_rebuild"
+    UNSEEDED_BOUNDED_REBUILD = "unseeded_bounded_rebuild"
+
+class DeploymentPhase(StrEnum):
+    PLAN = "plan"
+    BACKFILL = "backfill"
+    AUDIT = "audit"
+    PUBLISH = "publish"
+
+class DeploymentAction(StrEnum):
+    PLAN_SHADOW_TABLE = "plan_shadow_table"
+    PLAN_SHADOW_MATERIALIZED_VIEW = "plan_shadow_materialized_view"
+    PLAN_SHADOW_VIEW = "plan_shadow_view"
+    BACKFILL_SUBTREE = "backfill_subtree"
+    AUDIT_SUBTREE = "audit_subtree"
+    PUBLISH_SUBTREE = "publish_subtree"
+
+class RootDeploymentStateKind(StrEnum):
+    ACTIVE_VIEW_PRESENT = "active_view_present"
+    GREENFIELD = "greenfield"
+    LOGICAL_VIEW_MISSING = "logical_view_missing"
+    INVALID_ACTIVE_VIEW = "invalid_active_view"
+
+class DirectPlanReason(StrEnum):
+    SELECTED = "selected"
+    CHANGED = "changed"
+    SOURCE_DRIFT = "source_drift"
+    DOWNSTREAM_OF_SELECTED = "downstream_of_selected"
+    MISSING_UPSTREAM = "missing_upstream"
+    ALL_MODELS = "all_models"
+
+class DirectSelectionMode(StrEnum):
+    ALL_MODELS = "all_models"
+    EXPLICIT = "explicit"
+    CHANGED = "changed"
+
+class DirectSqlBaselineStatus(StrEnum):
+    FIRST_BASELINE = "first_baseline"
+    QUERY_CHANGED = "query_changed"
+    NO_QUERY_CHANGE = "no_query_change"
+    BASELINE_UNAVAILABLE = "baseline_unavailable"
+
+class DirectRelationAction(StrEnum):
+    DROP = "drop"
+    CREATE = "create"
+
+class DirectResourceKind(StrEnum):
+    TABLE = "table"
+    MATERIALIZED_VIEW = "materialized_view"
+    VIEW = "view"
+
+class PublishOperation(StrEnum):
+    PROMOTE = "promote"
+    ROLLBACK = "rollback"
+
+class PromotionPreviewClassification(StrEnum):
+    INITIAL_PUBLISH = "initial_publish"
+    PROMOTION = "promotion"
+
+@final
+@dataclass(frozen=True)
+class PlanningWarehouseSnapshot:
+    catalog: CatalogSnapshot
+    object_state_records: tuple[ObjectStateRecord, ...]
+
+@final
+@dataclass(frozen=True)
+class ActualKafkaTable:
+    key: ObjectKey
+    spec: KafkaTableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def kafka(self) -> KafkaSettings: ...
+
+@final
+@dataclass(frozen=True)
+class ActualTable:
+    key: ObjectKey
+    spec: TableSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def columns(self) -> tuple[Column, ...]: ...
+    @property
+    def engine(self) -> str: ...
+    @property
+    def order_by(self) -> tuple[str, ...]: ...
+    @property
+    def partition_by(self) -> str | None: ...
+    @property
+    def ttl(self) -> str | None: ...
+    @property
+    def settings(self) -> Mapping[str, str] | None: ...
+
+@final
+@dataclass(frozen=True)
+class ActualMaterializedView:
+    key: ObjectKey
+    spec: MaterializedViewSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def source_table_name(self) -> str: ...
+    @property
+    def target_table_name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class ActualView:
+    key: ObjectKey
+    spec: ViewSpec
+    @property
+    def name(self) -> str: ...
+    @property
+    def query(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class ActualState:
+    objects: tuple[ActualKafkaTable | ActualTable | ActualMaterializedView | ActualView, ...]
+
+@final
+@dataclass(frozen=True)
+class RootDeploymentInspection:
+    root_key: ObjectKey
+    state_kind: str
+    active_deployment_id: str | None
+
+@final
+@dataclass(frozen=True)
+class ObjectStateMetadataRow:
+    deployment_id: str
+    database_name: str | None
+    object_type: str
+    object_name: str
+    normalized_fingerprint: str
+    normalized_query: str | None
+    recorded_at: str
+    observation_id: str
+    state_kind: str
+
+@final
+@dataclass(frozen=True)
+class PlannedObjectChange:
+    key: ObjectKey
+    change_type: PlannedChangeType | str
+    force_full_refresh: bool = False
+    forced_start_time: str | None = None
+    schema_change_kind: TableSchemaChangeKind | str | None = None
+    seed_compatibility: TableSchemaSeedCompatibility | str | None = None
+
+@final
+@dataclass(frozen=True)
+class PlannedSqlDiff:
+    key: ObjectKey
+    object_type: str
+    name: str
+    diff_lines: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class RebuildSubtree:
+    root_key: ObjectKey
+    affected_keys: tuple[ObjectKey, ...]
+    upstream_boundary_key: ObjectKey
+    strategy: RebuildStrategy | str
+    replay_required: bool = True
+    execution_mode: RebuildExecutionMode | str = RebuildExecutionMode.FULL_REBUILD
+    forced_full_refresh: bool = False
+    forced_start_time: str | None = None
+    requested_start_time: str | None = None
+    configured_backfill_mode: ReplayOnChangeMode | str | None = None
+    execution_lookback_seconds: int | None = None
+    history_preserving_bounded_supported: bool = True
+    resolved_bounded_replay_fallback: BoundedReplayFallback | str | None = None
+
+@final
+@dataclass(frozen=True)
+class DeploymentStep:
+    step_id: str
+    phase: DeploymentPhase | str
+    action: DeploymentAction | str
+    root_key: ObjectKey
+    target_key: ObjectKey | None = None
+    physical_name: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PreparedShadowObject:
+    logical_key: ObjectKey
+    physical_name: str
+    logical_model_name: str
+
+@final
+@dataclass(frozen=True)
+class PlannerWarning:
+    warning_code: str
+    message: str
+    root_key: ObjectKey
+    target_key: ObjectKey | None = None
+
+@final
+@dataclass(frozen=True)
+class DeploymentPlan:
+    deployment_id: str | None
+    object_changes: tuple[PlannedObjectChange, ...]
+    rebuild_subtrees: tuple[RebuildSubtree, ...]
+    steps: tuple[DeploymentStep, ...]
+    prepared_shadow_objects: tuple[PreparedShadowObject, ...]
+    warnings: tuple[PlannerWarning, ...]
+    sql_diffs: tuple[PlannedSqlDiff, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class PreparedObjectMapping:
+    logical_key: ObjectKey
+    physical_name: str
+    logical_model_name: str
+
+@final
+@dataclass(frozen=True)
+class ObjectStateRecord:
+    deployment_id: str
+    key: ObjectKey
+    normalized_fingerprint: str
+    normalized_query: str | None
+    recorded_at: str
+    observation_id: str = ""
+    state_kind: str = "deployment"
+
+@final
+@dataclass(frozen=True)
+class DeploymentRecord:
+    deployment_id: str
+    created_at: str
+    status: str
+    replay_lineage_mode: ReplayLineageMode | str
+    selected_root_keys: tuple[ObjectKey, ...]
+    warning_codes: tuple[str, ...]
+    prepared_object_mappings: tuple[PreparedObjectMapping, ...]
+    workflow_fingerprint: str = ""
+    boundary_time: str | None = None
+    tool_version: str = ""
+
+@final
+@dataclass(frozen=True)
+class DeploymentWatermarkRecord:
+    deployment_id: str
+    root_key: ObjectKey
+    anchor_key: ObjectKey
+    boundary_key: str
+    cutoff_value: str
+
+@final
+@dataclass(frozen=True)
+class PublishEventRecord:
+    deployment_id: str
+    published_at: str
+    logical_view_names: tuple[str, ...]
+    database: str = ""
+    physical_relation_names: tuple[str, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class MetadataState:
+    object_states: tuple[ObjectStateRecord, ...]
+    deployments: tuple[DeploymentRecord, ...]
+    deployment_watermarks: tuple[DeploymentWatermarkRecord, ...]
+    publish_events: tuple[PublishEventRecord, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectWarehouseSnapshot:
+    catalog: CatalogSnapshot
+    fingerprints: AdapterDirectFingerprintSnapshot = ...
+
+@final
+@dataclass(frozen=True)
+class DirectPlanEntry:
+    model_key: LogicalResourceKey
+    reason: DirectPlanReason | str
+    relation_names: tuple[str, ...]
+    resource_kinds: tuple[DirectResourceKind | str, ...]
+    driving_input_key: LogicalResourceKey | None
+    is_replay_root: bool
+    sql_change: DirectSqlChange | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectSqlChange:
+    status: DirectSqlBaselineStatus | str
+    current_sql: str
+    current_hash: str
+    previous_sql: str | None
+    previous_hash: str | None
+    unified_diff: str | None
+    warning: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectPrerequisite:
+    key: LogicalResourceKey
+    relation_names: tuple[str, ...]
+    present: bool
+    framework_managed: bool = False
+
+@final
+@dataclass(frozen=True)
+class DirectReplayRoot:
+    model_key: LogicalResourceKey
+    driving_input_key: LogicalResourceKey
+    driving_input_relation_name: str
+    driving_input_replay_columns: AdapterReplayColumns
+    replay_boundary_mode: ReplayLineageMode | str
+    propagated_model_keys: tuple[LogicalResourceKey, ...]
+    has_aggregate_semantics: bool = False
+    replay_settings: tuple[tuple[str, str], ...] = ()
+
+@final
+@dataclass(frozen=True)
+class DirectRelationOperation:
+    relation_name: str
+    action: DirectRelationAction | str
+    model_key: LogicalResourceKey
+    resource_kind: DirectResourceKind | str
+
+@final
+@dataclass(frozen=True)
+class DirectSourceDriftSelection:
+    source_key: LogicalResourceKey
+    pipeline_name: str
+    reader_pipeline_names: tuple[str, ...]
+    drifted_setting_names: tuple[str, ...]
+    model_keys: tuple[LogicalResourceKey, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectRowErrorPolicyChange:
+    model_key: LogicalResourceKey
+    view_name: str
+    dead_letter_view_name: str
+    desired_policy: RowErrorPolicy
+    landing_view_names: tuple[str, ...]
+    logical_view_name: str = ""
+    logical_dead_letter_view_name: str = ""
+    previous_view_definition: str | None = None
+    landing_repair_only: bool = False
+
+@final
+@dataclass(frozen=True)
+class DirectPlan:
+    database: str
+    user_scope: tuple[LogicalResourceKey, ...]
+    execution_scope: tuple[LogicalResourceKey, ...]
+    prerequisite_scope: tuple[DirectPrerequisite, ...]
+    entries: tuple[DirectPlanEntry, ...]
+    replay_roots: tuple[DirectReplayRoot, ...]
+    teardown_operations: tuple[DirectRelationOperation, ...]
+    creation_operations: tuple[DirectRelationOperation, ...]
+    selection_mode: DirectSelectionMode | str = DirectSelectionMode.EXPLICIT
+    prerequisite_execution_scope: tuple[LogicalResourceKey, ...] = ()
+    warnings: tuple[PlannerWarning, ...] = ()
+    effective_start_time: str | None = None
+    source_drift_selections: tuple[DirectSourceDriftSelection, ...] = ()
+
+@dataclass(frozen=True)
+class BackfillBootstrapRequest:
+    desired_state: DesiredState
+    default_database: str
+    metadata_database: str
+    replay_lineage_mode: ReplayLineageMode | str
+    confirmed_plan: DeploymentPlan | None = None
+    deployment_id: str | None = None
+    full_refresh_keys: frozenset[ObjectKey] = frozenset()
+    start_time_keys: frozenset[ObjectKey] = frozenset()
+    start_time: str | None = None
+    created_at: str | None = None
+    boundary_time: str | None = None
+    stabilization_seconds: float = 5.0
+    confirmed_target_catalog: CatalogSnapshot | None = None
+    confirmed_metadata_catalog: CatalogSnapshot | None = None
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class BackfillBootstrapResult:
+    deployment_id: str
+    created_at: str
+    deployment_plan: DeploymentPlan
+    root_reports: tuple[RootBackfillReport, ...]
+    existing_relation_names: frozenset[str]
+
+@final
+@dataclass(frozen=True)
+class BackfillRootReplayResult:
+    root_key: ObjectKey
+    written_rows: int | None
+
+@final
+@dataclass(frozen=True)
+class BackfillExecutionResult:
+    bootstrap: BackfillBootstrapResult
+    boundary_time: str
+    replay_results: tuple[BackfillRootReplayResult, ...]
+
+@final
+@dataclass(frozen=True)
+class BackfillDeploymentIdentity:
+    deployment_id: str
+    created_at: str
+
+@final
+@dataclass(frozen=True)
+class RootBackfillReport:
+    root_key: ObjectKey
+    state_kind: str
+    replay_strategy: str
+    active_deployment_id: str | None
+
+@dataclass(frozen=True)
+class DirectBuildRequest:
+    plan: DirectPlan
+    realized_project: RealizedProject
+    database: str
+    metadata_database: str
+    tool_version: str
+    workflow_id: str = ...
+    stabilization_seconds: float = 5.0
+    boundary_time: str | None = None
+    audits: tuple[DirectBuildAudit, ...] = ()
+    row_error_policy_changes: tuple[DirectRowErrorPolicyChange, ...] = ()
+    @property
+    def effective_start_time(self) -> str | None: ...
+
+@final
+@dataclass(frozen=True)
+class DriftedManagedSource:
+    source_key: LogicalResourceKey
+    owner_pipeline_names: tuple[str, ...]
+    drifted_setting_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectBuildAudit:
+    name: str
+    query: str
+    severity: str
+    description: str | None
+
+@final
+@dataclass(frozen=True)
+class DirectReplayRange:
+    partition_value: str | None
+    source_partition_column_name: str | None
+    source_position_column_name: str
+    source_timestamp_column_name: str | None
+    lower_value: str
+    upper_value: str
+    replay_cutoff_value: str
+    cutoff_inclusive: bool
+    anchor_row_count: int | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectReplayCapture:
+    capture_id: str
+    workflow_id: str
+    target_database: str
+    logical_model_name: str
+    driving_input_relation_name: str
+    boundary_mode: ReplayLineageMode | str
+    captured_at: str | None
+    ranges: tuple[DirectReplayRange, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectRuntimeReplay:
+    model_name: str
+    capture_step_id: str
+    replay_step_id: str
+    replay: AdapterReplayRequest
+    boundary_column_type: str | None
+    managed_landing_anchor: bool = False
+
+@dataclass(frozen=True)
+class DirectBuildWorkflow:
+    template: BuildWorkflow
+    runtime_replays: tuple[DirectRuntimeReplay, ...]
+    workflow_id: str
+    source_recovery_statements: tuple[WarehouseStatement, ...] = ()
+    recreated_sources: tuple[PopulationSourceRecreation, ...] = ()
+    @property
+    def mode(self) -> WorkflowMode: ...
+    @property
+    def plan_json(self) -> str: ...
+    @property
+    def statements(self) -> tuple[WarehouseStatement, ...]: ...
+
+@final
+@dataclass(frozen=True)
+class DirectRuntimeExecution:
+    workflow: BuildWorkflow
+    execution: WorkflowExecutionResult
+    captures: tuple[DirectReplayCapture, ...]
+
+@final
+@dataclass(frozen=True)
+class DirectReplayBoundary:
+    model_name: str
+    driving_input_relation_name: str
+    replay_boundary_mode: ReplayLineageMode | str
+    boundary_key: str
+    cutoff_value: str
+    cutoff_inclusive: bool
+
+@final
+@dataclass(frozen=True)
+class DirectRootReplayResult:
+    model_name: str
+    written_rows: int | None
+
+@final
+@dataclass(frozen=True)
+class DirectBuildResult:
+    database: str
+    preserved_source_relation_names: tuple[str, ...]
+    created_source_relation_names: tuple[str, ...]
+    dropped_relation_names: tuple[str, ...]
+    created_relation_names: tuple[str, ...]
+    boundary_time: str
+    boundaries: tuple[DirectReplayBoundary, ...]
+    replay_results: tuple[DirectRootReplayResult, ...]
+    effective_start_time: str | None = None
+
+@final
+@dataclass(frozen=True)
+class DirectBuildExecutionResult:
+    build_result: DirectBuildResult
+    audit_result: SqlAuditRunResult
+
+@final
+@dataclass(frozen=True)
+class PopulationRoot:
+    root_key: ObjectKey
+    affected_keys: tuple[ObjectKey, ...]
+    upstream_boundary_key: ObjectKey
+    replay_lineage_mode: ReplayLineageMode | str
+    execution_mode: RebuildExecutionMode | str = RebuildExecutionMode.FULL_REBUILD
+    forced_start_time: str | None = None
+    execution_lookback_seconds: int | None = None
+    persist_watermarks: bool = True
+
+@final
+@dataclass(frozen=True)
+class PopulationObject:
+    logical_key: ObjectKey
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PopulationPlan:
+    execution_id: str
+    roots: tuple[PopulationRoot, ...]
+    objects: tuple[PopulationObject, ...]
+
+@final
+@dataclass(frozen=True)
+class PopulationWatermark:
+    root_key: ObjectKey
+    anchor_key: ObjectKey
+    boundary_key: str
+    cutoff_value: str
+
+@final
+@dataclass(frozen=True)
+class PopulationManagedSource:
+    resource: AdapterManagedSource
+    database: str
+
+@final
+@dataclass(frozen=True)
+class PopulationRealization:
+    resource: (
+        AdapterManagedSource
+        | AdapterTable
+        | AdapterMaterializedView
+        | AdapterView
+        | AdapterStableView
+    )
+    database: str
+
+@final
+@dataclass(frozen=True)
+class PopulationSourceRecreation:
+    managed_source: PopulationManagedSource
+    landing_view_name: str
+    landing_relation_name: str
+    consumer_group: str
+    drifted_setting_names: tuple[str, ...]
+    @property
+    def staged_relation_name(self) -> str: ...
+
+@final
+@dataclass(frozen=True)
+class PopulationSourcePreparation:
+    preserved_relation_names: tuple[str, ...]
+    created_relation_names: tuple[str, ...]
+    landing_views: tuple[DesiredMaterializedView, ...]
+    managed_sources: tuple[PopulationManagedSource, ...]
+    recreated_sources: tuple[PopulationSourceRecreation, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class PublishRequest:
+    deployment_id: str | None
+    metadata_database: str
+    default_database: str
+    operation: PublishOperation | str = PublishOperation.PROMOTE
+    previous_deployment_id: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PublishedView:
+    view_name: str
+    target_table_name: str
+
+@final
+@dataclass(frozen=True)
+class PublishResult:
+    deployment_id: str
+    published_views: tuple[PublishedView, ...]
+    per_relation_atomic_replace: bool
+    graph_atomic_publish: bool
+    operation: PublishOperation | str = PublishOperation.PROMOTE
+    previous_deployment_id: str | None = None
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingAddition:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingReplacement:
+    database: str
+    logical_name: str
+    from_physical_name: str
+    to_physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionBindingRemoval:
+    database: str
+    logical_name: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class PromotionOrphanedRelation:
+    database: str
+    physical_name: str
+
+@final
+@dataclass(frozen=True)
+class DeploymentPromotionPreview:
+    classification: PromotionPreviewClassification
+    additions: tuple[PromotionBindingAddition, ...]
+    replacements: tuple[PromotionBindingReplacement, ...]
+    removals: tuple[PromotionBindingRemoval, ...]
+    orphaned_relations: tuple[PromotionOrphanedRelation, ...]
+
+@final
+@dataclass(frozen=True)
+class RollbackRequest:
+    deployment_id: str | None
+    previous: bool
+    metadata_database: str
+    default_database: str
+
+@final
+@dataclass(frozen=True)
+class RollbackPlan:
+    current_deployment_id: str
+    target_deployment_id: str
+    logical_view_names: tuple[str, ...]
+
+@final
+@dataclass(frozen=True)
+class RepairActiveViewRequest:
+    default_database: str
+    table_name: str
+    deployment_id: str
+
+@final
+@dataclass(frozen=True)
+class RepairActiveViewResult:
+    table_name: str
+    target_table_name: str
+
+class DeploymentPlanError(ValueError): ...
+class ActualStateError(ValueError): ...
+class DirectPlanError(ValueError): ...
+class BackfillExecutionError(ValueError): ...
+class DirectBuildError(RuntimeError): ...
+
+class DirectWorkflowExecutionError(DirectBuildError):
+    workflow: BuildWorkflow
+    partial_result: WorkflowExecutionResult
+    captures: tuple[DirectReplayCapture, ...]
+    failed_step_id: str
+    cause: BaseException
+    def __init__(
+        self,
+        *,
+        workflow: BuildWorkflow,
+        partial_result: WorkflowExecutionResult,
+        captures: tuple[DirectReplayCapture, ...],
+        failed_step_id: str,
+        cause: BaseException,
+    ) -> None: ...
+
+class PopulationScopeError(LookupError): ...
+class PublishExecutionError(ValueError): ...
+
+PLANNED_CHANGE_TYPE_REBUILD: PlannedChangeType
+PLANNED_CHANGE_TYPE_CREATE: PlannedChangeType
+PLANNED_CHANGE_TYPE_NO_OP: PlannedChangeType
+TABLE_SCHEMA_CHANGE_KIND_NON_BREAKING: TableSchemaChangeKind
+TABLE_SCHEMA_CHANGE_KIND_BREAKING: TableSchemaChangeKind
+TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE: TableSchemaSeedCompatibility
+TABLE_SCHEMA_SEED_COMPATIBILITY_NON_SEEDABLE: TableSchemaSeedCompatibility
+REBUILD_STRATEGY_SHADOW: RebuildStrategy
+REBUILD_EXECUTION_MODE_FULL: RebuildExecutionMode
+REBUILD_EXECUTION_MODE_SEEDED_BOUNDED: RebuildExecutionMode
+REBUILD_EXECUTION_MODE_UNSEEDED_BOUNDED: RebuildExecutionMode
+DEPLOYMENT_PHASE_PLAN: DeploymentPhase
+DEPLOYMENT_ACTION_PLAN_SHADOW_TABLE: DeploymentAction
+BLANK_VALUES: tuple[object, ...]
+DIRECT_DEAD_LETTERS_VIEW_SUFFIX: str
+REDACTED_SECRET_PLACEHOLDER: str
+ADAPTER_DATABASE_PLACEHOLDER: str
+METADATA_OBJECT_STATE_TABLE_NAME: str
+METADATA_DEPLOYMENTS_TABLE_NAME: str
+METADATA_DEPLOYMENT_WATERMARKS_TABLE_NAME: str
+METADATA_PUBLISH_HISTORY_TABLE_NAME: str
+METADATA_SCHEMA_VERSIONS_TABLE_NAME: str
+METADATA_DIRECT_FINGERPRINTS_TABLE_NAME: str
+METADATA_MANIFESTS_TABLE_NAME: str
+METADATA_DEAD_LETTERS_TABLE_NAME: str
+QUARANTINE_LIVE_VIEW_PATTERN: str
+METADATA_INVOCATIONS_TABLE_NAME: str
+METADATA_NODE_RESULTS_TABLE_NAME: str
+METADATA_RUN_EVENTS_TABLE_NAME: str
+METADATA_RUN_STATEMENTS_TABLE_NAME: str
+METADATA_SENSOR_CHECKPOINTS_TABLE_NAME: str
+METADATA_SENSOR_TICKS_TABLE_NAME: str
+METADATA_SENSOR_STEPS_TABLE_NAME: str
+METADATA_SENSOR_OVERRIDES_TABLE_NAME: str
+METADATA_SENSOR_LEASES_TABLE_NAME: str
+VIRTUAL_OBJECT_STATE_KIND_DEPLOYMENT: str
+VIRTUAL_OBJECT_STATE_KIND_RECONCILE: str
+VIRTUAL_DEPLOYMENT_STATUS_INCOMPLETE: str
+MANAGED_SOURCE_KIND_KAFKA: str
+ADAPTER_SECRET_PLACEHOLDER_PREFIX: str
+ADAPTER_SECRET_PLACEHOLDER_SUFFIX: str
+CLICKHOUSE_ADAPTER_NAME: str
+CLICKHOUSE_WRITTEN_ROWS_SUMMARY_KEY: str
+CLICKHOUSE_DEFAULT_DATABASE: str
+CLICKHOUSE_SQL_ANALYSIS_DIALECT: str
+CLICKHOUSE_VIRTUAL_ENVIRONMENTS_SUPPORTED: bool
+CLICKHOUSE_MANAGED_SOURCE_KINDS: frozenset[str]
+CLICKHOUSE_REPLAY_BOUNDARY_MODES: frozenset[AdapterReplayBoundaryMode]
+CLICKHOUSE_HISTORY_PREFIX_SEED_SUPPORTED: bool
+CLICKHOUSE_STABLE_LOGICAL_BINDINGS_SUPPORTED: bool
+CLICKHOUSE_PER_RELATION_ATOMIC_REPLACE: bool
+CLICKHOUSE_GRAPH_ATOMIC_PUBLISH: bool
+CLICKHOUSE_SET_DIFFERENCE_COMPARISON_SUPPORTED: bool
+CLICKHOUSE_DIRECT_REBUILD_SUPPORTED: bool
+CLICKHOUSE_CATALOG_RETRY_DELAY_SECONDS: float
+CLICKHOUSE_MODEL_TABLE_NAME_PREFIX: str
+STAGED_SOURCE_NAME_PREFIX: str
 
 type _Span = tuple[int, int, int, int, int, int]
 
@@ -2543,15 +4259,17 @@ def ensure_header_columns(
 class KafkaLagSource(Protocol):
     """Cached consumer-group lag for one managed Kafka source."""
 
-    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
 
 class KafkaTopicSource(Protocol):
     """Cached topic inventory for one broker configuration."""
 
-    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
 
-def build_kafka_client_config(*, kafka: KafkaSettings) -> dict[str, object]: ...
-def kafka_client_key(*, kafka: KafkaSettings) -> tuple[str, tuple[tuple[str, str], ...]]: ...
+def build_kafka_client_config(*, kafka: _DiscoveryKafkaSettings) -> dict[str, object]: ...
+def kafka_client_key(
+    *, kafka: _DiscoveryKafkaSettings
+) -> tuple[str, tuple[tuple[str, str], ...]]: ...
 def build_kafka_lag_snapshot(
     *,
     partition_ids: frozenset[int],
@@ -2570,7 +4288,7 @@ class KafkaLagReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: KafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings, database: str) -> KafkaLagSnapshot | None: ...
     def close(self) -> None: ...
 
 @final
@@ -2583,7 +4301,7 @@ class KafkaTopicReader:
         clock: Callable[[], float] | None = None,
         collector: Callable[..., object] | None = None,
     ) -> None: ...
-    def read(self, *, kafka: KafkaSettings) -> KafkaTopicsSnapshot | None: ...
+    def read(self, *, kafka: _DiscoveryKafkaSettings) -> KafkaTopicsSnapshot | None: ...
     def close(self) -> None: ...
 
 @final

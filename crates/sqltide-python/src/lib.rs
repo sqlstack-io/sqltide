@@ -75,6 +75,7 @@ mod rules;
 mod run_events;
 mod selection;
 mod sensors;
+mod shapes;
 mod sources;
 mod sql_scan;
 mod sql_tests_command;
@@ -211,5 +212,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     test_discovery::register(module)?;
     testing::register(module)?;
     timestamps::register(module)?;
-    toml::register(module)
+    toml::register(module)?;
+    shapes::register(module)
 }

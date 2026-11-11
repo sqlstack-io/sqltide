@@ -15,3 +15,9 @@ STAY_RULES: dict[int, str] = {
 STAY_KEYS: frozenset[str] = frozenset({"path", "rule", "note"})
 NOTE_RULE_PATTERN: str = r"\b[Rr]ule (\d+)\b"
 ESCAPING_PATH_PARTS: frozenset[str] = frozenset({".", ".."})
+NATIVE_MODULE: str = "sqltide._native"
+EXPORTS_NAME: str = "__all__"
+NATIVE_ALIASES: dict[str, tuple[str, str]] = {
+    "DiscoveryRefType": ("RefType", "compiler/discovery/types.py"),
+    "DiscoverySqlRelationType": ("SqlRelationType", "compiler/discovery/types.py"),
+}

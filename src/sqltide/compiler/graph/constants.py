@@ -1,13 +1,8 @@
 """Dependency graph constants."""
 
-from sqltide.compiler.graph.types import DependencyEdgeType
-
-UPSTREAM_SELECTOR_PREFIX: str = "+"
-SELECTOR_NAMESPACE_SEPARATOR: str = ":"
-PIPELINE_SELECTOR_NAMESPACE: str = "pipeline"
-MODEL_SELECTOR_NAMESPACE: str = "model"
-
-ALL_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType] = frozenset(DependencyEdgeType)
-DRIVING_DEPENDENCY_EDGE_TYPES: frozenset[DependencyEdgeType] = frozenset(
-    {DependencyEdgeType.DRIVING_INPUT}
-)
+from sqltide._native import ALL_DEPENDENCY_EDGE_TYPES as ALL_DEPENDENCY_EDGE_TYPES
+from sqltide._native import DRIVING_DEPENDENCY_EDGE_TYPES as DRIVING_DEPENDENCY_EDGE_TYPES
+from sqltide._native import MODEL_SELECTOR_NAMESPACE as MODEL_SELECTOR_NAMESPACE
+from sqltide._native import PIPELINE_SELECTOR_NAMESPACE as PIPELINE_SELECTOR_NAMESPACE
+from sqltide._native import SELECTOR_NAMESPACE_SEPARATOR as SELECTOR_NAMESPACE_SEPARATOR
+from sqltide._native import UPSTREAM_SELECTOR_PREFIX as UPSTREAM_SELECTOR_PREFIX

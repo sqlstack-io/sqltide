@@ -1,100 +1,19 @@
 """Authored spec domain types."""
 
-from enum import StrEnum
-
-
-class PipelineMode(StrEnum):
-    DIRECT = "direct"
-    VIRTUAL = "virtual"
-
-
-class RetentionMissingBehavior(StrEnum):
-    ERROR = "error"
-    SKIP = "skip"
-
-
-class KafkaRetentionReference(StrEnum):
-    BROKER = "broker"
-    LANDED = "landed"
-
-
-class KafkaRetentionOrigin(StrEnum):
-    SOURCE = "source"
-    PROJECT = "project"
-
-
-class ModelReferenceScope(StrEnum):
-    PROJECT = "project"
-    PIPELINE = "pipeline"
-
-
-class RowErrorPolicy(StrEnum):
-    """What a streaming model does with a row its typed projection cannot produce."""
-
-    FAIL = "fail"
-    QUARANTINE = "quarantine"
-
-
-class ReplayAnchorMode(StrEnum):
-    AUTO = "auto"
-    NEVER = "never"
-
-
-class ReplayLineageMode(StrEnum):
-    OFFSETS = "offsets"
-    TIMESTAMP = "timestamp"
-    LANDED_AT = "landed_at"
-    CURSOR = "cursor"
-
-
-class SourceKind(StrEnum):
-    KAFKA = "kafka"
-    STREAM_TABLE = "stream_table"
-    POSTGRES = "postgres"
-
-
-class SourceNameOrigin(StrEnum):
-    EXPLICIT = "explicit"
-    DERIVED = "derived"
-
-
-class ModelKind(StrEnum):
-    TABLE = "table"
-    VIEW = "view"
-
-
-class ReplayBoundaryMode(StrEnum):
-    OFFSETS = "offsets"
-    TIMESTAMP = "timestamp"
-    LANDED_AT = "landed_at"
-    CURSOR = "cursor"
-
-
-class BoundedReplayFallback(StrEnum):
-    FULL = "full"
-    BOUNDED_WITHOUT_HISTORY = "bounded_without_history"
-
-
-class RefType(StrEnum):
-    REFERENCE = "reference"
-    MUTABLE = "mutable"
-
-
-class SqlRelationType(StrEnum):
-    SOURCE = "source"
-    REF = "ref"
-
-
-class ReplayOnChangeMode(StrEnum):
-    FULL = "full"
-    BOUNDED = "bounded"
-
-
-class SchemaChangeKind(StrEnum):
-    BREAKING = "breaking"
-    NON_BREAKING = "non_breaking"
-
-
-type ModelFacts = tuple[str, bool, bool, bool]
-type PipelineFacts = tuple[str, str, bool, bool, bool, list[ModelFacts]]
-type ProjectPolicyFacts = tuple[str, bool, bool, bool]
+from sqltide._native import BoundedReplayFallback as BoundedReplayFallback
+from sqltide._native import DiscoveryRefType as RefType  # noqa: F401
+from sqltide._native import DiscoverySqlRelationType as SqlRelationType  # noqa: F401
+from sqltide._native import KafkaRetentionOrigin as KafkaRetentionOrigin
+from sqltide._native import KafkaRetentionReference as KafkaRetentionReference
+from sqltide._native import ModelKind as ModelKind
+from sqltide._native import ModelReferenceScope as ModelReferenceScope
+from sqltide._native import PipelineMode as PipelineMode
+from sqltide._native import ReplayAnchorMode as ReplayAnchorMode
+from sqltide._native import ReplayBoundaryMode as ReplayBoundaryMode
+from sqltide._native import ReplayLineageMode as ReplayLineageMode
+from sqltide._native import ReplayOnChangeMode as ReplayOnChangeMode
+from sqltide._native import RetentionMissingBehavior as RetentionMissingBehavior
+from sqltide._native import RowErrorPolicy as RowErrorPolicy
+from sqltide._native import SchemaChangeKind as SchemaChangeKind
+from sqltide._native import SourceKind as SourceKind
+from sqltide._native import SourceNameOrigin as SourceNameOrigin
