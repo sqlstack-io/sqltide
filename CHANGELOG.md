@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.65.15](https://github.com/sqlstack-io/sqltide/compare/v0.65.14...v0.65.15) (2026-11-10)
+
+
+### Refactoring
+
+* move the remaining executor logic into the native core ([#369](https://github.com/sqlstack-io/sqltide/issues/369)) ([431f5bf](https://github.com/sqlstack-io/sqltide/commit/431f5bf2725398ea92942b6fd172ff47cc372da5))
+
 ## [0.65.14](https://github.com/sqlstack-io/sqltide/compare/v0.65.13...v0.65.14) (2026-11-10)
 
 
