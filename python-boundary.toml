@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 4784
+remaining_lines = 3747
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -109,6 +109,11 @@ note = "Rule 3: Public sqltide.events facade that documented sensors import; re-
 path = "events/types.py"
 rule = 3
 note = "Rule 3: Public AuditTransition and ObservedCommand enums and the SensorEvent alias re-exported by sqltide.events; data only."
+
+[[stays]]
+path = "executor/destruction/types.py"
+rule = 1
+note = "Rule 1: Logic-free protocols DestructionPlanningConnection (the read-only adapter surface destruction planning calls) and DestructionPlanStore (the reviewed single-use plan store) and the data-only type alias DestructionClock the destruction runtime consumes, beside native re-exports of the destruction value enums; no logic."
 
 [[stays]]
 path = "executor/kafka_admin/_helpers/offset_reset.py"
