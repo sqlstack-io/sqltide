@@ -87,9 +87,13 @@ the control store's role assignments from `OLD_NAME`, under the same lock, dry-r
 rules and idempotence as the first run. The target may already have been built under the new name:
 its own new manifests are kept and the old history is merged in, so `sqt destroy` sees both. It
 refuses when `NEW_NAME` is not the name the configuration carries, when the configuration is still
-named `OLD_NAME` (run without `--from` first), when `OLD_NAME` equals the new name, or when nothing
-on the target records `OLD_NAME`: no manifests and no role assignments, which usually means a
-mistyped name.
+named `OLD_NAME` (run without `--from` first), when `OLD_NAME` equals the new name, when nothing
+on the target records `OLD_NAME` (a mistyped name, or a target never built under it with no grants
+in this control store), or when the history of `OLD_NAME` does not look like this project's: a
+`consumer_group_identity` that differs from `OLD_NAME`, or a newest `OLD_NAME` manifest that shares
+no pipeline with the project. The last check keeps another project's history in the same database
+from being merged in, where `sqt destroy` would treat its pipelines as retired ones of this
+project.
 
 Until a target is completed, it keeps its manifest history under the old name, so `sqt destroy`
 there does not see relations recorded before the rename. The first run's output lists the targets

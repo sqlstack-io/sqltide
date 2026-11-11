@@ -22,6 +22,7 @@ from sqltide.auth.models import ProjectRoleAssignment
 from tests.integration.src.sqltide.cli.helpers import build_managed_clickhouse_client
 from tests.integration.src.sqltide.cli.rename_project.main._test_types import (
     ConsumerGroupDriftTestCase,
+    ForeignHistoryTestCase,
     MultiTargetRenameTestCase,
     ProjectRenameConflictTestCase,
     ProjectRenameTestCase,
@@ -33,12 +34,14 @@ from tests.integration.src.sqltide.cli.rename_project.main.helpers import (
     TWO_TARGET_PROJECT_CONFIG,
     built_shop_project,
     catalog_definitions,
+    connection_arguments,
     destroy_history_ids,
     kafka_group_name,
     manifest_ids,
     plan_json,
     role_names,
     target_arguments,
+    write_project,
     write_shop_project,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
@@ -595,3 +598,109 @@ def test_given_live_group_drift_when_renaming_then_rename_is_refused(
     assert "consumer group drift warning" in error
     assert config_path.read_text(encoding="utf-8") == test_case.renamed_config
     assert manifest_ids(clickhouse_client, database=clickhouse_database, identity="outlet") == ()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        ForeignHistoryTestCase(
+            description="refuses --from another project's name in the same database",
+            new_name="storefront",
+            foreign_name="billing",
+            expected_error_fragments=(
+                "The history of 'billing' on target 'test' does not look like this project's",
+                "pl__invoices",
+                'consumer_group_identity = "shop", not "billing"',
+            ),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_other_project_in_database_when_completing_from_its_name_then_it_is_refused(
+    test_case: ForeignHistoryTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("SQLTIDE_CONTROL_STORE_URL", raising=False)
+    projects: dict[str, Path] = {
+        name: write_project(
+            tmp_path / name,
+            name=name,
+            source=source,
+            consumer_group=f"{name}-{source}",
+            database=clickhouse_database,
+        )
+        for name, source in (("shop", "orders"), (test_case.foreign_name, "invoices"))
+    }
+    arguments: dict[str, tuple[str, ...]] = {
+        name: connection_arguments(
+            settings=clickhouse_connection_settings,
+            project_dir=project_dir,
+            database=clickhouse_database,
+        )
+        for name, project_dir in projects.items()
+    }
+    assert [run_cli(("sqt", "build", "--auto-approve", *arguments[name])) for name in projects] == [
+        0,
+        0,
+    ]
+    shop_history: tuple[str, ...] = manifest_ids(
+        clickhouse_client, database=clickhouse_database, identity="shop"
+    )
+    config_path: Path = projects["shop"] / "sqltide_project.toml"
+    assert (
+        run_cli(("sqt", "rename-project", test_case.new_name, "--apply", *arguments["shop"])) == 0
+    )
+    renamed_config: str = config_path.read_text(encoding="utf-8")
+    _ = capsys.readouterr()
+
+    from_foreign: tuple[str, ...] = (
+        "sqt",
+        "rename-project",
+        test_case.new_name,
+        "--from",
+        test_case.foreign_name,
+        "--apply",
+        *arguments["shop"],
+    )
+    assert run_cli(from_foreign) == 1
+    pipeline_error: str = capsys.readouterr().err
+    assert (
+        run_cli(
+            (
+                "sqt",
+                "rename-project",
+                test_case.new_name,
+                "--from",
+                "shop",
+                "--apply",
+                *arguments["shop"],
+            )
+        )
+        == 0
+    )
+    config_path.write_text(
+        renamed_config.replace(
+            f'name = "{test_case.new_name}"\n',
+            f'name = "{test_case.new_name}"\nconsumer_group_identity = "shop"\n',
+        ),
+        encoding="utf-8",
+    )
+    _ = capsys.readouterr()
+    assert run_cli(from_foreign) == 1
+    identity_error: str = capsys.readouterr().err
+
+    assert "consumer_group_identity" not in renamed_config
+    assert test_case.expected_error_fragments[0] in pipeline_error
+    assert test_case.expected_error_fragments[1] in pipeline_error
+    assert test_case.expected_error_fragments[0] in identity_error
+    assert test_case.expected_error_fragments[2] in identity_error
+    assert (
+        manifest_ids(clickhouse_client, database=clickhouse_database, identity=test_case.new_name)
+        == shop_history
+    )

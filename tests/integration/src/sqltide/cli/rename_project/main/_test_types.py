@@ -47,3 +47,11 @@ class MultiTargetRenameTestCase:
     new_name: str
     role_name: str
     expected_config: str
+
+
+@dataclass(frozen=True)
+class ForeignHistoryTestCase:
+    description: str
+    new_name: str
+    foreign_name: str
+    expected_error_fragments: tuple[str, ...]

@@ -44,6 +44,8 @@ struct ManifestPlan {
     to_copy: usize,
     /// Manifests recorded under the old identity.
     recorded: usize,
+    /// The pipelines the old identity's newest manifest on the target names.
+    latest_pipelines: Vec<String>,
     /// Whether the new identity may already hold manifests of its own, as it does once a
     /// target being completed with `--from` has built under the new name.
     allow_existing: bool,
@@ -105,13 +107,14 @@ fn validated_name(py: Python<'_>, new_name: &str, current_name: &str) -> PyResul
     Ok(new_name.to_owned())
 }
 
-/// The manifest ids one identity holds for the target, or the reason they cannot be read.
-fn manifest_ids(
+/// The manifest ids one identity holds for the target, and the pipelines its newest manifest
+/// names, or the reason they cannot be read.
+fn manifest_history(
     client: &Any<'_>,
     database: &str,
     identity: &str,
     target_name: &str,
-) -> PyResult<BTreeSet<String>> {
+) -> PyResult<(BTreeSet<String>, Vec<String>)> {
     let py: Python<'_> = client.py();
     let snapshot: Any<'_> = client.call_method(
         "load_manifests",
@@ -139,11 +142,20 @@ fn manifest_ids(
             ),
         ));
     }
-    snapshot
+    let manifests: Vec<Any<'_>> = snapshot
         .getattr("manifests")?
         .try_iter()?
-        .map(|manifest| manifest?.getattr("manifest_id")?.extract())
-        .collect()
+        .collect::<PyResult<_>>()?;
+    // Newest first, as the manifest history query orders it.
+    let latest_pipelines: Vec<String> = match manifests.first() {
+        Some(latest) => latest.getattr("pipelines")?.extract()?,
+        None => Vec::new(),
+    };
+    let ids: BTreeSet<String> = manifests
+        .iter()
+        .map(|manifest| manifest.getattr("manifest_id")?.extract())
+        .collect::<PyResult<_>>()?;
+    Ok((ids, latest_pipelines))
 }
 
 fn manifest_plan(
@@ -155,8 +167,9 @@ fn manifest_plan(
     allow_existing: bool,
 ) -> PyResult<ManifestPlan> {
     let py: Python<'_> = client.py();
-    let recorded: BTreeSet<String> = manifest_ids(client, database, from_identity, target_name)?;
-    let copied: BTreeSet<String> = manifest_ids(client, database, to_identity, target_name)?;
+    let (recorded, latest_pipelines) =
+        manifest_history(client, database, from_identity, target_name)?;
+    let (copied, _) = manifest_history(client, database, to_identity, target_name)?;
     let foreign: Vec<&String> = copied.difference(&recorded).collect();
     if !foreign.is_empty() && !allow_existing {
         return Err(fail(
@@ -176,6 +189,7 @@ fn manifest_plan(
         database: database.to_owned(),
         to_copy: recorded.difference(&copied).count(),
         recorded: recorded.len(),
+        latest_pipelines,
         allow_existing,
     })
 }
@@ -422,9 +436,20 @@ fn plan_rename<'py>(
             &format!(
                 "Nothing on target '{target_name}' records project '{current_name}': it has no \
                  manifests in database '{database}' and no role assignments in the control \
-                 store. Check the name passed to --from."
+                 store. Either '{current_name}' is mistyped, or this target was never built \
+                 under it and this control store holds no grants for it, in which case there \
+                 is nothing to complete here."
             ),
         ));
+    }
+    if completing {
+        refuse_foreign_history(
+            py,
+            &compiled,
+            identity.as_deref(),
+            &current_name,
+            &manifests,
+        )?;
     }
     let edited_config: Option<String> = if completing {
         None
@@ -446,6 +471,58 @@ fn plan_rename<'py>(
         other_targets: other_targets(loaded_project, &target_name)?,
         edited_config,
     })
+}
+
+/// Refuse to complete a rename from a name whose history on the target belongs to another
+/// project: merging it would make destroy planning treat that project's pipelines as this
+/// project's retired ones. A `consumer_group_identity` must equal OLD_NAME; without one, the
+/// newest OLD_NAME manifest must share a pipeline with the compiled project.
+fn refuse_foreign_history(
+    py: Python<'_>,
+    compiled: &Any<'_>,
+    identity: Option<&str>,
+    from_name: &str,
+    manifests: &ManifestPlan,
+) -> PyResult<()> {
+    let foreign = |detail: String| -> PyErr {
+        fail(
+            py,
+            &format!(
+                "The history of '{from_name}' on target '{}' does not look like this project's: \
+                 {detail}. Pass the name this project had before the rename to --from.",
+                manifests.target_name
+            ),
+        )
+    };
+    if let Some(identity) = identity {
+        if identity != from_name {
+            return Err(foreign(format!(
+                "sqltide_project.toml keeps consumer_group_identity = {}, not {}",
+                quoted(identity),
+                quoted(from_name)
+            )));
+        }
+        return Ok(());
+    }
+    if manifests.recorded == 0 {
+        return Ok(());
+    }
+    let current: Vec<String> = compiled
+        .getattr("pipelines")?
+        .try_iter()?
+        .map(|pipeline| pipeline?.getattr("pipeline")?.getattr("name")?.extract())
+        .collect::<PyResult<_>>()?;
+    if manifests
+        .latest_pipelines
+        .iter()
+        .any(|name| current.contains(name))
+    {
+        return Ok(());
+    }
+    Err(foreign(format!(
+        "its latest manifest names pipelines {} and none of them is in this project",
+        manifests.latest_pipelines.join(", ")
+    )))
 }
 
 /// Refuse when a managed Kafka table on the target already consumes as a different consumer
@@ -568,11 +645,13 @@ fn render_plan(plan: &RenamePlan<'_>, applied: bool) -> String {
             plan.current_name,
             plan.other_targets.join(", ")
         ));
-        lines.push(
-            "Role grants move for this whole control store. If other targets share it, their \
-             UI users lose those grants until those targets run the renamed config."
-                .to_owned(),
-        );
+        if plan.roles.is_some() {
+            lines.push(
+                "Role grants move for this whole control store. If other targets share it, \
+                 their UI users lose those grants until those targets run the renamed config."
+                    .to_owned(),
+            );
+        }
     }
     lines.push(
         "Unchanged: run history and audit and check status follow the project directory name, \

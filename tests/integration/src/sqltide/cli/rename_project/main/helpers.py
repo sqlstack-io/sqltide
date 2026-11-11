@@ -70,6 +70,31 @@ def write_shop_project(project_dir: Path, project_config: str = PROJECT_CONFIG) 
     return project_dir
 
 
+def write_project(
+    project_dir: Path, *, name: str, source: str, consumer_group: str, database: str
+) -> Path:
+    """Write a direct-mode project whose one Kafka source declares its own consumer group."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "sqltide_project.toml").write_text(
+        f'name = "{name}"\ndefault_target = "test"\n\n[defaults]\npipeline_mode = "direct"\n\n'
+        f'[targets.test]\ndatabase = "{database}"\n',
+        encoding="utf-8",
+    )
+    (project_dir / "sources").mkdir()
+    (project_dir / "sources" / f"{source}.yml").write_text(
+        SOURCE_CONFIG.replace("name: orders", f"name: {source}")
+        .replace("shop.orders", f"{name}.{source}")
+        .replace("    topic:", f"    consumer_group: {consumer_group}\n    topic:"),
+        encoding="utf-8",
+    )
+    pipeline_dir: Path = project_dir / "pipelines" / f"pl__{source}"
+    pipeline_dir.mkdir(parents=True)
+    (pipeline_dir / f"{source}_clean.sql").write_text(
+        MODEL_SQL.replace('__ref("orders")', f'__ref("{source}")'), encoding="utf-8"
+    )
+    return project_dir
+
+
 def connection_arguments(
     *, settings: ClickHouseConnectionSettings, project_dir: Path, database: str
 ) -> tuple[str, ...]:
