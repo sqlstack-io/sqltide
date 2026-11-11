@@ -15,6 +15,7 @@ use pyo3::types::{
     IntoPyDict, PyCFunction, PyDict, PyFloat, PyFrozenSet, PyString, PyTuple, PyType,
 };
 
+mod cli_service;
 mod compiler_analysis;
 mod compiler_project;
 mod executor_ops;
@@ -790,6 +791,15 @@ pub(crate) fn add_class<T: pyo3::PyTypeInfo>(module: &Bound<'_, PyModule>) -> Py
     add(module, name.to_str()?, class)
 }
 
+/// The native exception `name` raised with `message`.
+pub(crate) fn raised(py: Python<'_>, name: &str, message: String) -> PyResult<PyErr> {
+    Ok(PyErr::from_value(
+        py.import("sqltide._native")?
+            .getattr(name)?
+            .call1((message,))?,
+    ))
+}
+
 /// Constants built on first read, by name.
 static LAZY_VALUES: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
 
@@ -856,5 +866,17 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     compiler_analysis::register(module)?;
     compiler_project::register(module)?;
     planner_execution::register(module)?;
-    executor_ops::register(module)
+    executor_ops::register(module)?;
+    cli_service::register(module)?;
+    lazy_constants(
+        module,
+        &[
+            (
+                "CLICKHOUSE_REPLAY_BOUNDARY_MODES",
+                planner_execution::clickhouse_replay_boundary_modes,
+            ),
+            ("SQLTIDE_TOOL_VERSION", cli_service::tool_version),
+            ("WORKFLOW_PHASE_ORDER", cli_service::workflow_phase_order),
+        ],
+    )
 }

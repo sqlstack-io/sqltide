@@ -8,8 +8,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{IntoPyDict, PyFrozenSet, PyString, PyTuple};
 
 use super::{
-    Coerce, Given, add, add_class, base_init, exception, lazy_constants, native_enum, path, shapes,
-    str_enum,
+    Coerce, Given, add, add_class, base_init, exception, native_enum, path, shapes, str_enum,
 };
 
 const PLANNER_TYPES: &str = "sqltide.compiler.planner.types";
@@ -978,7 +977,7 @@ fn exceptions(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 /// `frozenset(AdapterReplayBoundaryMode)`, built on first read because the enum is still
 /// defined in Python.
-fn clickhouse_replay_boundary_modes(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(super) fn clickhouse_replay_boundary_modes(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let modes: Bound<'_, PyAny> = py
         .import("sqltide.adapter.types")?
         .getattr("AdapterReplayBoundaryMode")?;
@@ -1223,12 +1222,5 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add_class::<RollbackRequest>(module)?;
     add_class::<RollbackPlan>(module)?;
     add_class::<RepairActiveViewRequest>(module)?;
-    add_class::<RepairActiveViewResult>(module)?;
-    lazy_constants(
-        module,
-        &[(
-            "CLICKHOUSE_REPLAY_BOUNDARY_MODES",
-            clickhouse_replay_boundary_modes,
-        )],
-    )
+    add_class::<RepairActiveViewResult>(module)
 }
