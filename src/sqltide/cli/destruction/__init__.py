@@ -1,1 +1,0 @@
-"""Interactive destructive CLI commands."""

@@ -90,3 +90,19 @@ class FailingStep:
     def __call__(self) -> object:
         self.calls += 1
         raise RuntimeError("slack unavailable")
+
+
+CATALOG_EVENT_HANDLERS_SOURCE: str = """
+from sqltide.events import AuditCompleted, RunCompleted
+from sqltide.sensors import DefaultSensorStatus, event_sensor
+
+
+@event_sensor(on=AuditCompleted, default_status=DefaultSensorStatus.RUNNING)
+def audit_watch(ctx):
+    assert type(ctx.event) is AuditCompleted
+
+
+@event_sensor(on=RunCompleted, default_status=DefaultSensorStatus.RUNNING)
+def run_watch(ctx):
+    assert type(ctx.event) is RunCompleted
+"""

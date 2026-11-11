@@ -6,7 +6,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyFrozenSet, PyList, PyTuple};
 
 use super::dispatch::event_source_for;
-use super::support::{SENSOR_EXCEPTIONS, SENSOR_MODELS, SENSOR_TYPES, text};
+use super::providers::discover_provider_classes;
+use super::support::{SENSOR_EXCEPTIONS, SENSOR_MODELS, SENSOR_TYPES, chained_to_handled, text};
 use crate::dev_server::support::attr;
 use crate::py_kwargs;
 
@@ -350,12 +351,7 @@ fn compile_sensors<'py>(
 ) -> PyResult<Option<Any<'py>>> {
     let py: Python<'py> = project_dir.py();
     let sensor_paths: Vec<Any<'py>> = discover_sensor_paths(&project_dir)?;
-    let providers: Any<'py> = attr(
-        py,
-        "sqltide.provider.main._discover_provider_classes",
-        "discover_provider_classes",
-    )?
-    .call((), Some(&py_kwargs!(py; project_dir = &project_dir)?))?;
+    let providers: Any<'py> = discover_provider_classes(&project_dir)?;
     if sensor_paths.is_empty() && !providers.is_truthy()? {
         return Ok(None);
     }
@@ -582,8 +578,35 @@ fn polling_sensor<'py>(
     )
 }
 
+/// Reject a `SensorRetryPolicy` without an attempt or with a negative backoff.
+#[pyfunction]
+#[pyo3(signature = (*, max_attempts, backoff_seconds))]
+fn validate_sensor_retry_policy(max_attempts: Any<'_>, backoff_seconds: Any<'_>) -> PyResult<()> {
+    let py: Python<'_> = max_attempts.py();
+    if max_attempts.lt(1)? {
+        return Err(chained_to_handled(
+            py,
+            plain_error(
+                py,
+                "SensorRetryPolicy.max_attempts must be at least 1".to_owned(),
+            ),
+        ));
+    }
+    if backoff_seconds.lt(0)? {
+        return Err(chained_to_handled(
+            py,
+            plain_error(
+                py,
+                "SensorRetryPolicy.backoff_seconds must not be negative".to_owned(),
+            ),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(compile_sensors, module)?)?;
+    module.add_function(wrap_pyfunction!(validate_sensor_retry_policy, module)?)?;
     module.add_function(wrap_pyfunction!(event_sensor, module)?)?;
     module.add_function(wrap_pyfunction!(polling_sensor, module)?)
 }

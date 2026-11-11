@@ -110,23 +110,15 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.macros.models import MacroContext
 from sqltide.compiler.macros.types import MacroFunction
 from sqltide.dev_server.models import (
-    BuildCancellationOutcome,
-    CompileErrorInfo,
-    CompileOutcome,
-    DevExecutionContext,
-    KafkaLagSnapshot,
-    KafkaTopicsSnapshot,
     MessageFacetsRequest,
     MessagesQueryRequest,
-    ReplayOffsetProgress,
 )
 from sqltide.dev_server.types import CompileAuthorizationGuard, DevServerReporter
 from sqltide.events.models import (
     AuditCompleted,
-    InvocationObservation,
-    NodeResultObservation,
     RunCompleted,
 )
+from sqltide.events.types import SensorEvent
 from sqltide.executor.destruction.types import (
     DestructionClock,
     DestructionPlanningConnection,
@@ -142,27 +134,16 @@ from sqltide.executor.workflow.types import (
     WorkflowPhase,
 )
 from sqltide.provider.models import DiscoveredProvider
+from sqltide.providers import Provider
 from sqltide.sensors.models import (
-    CompiledSensors,
     EventSensorDeclaration,
-    LoadedSensor,
     PollingSensorDeclaration,
-    PollingTickState,
-    SensorDispatchSummary,
-    SensorRegistry,
     SensorRetryPolicy,
-    SensorStreamPosition,
-    SensorTickView,
-    StepMarker,
-    TickAttemptState,
 )
 from sqltide.sensors.types import (
-    DefaultSensorStatus,
+    SensorDeclaration,
     SensorFunction,
-    SensorOverrideStatus,
     SensorStepStore,
-    SensorTickStatus,
-    StepPolicy,
 )
 
 # Compiler analysis shapes: SQL analysis, graph, Rules, quality, audit and test discovery.
@@ -3032,6 +3013,277 @@ CANCEL_GRACE_SECONDS: float
 TERMINATE_GRACE_SECONDS: float
 ACTIVITY_WINDOW_SECONDS: int
 
+# Sensor runtime, event observation and dev server shapes.
+
+class SensorKind(StrEnum):
+    EVENT = "event"
+    POLLING = "polling"
+
+class DefaultSensorStatus(StrEnum):
+    RUNNING = "running"
+    STOPPED = "stopped"
+
+class SensorOverrideStatus(StrEnum):
+    RUNNING = "running"
+    STOPPED = "stopped"
+    DECLARED_IN_CODE = "declared_in_code"
+
+class SensorTickStatus(StrEnum):
+    STARTED = "started"
+    SKIPPED = "skipped"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    DEAD_LETTERED = "dead_lettered"
+
+class StepPolicy(StrEnum):
+    AT_LEAST_ONCE = "at_least_once"
+    AT_MOST_ONCE = "at_most_once"
+
+@final
+@dataclass(frozen=True)
+class LoadedSensor:
+    name: str
+    kind: SensorKind
+    declaration: SensorDeclaration
+    file_path: Path
+    relative_path: Path
+    source: str
+    definition_line: int
+    description: str | None = None
+    timeout_seconds: float = ...
+    @property
+    def identity_fingerprint(self) -> str: ...
+    @property
+    def default_status(self) -> DefaultSensorStatus: ...
+    @property
+    def retry_policy(self) -> SensorRetryPolicy: ...
+
+@final
+@dataclass(frozen=True)
+class CompiledSensors:
+    registry: SensorRegistry
+    providers: tuple[DiscoveredProvider, ...] = ()
+
+@final
+@dataclass(frozen=True)
+class SensorStreamPosition:
+    completed_at: str
+    result_id: str
+
+@final
+@dataclass(frozen=True)
+class StepMarker:
+    status: str
+    result_json: str | None
+    attempt: int
+
+@final
+@dataclass(frozen=True)
+class TickAttemptState:
+    failed_attempts: int
+    last_failed_at: str | None
+    last_error_message: str | None
+    resolved: bool
+
+@final
+@dataclass(frozen=True)
+class SensorTickView:
+    tick_id: str
+    sensor_name: str
+    definition_fingerprint: str
+    kind: str
+    event_id: str | None
+    event_kind: str | None
+    attempt: int
+    status: str
+    started_at: str
+    completed_at: str | None
+    error_message: str | None
+    skip_reason: str | None
+    cursor: str | None
+
+@final
+@dataclass(frozen=True)
+class PollingTickState:
+    last_started_at: str | None
+    last_success_at: str | None
+    cursor: str | None
+
+@final
+@dataclass(frozen=True)
+class SensorEvaluation:
+    status: SensorTickStatus
+    skip_reason: str | None = None
+    error_message: str | None = None
+    cursor: str | None = None
+
+@final
+@dataclass(frozen=True)
+class SensorDeliveryOutcome:
+    resolved: bool
+    evaluation: SensorEvaluation | None = None
+    dead_lettered: bool = False
+
+@final
+@dataclass(frozen=True)
+class SensorEventDelivery:
+    position: SensorStreamPosition
+    events: tuple[SensorEvent, ...]
+
+@final
+@dataclass(frozen=True)
+class SensorDispatchSummary:
+    lease_acquired: bool = True
+    evaluated: int = 0
+    succeeded: int = 0
+    skipped: int = 0
+    failed: int = 0
+    dead_lettered: int = 0
+
+@final
+@dataclass(frozen=True)
+class SensorRegistry:
+    sensors: Mapping[str, LoadedSensor] = ...
+    def ordered(self) -> tuple[LoadedSensor, ...]: ...
+
+@final
+@dataclass(frozen=True)
+class NodeResultObservation:
+    result_id: str
+    invocation_id: str
+    node_kind: QualityNodeKind
+    node_name: str
+    binding_key: str
+    target_identity: str
+    trigger: str
+    status: QualityResultStatus
+    severity: str | None
+    failure_count: int
+    completed_at: str
+    scheduled_for: str | None
+    payload_json: str
+    error_message: str | None
+
+@final
+@dataclass(frozen=True)
+class InvocationObservation:
+    invocation_id: str
+    command: str
+    mode: str | None
+    outcome: str
+    exit_code: int
+    target_identity: str
+    deployment_id: str | None
+    selected_node_count: int
+    error_message: str | None
+    completed_at: str
+
+@final
+@dataclass(frozen=True)
+class ReplayOffsetProgress:
+    percentage: float
+    eta_seconds: float | None
+    completed_span: int
+    total_span: int
+    observed_partitions: int
+    total_partitions: int
+
+@final
+@dataclass(frozen=True, repr=False)
+class DevExecutionContext:
+    database: str | None = None
+    selected_target: str | None = None
+    cli_variables: tuple[tuple[str, object], ...] = ()
+    environment: Mapping[str, str] | None = None
+    connection_host: str | None = None
+    connection_port: int | None = None
+    connection_username: str | None = None
+    connection_password: str | None = None
+    run_presumed_failed_after_seconds: int = ...
+    connection_factory: Callable[[], AdapterConnection] | None = None
+    observation_connection_factory: Callable[[], AdapterConnection] | None = None
+
+@final
+@dataclass(frozen=True)
+class CompileErrorInfo:
+    message: str
+    path: str | None = None
+    line: int | None = None
+    column: int | None = None
+    end_line: int | None = None
+    end_column: int | None = None
+
+@final
+@dataclass(frozen=True)
+class CompileOutcome:
+    state: CompileStateKind
+    version_key: str
+    compiled_at: str
+    analysis: CompileAnalysis | None = None
+    timings: CompilationTimings | None = None
+    error: CompileErrorInfo | None = None
+
+@final
+@dataclass(frozen=True)
+class OperationAuthorizationContext:
+    store: ControlStore
+    project_dir: Path
+    selected_target: str | None
+
+@final
+@dataclass(frozen=True)
+class DevControlStores:
+    accounts: ControlStore
+    destruction_plans: RelationalDestructionPlanStore
+    owns_accounts: bool
+    def close(self) -> None: ...
+
+@final
+@dataclass(frozen=True)
+class KafkaTopicInfo:
+    name: str
+    partition_count: int
+    replication_factor: int
+    internal: bool
+
+@final
+@dataclass(frozen=True)
+class KafkaTopicsSnapshot:
+    topics: tuple[KafkaTopicInfo, ...]
+
+@final
+@dataclass(frozen=True)
+class KafkaPartitionLag:
+    partition: int
+    committed_offset: int | None
+    end_offset: int
+    lag_messages: int | None
+
+@final
+@dataclass(frozen=True)
+class KafkaLagSnapshot:
+    total_messages: int | None
+    partitions: tuple[KafkaPartitionLag, ...]
+
+@final
+@dataclass(frozen=True)
+class RelationStorage:
+    rows: int = 0
+    bytes: int = 0
+
+@final
+@dataclass(frozen=True)
+class BuildCancellationOutcome:
+    invocation_id: str
+    query_id: str | None
+    requested_at: str
+    status: Literal["cancelled", "cancellation_failed"]
+    process_exit_code: int
+    warehouse_supported: bool | None
+    query_found: bool | None
+    warehouse_termination_confirmed: bool | None
+    error_message: str | None = None
+
 type _Span = tuple[int, int, int, int, int, int]
 
 class SqlScanError(ValueError):
@@ -3107,6 +3359,8 @@ def polling_sensor(
 def effective_sensor_status(
     *, sensor: LoadedSensor, overrides: Mapping[str, SensorOverrideStatus]
 ) -> SensorOverrideStatus: ...
+def validate_sensor_retry_policy(*, max_attempts: int, backoff_seconds: float) -> None: ...
+def provider_name(provider_class: type[Provider]) -> str: ...
 def start_invocation(*, invocation_id: str | None = None) -> tuple[str, str, int]: ...
 def logical_project_identity(*, project_dir: Path) -> str: ...
 def build_invocation_record(

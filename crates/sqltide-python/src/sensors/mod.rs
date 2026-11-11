@@ -2,6 +2,7 @@
 //! User handlers still run through the Python evaluation shim and receive the Python contexts.
 
 mod dispatch;
+mod providers;
 mod queries;
 mod registry;
 mod repository;
@@ -17,5 +18,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<steps::InMemoryStepStore>()?;
     module.add_class::<steps::RepositoryStepStore>()?;
     module.add_function(wrap_pyfunction!(dispatch::effective_sensor_status, module)?)?;
+    module.add_function(wrap_pyfunction!(providers::provider_name, module)?)?;
     registry::register(module)
 }

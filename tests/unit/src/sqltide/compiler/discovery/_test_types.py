@@ -344,3 +344,11 @@ class ProjectConnectionSettingsTestCase:
 class ProjectProductionTargetTestCase:
     description: str
     expected_production_target: bool
+
+
+@dataclass(frozen=True)
+class ModelStepErrorTestCase:
+    description: str
+    step_class: type
+    arguments: dict[str, object]
+    expected_message: str

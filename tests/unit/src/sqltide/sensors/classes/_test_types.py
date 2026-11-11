@@ -86,3 +86,12 @@ class StepRunnerTestCase:
     expected_first_value: object
     expected_second_value: object
     expected_call_count: int
+
+
+@dataclass(frozen=True)
+class CompiledSensorDispatchTestCase:
+    description: str
+    sensor_files: tuple[tuple[str, str], ...]
+    checkpoints: dict[tuple[str, str], SensorStreamPosition]
+    expected_ticks: tuple[tuple[str, str], ...]
+    expected_summary: SensorDispatchSummary

@@ -8,7 +8,7 @@
 # still carries planning, validation, rendering or other movable logic counts as movable until
 # that logic moves to Rust.
 # Native failures must surface as errors; `handled_native_errors` lists the reviewed exceptions.
-remaining_lines = 2685
+remaining_lines = 1774
 
 [[stays]]
 path = "adapter/classes/adapter.py"
@@ -106,6 +106,11 @@ rule = 3
 note = "Rule 3: Public sqltide.events facade that documented sensors import; re-exports only."
 
 [[stays]]
+path = "events/models.py"
+rule = 3
+note = "Rule 3: AuditCompleted and RunCompleted, the event classes sqltide.events re-exports, that user sensors pass to event_sensor(on=...) and receive as ctx.event, that native events_from_node_result and events_from_invocation construct, and that native dispatch matches by identity, stay Python frozen dataclasses; data only. NodeResultObservation and InvocationObservation are native re-exports."
+
+[[stays]]
 path = "events/types.py"
 rule = 3
 note = "Rule 3: Public AuditTransition and ObservedCommand enums and the SensorEvent alias re-exported by sqltide.events; data only."
@@ -186,11 +191,6 @@ rule = 2
 note = "Rule 2: Instantiates user Provider subclasses into a session."
 
 [[stays]]
-path = "provider/main/_discover_provider_classes.py"
-rule = 2
-note = "Rule 2: Entry point of the shim that imports project provider modules."
-
-[[stays]]
 path = "provider/main/invoke_with_providers.py"
 rule = 2
 note = "Rule 2: Entry point that calls a user sensor function with provider injection."
@@ -199,6 +199,11 @@ note = "Rule 2: Entry point that calls a user sensor function with provider inje
 path = "provider/models.py"
 rule = 2
 note = "Rule 2: Record holding a live user Provider class and its settings instance."
+
+[[stays]]
+path = "providers.py"
+rule = 3
+note = "Rule 3: The documented Provider base class that project providers subclass, built on pydantic-settings BaseSettings with its model config and the no-op setup and teardown hooks the rule-2 provider session calls; name() returns the native provider_name for the class, which native provider discovery reads."
 
 [[stays]]
 path = "sensors/__init__.py"
@@ -220,11 +225,26 @@ path = "sensors/classes/polling_sensor_context.py"
 rule = 3
 note = "Rule 3: PollingSensorContext that user polling sensors receive, re-exported by sqltide.sensors; read-only properties."
 
+[[stays]]
+path = "sensors/models.py"
+rule = 3
+note = "Rule 3: SensorRetryPolicy, SkipReason and PollingSensorResult, which user sensors construct and return and sqltide.sensors re-exports (the rule-2 evaluation shim matches the returned SkipReason and PollingSensorResult), and EventSensorDeclaration and PollingSensorDeclaration, which the native event_sensor and polling_sensor decorators bind in place of the user function and whose __call__ forwards to it, stay Python frozen dataclasses; SensorRetryPolicy validation runs in the native validate_sensor_retry_policy. The other names here are native re-exports of the sensor runtime shapes."
+
+[[stays]]
+path = "sensors/types.py"
+rule = 1
+note = "Rule 1: The data-only alias SensorFunction, the live user sensor function the rule-3 EventSensorDeclaration and PollingSensorDeclaration in sensors/models.py hold and the native event_sensor and polling_sensor decorators wrap; the data-only alias SensorDeclaration, the union of those two declarations that native LoadedSensor holds; and the logic-free SensorStepStore protocol for the store the native DurableStepRunner takes, implemented by native InMemoryStepStore and RepositoryStepStore. The sensor enums here are native re-exports; no logic."
+
 
 [[stays]]
 path = "auth/models.py"
 rule = 4
 note = "Rule 4: pydantic request bodies LoginRequest, CreateUserRequest, UpdateUserRequest, PasswordResetRequest, RoleRequest and ProjectRoleRequest, which the native dev server validates with pydantic for the account routes. They hold only field declarations with Field constraints and defaults and no custom validators or model config; the other names here are native re-exports of the account shapes."
+
+[[stays]]
+path = "dev_server/models.py"
+rule = 4
+note = "Rule 4: pydantic request bodies ChecksRunRequest, AuditBatchRunRequest, BuildRunRequest, MessageQueryMode, MessageQueryPredicate, MessageQueryCursor, MessagesQueryRequest, MessageRecordRequest, MessageFacetsRequest, DeploymentCleanupRequest, DestructionPlanRequest, DestructionExecutionRequest, SensorStatusRequest and SensorDeadLetterActionRequest, which the native dev server routes validate with pydantic. They hold only field declarations with Field constraints and defaults, a shared MessageQueryMode() default and model_config extra=\"forbid\" on the two destruction requests, and no custom validators; the other names here are native re-exports of the dev server shapes."
 
 [[stays]]
 path = "dev_server/types.py"

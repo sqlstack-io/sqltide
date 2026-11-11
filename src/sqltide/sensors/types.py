@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
+
+from sqltide._native import DefaultSensorStatus as DefaultSensorStatus
+from sqltide._native import SensorKind as SensorKind
+from sqltide._native import SensorOverrideStatus as SensorOverrideStatus
+from sqltide._native import SensorTickStatus as SensorTickStatus
+from sqltide._native import StepPolicy as StepPolicy
 
 if TYPE_CHECKING:
     from sqltide.sensors.models import (
@@ -15,45 +20,6 @@ if TYPE_CHECKING:
 
 type SensorFunction = Callable[..., object]
 type SensorDeclaration = EventSensorDeclaration | PollingSensorDeclaration
-
-
-class SensorKind(StrEnum):
-    """Kinds of authored sensors."""
-
-    EVENT = "event"
-    POLLING = "polling"
-
-
-class DefaultSensorStatus(StrEnum):
-    """Authored default sensor status declared in code."""
-
-    RUNNING = "running"
-    STOPPED = "stopped"
-
-
-class SensorOverrideStatus(StrEnum):
-    """Runtime override state persisted by operator actions."""
-
-    RUNNING = "running"
-    STOPPED = "stopped"
-    DECLARED_IN_CODE = "declared_in_code"
-
-
-class SensorTickStatus(StrEnum):
-    """Persisted status of one sensor tick attempt."""
-
-    STARTED = "started"
-    SKIPPED = "skipped"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    DEAD_LETTERED = "dead_lettered"
-
-
-class StepPolicy(StrEnum):
-    """Durable step re-execution policy."""
-
-    AT_LEAST_ONCE = "at_least_once"
-    AT_MOST_ONCE = "at_most_once"
 
 
 class SensorStepStore(Protocol):

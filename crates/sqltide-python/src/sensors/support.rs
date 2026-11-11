@@ -15,6 +15,23 @@ pub(crate) const SENSOR_MODELS: &str = "sqltide.sensors.models";
 pub(crate) const SENSOR_TYPES: &str = "sqltide.sensors.types";
 pub(crate) const SENSOR_EXCEPTIONS: &str = "sqltide.sensors.exceptions";
 
+/// Chain `error` to the exception being handled, as a Python `raise` inside an `except` does.
+pub(crate) fn chained_to_handled(py: Python<'_>, error: PyErr) -> PyErr {
+    let handled: Bound<'_, PyAny> = match py
+        .import("sys")
+        .and_then(|sys| sys.call_method0("exception"))
+    {
+        Ok(handled) => handled,
+        Err(failed) => return failed,
+    };
+    if !handled.is_none()
+        && let Err(failed) = error.value(py).setattr("__context__", handled)
+    {
+        return failed;
+    }
+    error
+}
+
 /// `str(value)`.
 pub(crate) fn text(value: &Bound<'_, PyAny>) -> PyResult<String> {
     Ok(value.str()?.to_string())

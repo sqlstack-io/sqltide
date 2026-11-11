@@ -1,1 +1,0 @@
-"""ClickHouse adapter implementation."""

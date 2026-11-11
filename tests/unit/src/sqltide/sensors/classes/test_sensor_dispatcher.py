@@ -1,5 +1,7 @@
 """Behavior tests for one sequential sensor dispatch pass."""
 
+from pathlib import Path
+
 import pytest
 
 from sqltide._native import SensorDispatcher
@@ -12,8 +14,13 @@ from sqltide.sensors.models import (
     TickAttemptState,
 )
 from sqltide.sensors.types import SensorOverrideStatus, SensorTickStatus
-from tests.unit.src.sqltide.events.helpers import build_node_result_observation
+from tests.unit.src.sqltide.events.helpers import (
+    build_invocation_observation,
+    build_node_result_observation,
+)
+from tests.unit.src.sqltide.sensors._helpers.helpers import load_registry, write_project_files
 from tests.unit.src.sqltide.sensors.classes._test_types import (
+    CompiledSensorDispatchTestCase,
     DeadLetterActionTestCase,
     DispatcherScenarioTestCase,
     EventCheckpointInitializationTestCase,
@@ -22,6 +29,7 @@ from tests.unit.src.sqltide.sensors.classes._test_types import (
     StreamHeadBoundTestCase,
 )
 from tests.unit.src.sqltide.sensors.classes.helpers import (
+    CATALOG_EVENT_HANDLERS_SOURCE,
     EPOCH_POSITION,
     ROW_POSITION,
     backoff_sensor,
@@ -526,3 +534,46 @@ def test_given_dead_letter_when_skipping_then_a_skipped_tick_resolves_it(
         test_case.expected_tick_attempts
     )
     assert repository.recorded_ticks[0].skip_reason == test_case.expected_skip_reason
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        CompiledSensorDispatchTestCase(
+            description="sensors on events imported from sqltide.events receive those events",
+            sensor_files=(("sensors/catalog.py", CATALOG_EVENT_HANDLERS_SOURCE),),
+            checkpoints={
+                ("audit_watch", "node_results"): EPOCH_POSITION,
+                ("run_watch", "invocations"): EPOCH_POSITION,
+            },
+            expected_ticks=(
+                ("audit_watch", "started"),
+                ("audit_watch", "succeeded"),
+                ("run_watch", "started"),
+                ("run_watch", "succeeded"),
+            ),
+            expected_summary=SensorDispatchSummary(evaluated=2, succeeded=2),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_compiled_catalog_event_sensors_when_dispatching_then_each_receives_its_event(
+    test_case: CompiledSensorDispatchTestCase, tmp_path: Path
+) -> None:
+    write_project_files(project_dir=tmp_path, files=test_case.sensor_files)
+    registry: SensorRegistry = load_registry(project_dir=tmp_path)
+    repository: FakeSensorStateRepository = FakeSensorStateRepository(
+        checkpoints=test_case.checkpoints,
+        node_results=(build_node_result_observation(),),
+        invocations=(build_invocation_observation(),),
+        newest_position=SensorStreamPosition(completed_at="2024-01-01 00:00:09.000", result_id="z"),
+    )
+    dispatcher: SensorDispatcher = SensorDispatcher(repository=repository, event_target="prod")
+
+    summary: SensorDispatchSummary = dispatcher.dispatch_once(registry=registry, target="prod")
+
+    assert summary == test_case.expected_summary
+    assert (
+        tuple((tick.sensor_name, tick.status) for tick in repository.recorded_ticks)
+        == test_case.expected_ticks
+    )
