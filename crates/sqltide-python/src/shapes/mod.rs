@@ -15,6 +15,7 @@ use pyo3::types::{
     IntoPyDict, PyCFunction, PyDict, PyFloat, PyFrozenSet, PyString, PyTuple, PyType,
 };
 
+mod adapter_models;
 mod cli_service;
 mod compiler_analysis;
 mod compiler_project;
@@ -186,7 +187,10 @@ macro_rules! shapes {
                 kwargs: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
             ) -> pyo3::PyResult<pyo3::PyClassInitializer<Self>> {
                 let values: Vec<pyo3::Bound<'_, pyo3::PyAny>> =
-                    $crate::shapes::bind(&Self::SPEC, args, kwargs)?;
+                    match $crate::shapes::copied_values(args, kwargs)? {
+                        Some(values) => values,
+                        None => $crate::shapes::bind(&Self::SPEC, args, kwargs)?,
+                    };
                 Ok($crate::shapes::shapes!(@init values $($base)?))
             }
 
@@ -249,8 +253,16 @@ macro_rules! shapes {
                 $crate::shapes::missing_attribute(slf.as_any(), name)
             }
 
-            /// Rebuilds the shape from its field values, so `copy`, `deepcopy` and `pickle`
-            /// work as they did on the dataclass.
+            /// A new instance of the same class sharing every field value, as `copy.copy` of
+            /// the dataclass gave.
+            fn __copy__<'py>(
+                slf: &pyo3::Bound<'py, Self>,
+            ) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::PyAny>> {
+                $crate::shapes::shallow_copy(slf.as_any(), slf.get().values(slf.py()))
+            }
+
+            /// Rebuilds the shape from its field values, so `deepcopy` and `pickle` work as they
+            /// did on the dataclass.
             fn __reduce__<'py>(
                 slf: &pyo3::Bound<'py, Self>,
             ) -> pyo3::PyResult<(
@@ -281,6 +293,52 @@ pub(crate) fn next<'py>(
         .next()
         .map(Bound::unbind)
         .ok_or_else(|| PyValueError::new_err("shape constructor bound too few values"))
+}
+
+/// The private first constructor argument with which `copy.copy` hands a shape class the field
+/// values to keep as they are, so a copy of any subclass is built without rebinding them.
+static COPY_MARKER: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+
+fn copy_marker(py: Python<'_>) -> PyResult<&Py<PyAny>> {
+    COPY_MARKER.get_or_try_init(py, || {
+        Ok(py.import("builtins")?.getattr("object")?.call0()?.unbind())
+    })
+}
+
+/// The field values `shallow_copy` passed to the constructor, or `None` for any other call.
+pub(crate) fn copied_values<'py>(
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Option<Vec<Bound<'py, PyAny>>>> {
+    if args.len() != 2 || kwargs.is_some_and(|kwargs| !kwargs.is_empty()) {
+        return Ok(None);
+    }
+    if !args.get_item(0)?.is(copy_marker(args.py())?) {
+        return Ok(None);
+    }
+    let values: Bound<'py, PyTuple> = args.get_item(1)?.cast_into()?;
+    Ok(Some(values.iter().collect()))
+}
+
+/// `copy.copy` as it worked on the dataclass: a new instance of the instance's own class that
+/// shares every field value, without rerunning normalization, post-init checks or a subclass
+/// `__init__`, and with a copy of a Python subclass instance's `__dict__`.
+pub(crate) fn shallow_copy<'py>(
+    instance: &Bound<'py, PyAny>,
+    values: Vec<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py: Python<'py> = instance.py();
+    let class: Bound<'py, PyType> = instance.get_type();
+    let copied: Bound<'py, PyAny> =
+        class
+            .getattr("__new__")?
+            .call1((&class, copy_marker(py)?, PyTuple::new(py, values)?))?;
+    if class.getattr("__dictoffset__")?.extract::<isize>()? != 0 {
+        copied
+            .getattr("__dict__")?
+            .call_method1("update", (instance.getattr("__dict__")?,))?;
+    }
+    Ok(copied)
 }
 
 /// Native enums by their `sqltide._native` attribute, for defaults and coercions.
@@ -877,6 +935,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     cli_service::register(module)?;
     sensors_dev::register(module)?;
     discovery_models::register(module)?;
+    adapter_models::register(module)?;
     lazy_constants(
         module,
         &[

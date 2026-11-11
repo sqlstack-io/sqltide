@@ -309,3 +309,10 @@ class LiveQuarantineShapeTestCase:
     description: str
     view_sql: str
     expected_quarantined: bool
+
+
+@dataclass(frozen=True)
+class CompiledModelShallowCopyTestCase:
+    description: str
+    transform_query: str
+    expected_type: type

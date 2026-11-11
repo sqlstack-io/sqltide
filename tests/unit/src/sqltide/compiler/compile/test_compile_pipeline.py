@@ -1,4 +1,5 @@
-from dataclasses import replace
+import copy
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import cast
 
@@ -56,6 +57,7 @@ from sqltide.compiler.discovery.types import (
 from sqltide.compiler.pipeline.models import RealizedProject
 from tests.unit.src.sqltide.compiler.compile._test_types import (
     CompileAdoptedSourceSharingTestCase,
+    CompiledModelShallowCopyTestCase,
     CompileModelNamingTestCase,
     CompileModelRetentionTestCase,
     CompileModelTtlDefaultTestCase,
@@ -1899,3 +1901,28 @@ def test_given_consistent_shared_adopted_relation_when_compiling_then_preserves_
         tuple(cast(ExternalTableSourceStep, source.source).table_name for source in project.sources)
         == test_case.expected_source_table_names
     )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        CompiledModelShallowCopyTestCase(
+            description="a compiled table model copy keeps its class and shares every field",
+            transform_query='SELECT order_id::UInt64 AS order_id FROM __ref("orders")',
+            expected_type=CompiledTableModel,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_compiled_table_model_when_shallow_copying_then_the_copy_shares_every_field(
+    test_case: CompiledModelShallowCopyTestCase,
+) -> None:
+    model: CompiledModel = compile_test_pipeline(
+        build_inline_sql_pipeline(test_case.transform_query)
+    ).models[0]
+
+    copied: CompiledModel = copy.copy(model)
+
+    assert type(copied) is test_case.expected_type
+    assert copied == model
+    assert all(getattr(copied, field.name) is getattr(model, field.name) for field in fields(model))
