@@ -371,3 +371,11 @@ class ShallowCopyTestCase:
     description: str
     instance: "DataclassInstance"
     expected_type: type
+
+
+@dataclass(frozen=True)
+class ReplaceTestCase:
+    description: str
+    instance: "DataclassInstance"
+    changes: dict[str, object]
+    expected_instance: "DataclassInstance"
