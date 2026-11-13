@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.67.1](https://github.com/sqlstack-io/sqltide/compare/v0.67.0...v0.67.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **planner:** plan an unchanged TTL table as no change ([#391](https://github.com/sqlstack-io/sqltide/issues/391)) ([357352d](https://github.com/sqlstack-io/sqltide/commit/357352d2534c85b13f31c6d335e323f2e160ca19))
+
 ## [0.67.0](https://github.com/sqlstack-io/sqltide/compare/v0.66.0...v0.67.0) (2026-11-13)
 
 
