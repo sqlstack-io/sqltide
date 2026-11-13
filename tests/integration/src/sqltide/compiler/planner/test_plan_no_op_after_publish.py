@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from clickhouse_connect.driver.client import Client
 
@@ -8,6 +10,7 @@ from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAda
 from sqltide.compiler.compile.models import CompiledPipeline, DesiredState
 from sqltide.compiler.planner.constants import (
     PLANNED_CHANGE_TYPE_NO_OP,
+    PLANNED_CHANGE_TYPE_REBUILD,
     REBUILD_EXECUTION_MODE_FULL,
     REBUILD_EXECUTION_MODE_SEEDED_BOUNDED,
     TABLE_SCHEMA_CHANGE_KIND_BREAKING,
@@ -16,7 +19,7 @@ from sqltide.compiler.planner.constants import (
     TABLE_SCHEMA_SEED_COMPATIBILITY_SEEDABLE,
 )
 from sqltide.compiler.planner.models import ActualState, DeploymentPlan, PlannedObjectChange
-from sqltide.executor.backfill.models import BackfillExecutionResult
+from sqltide.executor.backfill.models import BackfillBootstrapRequest, BackfillExecutionResult
 from sqltide.executor.promotion.models import PublishRequest, PublishResult
 from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     render_create_kafka_table_ddl,
@@ -28,6 +31,7 @@ from tests.integration.src.sqltide.compiler.planner._test_types import (
     PlannerNormalizedTypeNoOpIntegrationTestCase,
     PlannerSchemaChangeAfterPublishIntegrationTestCase,
     PlannerSqlChangeAfterPublishIntegrationTestCase,
+    PlannerTtlAfterPublishIntegrationTestCase,
 )
 from tests.integration.src.sqltide.compiler.planner.helpers import (
     build_changed_schema_variant_compiled_pipeline,
@@ -35,6 +39,7 @@ from tests.integration.src.sqltide.compiler.planner.helpers import (
     get_orders_enriched_change,
     normalize_orders_enriched_timestamp_type,
     realize_compiled_pipelines,
+    with_orders_enriched_ttl,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 from tests.integration.src.sqltide.executor.backfill.helpers import (
@@ -273,6 +278,111 @@ def test_given_equivalent_type_casing_after_publish_when_planning_again_then_it_
         object_change.change_type == test_case.expected_change_type
         for object_change in plan.object_changes
     )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PlannerTtlAfterPublishIntegrationTestCase(
+            description="an unchanged ttl matches the form clickhouse stores",
+            deployment_id="20260410T130000Z_ab12cd",
+            created_at="2026-04-10 13:00:00.123",
+            boundary_time="2026-04-10 13:00:00.000",
+            published_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            desired_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            expected_change_type=PLANNED_CHANGE_TYPE_NO_OP,
+        ),
+        PlannerTtlAfterPublishIntegrationTestCase(
+            description="a changed ttl rebuilds the table",
+            deployment_id="20260410T130000Z_ab12cd",
+            created_at="2026-04-10 13:00:00.123",
+            boundary_time="2026-04-10 13:00:00.000",
+            published_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            desired_ttl="_replay_timestamp + INTERVAL 30 DAY",
+            expected_change_type=PLANNED_CHANGE_TYPE_REBUILD,
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_published_ttl_table_when_planning_again_then_only_a_ttl_change_rebuilds(
+    test_case: PlannerTtlAfterPublishIntegrationTestCase,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    compiled_pipeline: CompiledPipeline = build_scalar_replay_compiled_pipeline("timestamp")
+    desired_state: DesiredState = with_orders_enriched_ttl(
+        realize_compiled_pipelines((compiled_pipeline,)).desired_state, test_case.desired_ttl
+    )
+    clickhouse_client.command(
+        render_create_kafka_table_ddl(
+            table=require_managed_source(compiled_pipeline).kafka_table,
+            database=clickhouse_database,
+        )
+    )
+    clickhouse_client.command(
+        render_create_table_ddl(
+            table=require_managed_source(compiled_pipeline).raw_table, database=clickhouse_database
+        )
+    )
+    clickhouse_client.command(
+        render_create_materialized_view_ddl(
+            materialized_view=require_managed_source(compiled_pipeline).materialized_view,
+            database=clickhouse_database,
+        )
+    )
+    managed_client: AdapterConnection = ClickHouseAdapter().connect(
+        AdapterConnectionConfig(
+            host=clickhouse_connection_settings.host,
+            port=clickhouse_connection_settings.port,
+            username=clickhouse_connection_settings.username,
+            password=clickhouse_connection_settings.password,
+            database=clickhouse_database,
+        )
+    )
+
+    try:
+        request: BackfillBootstrapRequest = build_scalar_replay_request(
+            database=clickhouse_database,
+            deployment_id=test_case.deployment_id,
+            created_at=test_case.created_at,
+            boundary_time=test_case.boundary_time,
+            replay_lineage_mode="timestamp",
+        )
+        execute_backfill(
+            request=replace(
+                request,
+                desired_state=with_orders_enriched_ttl(
+                    request.desired_state, test_case.published_ttl
+                ),
+            ),
+            client=managed_client,
+        )
+        execute_publish(
+            request=PublishRequest(
+                deployment_id=test_case.deployment_id,
+                metadata_database=clickhouse_database,
+                default_database=clickhouse_database,
+            ),
+            client=managed_client,
+        )
+        actual_state: ActualState = load_actual_state(
+            client=managed_client,
+            desired_state=desired_state,
+            database=clickhouse_database,
+        )
+    finally:
+        managed_client.close()
+
+    plan: DeploymentPlan = plan_deployment(
+        desired_state=desired_state,
+        actual_state=actual_state,
+        default_database=clickhouse_database,
+        render_resource=managed_client.render_resource,
+    )
+
+    assert get_orders_enriched_change(plan).change_type == test_case.expected_change_type
 
 
 @pytest.mark.integration

@@ -1,13 +1,14 @@
 //! Classify each desired object against the object that exists now.
 //!
-//! Tables compare columns by name, ClickHouse-normalized type, and default, plus storage.
+//! Tables compare columns by name, ClickHouse-normalized type, and default, plus storage, whose
+//! TTL matches when both sides generate the same canonical TTL.
 //! Materialized views and views also match when their queries generate the same canonical SQL.
 //! Comparisons short-circuit in authored column order, so a type is only normalized when every
 //! earlier comparison matched, and a type that cannot be normalized fails the plan only then.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use sqltide_sqlanalysis::{SqlDialect, canonicalize_sql, normalize_data_type};
+use sqltide_sqlanalysis::{SqlDialect, canonicalize_sql, canonicalize_ttl, normalize_data_type};
 
 use crate::rebuild::{ChangeType, SchemaChangeKind, SeedCompatibility};
 
@@ -122,11 +123,12 @@ pub struct Comparison {
     pub forced: bool,
 }
 
-/// Normalized types and canonical queries, computed once per text.
+/// Normalized types, canonical queries, and canonical TTLs, computed once per text.
 pub struct Differ {
     dialect: SqlDialect,
     types: HashMap<String, Result<String, String>>,
     queries: HashMap<String, Option<String>>,
+    ttls: HashMap<String, Option<String>>,
 }
 
 impl Default for Differ {
@@ -142,6 +144,7 @@ impl Differ {
             dialect: SqlDialect::new(DIALECT),
             types: HashMap::new(),
             queries: HashMap::new(),
+            ttls: HashMap::new(),
         }
     }
 
@@ -197,7 +200,10 @@ impl Differ {
                     columns: actual_columns,
                     storage: actual_storage,
                 },
-            ) => self.columns_match(columns, actual_columns)? && storage == actual_storage,
+            ) => {
+                self.columns_match(columns, actual_columns)?
+                    && self.storage_equal(storage, actual_storage)
+            }
             (
                 Spec::MaterializedView {
                     source,
@@ -321,6 +327,37 @@ impl Differ {
         }
     }
 
+    fn storage_equal(&mut self, desired: &Storage, actual: &Storage) -> bool {
+        let Storage {
+            engine,
+            order_by,
+            partition_by,
+            ttl,
+            settings,
+        } = desired;
+        *engine == actual.engine
+            && *order_by == actual.order_by
+            && *partition_by == actual.partition_by
+            && *settings == actual.settings
+            && match (ttl, &actual.ttl) {
+                // Even identical text compares canonically: a TTL without a canonical form, such
+                // as one the catalog could only partly parse, always differs.
+                (Some(desired), Some(actual)) => self
+                    .canonical_ttl(desired)
+                    .is_some_and(|desired| self.canonical_ttl(actual) == Some(desired)),
+                (desired, actual) => desired == actual,
+            }
+    }
+
+    fn canonical_ttl(&mut self, ttl: &str) -> Option<String> {
+        if let Some(canonical) = self.ttls.get(ttl) {
+            return canonical.clone();
+        }
+        let canonical: Option<String> = canonicalize_ttl(ttl, &self.dialect).ok();
+        self.ttls.insert(ttl.to_owned(), canonical.clone());
+        canonical
+    }
+
     fn canonical(&mut self, query: &str) -> Option<String> {
         if let Some(canonical) = self.queries.get(query) {
             return canonical.clone();
@@ -361,6 +398,82 @@ mod tests {
                 ttl: None,
                 settings: None,
             },
+        }
+    }
+
+    fn ttl_table(ttl: Option<&str>) -> Spec {
+        let Spec::Table {
+            columns,
+            mut storage,
+        } = table(vec![column("at", "DateTime")])
+        else {
+            unreachable!("table builds a table spec")
+        };
+        storage.ttl = ttl.map(str::to_owned);
+        Spec::Table { columns, storage }
+    }
+
+    fn change_type(differ: &mut Differ, desired: Spec, actual: Spec) -> ChangeType {
+        let comparison: Comparison = Comparison {
+            desired,
+            actual: Some(actual),
+            forced: false,
+        };
+        differ
+            .classify(&comparison)
+            .expect("the columns normalize")
+            .change_type
+    }
+
+    #[test]
+    fn an_unchanged_ttl_matches_the_form_clickhouse_stores() {
+        let mut differ: Differ = Differ::new();
+        // Each stored form is what ClickHouse's `create_table_query` holds for the authored TTL.
+        for (authored, stored) in [
+            ("at + INTERVAL 7 DAY", "at + toIntervalDay(7)"),
+            ("at + INTERVAL '1' MONTH", "at + toIntervalMonth('1')"),
+            ("at + INTERVAL 7 DAY DELETE", "at + toIntervalDay(7)"),
+            ("at + toIntervalHour(12)", "at + toIntervalHour(12)"),
+        ] {
+            assert_eq!(
+                change_type(
+                    &mut differ,
+                    ttl_table(Some(authored)),
+                    ttl_table(Some(stored))
+                ),
+                ChangeType::NoOp,
+                "{authored} against {stored}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_changed_ttl_rebuilds() {
+        let mut differ: Differ = Differ::new();
+        for (authored, stored) in [
+            (Some("at + INTERVAL 30 DAY"), Some("at + toIntervalDay(7)")),
+            (Some("at + INTERVAL 7 HOUR"), Some("at + toIntervalDay(7)")),
+            (
+                Some("at + INTERVAL 7 DAY + INTERVAL 1 HOUR"),
+                Some("at + toIntervalDay(7)"),
+            ),
+            (None, Some("at + toIntervalDay(7)")),
+            (Some("at + INTERVAL 7 DAY"), None),
+            // A removed WHERE or GROUP BY clause leaves the same TTL expression.
+            (
+                Some("at + INTERVAL 7 DAY"),
+                Some("at + toIntervalDay(7) WHERE x = 1"),
+            ),
+            (
+                Some("at + INTERVAL 7 DAY"),
+                Some("at + toIntervalDay(7) GROUP BY at SET x = max(x)"),
+            ),
+        ] {
+            assert_eq!(
+                change_type(&mut differ, ttl_table(authored), ttl_table(stored)),
+                ChangeType::Rebuild,
+                "{authored:?} against {stored:?}"
+            );
         }
     }
 

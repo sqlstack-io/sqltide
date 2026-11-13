@@ -124,7 +124,7 @@ fn catalog_table_spec<'py>(relation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, 
             ),
             ("order_by", relation.getattr("order_by")?),
             ("partition_by", relation.getattr("partition_by")?),
-            ("ttl", py.None().into_bound(py)),
+            ("ttl", relation.getattr("ttl")?),
             ("settings", py.None().into_bound(py)),
         ],
     )?;
