@@ -297,6 +297,16 @@ class PlannerSettledPlanTestCase:
 
 
 @dataclass(frozen=True)
+class PlannerQueryOnlyChangeTestCase:
+    description: str
+    published_query: str
+    changed_query: str
+    expected_root_key: tuple[str | None, str, str]
+    expected_affected_keys: tuple[tuple[str | None, str, str], ...]
+    expected_execution_mode: str
+
+
+@dataclass(frozen=True)
 class PlannerViewQueryClassificationTestCase:
     description: str
     desired_query: str

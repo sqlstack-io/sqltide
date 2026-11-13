@@ -16,6 +16,7 @@ from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerFullRefreshPlanTestCase,
     PlannerInvalidTableSettingTestCase,
     PlannerMutableWarningTestCase,
+    PlannerQueryOnlyChangeTestCase,
     PlannerSettledPlanTestCase,
     PlannerShadowIdentityTestCase,
     PlannerTableSettingSqlTestCase,
@@ -121,6 +122,47 @@ def test_given_view_only_change_when_planning_deployment_then_it_has_no_replay_r
         test_case.expected_physical_name
     )
     assert deployment_plan.steps[0].action == test_case.expected_action
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PlannerQueryOnlyChangeTestCase(
+            description="a filter-only change rebuilds from the table its materialized view fills",
+            published_query=_SETTINGS_QUERY,
+            changed_query=f"{_SETTINGS_QUERY} WHERE kafka_key != ''",
+            expected_root_key=(None, "table", "tbl__orders_enriched"),
+            expected_affected_keys=(
+                (None, "table", "tbl__orders_enriched"),
+                (None, "materialized_view", "mv__orders_enriched"),
+            ),
+            expected_execution_mode=REBUILD_EXECUTION_MODE_FULL,
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_query_only_change_when_planning_deployment_then_it_roots_at_the_target_table(
+    test_case: PlannerQueryOnlyChangeTestCase,
+) -> None:
+    published: DesiredState = build_single_transform_desired_state(
+        query=test_case.published_query
+    )
+
+    deployment_plan: DeploymentPlan = plan_deployment(
+        desired_state=build_single_transform_desired_state(query=test_case.changed_query),
+        actual_state=build_actual_state_matching_desired(published),
+        default_database="analytics",
+        render_resource=ClickHouseAdapter().render_resource,
+    )
+
+    assert len(deployment_plan.rebuild_subtrees) == 1
+    subtree = deployment_plan.rebuild_subtrees[0]
+    assert key_parts(subtree.root_key) == test_case.expected_root_key
+    assert tuple(key_parts(key) for key in subtree.affected_keys) == (
+        test_case.expected_affected_keys
+    )
+    assert subtree.replay_required is True
+    assert subtree.execution_mode == test_case.expected_execution_mode
 
 
 @pytest.mark.parametrize(

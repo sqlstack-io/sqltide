@@ -92,11 +92,13 @@ pub fn rebuild_subtrees(
 ) -> Result<Vec<RebuildSubtree>, CycleError> {
     let mut policy_by_key: HashMap<usize, Option<ReplayPolicy>> = HashMap::new();
     let mut table_or_view_by_key: HashMap<usize, &ObjectKind> = HashMap::new();
+    let mut table_by_name: HashMap<&str, usize> = HashMap::new();
     for object in graph.objects() {
         match &object.kind {
             ObjectKind::Table(policy) => {
                 policy_by_key.insert(object.key, *policy);
                 table_or_view_by_key.insert(object.key, &object.kind);
+                table_by_name.insert(graph.key(object.key).name.as_str(), object.key);
             }
             kind @ ObjectKind::MaterializedView { .. } => {
                 table_or_view_by_key.insert(object.key, kind);
@@ -122,7 +124,12 @@ pub fn rebuild_subtrees(
     // collects every candidate's closure in change order so the first cycle reported matches.
     // Anchor walks run for every candidate in change order either way.
     let acyclic: bool = graph.is_acyclic();
-    let mut candidates: Vec<Candidate<'_>> = Vec::new();
+    let changed: HashSet<usize> = changes
+        .iter()
+        .filter(|change| matches!(change.change_type, ChangeType::Create | ChangeType::Rebuild))
+        .map(|change| change.key)
+        .collect();
+    let mut candidates: Vec<Candidate> = Vec::new();
     for change in changes {
         if !matches!(change.change_type, ChangeType::Create | ChangeType::Rebuild)
             || graph.key(change.key).object_type == ObjectType::KafkaTable
@@ -130,20 +137,34 @@ pub fn rebuild_subtrees(
         {
             continue;
         }
+        // A materialized view's new query needs a new table to write into, so a view change
+        // rebuilds from the table it fills, which a changed table already does. The table's
+        // replay policy does not apply: a changed query fully replays unless a full refresh or
+        // start time says otherwise.
+        let mut change: ObjectChange = change.clone();
+        let mut policy: Option<ReplayPolicy> = policy_by_key.get(&change.key).copied().flatten();
+        if let Some(ObjectKind::MaterializedView { target, .. }) =
+            table_or_view_by_key.get(&change.key)
+            && let Some(&table) = table_by_name.get(target.as_str())
+        {
+            if changed.contains(&table) {
+                continue;
+            }
+            change.key = table;
+            policy = None;
+        }
         let affected: Vec<usize> = if acyclic {
             Vec::new()
         } else {
             graph.descendants(change.key)?
         };
+        let upstream_boundary: usize =
+            graph.nearest_replay_anchor(change.key, false, &graph.key(change.key).name)?;
         candidates.push(Candidate {
             change,
-            policy: policy_by_key.get(&change.key).copied().flatten(),
+            policy,
             affected,
-            upstream_boundary: graph.nearest_replay_anchor(
-                change.key,
-                false,
-                &graph.key(change.key).name,
-            )?,
+            upstream_boundary,
         });
     }
     if acyclic {
@@ -180,14 +201,14 @@ pub fn rebuild_subtrees(
 }
 
 /// One changed root before its subtree is chosen.
-struct Candidate<'a> {
-    change: &'a ObjectChange,
+struct Candidate {
+    change: ObjectChange,
     policy: Option<ReplayPolicy>,
     affected: Vec<usize>,
     upstream_boundary: usize,
 }
 
-fn subtree(graph: &DesiredGraph, candidate: Candidate<'_>) -> RebuildSubtree {
+fn subtree(graph: &DesiredGraph, candidate: Candidate) -> RebuildSubtree {
     let Candidate {
         change,
         policy,
@@ -201,7 +222,7 @@ fn subtree(graph: &DesiredGraph, candidate: Candidate<'_>) -> RebuildSubtree {
         } else if change.forced_start_time.is_some() {
             (ExecutionMode::SeededBounded, None, None)
         } else {
-            execution_policy(change, policy)
+            execution_policy(&change, policy)
         };
     RebuildSubtree {
         root: change.key,
