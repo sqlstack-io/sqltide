@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.67.3](https://github.com/sqlstack-io/sqltide/compare/v0.67.2...v0.67.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **compiler:** render each table setting as one SQL value ([#395](https://github.com/sqlstack-io/sqltide/issues/395)) ([cf1b88e](https://github.com/sqlstack-io/sqltide/commit/cf1b88e137f0eeaca959ef02c803e1300e46f281))
+
 ## [0.67.2](https://github.com/sqlstack-io/sqltide/compare/v0.67.1...v0.67.2) (2026-11-13)
 
 
