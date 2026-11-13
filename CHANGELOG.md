@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.67.0](https://github.com/sqlstack-io/sqltide/compare/v0.66.0...v0.67.0) (2026-11-13)
+
+
+### Features
+
+* **playground:** add a streaming template and document sqt playground ([#389](https://github.com/sqlstack-io/sqltide/issues/389)) ([62a80e0](https://github.com/sqlstack-io/sqltide/commit/62a80e04b183ffdb3e473afd6c53e00f93fe3070))
+
 ## [0.66.0](https://github.com/sqlstack-io/sqltide/compare/v0.65.21...v0.66.0) (2026-11-11)
 
 
