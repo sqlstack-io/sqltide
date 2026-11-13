@@ -17,7 +17,7 @@ from tests.integration.src.sqltide.cli.helpers import (
     write_sql_test_semantics_project,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
-from tests.unit.src.sqltide.cli.compile.helpers import copy_orders_demo
+from tests.unit.src.sqltide.cli.compile.helpers import copy_streaming_playground
 
 _DUPLICATE_MULTIPLICITY_TEST: str = """
 TEST ();
@@ -416,7 +416,7 @@ def test_given_executed_sql_test_when_running_test_command_then_runtime_bytes_ma
     ids=lambda case: case.description,
 )
 @pytest.mark.integration
-def test_given_orders_demo_example_when_running_test_command_then_every_authored_test_passes(
+def test_given_streaming_playground_when_running_test_command_then_every_authored_test_passes(
     test_case: CliTestSemanticsIntegrationTestCase,
     clickhouse_connection_settings: ClickHouseConnectionSettings,
     clickhouse_database: str,
@@ -424,7 +424,7 @@ def test_given_orders_demo_example_when_running_test_command_then_every_authored
     tmp_path: Path,
 ) -> None:
     project_dir: Path = tmp_path / "project"
-    copy_orders_demo(project_dir=project_dir)
+    copy_streaming_playground(project_dir=project_dir)
     managed_client: AdapterConnection = build_managed_clickhouse_client(
         clickhouse_connection_settings,
         database=clickhouse_database,

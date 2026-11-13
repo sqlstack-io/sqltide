@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from kafka import KafkaProducer
 
-from examples.orders_demo.producer.fake_orders_producer import (
+from sqltide.playground_templates.streaming.producer.fake_orders_producer import (
     ActiveOrder,
     CommerceEvent,
     ProducerState,
@@ -17,7 +17,7 @@ from examples.orders_demo.producer.fake_orders_producer import (
     publish_pending,
     save_state,
 )
-from tests.unit.examples.orders_demo.producer._test_types import (
+from tests.unit.src.sqltide.playground_templates.streaming.producer._test_types import (
     CrashReplayTestCase,
     PendingPublishTestCase,
     RandomContinuationTestCase,

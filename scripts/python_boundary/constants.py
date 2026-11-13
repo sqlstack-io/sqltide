@@ -2,6 +2,7 @@
 
 POLICY_FILE: str = "python-boundary.toml"
 SOURCE_ROOT: str = "src/sqltide"
+PROJECT_TEMPLATE_ROOT: str = "playground_templates"
 NATIVE_PACKAGE: str = "sqltide"
 NATIVE_MARKER: str = "native"
 SUPPRESS_NAME: str = "suppress"

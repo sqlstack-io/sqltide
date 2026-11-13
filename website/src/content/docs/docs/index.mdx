@@ -6,8 +6,10 @@ description: "Declarative streaming data pipelines for ClickHouse."
 SQLTide compiles typed SQL models into ClickHouse tables and materialized views, plans their
 dependencies, and rebuilds them from retained streaming history.
 
-These guides describe **SQLTide 0.60.0**. New to streaming SQL? Start with the
-[local quickstart](/docs/quickstart/): one adopted input table, one typed model, and a live insert.
+These guides describe **SQLTide 0.60.0**. New to SQLTide? Run [`sqt playground`](/docs/cli/playground/)
+for a ready-made orders project you run locally with Docker, then follow the
+[local quickstart](/docs/quickstart/) to build your own: one adopted input table, one typed model,
+and a live insert.
 
 Each pipeline has an effective operational mode:
 
@@ -37,6 +39,9 @@ seeds, UDF management, or a generic multi-warehouse abstraction.
 ## Choose a workflow
 
 <CardGroup cols={2}>
+  <Card title="Playground" icon="cart-shopping" href="/docs/cli/playground/">
+    Copy a ready-made orders project, then plan, build a candidate, and promote it locally with Docker.
+  </Card>
   <Card title="Direct-mode quickstart" icon="bolt" href="/quickstart">
     Build a small adopted-source pipeline against local ClickHouse.
   </Card>
@@ -48,9 +53,6 @@ seeds, UDF management, or a generic multi-warehouse abstraction.
   </Card>
   <Card title="Development UI" icon="display" href="/ui/overview">
     Explore lineage, sources, messages, plans, quality, and durable runs.
-  </Card>
-  <Card title="Orders demo" icon="cart-shopping" href="/examples/orders-demo">
-    Run the checked-in Kafka-to-ClickHouse direct-mode example.
   </Card>
 </CardGroup>
 

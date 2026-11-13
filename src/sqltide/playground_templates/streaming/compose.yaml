@@ -1,5 +1,3 @@
-name: ${COMPOSE_PROJECT_NAME:-sqltide-orders-demo}
-
 services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v25.1.4
@@ -14,16 +12,12 @@ services:
       - --check=false
       - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr=internal://redpanda:9092,external://redpanda.localhost:19092
-      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:18082
-      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:${REDPANDA_PROXY_PORT:-18082}
       - --rpc-addr=0.0.0.0:33145
       - --advertise-rpc-addr=redpanda:33145
     ports:
-      - "127.0.0.1:${REDPANDA_PROXY_PORT:-18082}:18082"
       - "127.0.0.1:19092:19092"
-      - "127.0.0.1:${REDPANDA_ADMIN_PORT:-19644}:9644"
     volumes:
-      - redpanda_data:/var/lib/redpanda/data
+      - redpanda-data:/var/lib/redpanda/data
     networks:
       default:
         aliases:
@@ -69,39 +63,27 @@ services:
         condition: service_healthy
     restart: "no"
 
-  redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:v2.8.5
-    environment:
-      KAFKA_BROKERS: redpanda:9092
-    ports:
-      - "127.0.0.1:${REDPANDA_CONSOLE_PORT:-18081}:8080"
-    depends_on:
-      topic-init:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
   clickhouse:
     image: clickhouse/clickhouse-server:25.8
-    environment:
-      CLICKHOUSE_DB: orders_demo
-      CLICKHOUSE_USER: ${SQLTIDE_CLICKHOUSE_USERNAME:-clickhouse}
-      CLICKHOUSE_PASSWORD: ${SQLTIDE_CLICKHOUSE_PASSWORD:-clickhouse}
     ports:
-      - "127.0.0.1:${SQLTIDE_CLICKHOUSE_PORT:-18123}:8123"
-      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-19000}:9000"
+      - "127.0.0.1:18125:8123"
+    environment:
+      CLICKHOUSE_DB: sqltide_streaming
+      CLICKHOUSE_USER: playground
+      CLICKHOUSE_PASSWORD: sqltide_playground
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
-      - clickhouse_logs:/var/log/clickhouse-server
+      - clickhouse-data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:8123/ping"]
-      interval: 5s
+      test: ["CMD", "clickhouse-client", "--user", "playground", "--password", "sqltide_playground", "--query", "SELECT 1"]
+      interval: 2s
       timeout: 5s
-      retries: 12
+      retries: 30
     restart: unless-stopped
 
   producer:
     build:
-      context: ..
+      context: .
       dockerfile: producer/Dockerfile
     environment:
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
@@ -109,17 +91,16 @@ services:
       TICK_INTERVAL_SECONDS: ${TICK_INTERVAL_SECONDS:-3}
       NEW_ORDERS_PER_TICK: ${NEW_ORDERS_PER_TICK:-2}
       PRODUCER_RANDOM_SEED: ${PRODUCER_RANDOM_SEED:-86}
-      PRODUCER_STATE_PATH: /var/lib/orders-demo/state.json
+      PRODUCER_STATE_PATH: /var/lib/producer/state.json
       FUTURE_EVENT_SECONDS: ${FUTURE_EVENT_SECONDS:-30}
     volumes:
-      - producer_state:/var/lib/orders-demo
+      - producer-state:/var/lib/producer
     depends_on:
       topic-init:
         condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:
-  redpanda_data:
-  clickhouse_data:
-  clickhouse_logs:
-  producer_state:
+  redpanda-data:
+  clickhouse-data:
+  producer-state:

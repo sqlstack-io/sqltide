@@ -7,8 +7,8 @@ from sqltide.compiler.discovery.models import LoadedProject
 from sqltide.compiler.pipeline.models import CompileAnalysis
 
 
-def analyze_orders_demo() -> CompileAnalysis:
-    project_dir: Path = Path("examples/orders_demo")
+def analyze_streaming_playground() -> CompileAnalysis:
+    project_dir: Path = Path("src/sqltide/playground_templates/streaming")
     loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=project_dir)
     return analyze_project(
         pipelines_root=project_dir / "pipelines",

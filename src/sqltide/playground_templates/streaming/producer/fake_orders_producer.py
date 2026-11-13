@@ -396,7 +396,7 @@ def main() -> None:
     bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
     topic = os.getenv("KAFKA_TOPIC", "source.order_events.live")
     rng = random.Random(int(os.getenv("PRODUCER_RANDOM_SEED", "86")))
-    state_path = Path(os.getenv("PRODUCER_STATE_PATH", "/var/lib/orders-demo/state.json"))
+    state_path = Path(os.getenv("PRODUCER_STATE_PATH", "/var/lib/producer/state.json"))
     producer = build_producer(bootstrap_servers)
 
     try:

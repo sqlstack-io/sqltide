@@ -7,4 +7,4 @@ class ConsoleNotifier(Provider):
     """Print audit transitions to the SQLTide process console."""
 
     def notify(self, message: str) -> None:
-        print(f"[orders-demo] {message}", flush=True)  # noqa: T201 - intentional local output
+        print(f"[sqltide-streaming] {message}", flush=True)  # noqa: T201 - intentional local output

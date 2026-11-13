@@ -1,5 +1,5 @@
 {
-  "project": "orders_demo",
+  "project": "streaming",
   "scenarios": {
     "deploy_drifted": {
       "plan": {
@@ -718,7 +718,7 @@
               "+CREATE TABLE analytics.kafka__commerce_event_stream (",
               "+    message String",
               "+) ENGINE = Kafka",
-              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_analytics', kafka_format = 'JSONAsString'"
+              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'sqltide_streaming_playground_analytics', kafka_format = 'JSONAsString'"
             ],
             "key": {
               "database": null,
@@ -2064,7 +2064,7 @@
               "+CREATE TABLE analytics.kafka__commerce_event_stream (",
               "+    message String",
               "+) ENGINE = Kafka",
-              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_analytics', kafka_format = 'JSONAsString'"
+              "+SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'sqltide_streaming_playground_analytics', kafka_format = 'JSONAsString'"
             ],
             "key": {
               "database": null,

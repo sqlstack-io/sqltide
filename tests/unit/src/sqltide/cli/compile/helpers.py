@@ -20,8 +20,8 @@ def copy_basic_project(*, project_dir: Path) -> None:
     _ = copytree(Path("tests/fixtures/basic_project"), project_dir)
 
 
-def copy_orders_demo(*, project_dir: Path) -> None:
-    _ = copytree(Path("examples/orders_demo"), project_dir)
+def copy_streaming_playground(*, project_dir: Path) -> None:
+    _ = copytree(Path("src/sqltide/playground_templates/streaming"), project_dir)
 
 
 def write_typed_source_retention(*, project_dir: Path) -> None:

@@ -19,7 +19,7 @@ enabled = true
 require_cacheable = true
 
 [targets.python.evaluation]
-exclude = ["tests/e2e/fixtures/**"]
+exclude = ["tests/e2e/fixtures/**", "src/sqltide/playground_templates/**"]
 
 [[targets.python.rule_exceptions]]
 rule = "FFR402"
@@ -48,16 +48,6 @@ rule = "FFT104"
 path = "tests/e2e/src/sqltide/executor/helpers.py"
 symbols = ["wait_for_query_view_activity", "wait_for_row_count", "wait_for_state_model_activity", "wait_for_table_exists", "wait_for_table_missing"]
 reason = "These wait_for_* helpers poll for state reached asynchronously. A bounded retry loop and its early return are the wait condition, so they cannot be expressed branch-free. Every other conditional in this module has been removed."
-
-[[targets.python.rule_exceptions]]
-rule = "FFT003"
-path = "tests/unit/examples/orders_demo/producer/test_fake_orders_producer.py"
-reason = "The runnable orders-demo producer lives outside the installable package; these tests mirror that checked-in example rather than a runtime package root."
-
-[[targets.python.rule_exceptions]]
-rule = "FFT003"
-path = "tests/unit/examples/orders_demo/producer/_test_types.py"
-reason = "The runnable orders-demo producer lives outside the installable package; this local test-case role supports tests for that checked-in example."
 
 [[targets.python.rule_exceptions]]
 rule = "FFR309"

@@ -1,0 +1,22 @@
+name = "sqltide_streaming"
+default_target = "local"
+
+[defaults]
+pipeline_mode = "virtual"
+kafka_broker_list = "redpanda.localhost:19092"
+
+[connection]
+host = "127.0.0.1"
+port = 18125
+username = "playground"
+password = "sqltide_playground"
+
+[targets.local]
+database = "sqltide_streaming"
+
+[audit_scheduler]
+enabled = true
+
+[sensors]
+enabled = true
+tick_retention_days = 7

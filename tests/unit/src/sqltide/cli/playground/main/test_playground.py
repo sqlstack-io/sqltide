@@ -15,6 +15,18 @@ from tests.unit.src.sqltide.cli.playground.main._test_types import PlaygroundTes
             directory_name="orders example",
             arguments=("orders example",),
         ),
+        PlaygroundTestCase(
+            description="streaming template",
+            directory_name="sqltide-streaming-playground",
+            arguments=("--template", "streaming"),
+            expected_files=(
+                "compose.yaml",
+                "consumer.sql",
+                "candidate.sql",
+                "producer/fake_orders_producer.py",
+                "revisions/order_event_facts.sql",
+            ),
+        ),
     ],
     ids=lambda case: case.description,
 )
@@ -33,10 +45,10 @@ def test_given_no_project_when_creating_playground_then_it_compiles_offline(
     output: str = capsys.readouterr().out
     project: Path = tmp_path / test_case.directory_name
     assert "require a running ClickHouse server" in output
-    assert (project / "compose.yaml").is_file()
-    assert (project / "consumer.sql").is_file()
-    assert (project / "revisions" / "completed_orders.sql").is_file()
+    assert all((project / path).is_file() for path in test_case.expected_files)
     assert (project / ".gitignore").read_text(encoding="utf-8") == "target/\n"
+    # A source checkout's bytecode and compile output never reach the new project.
+    assert not any(path.name in {"__pycache__", "target"} for path in project.rglob("*"))
 
     monkeypatch.delenv("SQLTIDE_CLICKHOUSE_PORT")
     assert run_cli(("sqt", "compile", "--project-dir", str(project))) == 0

@@ -5,7 +5,7 @@ from pathlib import Path
 REPOSITORY_ROOT: Path = Path(__file__).resolve().parents[2]
 GOLDEN_DIRECTORY: Path = REPOSITORY_ROOT / "tests" / "goldens" / "compiler"
 CORPUS_PROJECT_DIRECTORIES: tuple[Path, ...] = (
-    REPOSITORY_ROOT / "examples" / "orders_demo",
+    REPOSITORY_ROOT / "src" / "sqltide" / "playground_templates" / "streaming",
     REPOSITORY_ROOT / "tests" / "fixtures" / "basic_project",
     REPOSITORY_ROOT / "tests" / "fixtures" / "e2e_kafka_landed_at_project",
     REPOSITORY_ROOT / "tests" / "fixtures" / "e2e_kafka_offset_project",

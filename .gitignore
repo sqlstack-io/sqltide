@@ -49,9 +49,8 @@ data/
 
 # Demo-local secrets
 sqltide_local.toml
-examples/flights_demo/.env
-examples/orders_demo/pipelines/target
-examples/orders_demo/target
+# Compile output from running sqt inside a packaged playground template
+src/sqltide/playground_templates/*/target/
 # Fensu
 .fensu/cache/
 

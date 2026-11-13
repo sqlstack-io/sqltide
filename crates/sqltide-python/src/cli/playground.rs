@@ -1,4 +1,4 @@
-//! `sqt playground`: copy the packaged, local-only virtual workflow example.
+//! `sqt playground`: copy a packaged, local-only virtual workflow example.
 
 use pyo3::exceptions::{PyFileExistsError, PyOSError};
 use pyo3::prelude::*;
@@ -21,16 +21,21 @@ fn shell_quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\"'\"'"))
 }
 
-/// Copy the templates to `working_directory / directory`, never over an existing path.
-fn copy_templates(py: Python<'_>, destination: &Bound<'_, PyAny>) -> PyResult<()> {
+/// Copy one template to `destination`, never over an existing path.
+fn copy_template(py: Python<'_>, name: &str, destination: &Bound<'_, PyAny>) -> PyResult<()> {
     let template: Bound<'_, PyAny> = attr(py, "importlib.resources", "files")?
         .call1(("sqltide",))?
-        .call_method1("joinpath", (TEMPLATES,))?;
+        .call_method1("joinpath", (TEMPLATES, name))?;
     let context: Bound<'_, PyAny> =
         attr(py, "importlib.resources", "as_file")?.call1((template,))?;
     let path: Bound<'_, PyAny> = context.call_method0("__enter__")?;
+    // Leave out bytecode and compile output a source checkout may hold beside the template.
+    let ignore: Bound<'_, PyAny> =
+        attr(py, "shutil", "ignore_patterns")?.call1(("__pycache__", "target"))?;
+    let options: Bound<'_, pyo3::types::PyDict> = pyo3::types::PyDict::new(py);
+    options.set_item("ignore", ignore)?;
     let copied: PyResult<Bound<'_, PyAny>> =
-        attr(py, "shutil", "copytree")?.call1((path, destination));
+        attr(py, "shutil", "copytree")?.call((path, destination), Some(&options));
     match copied {
         Ok(_) => {
             context.call_method1("__exit__", (py.None(), py.None(), py.None()))?;
@@ -49,15 +54,37 @@ fn copy_templates(py: Python<'_>, destination: &Bound<'_, PyAny>) -> PyResult<()
     }
 }
 
+/// The `--template` choice's default directory and the services its README starts.
+fn template_details(template: &str) -> (&'static str, &'static str) {
+    if template == "streaming" {
+        (
+            "sqltide-streaming-playground",
+            "Docker Compose setup for Redpanda, ClickHouse and an order producer",
+        )
+    } else {
+        (
+            "sqltide-playground",
+            "Docker Compose setup for ClickHouse, seeded orders, and expected query results",
+        )
+    }
+}
+
 /// Create the playground project and print what to do next; exit status 0.
 pub(crate) fn run_playground(
     py: Python<'_>,
     directory: &Bound<'_, PyAny>,
+    template: &str,
     working_directory: &Bound<'_, PyAny>,
 ) -> PyResult<i64> {
+    let (default_directory, services): (&str, &str) = template_details(template);
+    let directory: Bound<'_, PyAny> = if directory.is_none() {
+        attr(py, "pathlib", "Path")?.call1((default_directory,))?
+    } else {
+        directory.clone()
+    };
     let destination: Bound<'_, PyAny> =
-        working_directory.call_method1("__truediv__", (directory,))?;
-    if let Err(error) = copy_templates(py, &destination) {
+        working_directory.call_method1("__truediv__", (&directory,))?;
+    if let Err(error) = copy_template(py, template, &destination) {
         let replacement: PyErr = if error.is_instance_of::<PyFileExistsError>(py) {
             user_error(
                 py,
@@ -90,8 +117,8 @@ pub(crate) fn run_playground(
              cd {}\n  \
              sqt compile\n\
              \n\
-             Then follow README.md for the real ClickHouse workflow.\n\
-             It includes Docker Compose setup, seeded orders, and expected query results.\n\
+             Then follow README.md to run it locally with Docker.\n\
+             It includes {services}.\n\
              Plan, build, inspection, and promotion require a running ClickHouse server.\n\
              Nothing has been started, installed, or executed in ClickHouse.",
             shell_quote(&directory.str()?.to_string())

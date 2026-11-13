@@ -1,0 +1,1 @@
+"""Streaming playground template tests."""

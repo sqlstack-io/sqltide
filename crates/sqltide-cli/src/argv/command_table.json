@@ -703,7 +703,7 @@
      "name": "playground",
      "parser": {
       "prog": "sqt playground",
-      "description": "Create a new example project without connecting to a warehouse. Compilation is offline; running the virtual workflow requires ClickHouse. The project includes Docker Compose setup and a step-by-step README.",
+      "description": "Create a new example project without connecting to a warehouse. Compilation is offline; running the plan, candidate and promote workflow needs the local Docker Compose services the project includes. Follow its README step by step.",
       "groups": [
        {
         "title": "positional arguments"
@@ -732,12 +732,24 @@
         "options": [],
         "dest": "directory",
         "nargs": "?",
-        "default": {
-         "path": "sqltide-playground"
-        },
+        "default": null,
         "type": "Path",
-        "help": "New directory to create (default: sqltide-playground); must not already exist",
+        "help": "New directory to create (default: sqltide-playground, or sqltide-streaming-playground for the streaming template); must not already exist",
         "group": 0
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--template"
+        ],
+        "dest": "template",
+        "default": "basic",
+        "choices": [
+         "basic",
+         "streaming"
+        ],
+        "help": "basic: ClickHouse and seeded orders (default); streaming: Redpanda, ClickHouse and a live order producer",
+        "group": 1
        }
       ]
      }
