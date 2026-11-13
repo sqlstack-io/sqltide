@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.1](https://github.com/sqlstack-io/sqltide/compare/v0.68.0...v0.68.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **promotion:** refuse a deployment built on an upstream version that is no longer published ([#399](https://github.com/sqlstack-io/sqltide/issues/399)) ([2db9fba](https://github.com/sqlstack-io/sqltide/commit/2db9fba50a662181a370878aebbbcf897ed9d72a))
+
 ## [0.68.0](https://github.com/sqlstack-io/sqltide/compare/v0.67.3...v0.68.0) (2026-11-13)
 
 
