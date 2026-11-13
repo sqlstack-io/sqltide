@@ -5,7 +5,7 @@ import pytest
 from sqltide._native import build_dag_json
 from sqltide.compiler.pipeline.models import CompileAnalysis
 from tests.unit.src.sqltide.compiler.dag._test_types import DagArtifactTestCase
-from tests.unit.src.sqltide.compiler.dag.helpers import analyze_orders_demo
+from tests.unit.src.sqltide.compiler.dag.helpers import analyze_streaming_playground
 
 
 @pytest.mark.parametrize(
@@ -26,7 +26,7 @@ from tests.unit.src.sqltide.compiler.dag.helpers import analyze_orders_demo
 def test_given_compiled_project_graph_when_building_dag_then_emits_logical_typed_artifact(
     test_case: DagArtifactTestCase,
 ) -> None:
-    analysis: CompileAnalysis = analyze_orders_demo()
+    analysis: CompileAnalysis = analyze_streaming_playground()
     rendered: str = build_dag_json(
         graph=analysis.graph,
         macro_registry=analysis.compile_inputs.macro_registry,

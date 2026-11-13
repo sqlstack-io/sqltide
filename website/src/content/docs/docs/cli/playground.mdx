@@ -1,0 +1,75 @@
+---
+title: "sqt playground"
+description: "Create a packaged example project and run plan, candidate build and promotion locally with Docker."
+---
+
+Create a ready-made example project in a new directory:
+
+```bash
+sqt playground
+sqt playground --template streaming
+sqt playground my-orders
+```
+
+<Note>
+  `sqt playground` is available from SQLTide 0.62.0. The `--template` option and the `streaming`
+  template are available from SQLTide 0.67.0; earlier versions create the `basic` project only.
+</Note>
+
+`sqt playground` only copies files. It does not connect to a warehouse, start Docker, install
+anything or run SQL. Compiling the new project is offline:
+
+```bash
+cd sqltide-playground
+sqt compile
+```
+
+Every later step runs **on your machine with Docker**. Each project includes a Docker Compose file
+for its local services and a `README.md` that walks through the virtual workflow one command at a
+time: plan a version, build it as a candidate, inspect it beside the published version, then
+promote it so the same consumer query reads the new version.
+
+## Templates
+
+| Template | Local services | What it shows |
+| --- | --- | --- |
+| `basic` (default) | ClickHouse | One model over a seeded orders table. Version B filters to completed orders; a candidate query and the unchanged consumer query return different rows until promotion. |
+| `streaming` | Redpanda, ClickHouse and an order producer | Order events flow from a three-partition Redpanda topic through ClickHouse's Kafka engine into four models with SQL tests, audits and a console sensor. Version B adds a net revenue column, rebuilt from retained source history while live events keep arriving. |
+
+Both templates use virtual mode, so planning and building never change what consumers read until
+you run `sqt deployment promote`. See [staged deployments](/docs/concepts/deployments/) for the full
+lifecycle.
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `DIRECTORY` | New directory to create. Defaults to `sqltide-playground`, or `sqltide-streaming-playground` with `--template streaming` |
+| `--template basic\|streaming` | Project to copy; defaults to `basic` |
+
+The destination must not exist. An existing directory, file or symbolic link is left unchanged and
+the command exits with an error, so `sqt playground` never overwrites your work. To start over,
+create a new directory.
+
+## Requirements
+
+- SQLTide installed with Python 3.12 or newer. The template's own Python files, such as the
+  streaming producer, run inside Docker or inside the `sqt` process; nothing else is installed.
+- Docker Engine or Docker Desktop with Compose v2 for every step after `sqt compile`. The first
+  start downloads ClickHouse and, for `streaming`, Redpanda and a Python base image.
+- Free loopback ports: `18124` for `basic`; `18125` and `19092` for `streaming`. Services bind to
+  `127.0.0.1` only.
+
+The credentials in each project are public local values for its own disposable containers. Do not
+point a playground project at an existing warehouse.
+
+## Stop and clean up
+
+From the project directory:
+
+```bash
+docker compose down             # stop, keeping the data volumes
+docker compose down --volumes   # delete this project's local data
+```
+
+Deleting volumes is irreversible and removes only the Compose project created from that directory.

@@ -145,7 +145,13 @@ fn run_command<'py>(
         }
     };
     if command == "playground" {
-        let code: i64 = run_playground(py, &args.getattr("directory")?, &working_directory()?)?;
+        let template: String = args.getattr("template")?.extract()?;
+        let code: i64 = run_playground(
+            py,
+            &args.getattr("directory")?,
+            &template,
+            &working_directory()?,
+        )?;
         return Ok(code.into_pyobject(py)?.into_any());
     }
     if command == "admin" {

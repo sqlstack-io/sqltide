@@ -26,7 +26,7 @@ from tests.unit.src.sqltide.cli.compile.helpers import (
     compile_project,
     compile_project_with_render_failure,
     copy_basic_project,
-    copy_orders_demo,
+    copy_streaming_playground,
     static_target_snapshot,
     target_file_paths,
     target_snapshot,
@@ -410,7 +410,7 @@ def test_given_tests_and_audits_when_compiling_then_writes_static_check_artifact
 ) -> None:
     project_dir: Path = tmp_path / "project"
     target_dir: Path = project_dir / "target"
-    copy_orders_demo(project_dir=project_dir)
+    copy_streaming_playground(project_dir=project_dir)
 
     exit_code: int = compile_project(project_dir=project_dir, target_dir=target_dir)
     manifest: dict[str, object] = json.loads((target_dir / "manifest.json").read_text())
@@ -716,7 +716,7 @@ def test_given_removed_authored_inputs_when_recompiling_then_removes_all_static_
 ) -> None:
     project_dir: Path = tmp_path / "project"
     target_dir: Path = project_dir / "target"
-    copy_orders_demo(project_dir=project_dir)
+    copy_streaming_playground(project_dir=project_dir)
     write_artifact_leaf_model(project_dir=project_dir)
     _ = compile_project(project_dir=project_dir, target_dir=target_dir)
     relative_input: str

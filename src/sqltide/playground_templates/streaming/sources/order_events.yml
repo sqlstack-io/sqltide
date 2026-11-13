@@ -2,6 +2,7 @@ sources:
   - name: commerce_event_stream
     kind: kafka
     topic: source.order_events.live
+    consumer_group: sqltide_streaming_playground
     ttl: "_replay_landed_at + INTERVAL 7 DAY"
     freshness:
       warn_after: 30s

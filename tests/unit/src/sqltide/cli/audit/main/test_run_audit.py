@@ -32,7 +32,7 @@ def test_given_audit_compile_failure_when_running_then_terminal_failure_is_recor
     test_case: FailedAuditInvocationTestCase,
     tmp_path: Path,
 ) -> None:
-    source_project: Path = Path("examples/orders_demo")
+    source_project: Path = Path("src/sqltide/playground_templates/streaming")
     loaded_project: LoadedProject | None = _native.load_project_input_for_path(path=source_project)
     profile: CompilerAdapterProfile = replace(
         build_compiler_adapter_profile(ClickHouseAdapter()),

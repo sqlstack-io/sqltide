@@ -175,8 +175,8 @@
       "FROM tbl__commerce_events"
     ],
     "compiled/resources/models/pl__order_events/commerce_events.mv.sql": [
-      "CREATE MATERIALIZED VIEW orders_demo.mv__commerce_events",
-      "TO orders_demo.tbl__commerce_events AS",
+      "CREATE MATERIALIZED VIEW sqltide_streaming.mv__commerce_events",
+      "TO sqltide_streaming.tbl__commerce_events AS",
       "SELECT",
       "  JSONExtractString(kafka_value, 'event_id')::String AS event_id,",
       "  JSONExtractString(kafka_value, 'event_type')::String AS event_type,",
@@ -195,10 +195,10 @@
       "  _replay_offset::Int64 AS _replay_offset,",
       "  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
       "  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
-      "FROM orders_demo.raw__commerce_event_stream"
+      "FROM sqltide_streaming.raw__commerce_event_stream"
     ],
     "compiled/resources/models/pl__order_events/commerce_events.table.sql": [
-      "CREATE TABLE orders_demo.tbl__commerce_events (",
+      "CREATE TABLE sqltide_streaming.tbl__commerce_events (",
       "    event_id String,",
       "    event_type String,",
       "    schema_version UInt16,",
@@ -222,7 +222,7 @@
       "TTL _replay_landed_at + INTERVAL 7 DAY"
     ],
     "compiled/resources/models/pl__order_events/commerce_kpis.view.sql": [
-      "CREATE VIEW orders_demo.view__commerce_kpis AS",
+      "CREATE VIEW sqltide_streaming.view__commerce_kpis AS",
       "WITH latest_event_facts AS (",
       "  SELECT",
       "    event_id,",
@@ -237,7 +237,7 @@
       "    argMax(refund_count, _replay_offset) AS refund_count,",
       "    argMax(units_ordered, _replay_offset) AS units_ordered,",
       "    argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents",
-      "  FROM orders_demo.tbl__order_event_facts",
+      "  FROM sqltide_streaming.tbl__order_event_facts",
       "  GROUP BY event_id",
       "),",
       "daily_metrics AS (",
@@ -275,8 +275,8 @@
       "FROM daily_metrics"
     ],
     "compiled/resources/models/pl__order_events/order_event_facts.mv.sql": [
-      "CREATE MATERIALIZED VIEW orders_demo.mv__order_event_facts",
-      "TO orders_demo.tbl__order_event_facts AS",
+      "CREATE MATERIALIZED VIEW sqltide_streaming.mv__order_event_facts",
+      "TO sqltide_streaming.tbl__order_event_facts AS",
       "SELECT",
       "  event_id::String AS event_id,",
       "  order_id::String AS order_id,",
@@ -296,10 +296,10 @@
       "  _replay_offset::Int64 AS _replay_offset,",
       "  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
       "  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
-      "FROM orders_demo.tbl__order_events"
+      "FROM sqltide_streaming.tbl__order_events"
     ],
     "compiled/resources/models/pl__order_events/order_event_facts.table.sql": [
-      "CREATE TABLE orders_demo.tbl__order_event_facts (",
+      "CREATE TABLE sqltide_streaming.tbl__order_event_facts (",
       "    event_id String,",
       "    order_id String,",
       "    category String,",
@@ -324,8 +324,8 @@
       "TTL _replay_landed_at + INTERVAL 7 DAY"
     ],
     "compiled/resources/models/pl__order_events/order_events.mv.sql": [
-      "CREATE MATERIALIZED VIEW orders_demo.mv__order_events",
-      "TO orders_demo.tbl__order_events AS",
+      "CREATE MATERIALIZED VIEW sqltide_streaming.mv__order_events",
+      "TO sqltide_streaming.tbl__order_events AS",
       "SELECT",
       "  event_id::String AS event_id,",
       "  event_type::String AS event_type,",
@@ -345,10 +345,10 @@
       "  _replay_offset::Int64 AS _replay_offset,",
       "  _replay_timestamp::DateTime64(3) AS _replay_timestamp,",
       "  _replay_landed_at::DateTime64(3) AS _replay_landed_at",
-      "FROM orders_demo.tbl__commerce_events"
+      "FROM sqltide_streaming.tbl__commerce_events"
     ],
     "compiled/resources/models/pl__order_events/order_events.table.sql": [
-      "CREATE TABLE orders_demo.tbl__order_events (",
+      "CREATE TABLE sqltide_streaming.tbl__order_events (",
       "    event_id String,",
       "    event_type String,",
       "    schema_version UInt16,",
@@ -373,14 +373,14 @@
       "TTL _replay_landed_at + INTERVAL 7 DAY"
     ],
     "compiled/resources/sources/commerce_event_stream/kafka__commerce_event_stream.sql": [
-      "CREATE TABLE orders_demo.kafka__commerce_event_stream (",
+      "CREATE TABLE sqltide_streaming.kafka__commerce_event_stream (",
       "    message String",
       ") ENGINE = Kafka",
-      "SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_orders_demo', kafka_format = 'JSONAsString'"
+      "SETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'sqltide_streaming_playground_sqltide_streaming', kafka_format = 'JSONAsString'"
     ],
     "compiled/resources/sources/commerce_event_stream/mv__commerce_event_stream.sql": [
-      "CREATE MATERIALIZED VIEW orders_demo.mv__commerce_event_stream",
-      "TO orders_demo.raw__commerce_event_stream AS",
+      "CREATE MATERIALIZED VIEW sqltide_streaming.mv__commerce_event_stream",
+      "TO sqltide_streaming.raw__commerce_event_stream AS",
       "SELECT",
       "  _key AS kafka_key,",
       "  message AS kafka_value,",
@@ -395,10 +395,10 @@
       "  _headers.value AS kafka_header_values,",
       "  now64(3) AS kafka_landed_at,",
       "  now64(3) AS _replay_landed_at",
-      "FROM orders_demo.kafka__commerce_event_stream"
+      "FROM sqltide_streaming.kafka__commerce_event_stream"
     ],
     "compiled/resources/sources/commerce_event_stream/raw__commerce_event_stream.sql": [
-      "CREATE TABLE orders_demo.raw__commerce_event_stream (",
+      "CREATE TABLE sqltide_streaming.raw__commerce_event_stream (",
       "    kafka_key String,",
       "    kafka_value String,",
       "    kafka_topic String,",
@@ -1317,7 +1317,7 @@
             "order_events": "tbl__order_events"
           },
           "replay_lineage_mode": "offsets",
-          "resolved_database": "orders_demo",
+          "resolved_database": "sqltide_streaming",
           "source_name": "commerce_event_stream"
         }
       },
@@ -1573,7 +1573,7 @@
         "identity": {
           "bindingKey": "a3f88f0c01bd6547e79ed63a5602d31eeb795be85a9a8ef8e874d4834ebc4e6b",
           "definitionFingerprint": "e2c141748297f6c1366bb30c015b598b37f4be108c13772b29d68c30fabc5002",
-          "executionFingerprint": "6495a83d1d49f7c01b4c02e3fb229235e16b8e14e8499c0f19cdc0d59bf5a118"
+          "executionFingerprint": "c9008420bde2c0083bc3a05befa57bf8edda68b60b37331223f0c703155c1db9"
         },
         "name": "additive_fact_invariants",
         "policy": {
@@ -1594,7 +1594,7 @@
         "identity": {
           "bindingKey": "1d415a45564c6d15a5550a2357cda73b6873da5a1956a82a3327d0d80efddb43",
           "definitionFingerprint": "0e8c1bec7b8bf84daa50d94dc463db30b40dabdd99f4cdb1846504c977eb6657",
-          "executionFingerprint": "2caf532c3006ea0347a41a0bf7d81f9f8c866ee478459b7602c0c69b7a743e9b"
+          "executionFingerprint": "3b6e4de5915d36a651a175a57d97552fae1b4336b9099f4f916c664a4be572b4"
         },
         "name": "event_identity_consistency",
         "policy": {
@@ -1615,7 +1615,7 @@
         "identity": {
           "bindingKey": "c6da1395954cece4ed094f9dc400c8fe810cef1772ca5e20e0ac2bed0aadb852",
           "definitionFingerprint": "903087d38ed05c9986372559709f0f21cdbe35dbdf7d90b9ad29c9d06496a45d",
-          "executionFingerprint": "3b7ce6811f23be1da51f1c924c67ebba3ff603c5c3af58e8f174cf1eae2eec8c"
+          "executionFingerprint": "4a9bb0eeed4533b5fab8d30f9ef563868dc2ba6b44aae7e8214eaef6be53cf12"
         },
         "name": "orders_no_future_events",
         "policy": {
@@ -1636,7 +1636,7 @@
         "identity": {
           "bindingKey": "df941fb04f30a549734a03f3cc86b9177cfcd999c94ed671d9d65179ff18b252",
           "definitionFingerprint": "ee3b4e75a8252672322b4ec9a89d95955630811977644d556bac6a23ae00549a",
-          "executionFingerprint": "795e01e89a168cdb0f4af8f7d485c39ddbf398e8f9104e29e95eb1508a81be87"
+          "executionFingerprint": "a5c19875dae3f7bcb36b20632029f7124629a5c9ff40f957e3a88bc2ff5bce3d"
         },
         "name": "event and order ids are non-empty",
         "policy": {
@@ -1657,7 +1657,7 @@
         "identity": {
           "bindingKey": "6dd2a1327b173f8e3154aa96fbf5c71ecb249fafa3fe2fddb43837918a505827",
           "definitionFingerprint": "22b8c503a9cd36c77f662c2702403d1d6f08c9fa8b1d27f7f474cc2a76d6f0e3",
-          "executionFingerprint": "67090b4f115064fb38e135ba89fd80abd7ce2e5b5a87445d0f99d6c9b5d0a0eb"
+          "executionFingerprint": "a443684dc9e7e157a4ee9b16495f9cfb98b9bf497789e0c2957adc62689ba732"
         },
         "name": "commerce_events.event_type.accepted_values.1",
         "policy": {
@@ -1678,7 +1678,7 @@
         "identity": {
           "bindingKey": "45c98092e8976808c58fa0b0c7aeb8a07e3d526322050ccf5494a54c5553bd7a",
           "definitionFingerprint": "dfc482d80d8e68989e9993502dbe7e1bad668bd73d0acd1d9d7e4ecf9379ef2c",
-          "executionFingerprint": "d91ee1529db495b5e83bf579919edf0be29ab1a89ba50066f59b0347b50e4d8a"
+          "executionFingerprint": "d17f4b56fb655683f2dbabc07e45bda3f8c5c48005c4d98343a1aa65789d0458"
         },
         "name": "order quantities and prices are positive",
         "policy": {
@@ -1699,7 +1699,7 @@
         "identity": {
           "bindingKey": "4542016787d40bf3d7f26162a368312904a215a928218d1f81c31b9df9a506b2",
           "definitionFingerprint": "97a132e9c0d095147a70992f5e1abc5c7a264c16f23ceff35519b7424c30a71f",
-          "executionFingerprint": "6687d67d5f4dc00a93dab4455953ecaf156a7b6c354a00ea70521ed124296526"
+          "executionFingerprint": "66b6b6f8d80c141969c97201e785a6abefed80087c7f84a8708648bf0a49d578"
         },
         "name": "order_events.currency.accepted_values.1",
         "policy": {
@@ -1720,7 +1720,7 @@
         "identity": {
           "bindingKey": "a4abdf3f543dd91d3cd6a6a7a8eb3fed16139d440eaaf7528745e25f1084d52c",
           "definitionFingerprint": "1373fb4c12a3fa8e8b5aa867884086bcac523e5f80001f6e3cf7b5978d9fad4b",
-          "executionFingerprint": "287c54109c599e75ff2f6182199948e50ed712c4a545bc0de5cd0a0361d171d7"
+          "executionFingerprint": "c1f7bb4f0f6b525932e8cfbcf49692b6e8878d304ba4588b10ae881b5f8ba183"
         },
         "name": "order_events.status.accepted_values.1",
         "policy": {
@@ -1865,8 +1865,8 @@
           "authored": "MODEL (\n  description \"Typed order lifecycle envelope parsed from the retained Kafka source.\",\n  order_by [\"event_id\", \"_replay_partition\", \"_replay_offset\"],\n  partition_by \"toYYYYMM(_replay_landed_at)\",\n  ttl \"_replay_landed_at + INTERVAL 7 DAY\",\n  columns (\n    event_id (description \"Producer-assigned idempotency key for one commerce event.\"),\n    event_type (\n      description \"Envelope discriminator for created orders and later lifecycle changes.\",\n      audits [\n        accepted_values (\n          values [\"order_created\", \"order_status_changed\"],\n        ),\n      ],\n    ),\n    schema_version (description \"Version of the producer event contract.\"),\n    order_id (description \"Order identifier shared by every event in one lifecycle.\"),\n    quantity (description \"Native integer item quantity carried by the order lifecycle.\"),\n    unit_price_cents (description \"Native integer unit price in the event currency.\"),\n    currency (description \"ISO 4217 currency code.\"),\n    region_code (description \"Stable code used to enrich events from region definitions.\"),\n    event_at (description \"UTC business timestamp assigned by the producer.\"),\n  ),\n  audits [\n    expression_is_true (\n      name \"event and order ids are non-empty\",\n      expression \"length(event_id) > 0 AND length(order_id) > 0\",\n    ),\n  ],\n);\n\nSELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __source(\"commerce_event_stream\")\n",
           "compiled": "SELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM raw__commerce_event_stream",
           "ddl": {
-            "materializedView": "CREATE MATERIALIZED VIEW orders_demo.mv__commerce_events\nTO orders_demo.tbl__commerce_events AS\nSELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM orders_demo.raw__commerce_event_stream",
-            "table": "CREATE TABLE orders_demo.tbl__commerce_events (\n    event_id String,\n    event_type String,\n    schema_version UInt16,\n    order_id String,\n    customer_id String,\n    product String,\n    category String,\n    quantity UInt32,\n    unit_price_cents UInt32,\n    currency String,\n    status String,\n    region_code String,\n    event_at DateTime64(3),\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (event_id, _replay_partition, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
+            "materializedView": "CREATE MATERIALIZED VIEW sqltide_streaming.mv__commerce_events\nTO sqltide_streaming.tbl__commerce_events AS\nSELECT\n  JSONExtractString(kafka_value, 'event_id')::String AS event_id,\n  JSONExtractString(kafka_value, 'event_type')::String AS event_type,\n  toUInt16(JSONExtractUInt(kafka_value, 'schema_version'))::UInt16 AS schema_version,\n  JSONExtractString(kafka_value, 'order_id')::String AS order_id,\n  JSONExtractString(kafka_value, 'customer_id')::String AS customer_id,\n  JSONExtractString(kafka_value, 'product')::String AS product,\n  JSONExtractString(kafka_value, 'category')::String AS category,\n  toUInt32(JSONExtractUInt(kafka_value, 'quantity'))::UInt32 AS quantity,\n  toUInt32(JSONExtractUInt(kafka_value, 'unit_price_cents'))::UInt32 AS unit_price_cents,\n  JSONExtractString(kafka_value, 'currency')::String AS currency,\n  JSONExtractString(kafka_value, 'status')::String AS status,\n  JSONExtractString(kafka_value, 'region_code')::String AS region_code,\n  parseDateTime64BestEffort(JSONExtractString(kafka_value, 'event_at'), 3)::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM sqltide_streaming.raw__commerce_event_stream",
+            "table": "CREATE TABLE sqltide_streaming.tbl__commerce_events (\n    event_id String,\n    event_type String,\n    schema_version UInt16,\n    order_id String,\n    customer_id String,\n    product String,\n    category String,\n    quantity UInt32,\n    unit_price_cents UInt32,\n    currency String,\n    status String,\n    region_code String,\n    event_at DateTime64(3),\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (event_id, _replay_partition, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
             "view": null
           }
         },
@@ -1983,7 +1983,7 @@
           "ddl": {
             "materializedView": null,
             "table": null,
-            "view": "CREATE VIEW orders_demo.view__commerce_kpis AS\nWITH latest_event_facts AS (\n  SELECT\n    event_id,\n    argMax(event_day, _replay_offset) AS event_day,\n    argMax(currency, _replay_offset) AS currency,\n    argMax(region_code, _replay_offset) AS region_code,\n    argMax(region_name, _replay_offset) AS region_name,\n    argMax(category, _replay_offset) AS category,\n    argMax(event_count, _replay_offset) AS event_count,\n    argMax(order_count, _replay_offset) AS order_count,\n    argMax(cancellation_count, _replay_offset) AS cancellation_count,\n    argMax(refund_count, _replay_offset) AS refund_count,\n    argMax(units_ordered, _replay_offset) AS units_ordered,\n    argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents\n  FROM orders_demo.tbl__order_event_facts\n  GROUP BY event_id\n),\ndaily_metrics AS (\n  SELECT\n    event_day,\n    currency,\n    region_code,\n    region_name,\n    category,\n    sum(event_count)::UInt64 AS event_count,\n    sum(order_count)::UInt64 AS order_count,\n    sum(cancellation_count)::UInt64 AS cancellation_count,\n    sum(refund_count)::UInt64 AS refund_count,\n    sum(units_ordered)::UInt64 AS units_ordered,\n    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents\n  FROM latest_event_facts\n  GROUP BY event_day, currency, region_code, region_name, category\n)\nSELECT\n  event_day::Date AS event_day,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  category::String AS category,\n  event_count::UInt64 AS event_count,\n  order_count::UInt64 AS order_count,\n  cancellation_count::UInt64 AS cancellation_count,\n  refund_count::UInt64 AS refund_count,\n  units_ordered::UInt64 AS units_ordered,\n  gross_revenue_cents::UInt64 AS gross_revenue_cents,\n  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,\n  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,\n  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,\n  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate\nFROM daily_metrics"
+            "view": "CREATE VIEW sqltide_streaming.view__commerce_kpis AS\nWITH latest_event_facts AS (\n  SELECT\n    event_id,\n    argMax(event_day, _replay_offset) AS event_day,\n    argMax(currency, _replay_offset) AS currency,\n    argMax(region_code, _replay_offset) AS region_code,\n    argMax(region_name, _replay_offset) AS region_name,\n    argMax(category, _replay_offset) AS category,\n    argMax(event_count, _replay_offset) AS event_count,\n    argMax(order_count, _replay_offset) AS order_count,\n    argMax(cancellation_count, _replay_offset) AS cancellation_count,\n    argMax(refund_count, _replay_offset) AS refund_count,\n    argMax(units_ordered, _replay_offset) AS units_ordered,\n    argMax(gross_revenue_cents, _replay_offset) AS gross_revenue_cents\n  FROM sqltide_streaming.tbl__order_event_facts\n  GROUP BY event_id\n),\ndaily_metrics AS (\n  SELECT\n    event_day,\n    currency,\n    region_code,\n    region_name,\n    category,\n    sum(event_count)::UInt64 AS event_count,\n    sum(order_count)::UInt64 AS order_count,\n    sum(cancellation_count)::UInt64 AS cancellation_count,\n    sum(refund_count)::UInt64 AS refund_count,\n    sum(units_ordered)::UInt64 AS units_ordered,\n    sum(gross_revenue_cents)::UInt64 AS gross_revenue_cents\n  FROM latest_event_facts\n  GROUP BY event_day, currency, region_code, region_name, category\n)\nSELECT\n  event_day::Date AS event_day,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  category::String AS category,\n  event_count::UInt64 AS event_count,\n  order_count::UInt64 AS order_count,\n  cancellation_count::UInt64 AS cancellation_count,\n  refund_count::UInt64 AS refund_count,\n  units_ordered::UInt64 AS units_ordered,\n  gross_revenue_cents::UInt64 AS gross_revenue_cents,\n  (gross_revenue_cents / 100.0)::Float64 AS gross_revenue,\n  (if(order_count = 0, 0.0, toFloat64(gross_revenue_cents) / toFloat64(order_count)) / 100.0)::Float64 AS average_order_value,\n  if(order_count = 0, 0.0, toFloat64(cancellation_count) / toFloat64(order_count))::Float64 AS cancellation_rate,\n  if(order_count = 0, 0.0, toFloat64(refund_count) / toFloat64(order_count))::Float64 AS refund_rate\nFROM daily_metrics"
           }
         },
         "storage": null
@@ -2102,8 +2102,8 @@
           "authored": "MODEL (\n  description \"Append-only additive facts; terminal consumers deduplicate by stable event id.\",\n  order_by [\"event_id\", \"_replay_partition\", \"_replay_offset\"],\n  partition_by \"toYYYYMM(_replay_landed_at)\",\n  ttl \"_replay_landed_at + INTERVAL 7 DAY\",\n  columns (\n    event_id (description \"Stable lifecycle event id used by terminal deduplication.\"),\n    event_count (description \"Additive count of lifecycle events; always one per row.\"),\n    order_count (description \"Additive count of order-created events.\"),\n    cancellation_count (description \"Additive count of cancelled events.\"),\n    refund_count (description \"Additive count of refunded events.\"),\n    units_ordered (description \"Additive units from order-created events only.\"),\n    gross_revenue_cents (description \"Additive created-order value in integer cents.\"),\n  ),\n);\n\nSELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', @line_revenue_cents(\"quantity\", \"unit_price_cents\"), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"order_events\")\n",
           "compiled": "SELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM tbl__order_events",
           "ddl": {
-            "materializedView": "CREATE MATERIALIZED VIEW orders_demo.mv__order_event_facts\nTO orders_demo.tbl__order_event_facts AS\nSELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM orders_demo.tbl__order_events",
-            "table": "CREATE TABLE orders_demo.tbl__order_event_facts (\n    event_id String,\n    order_id String,\n    category String,\n    currency String,\n    region_code String,\n    region_name String,\n    event_at DateTime64(3),\n    event_day Date,\n    event_count UInt64,\n    order_count UInt64,\n    cancellation_count UInt64,\n    refund_count UInt64,\n    units_ordered UInt64,\n    gross_revenue_cents UInt64,\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (event_id, _replay_partition, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
+            "materializedView": "CREATE MATERIALIZED VIEW sqltide_streaming.mv__order_event_facts\nTO sqltide_streaming.tbl__order_event_facts AS\nSELECT\n  event_id::String AS event_id,\n  order_id::String AS order_id,\n  category::String AS category,\n  currency::String AS currency,\n  region_code::String AS region_code,\n  region_name::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  toDate(event_at)::Date AS event_day,\n  1::UInt64 AS event_count,\n  toUInt64(status = 'created')::UInt64 AS order_count,\n  toUInt64(status = 'cancelled')::UInt64 AS cancellation_count,\n  toUInt64(status = 'refunded')::UInt64 AS refund_count,\n  if(status = 'created', toUInt64(quantity), 0)::UInt64 AS units_ordered,\n  if(status = 'created', toUInt64(quantity) * toUInt64(unit_price_cents), 0)::UInt64 AS gross_revenue_cents,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM sqltide_streaming.tbl__order_events",
+            "table": "CREATE TABLE sqltide_streaming.tbl__order_event_facts (\n    event_id String,\n    order_id String,\n    category String,\n    currency String,\n    region_code String,\n    region_name String,\n    event_at DateTime64(3),\n    event_day Date,\n    event_count UInt64,\n    order_count UInt64,\n    cancellation_count UInt64,\n    refund_count UInt64,\n    units_ordered UInt64,\n    gross_revenue_cents UInt64,\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (event_id, _replay_partition, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
             "view": null
           }
         },
@@ -2233,8 +2233,8 @@
           "authored": "MODEL (\n  description \"Validated order-created and order-status-change events.\",\n  order_by [\"order_id\", \"event_at\", \"event_id\", \"_replay_offset\"],\n  partition_by \"toYYYYMM(_replay_landed_at)\",\n  ttl \"_replay_landed_at + INTERVAL 7 DAY\",\n  columns (\n    event_id (description \"Unique lifecycle event identifier.\"),\n    order_id (description \"Order identifier shared by all events in one lifecycle.\"),\n    customer_id (description \"Synthetic customer identifier.\"),\n    quantity (description \"Positive item quantity fixed when the order is created.\"),\n    unit_price_cents (description \"Unit price in integer minor currency units.\"),\n    currency (description \"ISO 4217 currency code.\", audits [accepted_values (values [\"USD\"])]),\n    status (\n      description \"Order lifecycle state represented by this event.\",\n      audits [\n        accepted_values (\n          values [\"created\", \"paid\", \"shipped\", \"delivered\", \"cancelled\", \"refunded\"],\n        ),\n      ],\n    ),\n    event_at (description \"UTC business timestamp used for retention and daily metrics.\"),\n  ),\n  audits [\n    expression_is_true (\n      name \"order quantities and prices are positive\",\n      expression \"quantity > 0 AND unit_price_cents > 0\",\n    ),\n  ],\n);\n\nSELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    @region_name(\"region_code\")::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM __ref(\"commerce_events\")\n",
           "compiled": "SELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM tbl__commerce_events",
           "ddl": {
-            "materializedView": "CREATE MATERIALIZED VIEW orders_demo.mv__order_events\nTO orders_demo.tbl__order_events AS\nSELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM orders_demo.tbl__commerce_events",
-            "table": "CREATE TABLE orders_demo.tbl__order_events (\n    event_id String,\n    event_type String,\n    schema_version UInt16,\n    order_id String,\n    customer_id String,\n    product String,\n    category String,\n    quantity UInt32,\n    unit_price_cents UInt32,\n    currency String,\n    status String,\n    region_code String,\n    region_name String,\n    event_at DateTime64(3),\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (order_id, event_at, event_id, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
+            "materializedView": "CREATE MATERIALIZED VIEW sqltide_streaming.mv__order_events\nTO sqltide_streaming.tbl__order_events AS\nSELECT\n  event_id::String AS event_id,\n  event_type::String AS event_type,\n  schema_version::UInt16 AS schema_version,\n  order_id::String AS order_id,\n  customer_id::String AS customer_id,\n  product::String AS product,\n  category::String AS category,\n  quantity::UInt32 AS quantity,\n  unit_price_cents::UInt32 AS unit_price_cents,\n    currency::String AS currency,\n    status::String AS status,\n    region_code::String AS region_code,\n    multiIf(region_code = 'us-east', 'US East', region_code = 'us-west', 'US West', region_code = 'eu-west', 'Europe West', region_code = 'ap-south', 'Asia Pacific South', region_code)::String AS region_name,\n  event_at::DateTime64(3) AS event_at,\n  _replay_partition::Int64 AS _replay_partition,\n  _replay_offset::Int64 AS _replay_offset,\n  _replay_timestamp::DateTime64(3) AS _replay_timestamp,\n  _replay_landed_at::DateTime64(3) AS _replay_landed_at\nFROM sqltide_streaming.tbl__commerce_events",
+            "table": "CREATE TABLE sqltide_streaming.tbl__order_events (\n    event_id String,\n    event_type String,\n    schema_version UInt16,\n    order_id String,\n    customer_id String,\n    product String,\n    category String,\n    quantity UInt32,\n    unit_price_cents UInt32,\n    currency String,\n    status String,\n    region_code String,\n    region_name String,\n    event_at DateTime64(3),\n    _replay_partition Int64,\n    _replay_offset Int64,\n    _replay_timestamp DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (order_id, event_at, event_id, _replay_offset)\nPARTITION BY toYYYYMM(_replay_landed_at)\nTTL _replay_landed_at + INTERVAL 7 DAY",
             "view": null
           }
         },
@@ -2261,7 +2261,7 @@
         },
         "boundaryMode": "offsets",
         "directory": "pipelines/pl__order_events",
-        "mode": "direct",
+        "mode": "virtual",
         "models": [
           "commerce_events",
           "commerce_kpis",
@@ -2283,11 +2283,11 @@
         "enabled": true
       },
       "connection": {
-        "host": "localhost",
-        "port": 18123,
-        "username": "clickhouse"
+        "host": "127.0.0.1",
+        "port": 18125,
+        "username": "playground"
       },
-      "database": "orders_demo",
+      "database": "sqltide_streaming",
       "defaults": {
         "audits": {
           "cadenceSeconds": null,
@@ -2311,12 +2311,12 @@
         "allowedCrossPipelineReferences": [],
         "modelReferenceScope": "project"
       },
-      "name": "orders_demo",
+      "name": "sqltide_streaming",
       "naming": {
         "tablePrefix": "tbl__",
         "viewPrefix": "view__"
       },
-      "target": "demo",
+      "target": "local",
       "ui": {
         "timezone": "UTC"
       },
@@ -2332,7 +2332,7 @@
         },
         "kafka": {
           "brokerList": "redpanda.localhost:19092",
-          "consumerGroup": "streambuild_orders_demo_demo_commerce_event_stream_orders_demo",
+          "consumerGroup": "sqltide_streaming_playground_sqltide_streaming",
           "format": "JSONAsString",
           "settings": null,
           "topic": "source.order_events.live"
@@ -2340,17 +2340,17 @@
         "kind": "kafka",
         "managedRelations": [
           {
-            "ddl": "CREATE TABLE orders_demo.kafka__commerce_event_stream (\n    message String\n) ENGINE = Kafka\nSETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'streambuild_orders_demo_demo_commerce_event_stream_orders_demo', kafka_format = 'JSONAsString'",
+            "ddl": "CREATE TABLE sqltide_streaming.kafka__commerce_event_stream (\n    message String\n) ENGINE = Kafka\nSETTINGS kafka_broker_list = 'redpanda.localhost:19092', kafka_topic_list = 'source.order_events.live', kafka_group_name = 'sqltide_streaming_playground_sqltide_streaming', kafka_format = 'JSONAsString'",
             "kind": "kafka_engine",
             "name": "kafka__commerce_event_stream"
           },
           {
-            "ddl": "CREATE TABLE orders_demo.raw__commerce_event_stream (\n    kafka_key String,\n    kafka_value String,\n    kafka_topic String,\n    kafka_partition Int32,\n    kafka_offset Int64,\n    kafka_timestamp Nullable(DateTime64(3)),\n    _replay_partition Int32,\n    _replay_offset Int64,\n    _replay_timestamp Nullable(DateTime64(3)),\n    kafka_header_keys Array(String),\n    kafka_header_values Array(String),\n    kafka_landed_at DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (_replay_partition, _replay_offset)\nTTL _replay_landed_at + INTERVAL 7 DAY",
+            "ddl": "CREATE TABLE sqltide_streaming.raw__commerce_event_stream (\n    kafka_key String,\n    kafka_value String,\n    kafka_topic String,\n    kafka_partition Int32,\n    kafka_offset Int64,\n    kafka_timestamp Nullable(DateTime64(3)),\n    _replay_partition Int32,\n    _replay_offset Int64,\n    _replay_timestamp Nullable(DateTime64(3)),\n    kafka_header_keys Array(String),\n    kafka_header_values Array(String),\n    kafka_landed_at DateTime64(3),\n    _replay_landed_at DateTime64(3)\n) ENGINE = MergeTree()\nORDER BY (_replay_partition, _replay_offset)\nTTL _replay_landed_at + INTERVAL 7 DAY",
             "kind": "landing_table",
             "name": "raw__commerce_event_stream"
           },
           {
-            "ddl": "CREATE MATERIALIZED VIEW orders_demo.mv__commerce_event_stream\nTO orders_demo.raw__commerce_event_stream AS\nSELECT\n  _key AS kafka_key,\n  message AS kafka_value,\n  _topic AS kafka_topic,\n  _partition AS kafka_partition,\n  _offset AS kafka_offset,\n  _timestamp_ms AS kafka_timestamp,\n  _partition AS _replay_partition,\n  _offset AS _replay_offset,\n  _timestamp_ms AS _replay_timestamp,\n  _headers.name AS kafka_header_keys,\n  _headers.value AS kafka_header_values,\n  now64(3) AS kafka_landed_at,\n  now64(3) AS _replay_landed_at\nFROM orders_demo.kafka__commerce_event_stream",
+            "ddl": "CREATE MATERIALIZED VIEW sqltide_streaming.mv__commerce_event_stream\nTO sqltide_streaming.raw__commerce_event_stream AS\nSELECT\n  _key AS kafka_key,\n  message AS kafka_value,\n  _topic AS kafka_topic,\n  _partition AS kafka_partition,\n  _offset AS kafka_offset,\n  _timestamp_ms AS kafka_timestamp,\n  _partition AS _replay_partition,\n  _offset AS _replay_offset,\n  _timestamp_ms AS _replay_timestamp,\n  _headers.name AS kafka_header_keys,\n  _headers.value AS kafka_header_values,\n  now64(3) AS kafka_landed_at,\n  now64(3) AS _replay_landed_at\nFROM sqltide_streaming.kafka__commerce_event_stream",
             "kind": "landing_mv",
             "name": "mv__commerce_event_stream"
           }
@@ -2424,7 +2424,7 @@
     "versionKey": "golden"
   },
   "exit_code": 0,
-  "project": "orders_demo",
+  "project": "streaming",
   "stderr": [],
   "stdout": [
     "Wrote compile artifacts to <project>/target",

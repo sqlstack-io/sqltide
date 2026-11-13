@@ -6,4 +6,9 @@ class PlaygroundTestCase:
     description: str
     directory_name: str = "sqltide-playground"
     arguments: tuple[str, ...] = ()
+    expected_files: tuple[str, ...] = (
+        "compose.yaml",
+        "consumer.sql",
+        "revisions/completed_orders.sql",
+    )
     expected_exit_code: int = 0

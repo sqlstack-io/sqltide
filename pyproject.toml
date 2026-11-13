@@ -56,7 +56,7 @@ features = ["extension-module"]
 include = [
   { path = "src/sqltide/dev_server/static/**/*", format = ["sdist", "wheel"] },
   { path = "src/sqltide/playground_templates/**/*", format = ["sdist", "wheel"] },
-  { path = "src/sqltide/playground_templates/.gitignore", format = ["sdist", "wheel"] },
+  { path = "src/sqltide/playground_templates/*/.gitignore", format = ["sdist", "wheel"] },
 ]
 
 [tool.commitizen]

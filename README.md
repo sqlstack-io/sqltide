@@ -13,9 +13,9 @@
   <strong>Change your SQL, see exactly what will rebuild, and replay it from retained stream history.</strong>
   <br>
   <a href="https://sqltide.io">Website</a> ·
+  <a href="https://sqltide.io/docs/cli/playground/">Playground</a> ·
   <a href="https://sqltide.io/docs/quickstart/">Get started</a> ·
-  <a href="https://sqltide.io/docs/">Docs</a> ·
-  <a href="examples/orders_demo/README.md">Demo</a>
+  <a href="https://sqltide.io/docs/">Docs</a>
 </p>
 
 <p align="center">
@@ -31,9 +31,16 @@ rebuilt from retained Kafka history.
 
 ```bash
 uv tool install sqltide        # or: pip install sqltide
+sqt playground                 # copy a ready-made orders project
 ```
 
-![SQLTide lineage view showing the orders demo pipeline](https://raw.githubusercontent.com/sqlstack-io/sqltide/main/.github/sqltide-ui.png)
+`sqt playground` creates a small orders project you run on your own machine with Docker: plan a
+change, build it as a candidate beside the live version, then promote it without changing the
+consumer's query. Add `--template streaming` for the same workflow over live order events from
+Redpanda. Each project's `README.md` walks through every command; see the
+[playground reference](https://sqltide.io/docs/cli/playground/).
+
+![SQLTide lineage view showing an orders pipeline](https://raw.githubusercontent.com/sqlstack-io/sqltide/main/.github/sqltide-ui.png)
 
 ## Key features
 
@@ -88,8 +95,8 @@ sqt audit
 sqt dev         # local UI at 127.0.0.1:8000
 ```
 
-The [orders demo](examples/orders_demo/README.md) runs the whole workflow locally with Redpanda and
-ClickHouse. See the [quickstart](https://sqltide.io/docs/quickstart/) to start your own project.
+`sqt playground` runs this workflow on a ready-made project locally with Docker. See the
+[quickstart](https://sqltide.io/docs/quickstart/) to start your own project.
 
 ## Documentation
 

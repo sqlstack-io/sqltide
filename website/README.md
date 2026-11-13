@@ -42,7 +42,8 @@ available in Astro's development server.
   CLI help, tests and executable examples. Old product UI screenshots were not carried over as
   evidence of the current UI.
 - `src/navigation.mjs`: task-oriented learning/operations/UI/CLI/examples groups and local
-  old-path aliases. `src/mintlify-content.mjs` resolves imported components and links without
+  old-path aliases. The former Kafka orders demo page redirects to `/docs/cli/playground/`, whose
+  `streaming` template replaced it. `src/mintlify-content.mjs` resolves imported components and links without
   rewriting code samples. New pages should use `/docs/` links.
 - `public/assets/logo-light.png`, `logo-dark.png` and matching `src/assets/` files are unchanged
   approved `derivatives/SQLTide-light.png` and `SQLTide-dark.png` artwork. The original approved

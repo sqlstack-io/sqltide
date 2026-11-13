@@ -11,6 +11,10 @@ test('all documentation routes render, legacy routes retain query and fragment',
   await page.goto('/concepts/models?from=legacy#terminal-views');
   await expect(page).toHaveURL(/\/docs\/concepts\/models\/\?from=legacy#terminal-views$/);
   await expect(page.getByRole('heading', { name: 'Terminal views', exact: true })).toBeVisible();
+  for (const removed of ['/examples/orders-demo', '/docs/examples/orders-demo/']) {
+    await page.goto(removed);
+    await expect(page).toHaveURL(/\/docs\/cli\/playground\/$/);
+  }
 });
 
 test('keyboard navigation, copying, search and cross-page theme persistence', async ({ page, context }) => {
