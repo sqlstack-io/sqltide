@@ -133,6 +133,11 @@ Show, diff, audit, and promote take a deployment ID, or `--latest` for the most 
 deployment. `sqt deployment promote --latest` refuses when that deployment is already published or
 when more than one deployment is staged, and prints the ID it promotes.
 
+From 0.68.1, promotion also refuses a deployment built on an upstream model version that is no
+longer published. This happens when a deployment that changed only a downstream model is promoted
+after another deployment published a new version of its upstream model. The error names the model;
+rebuild it with `sqt build --select <model>` and promote that build.
+
 ## Staged views that stopped receiving rows (fixed in 0.68.0)
 
 In virtual mode up to and including 0.67.3, a build that staged a model without staging the model
