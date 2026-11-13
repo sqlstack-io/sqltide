@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.67.2](https://github.com/sqlstack-io/sqltide/compare/v0.67.1...v0.67.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **planner:** plan unchanged table settings as no change ([#393](https://github.com/sqlstack-io/sqltide/issues/393)) ([9517e27](https://github.com/sqlstack-io/sqltide/commit/9517e2721db933d477661ac9735184a462feef75))
+
 ## [0.67.1](https://github.com/sqlstack-io/sqltide/compare/v0.67.0...v0.67.1) (2026-11-13)
 
 
