@@ -405,6 +405,7 @@ def build_single_transform_desired_state(
     replay_anchor: ReplayAnchorMode | str = ReplayAnchorMode.AUTO,
     order_by: tuple[str, ...] = ("order_id",),
     supporting_transforms: tuple[tuple[str, str, tuple[str, ...]], ...] = (),
+    settings: dict[str, str] | None = None,
 ) -> DesiredState:
     resolved_replay_lineage_mode: ReplayLineageMode = ReplayLineageMode(replay_lineage_mode)
     resolved_replay_anchor: ReplayAnchorMode = ReplayAnchorMode(replay_anchor)
@@ -441,6 +442,7 @@ def build_single_transform_desired_state(
                 order_by=list(order_by),
                 query=query,
                 replay_anchor=resolved_replay_anchor,
+                settings=settings,
             ),
         ],
     )
@@ -936,6 +938,13 @@ def build_example_actual_state() -> ActualState:
             ),
         )
     )
+
+
+def orders_enriched_table(desired_state: DesiredState) -> DesiredTable:
+    object_by_name: dict[
+        str, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
+    ] = {desired_object.name: desired_object for desired_object in desired_state.objects}
+    return cast(DesiredTable, object_by_name["tbl__orders_enriched"])
 
 
 def with_raw_orders_ttl(desired_state: DesiredState, ttl: str | None) -> DesiredState:

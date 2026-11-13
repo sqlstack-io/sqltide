@@ -302,3 +302,17 @@ class PlannerViewQueryClassificationTestCase:
     desired_query: str
     actual_query: str
     expected_change_type: str
+
+
+@dataclass(frozen=True)
+class PlannerTableSettingSqlTestCase:
+    description: str
+    settings: dict[str, str]
+    expected_settings: dict[str, str]
+
+
+@dataclass(frozen=True)
+class PlannerInvalidTableSettingTestCase:
+    description: str
+    value: str
+    expected_error_fragment: str

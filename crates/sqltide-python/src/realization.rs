@@ -3,8 +3,10 @@
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PySet, PyTuple};
+use sqltide_sqlanalysis::{SqlDialect, table_setting_sql};
 
 const NATIVE: &str = "sqltide._native";
+const DIALECT: &str = "clickhouse";
 const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const COMPILE_CONSTANTS: &str = "sqltide.compiler.compile.constants";
@@ -150,6 +152,30 @@ impl<'py> Realizer<'py> {
         }
         let sorted: Bound<'py, PyAny> = self.sorted.call1((settings.call_method0("items")?,))?;
         self.tuple(self.items(&sorted)?)
+    }
+
+    /// A table model's settings sorted by name, each value as the canonical SQL to render, so a
+    /// bare word such as `hot` is quoted and text that is not one SQL value fails the compile.
+    fn table_settings(
+        &self,
+        settings: &Bound<'py, PyAny>,
+        logical_name: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let dialect: SqlDialect = SqlDialect::new(DIALECT);
+        let mut rendered: Vec<Bound<'py, PyAny>> = Vec::new();
+        for setting in self.items(&self.sorted_settings(settings)?)? {
+            let (name, value): (String, String) = setting.extract()?;
+            let sql: String = table_setting_sql(&value, &dialect).map_err(|error| {
+                self.fail(format!(
+                    "Model '{}' setting '{name}': {error}",
+                    logical_name
+                        .str()
+                        .map_or_else(|_| String::new(), |text| text.to_string())
+                ))
+            })?;
+            rendered.push(PyTuple::new(self.py, [name, sql])?.into_any());
+        }
+        self.tuple(rendered)
     }
 
     /// `None if not settings else dict(settings)`.
@@ -373,7 +399,8 @@ impl<'py> Realizer<'py> {
             )));
         }
         let transform: Bound<'py, PyAny> = model.getattr("transform")?;
-        let settings: Bound<'py, PyAny> = self.sorted_settings(&transform.getattr("settings")?)?;
+        let settings: Bound<'py, PyAny> =
+            self.table_settings(&transform.getattr("settings")?, &logical_name)?;
         let source_name: Bound<'py, PyAny> = transform.getattr("source")?;
         let source_relation_name: Bound<'py, PyAny> = relation_name_by_logical_name
             .as_any()

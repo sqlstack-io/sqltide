@@ -2,8 +2,10 @@ import pytest
 
 from sqltide._native import plan_deployment
 from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
+from sqltide.compiler.compile.exceptions import PipelineCompileError
 from sqltide.compiler.compile.models import (
     DesiredState,
+    DesiredTable,
     ObjectKey,
 )
 from sqltide.compiler.planner.constants import REBUILD_EXECUTION_MODE_FULL
@@ -12,9 +14,11 @@ from sqltide.compiler.planner.types import DeploymentAction
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerDeploymentPlanTestCase,
     PlannerFullRefreshPlanTestCase,
+    PlannerInvalidTableSettingTestCase,
     PlannerMutableWarningTestCase,
     PlannerSettledPlanTestCase,
     PlannerShadowIdentityTestCase,
+    PlannerTableSettingSqlTestCase,
     PlannerViewDeploymentTestCase,
 )
 from tests.unit.src.sqltide.compiler.planner.helpers import (
@@ -22,11 +26,15 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
     build_example_actual_state,
     build_example_desired_state,
     build_mutable_ref_desired_state,
+    build_single_transform_desired_state,
     build_view_only_desired_state,
     key_parts,
     optional_key_parts,
+    orders_enriched_table,
     with_raw_orders_ttl,
 )
+
+_SETTINGS_QUERY: str = 'SELECT CAST(kafka_key AS String) AS order_id FROM __ref("orders")'
 
 
 @pytest.mark.parametrize(
@@ -286,3 +294,81 @@ def test_given_matching_actual_state_when_planning_deployment_then_it_remains_a_
         frozenset(change.change_type for change in deployment_plan.object_changes)
         == test_case.expected_change_types
     )
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PlannerTableSettingSqlTestCase(
+            description="quotes a bare word and keeps keywords, numbers and booleans as sql values",
+            settings={
+                "storage_policy": "hot",
+                "merge_with_ttl_timeout": "3600",
+                "allow_nullable_key": "True",
+                "min_bytes_for_wide_part": "'10485760'",
+                "merge_selector_algorithm": "default",
+                "max_suspicious_broken_parts": "infinity",
+                "ttl_only_drop_parts": '"default"',
+            },
+            expected_settings={
+                "allow_nullable_key": "TRUE",
+                "max_suspicious_broken_parts": "infinity",
+                "merge_selector_algorithm": "DEFAULT",
+                "merge_with_ttl_timeout": "3600",
+                "min_bytes_for_wide_part": "'10485760'",
+                "storage_policy": "'hot'",
+                "ttl_only_drop_parts": "'default'",
+            },
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_model_table_settings_when_realizing_then_values_render_as_one_sql_value(
+    test_case: PlannerTableSettingSqlTestCase,
+) -> None:
+    desired_state: DesiredState = build_single_transform_desired_state(
+        query=_SETTINGS_QUERY, settings=test_case.settings
+    )
+    table: DesiredTable = orders_enriched_table(desired_state)
+
+    assert dict(table.spec.storage.settings or {}) == test_case.expected_settings
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        PlannerInvalidTableSettingTestCase(
+            description="two values",
+            value="1 2",
+            expected_error_fragment="is not exactly one SQL value",
+        ),
+        PlannerInvalidTableSettingTestCase(
+            description="a value list",
+            value="1, 2",
+            expected_error_fragment="is not exactly one SQL value",
+        ),
+        PlannerInvalidTableSettingTestCase(
+            description="an aliased value",
+            value="'x' AS y",
+            expected_error_fragment="is not exactly one SQL value",
+        ),
+        PlannerInvalidTableSettingTestCase(
+            description="two bare words",
+            value="hot cold",
+            expected_error_fragment="is not exactly one SQL value",
+        ),
+        PlannerInvalidTableSettingTestCase(
+            description="a trailing clause",
+            value="1) FROM t WHERE (1",
+            expected_error_fragment="is not exactly one SQL value",
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_malformed_table_setting_when_realizing_then_compile_fails(
+    test_case: PlannerInvalidTableSettingTestCase,
+) -> None:
+    with pytest.raises(PipelineCompileError, match=test_case.expected_error_fragment):
+        build_single_transform_desired_state(
+            query=_SETTINGS_QUERY, settings={"merge_with_ttl_timeout": test_case.value}
+        )

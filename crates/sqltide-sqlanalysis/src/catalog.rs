@@ -592,6 +592,55 @@ fn canonical_ttl_node(fields: &Object) -> Option<Value> {
     bare_delete.then(|| action.get("this").cloned()).flatten()
 }
 
+/// Unquoted words that ClickHouse reads as values rather than identifiers in a SETTINGS clause.
+const SETTING_KEYWORDS: [&str; 4] = ["default", "inf", "infinity", "nan"];
+
+/// One MergeTree table setting value as the canonical SQL to render: a bare word such as `hot`,
+/// which ClickHouse rejects as a value, becomes the string literal `'hot'`; `default` becomes
+/// `DEFAULT`.
+///
+/// # Errors
+///
+/// Refuses text that is not exactly one SQL value, such as `1 2`, `1, 2`, or `'x' AS y`.
+pub fn table_setting_sql(value: &str, dialect: &SqlDialect) -> AnalysisResult<String> {
+    let invalid = || AnalysisError::new(format!("{value:?} is not exactly one SQL value"));
+    // The newlines end any line comment, and the parentheses make leftover tokens a parse error.
+    let tree: Value = dialect
+        .parse_one(&format!("SELECT (\n{value}\n)"))
+        .map_err(|_| invalid())?;
+    let select: &Object = object(tree.get("select")).ok_or_else(invalid)?;
+    let clauses: bool = select.iter().any(|(key, clause)| {
+        key != "expressions"
+            && !matches!(clause, Value::Null | Value::Bool(false))
+            && clause.as_array().is_none_or(|items| !items.is_empty())
+    });
+    let expression: &Value = match select.get("expressions").and_then(Value::as_array) {
+        Some(expressions) if !clauses && expressions.len() == 1 => &expressions[0],
+        _ => return Err(invalid()),
+    };
+    let inner: &Value = object(expression.get("paren"))
+        .and_then(|paren| paren.get("this"))
+        .filter(|inner| {
+            object(inner.get("tuple")).is_none() && object(inner.get("alias")).is_none()
+        })
+        .ok_or_else(invalid)?;
+    if let Some(column) = object(inner.get("column"))
+        && column.get("table").is_none_or(Value::is_null)
+        && let Some(name) = identifier_name(column.get("name"))
+    {
+        let keyword: String = name.to_ascii_lowercase();
+        let quoted: bool = truthy(object(column.get("name")).and_then(|name| name.get("quoted")));
+        if quoted || !SETTING_KEYWORDS.contains(&keyword.as_str()) {
+            return render_string_literal(name, dialect);
+        }
+        // ClickHouse stores `DEFAULT` in upper case, so the planner then compares it as unchanged.
+        if keyword == "default" {
+            return Ok("DEFAULT".to_owned());
+        }
+    }
+    dialect.generate(inner, false)
+}
+
 /// One dialect-safe SQL string literal.
 ///
 /// # Errors
