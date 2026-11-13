@@ -155,6 +155,7 @@ class CompilePipelineReplayAnchorEligibilityTestCase:
     replay_lineage_mode: ReplayLineageMode | str
     engine: str = "MergeTree()"
     replay_anchor: ReplayAnchorMode | str = "auto"
+    pipeline_mode: PipelineMode = PipelineMode.DIRECT
     order_by: tuple[str, ...] = ("order_id",)
     supporting_transforms: tuple[tuple[str, str], ...] = ()
     expected_has_mutable_refs: bool = False

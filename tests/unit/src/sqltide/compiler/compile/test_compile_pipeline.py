@@ -48,6 +48,7 @@ from sqltide.compiler.discovery.models import (
 from sqltide.compiler.discovery.types import (
     BoundedReplayFallback,
     ModelReferenceScope,
+    PipelineMode,
     ReplayAnchorMode,
     ReplayBoundaryMode,
     ReplayLineageMode,
@@ -680,6 +681,33 @@ def test_given_loaded_pipeline_when_compiling_then_it_resolves_effective_unsuppo
             expected_preserves_required_lineage=True,
             expected_replay_anchor_eligible=False,
         ),
+        CompilePipelineReplayAnchorEligibilityTestCase(
+            description="virtual offsets transform without arrival column is not an anchor",
+            transform_query=(
+                "SELECT CAST(order_id AS UInt64) AS order_id, "
+                "CAST(_replay_partition AS UInt64) AS _replay_partition, "
+                "CAST(_replay_offset AS UInt64) AS _replay_offset "
+                'FROM __ref("orders")'
+            ),
+            replay_lineage_mode=ReplayLineageMode.OFFSETS,
+            pipeline_mode=PipelineMode.VIRTUAL,
+            expected_preserves_required_lineage=True,
+            expected_replay_anchor_eligible=False,
+        ),
+        CompilePipelineReplayAnchorEligibilityTestCase(
+            description="virtual offsets transform with arrival column stays an anchor",
+            transform_query=(
+                "SELECT CAST(order_id AS UInt64) AS order_id, "
+                "CAST(_replay_partition AS UInt64) AS _replay_partition, "
+                "CAST(_replay_offset AS UInt64) AS _replay_offset, "
+                "CAST(_replay_landed_at AS DateTime64(3)) AS _replay_landed_at "
+                'FROM __ref("orders")'
+            ),
+            replay_lineage_mode=ReplayLineageMode.OFFSETS,
+            pipeline_mode=PipelineMode.VIRTUAL,
+            expected_preserves_required_lineage=True,
+            expected_replay_anchor_eligible=True,
+        ),
     ],
     ids=lambda case: case.description,
 )
@@ -720,6 +748,7 @@ def test_given_transform_when_compiling_then_it_sets_replay_anchor_inference_fla
         name="tmp_pipeline",
         source=source,
         transforms=[*supporting_transforms, transform],
+        mode=test_case.pipeline_mode,
     )
     loaded_pipeline: LoadedPipeline = LoadedPipeline(
         pipeline=pipeline,

@@ -4,6 +4,8 @@
 const REF_RELATION: &str = "ref";
 const MUTABLE_REF_TYPE: &str = "mutable";
 const NEVER_REPLAY_ANCHOR: &str = "never";
+/// The column a virtual build bounds an offsets replay by: when each row arrived.
+const ARRIVAL_COLUMN: &str = "_replay_landed_at";
 
 /// `(name, relation type, ref type)` of one reference in a model query.
 pub type Reference<'a> = (&'a str, &'a str, Option<&'a str>);
@@ -27,11 +29,14 @@ pub fn required_lineage_columns(replay_lineage_mode: &str) -> &'static [&'static
     }
 }
 
-/// Check a transform's references and decide its lineage and replay-anchor eligibility.
+/// Check a transform's references and decide its lineage and replay-anchor eligibility. In a
+/// virtual pipeline with offsets lineage, an anchor must also output the arrival column, because
+/// the build bounds the replay by it; otherwise the replay starts further upstream.
 ///
 /// # Errors
 ///
 /// Returns the first invalid reference in query order, then a missing driving source.
+#[allow(clippy::too_many_arguments)]
 pub fn transform_contract(
     transform_name: &str,
     source: &str,
@@ -40,6 +45,7 @@ pub fn transform_contract(
     replay_lineage_mode: &str,
     replay_anchor: &str,
     has_aggregate_semantics: bool,
+    virtual_pipeline: bool,
 ) -> Result<TransformContract, String> {
     for (name, relation_type, ref_type) in references {
         if *name == source {
@@ -74,12 +80,16 @@ pub fn transform_contract(
     let preserves_required_lineage: bool = required_lineage_columns(replay_lineage_mode)
         .iter()
         .all(|column| output_column_names.contains(column));
+    let bounds_replay_by_arrival: bool = !virtual_pipeline
+        || replay_lineage_mode != "offsets"
+        || output_column_names.contains(&ARRIVAL_COLUMN);
     Ok(TransformContract {
         preserves_required_lineage,
         replay_anchor_eligible: replay_anchor != NEVER_REPLAY_ANCHOR
             && !has_mutable_refs
             && !has_aggregate_semantics
-            && preserves_required_lineage,
+            && preserves_required_lineage
+            && bounds_replay_by_arrival,
     })
 }
 

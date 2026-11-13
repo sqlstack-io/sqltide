@@ -622,6 +622,13 @@ class CancelledPausedSourceIntegrationTestCase:
 
 
 @dataclass(frozen=True)
+class VirtualArrivalFreeUpstreamIntegrationTestCase:
+    description: str
+    expected_after_added_model: tuple[str, ...]
+    expected_after_changed_model: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class VirtualDownstreamOnlyChangeIntegrationTestCase:
     description: str
     expected_after_downstream_promotion: tuple[str, ...]
