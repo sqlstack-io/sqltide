@@ -49,7 +49,7 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
             expected_transform_order_by=("order_id",),
             expected_transform_partition_by=None,
             expected_transform_ttl="created_at + INTERVAL 30 DAY",
-            expected_transform_settings=None,
+            expected_transform_settings={"index_granularity": "8192"},
         )
     ],
     ids=lambda case: case.description,

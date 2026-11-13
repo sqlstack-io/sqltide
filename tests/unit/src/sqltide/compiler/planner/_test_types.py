@@ -290,8 +290,10 @@ class DirectUndeclaredRelationTestCase:
 @dataclass(frozen=True)
 class PlannerSettledPlanTestCase:
     description: str
+    raw_ttl: str | None
     expected_rebuild_subtree_count: int
     expected_step_count: int
+    expected_change_types: frozenset[str]
 
 
 @dataclass(frozen=True)

@@ -938,6 +938,21 @@ def build_example_actual_state() -> ActualState:
     )
 
 
+def with_raw_orders_ttl(desired_state: DesiredState, ttl: str | None) -> DesiredState:
+    object_by_name: dict[
+        str, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
+    ] = {desired_object.name: desired_object for desired_object in desired_state.objects}
+    raw_table: DesiredTable = cast(DesiredTable, object_by_name["raw__orders"])
+    object_by_name[raw_table.name] = replace(
+        raw_table,
+        spec=replace(raw_table.spec, storage=replace(raw_table.spec.storage, ttl=ttl)),
+    )
+    return replace(
+        desired_state,
+        objects=tuple(object_by_name[object_.name] for object_ in desired_state.objects),
+    )
+
+
 def build_actual_state_matching_desired(desired_state: DesiredState) -> ActualState:
     actual_object_builders: dict[type[object], Callable[..., object]] = {
         DesiredKafkaTable: ActualKafkaTable,

@@ -24,7 +24,8 @@ const VIEW_ENGINE: &str = "View";
 const MATERIALIZED_VIEW_ENGINE: &str = "MaterializedView";
 const KAFKA_ENGINE: &str = "Kafka";
 const ZERO_UUID: &str = "00000000-0000-0000-0000-000000000000";
-const DEFAULT_INDEX_GRANULARITY: [&str; 2] = ["index_granularity", "8192"];
+/// The setting ClickHouse adds to every MergeTree table that does not set it.
+pub(crate) const DEFAULT_INDEX_GRANULARITY: [&str; 2] = ["index_granularity", "8192"];
 const CATALOG_LOAD_ATTEMPTS: u32 = 3;
 const CATALOG_RETRY_DELAY_SECONDS: f64 = 0.05;
 const EMPTY_KEY_EXPRESSIONS: [&str; 2] = ["", "tuple()"];

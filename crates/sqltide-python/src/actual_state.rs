@@ -13,6 +13,8 @@ use sqltide_planner::actual_assembly::{
 };
 use sqltide_planner::inspection::Relation;
 
+use crate::clickhouse_catalog::DEFAULT_INDEX_GRANULARITY;
+
 const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
 const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
 const PLANNER_EXCEPTIONS: &str = "sqltide.compiler.planner.exceptions";
@@ -93,7 +95,10 @@ impl<'py> DesiredClasses<'py> {
 }
 
 /// The comparable table spec of one catalog relation.
-fn catalog_table_spec<'py>(relation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+fn catalog_table_spec<'py>(
+    relation: &Bound<'py, PyAny>,
+    desired: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
     let py: Python<'py> = relation.py();
     let models: Bound<'py, PyModule> = py.import(COMPILE_MODELS)?;
     let column_class: Bound<'py, PyAny> = models.getattr("Column")?;
@@ -125,7 +130,7 @@ fn catalog_table_spec<'py>(relation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, 
             ("order_by", relation.getattr("order_by")?),
             ("partition_by", relation.getattr("partition_by")?),
             ("ttl", relation.getattr("ttl")?),
-            ("settings", py.None().into_bound(py)),
+            ("settings", catalog_settings(relation, desired)?),
         ],
     )?;
     keyword_call(
@@ -135,6 +140,31 @@ fn catalog_table_spec<'py>(relation: &Bound<'py, PyAny>) -> PyResult<Bound<'py, 
             ("storage", storage),
         ],
     )
+}
+
+/// A catalog relation's settings, without the default `index_granularity` ClickHouse adds unless
+/// the desired table sets it, or `None` when none remain.
+fn catalog_settings<'py>(
+    relation: &Bound<'py, PyAny>,
+    desired: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py: Python<'py> = relation.py();
+    let [default_name, default_value] = DEFAULT_INDEX_GRANULARITY;
+    let desired_settings: Bound<'py, PyAny> = desired.getattr("settings")?;
+    let keep_default: bool =
+        !desired_settings.is_none() && desired_settings.contains(default_name)?;
+    let settings: Bound<'py, PyDict> = PyDict::new(py);
+    for setting in relation.getattr("settings")?.try_iter()? {
+        let (name, value): (String, String) = setting?.extract()?;
+        if keep_default || name != default_name || value != default_value {
+            settings.set_item(name, value)?;
+        }
+    }
+    Ok(if settings.is_empty() {
+        py.None().into_bound(py)
+    } else {
+        settings.into_any()
+    })
 }
 
 /// The first catalog relation with this name, as `CatalogSnapshot.relation` finds it.
@@ -180,7 +210,7 @@ fn actual_object<'py>(
                     let relation: Bound<'py, PyAny> =
                         catalog_relation(relations, relation_names, physical)
                             .expect("assembly checked every active table has a catalog relation");
-                    let spec: Bound<'py, PyAny> = catalog_table_spec(&relation)?;
+                    let spec: Bound<'py, PyAny> = catalog_table_spec(&relation, desired)?;
                     table_specs.insert((*physical).to_owned(), spec.clone());
                     spec
                 }
@@ -431,7 +461,7 @@ fn build_direct_reconcile_actual_state<'py>(
                 let spec: Bound<'py, PyAny> = match table_specs.get(&name) {
                     Some(spec) => spec.clone(),
                     None => {
-                        let spec: Bound<'py, PyAny> = catalog_table_spec(&relation)?;
+                        let spec: Bound<'py, PyAny> = catalog_table_spec(&relation, &desired)?;
                         table_specs.insert(name, spec.clone());
                         spec
                     }
