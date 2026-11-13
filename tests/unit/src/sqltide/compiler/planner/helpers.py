@@ -406,6 +406,7 @@ def build_single_transform_desired_state(
     order_by: tuple[str, ...] = ("order_id",),
     supporting_transforms: tuple[tuple[str, str, tuple[str, ...]], ...] = (),
     settings: dict[str, str] | None = None,
+    source: str = "orders",
 ) -> DesiredState:
     resolved_replay_lineage_mode: ReplayLineageMode = ReplayLineageMode(replay_lineage_mode)
     resolved_replay_anchor: ReplayAnchorMode = ReplayAnchorMode(replay_anchor)
@@ -437,7 +438,7 @@ def build_single_transform_desired_state(
             *supporting_transform_steps,
             TransformStep(
                 name="orders_enriched",
-                source="orders",
+                source=source,
                 engine="MergeTree()",
                 order_by=list(order_by),
                 query=query,

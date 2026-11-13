@@ -5342,7 +5342,11 @@ def expand_population_plan(
     *, plan: PopulationPlan, desired_state: DesiredState
 ) -> PopulationPlan: ...
 def plan_population_objects(
-    *, plan: PopulationPlan, desired_state: DesiredState, default_database: str
+    *,
+    plan: PopulationPlan,
+    desired_state: DesiredState,
+    default_database: str,
+    target_catalog: CatalogSnapshot | None = None,
 ) -> tuple[PopulationRealization, ...]: ...
 def build_population_replay_templates(
     *, plan: PopulationPlan, desired_state: DesiredState, default_database: str

@@ -2,9 +2,10 @@
 //! connection options and the warehouse connections the command owns or borrows.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyCFunction, PyDict, PyTuple};
+use pyo3::types::{PyBool, PyCFunction, PyDict, PyTuple};
 
 use crate::cli::python::{getattr_none, getattr_or, raised, raised_from, user_error};
+use crate::dev_server::build_process::CONNECTION_OVERRIDES_ENV_VAR;
 use crate::dev_server::support::attr;
 
 const NATIVE: &str = "sqltide._native";
@@ -12,8 +13,9 @@ const DEV_CLI_VARIABLES_ENV_VAR: &str = "SQLTIDE_INTERNAL_CLI_VARS";
 const PROJECT_FILE: &str = "sqltide_project.toml";
 const LEGACY_PROJECT_FILE: &str = "streambuild_project.toml";
 const PIPELINES_DIRECTORY: &str = "pipelines";
-const COMMANDS_REQUIRING_PIPELINES_ROOT: [&str; 14] = [
+const COMMANDS_REQUIRING_PIPELINES_ROOT: [&str; 15] = [
     "dev",
+    "playground",
     "discover",
     "compile",
     "lint",
@@ -39,6 +41,9 @@ const CONNECTION_OPTIONS: [(&str, &str); 4] = [
     ("username", "SQLTIDE_CLICKHOUSE_USERNAME"),
     ("password", "SQLTIDE_CLICKHOUSE_PASSWORD"),
 ];
+
+/// The project connection setting that decides whether those variables apply.
+const CONNECTION_ENVIRONMENT_KEY: &str = "environment";
 
 /// The connection settings an invocation resolved from options, environment and project.
 pub(crate) struct ConnectionOptions<'py> {
@@ -241,6 +246,53 @@ fn connection_value<'py>(
     Ok(environment_value)
 }
 
+/// Whether `SQLTIDE_CLICKHOUSE_*` variables may override the project connection: the
+/// connection's `environment` setting, `true` when unset.
+fn uses_connection_environment(
+    py: Python<'_>,
+    raw_connection: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    if raw_connection.is_none() {
+        return Ok(true);
+    }
+    for pair in raw_connection.getattr("values")?.try_iter()? {
+        let (name, value): (String, Bound<'_, PyAny>) = pair?.extract()?;
+        if name != CONNECTION_ENVIRONMENT_KEY {
+            continue;
+        }
+        return match value.downcast::<PyBool>() {
+            Ok(flag) => Ok(flag.is_true()),
+            Err(_) => Err(user_error(
+                py,
+                "connection.environment must be true or false",
+                None,
+            )),
+        };
+    }
+    Ok(true)
+}
+
+/// The connection variables `sqt dev` set for its build, which it names in
+/// [`CONNECTION_OVERRIDES_ENV_VAR`].
+fn dev_server_overrides<'py>(
+    py: Python<'py>,
+    environment: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let overrides: Bound<'py, PyDict> = PyDict::new(py);
+    let names: Bound<'py, PyAny> =
+        environment_get(environment, CONNECTION_OVERRIDES_ENV_VAR, None)?;
+    if names.is_none() {
+        return Ok(overrides);
+    }
+    let names: String = names.extract()?;
+    for (_, variable) in CONNECTION_OPTIONS {
+        if names.split(',').any(|name| name == variable) {
+            overrides.set_item(variable, environment_get(environment, variable, None)?)?;
+        }
+    }
+    Ok(overrides)
+}
+
 /// Resolve the project, adapter and connection options of a parsed command.
 pub(crate) fn resolve_cli_invocation<'py>(
     py: Python<'py>,
@@ -311,9 +363,17 @@ pub(crate) fn resolve_cli_invocation<'py>(
     } else {
         default_database
     };
+    // `[connection] environment = false` keeps inherited connection variables from redirecting
+    // the project; command-line options still apply.
+    let connection_environment: Bound<'py, PyAny> =
+        if uses_connection_environment(py, &raw_connection)? {
+            environment.clone()
+        } else {
+            dev_server_overrides(py, &environment)?.into_any()
+        };
     let mut values: Vec<Bound<'py, PyAny>> = Vec::with_capacity(CONNECTION_OPTIONS.len());
     for option in CONNECTION_OPTIONS {
-        values.push(connection_value(py, args, &environment, option)?);
+        values.push(connection_value(py, args, &connection_environment, option)?);
     }
     let [host, port, username, password]: [Bound<'py, PyAny>; 4] = values
         .try_into()
@@ -424,6 +484,7 @@ pub(crate) fn resolve_invocation_connection_config<'py>(
         "update",
         (connection.raw_project_connection.getattr("values")?,),
     )?;
+    raw_values.call_method1("pop", (CONNECTION_ENVIRONMENT_KEY, py.None()))?;
     for (name, _) in CONNECTION_OPTIONS {
         let value: &Bound<'py, PyAny> = connection.value(name);
         if !value.is_none() {

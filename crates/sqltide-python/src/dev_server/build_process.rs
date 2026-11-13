@@ -27,6 +27,7 @@ const SCOPE_ENV_VARS: [&str; 3] = [
     "EXPECTED_BUILD_READ_SCOPE_ENV_VAR",
     "EXPECTED_BUILD_PIPELINE_SCOPE_ENV_VAR",
 ];
+pub(crate) const CONNECTION_OVERRIDES_ENV_VAR: &str = "SQLTIDE_INTERNAL_CONNECTION_OVERRIDES";
 const CONNECTION_OVERRIDES: [(&str, &str); 4] = [
     ("SQLTIDE_CLICKHOUSE_HOST", "connection_host"),
     ("SQLTIDE_CLICKHOUSE_PORT", "connection_port"),
@@ -341,11 +342,21 @@ pub(crate) fn build_child_environment<'py>(
             )?,
         )?;
     }
+    // Only this process decides which connection variables a child build may take.
+    if environment.contains(CONNECTION_OVERRIDES_ENV_VAR)? {
+        environment.del_item(CONNECTION_OVERRIDES_ENV_VAR)?;
+    }
+    let mut overridden: Vec<&str> = Vec::new();
     for (name, field) in CONNECTION_OVERRIDES {
         let value: Any<'py> = execution_context.getattr(field)?;
         if !value.is_none() {
             environment.set_item(name, value.str()?)?;
+            overridden.push(name);
         }
+    }
+    // A project that ignores inherited connection variables still takes the ones `sqt dev` sets.
+    if !overridden.is_empty() {
+        environment.set_item(CONNECTION_OVERRIDES_ENV_VAR, overridden.join(","))?;
     }
     Ok(environment)
 }

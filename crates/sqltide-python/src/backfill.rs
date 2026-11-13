@@ -840,6 +840,7 @@ fn assemble_statements<'py>(
             &confirmed.population_plan,
             &desired_state,
             &default_database,
+            Some(target_catalog),
         )?,
         &metadata_database,
     )?;

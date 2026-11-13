@@ -278,14 +278,63 @@ pub(crate) fn expand_population_plan<'py>(
     replace(plan, &[("roots", tuple(py, expanded)?)])
 }
 
-/// Population resources in the shared realization order, without mutation.
+/// `physical_name_by_key`, plus the active physical table of a materialized view's source table
+/// when that table is not staged and the catalog binds its stable name.
+fn with_active_source<'py>(
+    py: Python<'py>,
+    desired: &Value<'py>,
+    physical_name_by_key: &Bound<'py, PyDict>,
+    target_catalog: Option<&Value<'py>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let names: Bound<'py, PyDict> = physical_name_by_key.copy()?;
+    let Some(catalog) = target_catalog.filter(|catalog| !catalog.is_none()) else {
+        return Ok(names);
+    };
+    if !is_a(desired, COMPILE_MODELS, "DesiredMaterializedView")? {
+        return Ok(names);
+    }
+    let source: Value<'py> = desired.getattr("source_table_name")?;
+    let table_type: Value<'py> = py
+        .import("sqltide.compiler.compile.constants")?
+        .getattr("DESIRED_OBJECT_TYPE_TABLE")?;
+    for key in physical_name_by_key.keys() {
+        if key.getattr("object_type")?.eq(&table_type)? && key.getattr("name")?.eq(&source)? {
+            return Ok(names);
+        }
+    }
+    let relation: Value<'py> = catalog.call_method1("relation", (&source,))?;
+    if relation.is_none() {
+        return Ok(names);
+    }
+    let binding: Value<'py> = relation.getattr("stable_binding_name")?;
+    if binding.is_none() {
+        return Ok(names);
+    }
+    let key: Value<'py> = build(
+        py,
+        COMPILE_MODELS,
+        "ObjectKey",
+        &[
+            ("database", py.None().into_bound(py)),
+            ("object_type", table_type),
+            ("name", source),
+        ],
+    )?;
+    names.set_item(key, binding)?;
+    Ok(names)
+}
+
+/// Population resources in the shared realization order, without mutation. With
+/// `target_catalog`, a staged materialized view whose source table is not staged reads that
+/// table's active physical table: a view bound to a stable name never sees new inserts.
 #[pyfunction]
-#[pyo3(signature = (*, plan, desired_state, default_database))]
+#[pyo3(signature = (*, plan, desired_state, default_database, target_catalog = None))]
 pub(crate) fn plan_population_objects<'py>(
     py: Python<'py>,
     plan: &Value<'py>,
     desired_state: &Value<'py>,
     default_database: &Value<'py>,
+    target_catalog: Option<&Value<'py>>,
 ) -> PyResult<Value<'py>> {
     let objects: Vec<Value<'py>> = desired_objects(desired_state)?;
     let object_by_key: Bound<'py, PyDict> = PyDict::new(py);
@@ -332,11 +381,13 @@ pub(crate) fn plan_population_objects<'py>(
         if is_a(&desired, COMPILE_MODELS, "DesiredKafkaTable")? {
             continue;
         }
+        let names: Bound<'py, PyDict> =
+            with_active_source(py, &desired, &physical_name_by_key, target_catalog)?;
         let resource: Value<'py> = build_shadow_adapter_resource(
             py,
             &desired,
             &physical_name_by_key.as_any().get_item(&target_key)?,
-            physical_name_by_key.as_any(),
+            names.as_any(),
         )?;
         realizations.push(build(
             py,

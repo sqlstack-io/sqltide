@@ -2283,6 +2283,7 @@
         "enabled": true
       },
       "connection": {
+        "environment": false,
         "host": "127.0.0.1",
         "port": 18125,
         "username": "playground"

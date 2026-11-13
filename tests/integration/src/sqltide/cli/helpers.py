@@ -2269,3 +2269,91 @@ def view_is_quarantined(*, client: Client, database: str, view_name: str) -> boo
         f"AND name = '{view_name}'"
     )
     return "__sqt_value_0" in str(client.query(query).result_rows[0][0])
+
+
+_UPSTREAM_SOURCE_TOTALS_SQL: str = """
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp,
+  CAST(now64(3) AS DateTime64(3)) AS _replay_landed_at
+FROM __source("orders")
+WHERE amount_cents >= {minimum}
+"""
+
+_UPSTREAM_SOURCE_REPORT_SQL: str = """
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp,
+  CAST(_replay_landed_at AS DateTime64(3)) AS _replay_landed_at
+FROM __ref("order_totals")
+WHERE amount_cents >= {minimum}
+"""
+
+
+def write_upstream_source_project(
+    project: Path, settings: ClickHouseConnectionSettings, database: str
+) -> None:
+    (project / "sources").mkdir(parents=True)
+    (project / "pipelines" / "pl__orders").mkdir(parents=True)
+    (project / "sqltide_project.toml").write_text(
+        dedent(
+            f"""
+            name = "upstream_source"
+            default_target = "local"
+
+            [defaults]
+            pipeline_mode = "virtual"
+
+            [connection]
+            environment = false
+            host = "{settings.host}"
+            port = {settings.port}
+            username = "{settings.username}"
+            password = "{settings.password}"
+
+            [targets.local]
+            database = "{database}"
+            """
+        ),
+        encoding="utf-8",
+    )
+    (project / "sources" / "orders.yml").write_text(
+        dedent(
+            """
+            sources:
+              - name: orders
+                kind: stream_table
+                table_name: orders_input
+                replay_boundary:
+                  mode: offsets
+                  columns:
+                    _replay_partition: event_partition
+                    _replay_offset: event_offset
+                    _replay_timestamp: event_time
+            """
+        ),
+        encoding="utf-8",
+    )
+    write_upstream_source_models(project, totals_minimum=0, report_minimum=0)
+
+
+def write_upstream_source_models(
+    project: Path, *, totals_minimum: int, report_minimum: int
+) -> None:
+    models: Path = project / "pipelines" / "pl__orders"
+    (models / "order_totals.sql").write_text(
+        _UPSTREAM_SOURCE_TOTALS_SQL.format(minimum=totals_minimum), encoding="utf-8"
+    )
+    (models / "order_report.sql").write_text(
+        _UPSTREAM_SOURCE_REPORT_SQL.format(minimum=report_minimum), encoding="utf-8"
+    )

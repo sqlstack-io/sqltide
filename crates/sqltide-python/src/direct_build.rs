@@ -664,6 +664,7 @@ fn assemble_direct_build_workflow<'py>(
         &population_plan,
         &desired_state,
         &database,
+        None,
     )?)?;
     let mut replay_templates: Vec<Value<'py>> = Vec::new();
     for pair in items(&build_population_replay_templates(

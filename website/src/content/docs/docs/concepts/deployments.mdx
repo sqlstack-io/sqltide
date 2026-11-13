@@ -129,8 +129,39 @@ confirmation prompt; inspect the deployment before running it. If promotion stop
 only part of the graph, the deployment remains retryable and the next promotion applies only the
 remaining changes.
 
-Show, audit, and promote require explicit positional IDs. There is no automatic sole-candidate or
-latest-candidate selection.
+Show, diff, audit, and promote take a deployment ID, or `--latest` for the most recently built
+deployment. `sqt deployment promote --latest` refuses when that deployment is already published or
+when more than one deployment is staged, and prints the ID it promotes.
+
+## Staged views that stopped receiving rows (fixed in 0.68.0)
+
+In virtual mode up to and including 0.67.3, a build that staged a model without staging the model
+it reads created that model's materialized view on the upstream model's stable view. ClickHouse
+never runs a materialized view for inserts into a view, so that version stopped receiving new rows
+as soon as its build finished, both before and after promotion. Builds that also staged the
+upstream model were not affected.
+
+To check a target database, list the materialized views that read a view:
+
+```sql
+SELECT arrayJoin(dependencies_table) AS materialized_view
+FROM system.tables
+WHERE database = currentDatabase() AND engine = 'View';
+```
+
+Each name ends with its deployment ID, and that deployment's version of the model receives no new
+rows. Do not promote or roll back to any deployment listed here; rebuild the model instead.
+
+After upgrading to 0.68.0, rebuild each affected model and promote it:
+
+```bash
+sqt build --select order_report --full-refresh
+sqt deployment promote --latest
+```
+
+The full refresh replays the source's retained history, so rows that arrived while the old version
+was stalled come back if the source still has them. The stalled deployment stays listed until
+`sqt janitor --apply` removes it.
 
 ## Roll back
 

@@ -422,7 +422,7 @@ def test_given_published_table_storage_when_planning_again_then_only_a_change_re
             deployment_id="20260410T131500Z_cd34ef",
             created_at="2026-04-10 13:15:00.123",
             boundary_time="2026-04-10 13:15:00.000",
-            expected_rebuild_root_names=("mv__orders_enriched",),
+            expected_rebuild_root_names=("tbl__orders_enriched",),
         )
     ],
     ids=lambda case: case.description,

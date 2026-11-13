@@ -12,3 +12,10 @@ class PlaygroundTestCase:
         "revisions/completed_orders.sql",
     )
     expected_exit_code: int = 0
+
+
+@dataclass(frozen=True)
+class PlaygroundStartFailureTestCase:
+    description: str
+    expected_exit_code: int
+    expected_message: str

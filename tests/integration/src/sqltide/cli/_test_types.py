@@ -619,3 +619,10 @@ class VirtualAdoptedChainIntegrationTestCase:
 class CancelledPausedSourceIntegrationTestCase:
     description: str
     expected_note_fragment: str
+
+
+@dataclass(frozen=True)
+class VirtualDownstreamOnlyChangeIntegrationTestCase:
+    description: str
+    expected_after_downstream_promotion: tuple[str, ...]
+    expected_after_upstream_promotion: tuple[str, ...]
