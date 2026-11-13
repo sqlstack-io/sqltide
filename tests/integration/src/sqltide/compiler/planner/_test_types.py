@@ -28,13 +28,15 @@ class PlannerNormalizedTypeNoOpIntegrationTestCase:
 
 
 @dataclass(frozen=True)
-class PlannerTtlAfterPublishIntegrationTestCase:
+class PlannerStorageAfterPublishIntegrationTestCase:
     description: str
     deployment_id: str
     created_at: str
     boundary_time: str
     published_ttl: str
     desired_ttl: str
+    published_settings: dict[str, str] | None
+    desired_settings: dict[str, str] | None
     expected_change_type: PlannedChangeType
 
 

@@ -1,14 +1,16 @@
 //! Classify each desired object against the object that exists now.
 //!
 //! Tables compare columns by name, ClickHouse-normalized type, and default, plus storage, whose
-//! TTL matches when both sides generate the same canonical TTL.
+//! TTL and setting values match when both sides generate the same canonical form.
 //! Materialized views and views also match when their queries generate the same canonical SQL.
 //! Comparisons short-circuit in authored column order, so a type is only normalized when every
 //! earlier comparison matched, and a type that cannot be normalized fails the plan only then.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use sqltide_sqlanalysis::{SqlDialect, canonicalize_sql, canonicalize_ttl, normalize_data_type};
+use sqltide_sqlanalysis::{
+    SqlDialect, canonicalize_setting, canonicalize_sql, canonicalize_ttl, normalize_data_type,
+};
 
 use crate::rebuild::{ChangeType, SchemaChangeKind, SeedCompatibility};
 
@@ -22,7 +24,8 @@ pub struct Column {
     pub default: Option<String>,
 }
 
-/// Engine settings, compared as a mapping; `None` differs from an empty mapping.
+/// Engine settings by name. Kafka settings compare exactly, so `None` differs from an empty
+/// mapping; table settings compare canonically, and `None` matches an empty mapping.
 pub type Settings = Option<BTreeMap<String, String>>;
 
 /// Managed table storage.
@@ -129,6 +132,7 @@ pub struct Differ {
     types: HashMap<String, Result<String, String>>,
     queries: HashMap<String, Option<String>>,
     ttls: HashMap<String, Option<String>>,
+    settings: HashMap<(String, String), Option<String>>,
 }
 
 impl Default for Differ {
@@ -145,6 +149,7 @@ impl Differ {
             types: HashMap::new(),
             queries: HashMap::new(),
             ttls: HashMap::new(),
+            settings: HashMap::new(),
         }
     }
 
@@ -338,7 +343,7 @@ impl Differ {
         *engine == actual.engine
             && *order_by == actual.order_by
             && *partition_by == actual.partition_by
-            && *settings == actual.settings
+            && self.settings_equal(settings.as_ref(), actual.settings.as_ref())
             && match (ttl, &actual.ttl) {
                 // Even identical text compares canonically: a TTL without a canonical form, such
                 // as one the catalog could only partly parse, always differs.
@@ -347,6 +352,38 @@ impl Differ {
                     .is_some_and(|desired| self.canonical_ttl(actual) == Some(desired)),
                 (desired, actual) => desired == actual,
             }
+    }
+
+    /// Whether two table settings mappings hold the same names with the same canonical values. A
+    /// value without a canonical form always differs.
+    fn settings_equal(
+        &mut self,
+        desired: Option<&BTreeMap<String, String>>,
+        actual: Option<&BTreeMap<String, String>>,
+    ) -> bool {
+        let empty: BTreeMap<String, String> = BTreeMap::new();
+        let desired: &BTreeMap<String, String> = desired.unwrap_or(&empty);
+        let actual: &BTreeMap<String, String> = actual.unwrap_or(&empty);
+        desired.len() == actual.len()
+            && desired
+                .iter()
+                .zip(actual)
+                .all(|((name, value), (actual_name, actual_value))| {
+                    name == actual_name
+                        && self.canonical_setting(name, value).is_some_and(|desired| {
+                            self.canonical_setting(name, actual_value) == Some(desired)
+                        })
+                })
+    }
+
+    fn canonical_setting(&mut self, name: &str, value: &str) -> Option<String> {
+        let key: (String, String) = (name.to_owned(), value.to_owned());
+        if let Some(canonical) = self.settings.get(&key) {
+            return canonical.clone();
+        }
+        let canonical: Option<String> = canonicalize_setting(name, value, &self.dialect).ok();
+        self.settings.insert(key, canonical.clone());
+        canonical
     }
 
     fn canonical_ttl(&mut self, ttl: &str) -> Option<String> {
@@ -475,6 +512,99 @@ mod tests {
                 "{authored:?} against {stored:?}"
             );
         }
+    }
+
+    fn settings_table(settings: &[(&str, &str)]) -> Spec {
+        let Spec::Table {
+            columns,
+            mut storage,
+        } = table(vec![column("at", "DateTime")])
+        else {
+            unreachable!("table builds a table spec")
+        };
+        storage.settings = (!settings.is_empty()).then(|| {
+            settings
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+                .collect()
+        });
+        Spec::Table { columns, storage }
+    }
+
+    #[test]
+    fn unchanged_settings_match_the_form_clickhouse_stores() {
+        let mut differ: Differ = Differ::new();
+        // Each stored form is what ClickHouse's `create_table_query` holds for the rendered DDL.
+        for (authored, stored) in [
+            (
+                vec![
+                    ("allow_nullable_key", "True"),
+                    ("merge_with_ttl_timeout", "3600"),
+                ],
+                vec![
+                    ("merge_with_ttl_timeout", "3600"),
+                    ("allow_nullable_key", "true"),
+                ],
+            ),
+            (
+                vec![("index_granularity", "4096")],
+                vec![("index_granularity", "4096")],
+            ),
+            (vec![], vec![]),
+        ] {
+            assert_eq!(
+                change_type(
+                    &mut differ,
+                    settings_table(&authored),
+                    settings_table(&stored)
+                ),
+                ChangeType::NoOp,
+                "{authored:?} against {stored:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn changed_settings_rebuild() {
+        let mut differ: Differ = Differ::new();
+        let stored: &[(&str, &str)] = &[("merge_with_ttl_timeout", "3600")];
+        for authored in [
+            vec![("merge_with_ttl_timeout", "7200")],
+            vec![
+                ("merge_with_ttl_timeout", "3600"),
+                ("allow_nullable_key", "True"),
+            ],
+            vec![("ttl_only_drop_parts", "3600")],
+            vec![],
+        ] {
+            assert_eq!(
+                change_type(
+                    &mut differ,
+                    settings_table(&authored),
+                    settings_table(stored)
+                ),
+                ChangeType::Rebuild,
+                "{authored:?}"
+            );
+        }
+        // A value whose stored form differs in a way that cannot be compared safely rebuilds.
+        assert_eq!(
+            change_type(
+                &mut differ,
+                settings_table(&[("storage_policy", "default")]),
+                settings_table(&[("storage_policy", "DEFAULT")])
+            ),
+            ChangeType::Rebuild
+        );
+        // A value that is more than one setting has no canonical form.
+        assert_eq!(
+            change_type(
+                &mut differ,
+                settings_table(&[("a", "1, b = 2")]),
+                settings_table(&[("a", "1, b = 2")])
+            ),
+            ChangeType::Rebuild
+        );
     }
 
     #[test]

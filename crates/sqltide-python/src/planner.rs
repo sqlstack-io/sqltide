@@ -826,6 +826,7 @@ fn plan_deployment<'py>(
     let compile_models: Bound<'py, PyModule> = py.import(COMPILE_MODELS)?;
     let planner_models: Bound<'py, PyModule> = py.import(PLANNER_MODELS)?;
     let materialized_view_class = compile_models.getattr("DesiredMaterializedView")?;
+    let table_class = compile_models.getattr("DesiredTable")?;
     let desired_objects: Vec<Bound<'py, PyAny>> = desired_state
         .getattr("objects")?
         .try_iter()?
@@ -839,6 +840,8 @@ fn plan_deployment<'py>(
     // `(key, force full refresh, forced start time)` per desired object.
     let mut forcing: Vec<(Bound<'py, PyAny>, bool, Option<String>)> = Vec::new();
     let mut comparisons: Vec<(SpecArgument, Option<SpecArgument>, bool)> = Vec::new();
+    // Whether the actual spec is a copy of the desired spec rather than read from the catalog.
+    let mut copies: Vec<bool> = Vec::new();
     for object in &desired_objects {
         let key: Bound<'py, PyAny> = object.getattr("key")?;
         let forced_start_time: Option<String> = if start_time_keys.contains(&key)? {
@@ -858,10 +861,23 @@ fn plan_deployment<'py>(
         comparisons.push((
             comparison_spec_argument(&compile_models, object)?,
             actual
-                .map(|actual| comparison_spec_argument(&compile_models, &actual))
+                .as_ref()
+                .map(|actual| comparison_spec_argument(&compile_models, actual))
                 .transpose()?,
             force_full_refresh || forced_start_time.is_some(),
         ));
+        // Actual state copies a raw landing table's desired spec rather than reading the catalog.
+        let name: String = object.getattr("name")?.extract()?;
+        let copy: bool = match &actual {
+            Some(actual)
+                if object.is_instance(&table_class)?
+                    && name.starts_with(sqltide_compile::relations::RAW_TABLE_NAME_PREFIX) =>
+            {
+                actual.getattr("spec")?.eq(object.getattr("spec")?)?
+            }
+            _ => false,
+        };
+        copies.push(copy);
         forcing.push((key, force_full_refresh, forced_start_time));
     }
     let comparisons: Vec<Comparison> = comparisons
@@ -875,11 +891,23 @@ fn plan_deployment<'py>(
         })
         .collect::<PyResult<_>>()
         .map_err(|error| deployment_plan_error(py, error))?;
-    let classifications: Vec<Classification> = py
+    let mut classifications: Vec<Classification> = py
         .detach(|| Differ::new().classify_all(&comparisons))
         .map_err(|error| {
             raised_from_none(py, PLANNER_EXCEPTIONS, "DeploymentPlanError", error.message)
         })?;
+    // A copy is unchanged unless forced, even when its TTL or a setting has no canonical form
+    // and so never compares equal.
+    for ((classification, comparison), copy) in
+        classifications.iter_mut().zip(&comparisons).zip(&copies)
+    {
+        if *copy && !comparison.forced {
+            *classification = Classification {
+                change_type: ChangeType::NoOp,
+                column_difference: None,
+            };
+        }
+    }
 
     let change_class = planner_models.getattr("PlannedObjectChange")?;
     let mut object_changes: Vec<Bound<'py, PyAny>> = Vec::new();

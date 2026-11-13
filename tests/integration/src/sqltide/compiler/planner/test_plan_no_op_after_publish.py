@@ -31,7 +31,7 @@ from tests.integration.src.sqltide.compiler.planner._test_types import (
     PlannerNormalizedTypeNoOpIntegrationTestCase,
     PlannerSchemaChangeAfterPublishIntegrationTestCase,
     PlannerSqlChangeAfterPublishIntegrationTestCase,
-    PlannerTtlAfterPublishIntegrationTestCase,
+    PlannerStorageAfterPublishIntegrationTestCase,
 )
 from tests.integration.src.sqltide.compiler.planner.helpers import (
     build_changed_schema_variant_compiled_pipeline,
@@ -39,7 +39,7 @@ from tests.integration.src.sqltide.compiler.planner.helpers import (
     get_orders_enriched_change,
     normalize_orders_enriched_timestamp_type,
     realize_compiled_pipelines,
-    with_orders_enriched_ttl,
+    with_orders_enriched_storage,
 )
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 from tests.integration.src.sqltide.executor.backfill.helpers import (
@@ -284,36 +284,64 @@ def test_given_equivalent_type_casing_after_publish_when_planning_again_then_it_
 @pytest.mark.parametrize(
     "test_case",
     [
-        PlannerTtlAfterPublishIntegrationTestCase(
+        PlannerStorageAfterPublishIntegrationTestCase(
             description="an unchanged ttl matches the form clickhouse stores",
             deployment_id="20260410T130000Z_ab12cd",
             created_at="2026-04-10 13:00:00.123",
             boundary_time="2026-04-10 13:00:00.000",
             published_ttl="_replay_timestamp + INTERVAL 7 DAY",
             desired_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            published_settings=None,
+            desired_settings=None,
             expected_change_type=PLANNED_CHANGE_TYPE_NO_OP,
         ),
-        PlannerTtlAfterPublishIntegrationTestCase(
+        PlannerStorageAfterPublishIntegrationTestCase(
             description="a changed ttl rebuilds the table",
             deployment_id="20260410T130000Z_ab12cd",
             created_at="2026-04-10 13:00:00.123",
             boundary_time="2026-04-10 13:00:00.000",
             published_ttl="_replay_timestamp + INTERVAL 7 DAY",
             desired_ttl="_replay_timestamp + INTERVAL 30 DAY",
+            published_settings=None,
+            desired_settings=None,
+            expected_change_type=PLANNED_CHANGE_TYPE_REBUILD,
+        ),
+        PlannerStorageAfterPublishIntegrationTestCase(
+            description="unchanged settings match the form clickhouse stores",
+            deployment_id="20260410T130000Z_ab12cd",
+            created_at="2026-04-10 13:00:00.123",
+            boundary_time="2026-04-10 13:00:00.000",
+            published_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            desired_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            published_settings={"allow_nullable_key": "True", "merge_with_ttl_timeout": "3600"},
+            desired_settings={"allow_nullable_key": "True", "merge_with_ttl_timeout": "3600"},
+            expected_change_type=PLANNED_CHANGE_TYPE_NO_OP,
+        ),
+        PlannerStorageAfterPublishIntegrationTestCase(
+            description="a changed setting rebuilds the table",
+            deployment_id="20260410T130000Z_ab12cd",
+            created_at="2026-04-10 13:00:00.123",
+            boundary_time="2026-04-10 13:00:00.000",
+            published_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            desired_ttl="_replay_timestamp + INTERVAL 7 DAY",
+            published_settings={"merge_with_ttl_timeout": "3600"},
+            desired_settings={"merge_with_ttl_timeout": "7200"},
             expected_change_type=PLANNED_CHANGE_TYPE_REBUILD,
         ),
     ],
     ids=lambda case: case.description,
 )
-def test_given_published_ttl_table_when_planning_again_then_only_a_ttl_change_rebuilds(
-    test_case: PlannerTtlAfterPublishIntegrationTestCase,
+def test_given_published_table_storage_when_planning_again_then_only_a_change_rebuilds(
+    test_case: PlannerStorageAfterPublishIntegrationTestCase,
     clickhouse_connection_settings: ClickHouseConnectionSettings,
     clickhouse_client: Client,
     clickhouse_database: str,
 ) -> None:
     compiled_pipeline: CompiledPipeline = build_scalar_replay_compiled_pipeline("timestamp")
-    desired_state: DesiredState = with_orders_enriched_ttl(
-        realize_compiled_pipelines((compiled_pipeline,)).desired_state, test_case.desired_ttl
+    desired_state: DesiredState = with_orders_enriched_storage(
+        realize_compiled_pipelines((compiled_pipeline,)).desired_state,
+        test_case.desired_ttl,
+        test_case.desired_settings,
     )
     clickhouse_client.command(
         render_create_kafka_table_ddl(
@@ -353,8 +381,8 @@ def test_given_published_ttl_table_when_planning_again_then_only_a_ttl_change_re
         execute_backfill(
             request=replace(
                 request,
-                desired_state=with_orders_enriched_ttl(
-                    request.desired_state, test_case.published_ttl
+                desired_state=with_orders_enriched_storage(
+                    request.desired_state, test_case.published_ttl, test_case.published_settings
                 ),
             ),
             client=managed_client,

@@ -25,6 +25,7 @@ from tests.unit.src.sqltide.compiler.planner.helpers import (
     build_view_only_desired_state,
     key_parts,
     optional_key_parts,
+    with_raw_orders_ttl,
 )
 
 
@@ -249,16 +250,27 @@ def test_given_full_refresh_key_when_planning_deployment_then_it_forces_full_reb
     [
         PlannerSettledPlanTestCase(
             description="a published virtual-environment deployment still plans no rebuild work",
+            raw_ttl=None,
             expected_rebuild_subtree_count=0,
             expected_step_count=0,
-        )
+            expected_change_types=frozenset({"no_op"}),
+        ),
+        PlannerSettledPlanTestCase(
+            description="a landing table ttl without a canonical form is still unchanged",
+            raw_ttl="created_at + INTERVAL 7 DAY WHERE order_id != ''",
+            expected_rebuild_subtree_count=0,
+            expected_step_count=0,
+            expected_change_types=frozenset({"no_op"}),
+        ),
     ],
     ids=lambda case: case.description,
 )
 def test_given_matching_actual_state_when_planning_deployment_then_it_remains_a_no_op(
     test_case: PlannerSettledPlanTestCase,
 ) -> None:
-    desired_state: DesiredState = build_example_desired_state()
+    desired_state: DesiredState = with_raw_orders_ttl(
+        build_example_desired_state(), test_case.raw_ttl
+    )
     actual_state: ActualState = build_actual_state_matching_desired(desired_state)
 
     deployment_plan: DeploymentPlan = plan_deployment(
@@ -270,3 +282,7 @@ def test_given_matching_actual_state_when_planning_deployment_then_it_remains_a_
 
     assert len(deployment_plan.rebuild_subtrees) == test_case.expected_rebuild_subtree_count
     assert len(deployment_plan.steps) == test_case.expected_step_count
+    assert (
+        frozenset(change.change_type for change in deployment_plan.object_changes)
+        == test_case.expected_change_types
+    )

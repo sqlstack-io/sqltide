@@ -475,6 +475,30 @@ pub fn canonicalize_sql(sql: &str, dialect: &SqlDialect) -> AnalysisResult<Strin
     dialect.generate(&dialect.parse_one(sql)?, false)
 }
 
+/// One MergeTree table setting's value in the canonical form the catalog reads back.
+///
+/// # Errors
+///
+/// Returns parse or generation failures, and refuses text that is not exactly one setting.
+pub fn canonicalize_setting(
+    name: &str,
+    value: &str,
+    dialect: &SqlDialect,
+) -> AnalysisResult<String> {
+    let analysis: CatalogAnalysis = analyze_catalog(
+        &format!(
+            "CREATE TABLE t (x Int8) ENGINE = MergeTree ORDER BY tuple() SETTINGS {name} = {value}"
+        ),
+        dialect,
+    )?;
+    match analysis.settings.as_slice() {
+        [(parsed, canonical)] if parsed == name => Ok(canonical.clone()),
+        _ => Err(AnalysisError::new(
+            "A setting value must be exactly one setting",
+        )),
+    }
+}
+
 /// Whether a TTL has a WHERE, GROUP BY, or SET clause, which Polyglot keeps for the whole TTL
 /// rather than for its element, cutting off any elements after it.
 fn has_ttl_clauses(ttl: &Object) -> bool {

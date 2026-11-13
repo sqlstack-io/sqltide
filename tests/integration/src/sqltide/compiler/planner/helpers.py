@@ -318,14 +318,19 @@ def normalize_orders_enriched_timestamp_type(desired_state: DesiredState) -> Des
     )
 
 
-def with_orders_enriched_ttl(desired_state: DesiredState, ttl: str) -> DesiredState:
+def with_orders_enriched_storage(
+    desired_state: DesiredState, ttl: str, settings: dict[str, str] | None
+) -> DesiredState:
     object_by_name: dict[
         str, DesiredKafkaTable | DesiredTable | DesiredMaterializedView | DesiredView
     ] = {desired_object.name: desired_object for desired_object in desired_state.objects}
     target_table: DesiredTable = cast(DesiredTable, object_by_name["tbl__orders_enriched"])
     object_by_name[target_table.name] = replace(
         target_table,
-        spec=replace(target_table.spec, storage=replace(target_table.spec.storage, ttl=ttl)),
+        spec=replace(
+            target_table.spec,
+            storage=replace(target_table.spec.storage, ttl=ttl, settings=settings),
+        ),
     )
     return replace(
         desired_state,
