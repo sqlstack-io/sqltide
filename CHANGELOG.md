@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.68.0](https://github.com/sqlstack-io/sqltide/compare/v0.67.3...v0.68.0) (2026-11-13)
+
+
+### Features
+
+* **playground:** start the playground, query it, and pick builds with --latest ([8c4f5f4](https://github.com/sqlstack-io/sqltide/commit/8c4f5f45934ef6e958e00ecd8b1dd20b33f77364))
+
+
+### Bug Fixes
+
+* **planner:** rebuild a changed materialized view from the table it fills ([8c4f5f4](https://github.com/sqlstack-io/sqltide/commit/8c4f5f45934ef6e958e00ecd8b1dd20b33f77364))
+* **virtual:** keep staged models receiving rows when only a downstream model changes (data fix for 0.67.x and earlier) ([8c4f5f4](https://github.com/sqlstack-io/sqltide/commit/8c4f5f45934ef6e958e00ecd8b1dd20b33f77364))
+
 ## [0.67.3](https://github.com/sqlstack-io/sqltide/compare/v0.67.2...v0.67.3) (2026-11-13)
 
 
