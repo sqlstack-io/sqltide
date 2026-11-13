@@ -703,7 +703,7 @@
      "name": "playground",
      "parser": {
       "prog": "sqt playground",
-      "description": "Create a new example project without connecting to a warehouse. Compilation is offline; running the plan, candidate and promote workflow needs the local Docker Compose services the project includes. Follow its README step by step.",
+      "description": "Create an example project and start its local services with Docker Compose. Then plain sqt plan, sqt build and sqt deployment commands work from the project directory. `query FILE` runs a SQL file against the playground, `up` starts its services again, and `down` stops them.",
       "groups": [
        {
         "title": "positional arguments"
@@ -730,10 +730,10 @@
        {
         "kind": "store",
         "options": [],
-        "dest": "directory",
-        "nargs": "?",
+        "dest": "arguments",
+        "nargs": "*",
         "default": null,
-        "type": "Path",
+        "metavar": "DIRECTORY",
         "help": "New directory to create (default: sqltide-playground, or sqltide-streaming-playground for the streaming template); must not already exist",
         "group": 0
        },
@@ -750,8 +750,68 @@
         ],
         "help": "basic: ClickHouse and seeded orders (default); streaming: Redpanda, ClickHouse and a live order producer",
         "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--no-start"
+        ],
+        "dest": "no_start",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "Only create the project; do not start its services",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--candidate"
+        ],
+        "dest": "candidate",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "query: read the newest staged (unpublished) deployment instead of what consumers read",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--compare"
+        ],
+        "dest": "compare",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "query: show what consumers read and the newest staged deployment, one after the other",
+        "group": 1
+       },
+       {
+        "kind": "store_true",
+        "options": [
+         "--volumes"
+        ],
+        "dest": "volumes",
+        "nargs": 0,
+        "const": true,
+        "default": false,
+        "help": "down: also delete the playground's data",
+        "group": 1
+       },
+       {
+        "kind": "store",
+        "options": [
+         "--project-dir"
+        ],
+        "dest": "project_dir",
+        "default": null,
+        "type": "Path",
+        "help": "Playground project for query, up and down (default: the current directory)",
+        "group": 1
        }
-      ]
+      ],
+      "usage": "%(prog)s [DIRECTORY] [--template {basic,streaming}] [--no-start]\n       %(prog)s query FILE [--candidate | --compare] [--project-dir PROJECT_DIR]\n       %(prog)s up [--project-dir PROJECT_DIR]\n       %(prog)s down [--volumes] [--project-dir PROJECT_DIR]"
      }
     },
     {
@@ -2302,9 +2362,23 @@
              "options": [],
              "dest": "deployment_id",
              "default": null,
-             "required": true,
              "help": "Deployment identifier to inspect",
-             "group": 0
+             "group": 0,
+             "nargs": "?",
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--latest"
+             ],
+             "dest": "latest",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Use the most recently created deployment",
+             "group": 1,
+             "mutex_group": 0
             },
             {
              "kind": "store",
@@ -2413,6 +2487,9 @@
              "help": "Project variable overrides as one JSON object",
              "group": 1
             }
+           ],
+           "mutex_groups": [
+            true
            ]
           }
          },
@@ -2448,10 +2525,24 @@
              "options": [],
              "dest": "comparison",
              "default": null,
-             "required": true,
              "help": "Deployment ID (active baseline) or explicit FROM:TO endpoints",
              "metavar": "DEPLOYMENT|FROM:TO",
-             "group": 0
+             "group": 0,
+             "nargs": "?",
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--latest"
+             ],
+             "dest": "latest",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Use the most recently created deployment",
+             "group": 1,
+             "mutex_group": 0
             },
             {
              "kind": "store",
@@ -2560,6 +2651,9 @@
              "help": "Project variable overrides as one JSON object",
              "group": 1
             }
+           ],
+           "mutex_groups": [
+            true
            ]
           }
          },
@@ -2595,9 +2689,23 @@
              "options": [],
              "dest": "deployment_id",
              "default": null,
-             "required": true,
              "help": "Deployment identifier to audit",
-             "group": 0
+             "group": 0,
+             "nargs": "?",
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--latest"
+             ],
+             "dest": "latest",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Use the most recently created deployment",
+             "group": 1,
+             "mutex_group": 0
             },
             {
              "kind": "store",
@@ -2706,6 +2814,9 @@
              "help": "Project variable overrides as one JSON object",
              "group": 1
             }
+           ],
+           "mutex_groups": [
+            true
            ]
           }
          },
@@ -2741,9 +2852,23 @@
              "options": [],
              "dest": "deployment_id",
              "default": null,
-             "required": true,
              "help": "Deployment identifier to promote",
-             "group": 0
+             "group": 0,
+             "nargs": "?",
+             "mutex_group": 0
+            },
+            {
+             "kind": "store_true",
+             "options": [
+              "--latest"
+             ],
+             "dest": "latest",
+             "nargs": 0,
+             "const": true,
+             "default": false,
+             "help": "Promote the newest deployment; refused unless it is the only staged one",
+             "group": 1,
+             "mutex_group": 0
             },
             {
              "kind": "store",
@@ -2852,6 +2977,9 @@
              "help": "Project variable overrides as one JSON object",
              "group": 1
             }
+           ],
+           "mutex_groups": [
+            true
            ]
           }
          },

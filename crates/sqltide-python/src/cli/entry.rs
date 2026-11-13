@@ -13,7 +13,7 @@ use crate::cli::invocation::{
     Invocation, OwnedConnection, resolve_cli_invocation, resolve_observation_connection,
     resolve_primary_connection, validate_cli_command_mode,
 };
-use crate::cli::playground::run_playground;
+use crate::cli::playground::{is_query, playground_project, run_playground};
 use crate::cli::python::{getattr_none, print_to, raised, raised_during, user_error};
 use crate::cli::render::{
     attach_error_diagnostic, render_cli_user_error, render_error, render_expected_warehouse_error,
@@ -145,14 +145,13 @@ fn run_command<'py>(
         }
     };
     if command == "playground" {
-        let template: String = args.getattr("template")?.extract()?;
-        let code: i64 = run_playground(
-            py,
-            &args.getattr("directory")?,
-            &template,
-            &working_directory()?,
-        )?;
-        return Ok(code.into_pyobject(py)?.into_any());
+        if !is_query(args)? {
+            let code: i64 = run_playground(py, args, &working_directory()?)?;
+            return Ok(code.into_pyobject(py)?.into_any());
+        }
+        // `query` runs every statement in a file, so it only reaches a playground's own services.
+        // It then reads the project's connection like other warehouse commands.
+        playground_project(py, args, &working_directory()?)?;
     }
     if command == "admin" {
         let environment: Bound<'py, PyAny> = match &collaborators.environment {

@@ -78,22 +78,22 @@ from tests.unit.src.sqltide.cli._test_types import CliHelpBaselineTestCase
         CliHelpBaselineTestCase(
             description="captures deployment show help",
             argv=("deployment", "show", "--help"),
-            expected_sha256="fe178b92f7563ccae01242c58c3212b88d9c261d4e190a57c674f6b0c4b9aa33",
+            expected_sha256="d89034d83ae58eaf099a627cb57714593bccc71afa56ea153ff2d96150150b6d",
         ),
         CliHelpBaselineTestCase(
             description="captures deployment audit help",
             argv=("deployment", "audit", "--help"),
-            expected_sha256="71827d0727024e51354466765e2fcacb5423b86593e7e96b8137d557cb07d5e4",
+            expected_sha256="c983dc5b8a6518a07e9a6c39f88c9ea8ff45170992d4a518aadf750c3a023559",
         ),
         CliHelpBaselineTestCase(
             description="captures deployment promote help",
             argv=("deployment", "promote", "--help"),
-            expected_sha256="fc37187240ed19ed3264ba392c4a73dc78de1f76db3580855eeef63170772f5c",
+            expected_sha256="67b1a4f34878eb64992cb1bf9f9c9802bccd5244ec7ce8b862ee94e7b9c4d1e2",
         ),
         CliHelpBaselineTestCase(
             description="captures deployment diff help",
             argv=("deployment", "diff", "--help"),
-            expected_sha256="9ff6f2b865f65064965d36e06a3c27d1491d792599aa73472644ef57778639ef",
+            expected_sha256="a55cb97fcdc0c0bff5d3ef9580cc699877bb5aee8bc8f485070c3de7173ea576",
         ),
         CliHelpBaselineTestCase(
             description="captures deployment rollback help",

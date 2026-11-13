@@ -1,3 +1,4 @@
+import json
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from sqltide._native import run_cli
 from tests.integration.src.sqltide.cli.playground.main._test_types import (
     PlaygroundLifecycleTestCase,
 )
+from tests.integration.src.sqltide.cli.playground.main.helpers import query_rows
 from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 
 
@@ -45,23 +47,23 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
     clickhouse_connection_settings: ClickHouseConnectionSettings,
     clickhouse_client: Client,
     clickhouse_database: str,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     project: Path = tmp_path / "playground"
-    assert run_cli(("sqt", "playground", str(project))) == 0
-    arguments: tuple[str, ...] = (
-        "--project-dir",
-        str(project),
-        "--host",
-        clickhouse_connection_settings.host,
-        "--port",
-        str(clickhouse_connection_settings.port),
-        "--username",
-        clickhouse_connection_settings.username,
-        "--password",
-        clickhouse_connection_settings.password,
-        "--database",
-        clickhouse_database,
+    assert run_cli(("sqt", "playground", str(project), "--no-start")) == 0
+    # Point the project's own connection at the test server: no connection flags are needed.
+    config: Path = project / "sqltide_project.toml"
+    settings: ClickHouseConnectionSettings = clickhouse_connection_settings
+    config.write_text(
+        config.read_text(encoding="utf-8")
+        .replace('host = "127.0.0.1"', f'host = "{settings.host}"')
+        .replace("port = 18124", f"port = {settings.port}")
+        .replace('username = "playground"', f'username = "{settings.username}"')
+        .replace('password = "sqltide_playground"', f'password = "{settings.password}"')
+        .replace('database = "sqltide_playground"', f'database = "{clickhouse_database}"'),
+        encoding="utf-8",
     )
+    arguments: tuple[str, ...] = ("--project-dir", str(project))
     seed_statements: list[str] = (
         (project / "seed.sql")
         .read_text(encoding="utf-8")
@@ -72,36 +74,24 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
     )
     for statement in seed_statements:
         clickhouse_client.command(statement)
-    consumer_query: str = (
-        (project / "consumer.sql")
-        .read_text(encoding="utf-8")
-        .replace("sqltide_playground.", f"{clickhouse_database}.")
-        .strip()
-        .rstrip(";")
-    )
-    candidate_query: str = (
-        (project / "candidate.sql")
-        .read_text(encoding="utf-8")
-        .replace("sqltide_playground.", f"{clickhouse_database}.")
-        .strip()
-        .rstrip(";")
-    )
-    initial_options: tuple[str, ...] = (
-        "--select",
-        "order_report",
-        "--deployment-id",
-        "20260101T100000Z_a",
-        *arguments,
-    )
-    assert run_cli(("sqt", "plan", *initial_options)) == 0
-    assert run_cli(("sqt", "build", "--auto-approve", *initial_options)) == 0
-    assert clickhouse_client.command(f"EXISTS TABLE {clickhouse_database}.tbl__order_report") == 0
-    assert run_cli(("sqt", "deployment", "promote", "20260101T100000Z_a", *arguments)) == 0
-    assert (
-        tuple(clickhouse_client.query(consumer_query).result_rows)
-        == test_case.expected_initial_rows
-    )
 
+    def query(file: str, *options: str) -> str:
+        capsys.readouterr()
+        assert (
+            run_cli(("sqt", "playground", "query", str(project / file), *options, *arguments)) == 0
+        )
+        return capsys.readouterr().out
+
+    assert run_cli(("sqt", "plan", *arguments)) == 0
+    assert run_cli(("sqt", "build", "--auto-approve", *arguments)) == 0
+    assert clickhouse_client.command(f"EXISTS TABLE {clickhouse_database}.tbl__order_report") == 0
+    assert run_cli(("sqt", "deployment", "promote", "--latest", *arguments)) == 0
+    assert query_rows(query("consumer.sql")) == test_case.expected_initial_rows
+    capsys.readouterr()
+    assert run_cli(("sqt", "deployment", "list", "--json", *arguments)) == 0
+    (first_deployment,) = json.loads(capsys.readouterr().out)["deployments"]
+
+    # A filter-only change plans and builds without --full-refresh.
     model: Path = project / "pipelines" / "pl__orders" / "order_report.sql"
     model.write_text(
         (project / "revisions" / "completed_orders.sql").read_text(encoding="utf-8"),
@@ -114,45 +104,19 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
     catalog_before: tuple[Sequence[object], ...] = tuple(
         clickhouse_client.query(catalog_query).result_rows
     )
-    candidate_options: tuple[str, ...] = (
-        "--select",
-        "order_report",
-        "--full-refresh",
-        "--deployment-id",
-        "20260101T110000Z_b",
-        *arguments,
-    )
-    assert run_cli(("sqt", "plan", *candidate_options)) == 0
+    assert run_cli(("sqt", "plan", *arguments)) == 0
     assert tuple(clickhouse_client.query(catalog_query).result_rows) == catalog_before
-    assert run_cli(("sqt", "build", "--auto-approve", *candidate_options)) == 0
-    assert run_cli(("sqt", "deployment", "show", "20260101T110000Z_b", *arguments)) == 0
-    assert run_cli(("sqt", "deployment", "diff", "20260101T110000Z_b", *arguments)) == 0
-    assert (
-        tuple(clickhouse_client.query(consumer_query).result_rows)
-        == test_case.expected_initial_rows
-    )
-    assert (
-        tuple(clickhouse_client.query(candidate_query).result_rows)
-        == test_case.expected_candidate_rows
-    )
+    assert run_cli(("sqt", "build", "--auto-approve", *arguments)) == 0
+    assert run_cli(("sqt", "deployment", "show", "--latest", *arguments)) == 0
+    assert run_cli(("sqt", "deployment", "diff", "--latest", *arguments)) == 0
+    assert query_rows(query("consumer.sql")) == test_case.expected_initial_rows
+    assert query_rows(query("consumer.sql", "--candidate")) == test_case.expected_candidate_rows
 
-    clickhouse_client.command(
-        (project / "live.sql")
-        .read_text(encoding="utf-8")
-        .replace("sqltide_playground.", f"{clickhouse_database}.")
-    )
-    assert (
-        tuple(clickhouse_client.query(consumer_query).result_rows) == test_case.expected_live_rows
-    )
-    assert (
-        tuple(clickhouse_client.query(candidate_query).result_rows)
-        == test_case.expected_promoted_rows
-    )
-    assert run_cli(("sqt", "deployment", "promote", "20260101T110000Z_b", *arguments)) == 0
-    assert (
-        tuple(clickhouse_client.query(consumer_query).result_rows)
-        == test_case.expected_promoted_rows
-    )
+    assert "INSERT: done" in query("live.sql")
+    assert query_rows(query("consumer.sql")) == test_case.expected_live_rows
+    assert query_rows(query("consumer.sql", "--candidate")) == test_case.expected_promoted_rows
+    assert run_cli(("sqt", "deployment", "promote", "--latest", *arguments)) == 0
+    assert query_rows(query("consumer.sql")) == test_case.expected_promoted_rows
     assert (
         clickhouse_client.command(f"SELECT count() FROM {clickhouse_database}.playground_orders")
         == 5
@@ -160,8 +124,8 @@ def test_given_generated_playground_when_promoting_candidate_then_consumer_switc
     assert (
         tuple(
             clickhouse_client.query(
-                f"SELECT order_id, status, total_cents FROM "
-                f"{clickhouse_database}.tbl__order_report__20260101T100000Z_a ORDER BY order_id"
+                f"SELECT order_id, status, total_cents FROM {clickhouse_database}."
+                f"tbl__order_report__{first_deployment['deployment_id']} ORDER BY order_id"
             ).result_rows
         )
         == test_case.expected_live_rows

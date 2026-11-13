@@ -5,7 +5,8 @@ use pyo3::types::{PyBool, PyDict, PyInt, PyTuple};
 use pyo3::wrap_pyfunction;
 
 use crate::cli::invocation::Invocation;
-use crate::cli::python::{flag, getattr_none, getattr_or, user_error};
+use crate::cli::playground::run_playground_query;
+use crate::cli::python::{flag, getattr_none, getattr_or, print_to, user_error};
 use crate::cli::sql::run_sql;
 use crate::dev_server::support::attr;
 
@@ -15,6 +16,8 @@ const AUTH_TYPES: &str = "sqltide.auth.types";
 const DEFAULT_DEV_SERVER_HOST: &str = "127.0.0.1";
 const DEFAULT_DEV_SERVER_PORT: i64 = 8000;
 const DEFAULT_SESSION_TTL_SECONDS: i64 = 43200;
+/// `DeploymentLifecycleState.STAGED`: built, complete and never published.
+const STAGED_STATE: &str = "staged";
 const TRUE_ENV_VALUES: [&str; 3] = ["1", "true", "yes"];
 /// Each handler name and where its default implementation lives.
 const DEFAULT_HANDLERS: [(&str, &str, &str); 18] = [
@@ -54,6 +57,89 @@ fn handler<'py>(
         .find(|(handler, _, _)| *handler == name)
         .ok_or_else(|| pyo3::exceptions::PyAttributeError::new_err(name.to_owned()))?;
     attr(py, module, attribute)
+}
+
+/// The deployment `--latest` names: the most recently created one. Promotion writes without
+/// asking, so there it must also be the only deployment never published, and its ID is printed.
+fn latest_deployment<'py>(
+    py: Python<'py>,
+    client: &Bound<'py, PyAny>,
+    database: &Bound<'py, PyAny>,
+    metadata_database: &Bound<'py, PyAny>,
+    promotion: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let metadata_database: &Bound<'py, PyAny> = if metadata_database.is_none() {
+        database
+    } else {
+        metadata_database
+    };
+    let inventory: Bound<'py, PyAny> = attr(py, NATIVE, "load_deployments")?.call(
+        (),
+        Some(&kwargs(
+            py,
+            vec![
+                ("client", client.clone()),
+                ("metadata_database", metadata_database.clone()),
+                ("default_database", database.clone()),
+            ],
+        )?),
+    )?;
+    // `(created_at, deployment_id, published, state)` per deployment with a build record.
+    let mut deployments: Vec<(String, String, bool, String)> = Vec::new();
+    for deployment in inventory.getattr("deployments")?.try_iter()? {
+        let deployment: Bound<'py, PyAny> = deployment?;
+        let created_at: Bound<'py, PyAny> = deployment.getattr("created_at")?;
+        if created_at.is_none() {
+            continue;
+        }
+        deployments.push((
+            created_at.str()?.to_string(),
+            deployment.getattr("deployment_id")?.extract()?,
+            !deployment.getattr("latest_published_at")?.is_none(),
+            deployment.getattr("state")?.str()?.to_string(),
+        ));
+    }
+    deployments.sort();
+    let Some((_, newest, newest_published, newest_state)) = deployments.last().cloned() else {
+        return Err(user_error(
+            py,
+            &format!("No deployments found in database '{}'.", database.str()?),
+            Some("Run sqt build first."),
+        ));
+    };
+    if promotion {
+        if newest_published {
+            return Err(user_error(
+                py,
+                &format!("The newest deployment, {newest}, is already published."),
+                Some("Build a new deployment, or name the one to promote."),
+            ));
+        }
+        if newest_state != STAGED_STATE {
+            return Err(user_error(
+                py,
+                &format!("The newest deployment, {newest}, is {newest_state}, not staged."),
+                Some("Run sqt build again, or name the deployment to promote."),
+            ));
+        }
+        let staged: Vec<&str> = deployments
+            .iter()
+            .filter(|(_, _, published, state)| !published && state == STAGED_STATE)
+            .map(|(_, deployment_id, _, _)| deployment_id.as_str())
+            .collect();
+        if staged.len() > 1 {
+            return Err(user_error(
+                py,
+                &format!(
+                    "More than one deployment is staged and unpublished: {}.",
+                    staged.join(", ")
+                ),
+                Some("Name the deployment to promote."),
+            ));
+        }
+        print_to(py, "stderr", &format!("Promoting deployment {newest}"))?;
+    }
+    Ok(newest.into_pyobject(py)?.into_any())
 }
 
 fn kwargs<'py>(py: Python<'py>, entries: Entries<'py>) -> PyResult<Bound<'py, PyDict>> {
@@ -282,6 +368,9 @@ pub(crate) fn dispatch_cli_command<'py>(
         .cloned()
         .ok_or_else(|| user_error(py, "Command requires a resolved adapter connection", None))?;
     match command {
+        "playground" => Ok(run_playground_query(py, args, &client, &database)?
+            .into_pyobject(py)?
+            .into_any()),
         "test" => call_handler(
             py,
             handlers,
@@ -409,6 +498,21 @@ pub(crate) fn dispatch_cli_command<'py>(
         }
         "deployment" => {
             let deployment_command: String = args.getattr("deployment_command")?.str()?.to_string();
+            if flag(args, "latest")? {
+                let latest: Bound<'py, PyAny> = latest_deployment(
+                    py,
+                    &client,
+                    &database,
+                    &metadata_database()?,
+                    deployment_command == "promote",
+                )?;
+                let dest: &str = if deployment_command == "diff" {
+                    "comparison"
+                } else {
+                    "deployment_id"
+                };
+                args.setattr(dest, latest)?;
+            }
             match deployment_command.as_str() {
                 "list" => call_handler(
                     py,

@@ -6,6 +6,8 @@ pipeline_mode = "virtual"
 kafka_broker_list = "redpanda.localhost:19092"
 
 [connection]
+# Ignore SQLTIDE_CLICKHOUSE_* variables so this project only ever reaches its own containers.
+environment = false
 host = "127.0.0.1"
 port = 18125
 username = "playground"

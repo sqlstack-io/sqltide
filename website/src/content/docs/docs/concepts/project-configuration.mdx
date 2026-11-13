@@ -132,6 +132,17 @@ the warehouse — for example capping `max_threads` so a large replay does not e
 A target's `settings` table replaces the project-level one rather than merging key by key.
 ClickHouse rejects unknown setting names, so a typo fails on connect.
 
+`environment = false` makes the project ignore the `SQLTIDE_CLICKHOUSE_*` variables, so a variable
+exported for another warehouse cannot redirect it. CLI connection flags still apply. Projects
+created by `sqt playground` set it:
+
+```toml
+[connection]
+environment = false
+host = "127.0.0.1"
+port = 18124
+```
+
 ## Kafka and retention defaults
 
 Set a broker list once for every managed Kafka source in the project:
@@ -357,7 +368,8 @@ sqt plan --vars '{"environment_name":"ci"}'
 3. selected local target connection
 4. local connection
 5. `SQLTIDE_CLICKHOUSE_HOST`, `SQLTIDE_CLICKHOUSE_PORT`,
-   `SQLTIDE_CLICKHOUSE_USERNAME`, and `SQLTIDE_CLICKHOUSE_PASSWORD`
+   `SQLTIDE_CLICKHOUSE_USERNAME`, and `SQLTIDE_CLICKHOUSE_PASSWORD`, unless the connection sets
+   `environment = false`
 6. CLI connection flags
 
 There is no public metadata-database override. Metadata lives in the selected target database.

@@ -62,3 +62,10 @@ class ExternalReplayAnchorTestCase:
     boundary_key: str
     cutoff_value: str
     expected_request_count: int
+
+
+@dataclass(frozen=True)
+class StagedViewActiveSourceTestCase:
+    description: str
+    active_source_binding: str | None
+    expected_source_pattern: str

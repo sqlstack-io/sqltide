@@ -9,7 +9,7 @@ from sqltide.compiler.compile.models import (
     ObjectKey,
 )
 from sqltide.compiler.planner.constants import REBUILD_EXECUTION_MODE_FULL
-from sqltide.compiler.planner.models import ActualState, DeploymentPlan
+from sqltide.compiler.planner.models import ActualState, DeploymentPlan, RebuildSubtree
 from sqltide.compiler.planner.types import DeploymentAction
 from tests.unit.src.sqltide.compiler.planner._test_types import (
     PlannerDeploymentPlanTestCase,
@@ -144,9 +144,7 @@ def test_given_view_only_change_when_planning_deployment_then_it_has_no_replay_r
 def test_given_query_only_change_when_planning_deployment_then_it_roots_at_the_target_table(
     test_case: PlannerQueryOnlyChangeTestCase,
 ) -> None:
-    published: DesiredState = build_single_transform_desired_state(
-        query=test_case.published_query
-    )
+    published: DesiredState = build_single_transform_desired_state(query=test_case.published_query)
 
     deployment_plan: DeploymentPlan = plan_deployment(
         desired_state=build_single_transform_desired_state(query=test_case.changed_query),
@@ -156,7 +154,7 @@ def test_given_query_only_change_when_planning_deployment_then_it_roots_at_the_t
     )
 
     assert len(deployment_plan.rebuild_subtrees) == 1
-    subtree = deployment_plan.rebuild_subtrees[0]
+    subtree: RebuildSubtree = deployment_plan.rebuild_subtrees[0]
     assert key_parts(subtree.root_key) == test_case.expected_root_key
     assert tuple(key_parts(key) for key in subtree.affected_keys) == (
         test_case.expected_affected_keys
