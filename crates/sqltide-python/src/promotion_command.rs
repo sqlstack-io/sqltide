@@ -25,18 +25,18 @@ fn items<'py>(value: &Any<'py>, field: &str) -> PyResult<Vec<Any<'py>>> {
     value.getattr(field)?.try_iter()?.collect()
 }
 
-/// Refuse to promote a deployment when one of its relations reads another deployment's physical
-/// table that will not be its upstream's published version after the promotion. Those rows come
-/// from a version consumers no longer read, the candidate was compared against it, and janitor
-/// may drop it. Rebinding instead would publish something nobody reviewed.
-fn refuse_stale_upstreams<'py>(
-    py: Python<'py>,
+/// Why promoting a deployment must be refused, when one of its relations reads another
+/// deployment's physical table that will not be its upstream's published version after the
+/// promotion. Those rows come from a version consumers no longer read, the candidate was
+/// compared against it, and janitor may drop it. Rebinding instead would publish something
+/// nobody reviewed.
+pub(crate) fn stale_upstream_message<'py>(
     client: &Any<'py>,
     metadata_database: &Any<'py>,
     default_database: &Any<'py>,
     deployment_id: &Any<'py>,
     binding_request: &Any<'py>,
-) -> PyResult<()> {
+) -> PyResult<Option<String>> {
     let default_text: String = default_database.extract()?;
     let catalog: Any<'py> = client.call_method1("load_catalog", (default_database,))?;
     let relations: Vec<Any<'py>> = items(&catalog, "relations")?;
@@ -91,7 +91,7 @@ fn refuse_stale_upstreams<'py>(
         }
     }
     if stale.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let mut models: HashMap<String, String> = HashMap::new();
     let inventory: Any<'py> =
@@ -126,17 +126,14 @@ fn refuse_stale_upstreams<'py>(
             selected.push(model(reader));
         }
     }
-    let message: String = format!(
-        "Deployment {} reads an upstream version that is no longer published, so it was not \
-         promoted:\n{}\nRebuild the candidate with `sqt build --select {}`, then promote \
+    Ok(Some(format!(
+        "Deployment {} reads an upstream version that is no longer published, so it cannot \
+         be promoted:\n{}\nRebuild the candidate with `sqt build --select {}`, then promote \
          that build by the ID it prints.",
         deployment_id.str()?,
         lines.join("\n"),
         selected.join(" "),
-    );
-    Err(PyErr::from_value(
-        attr(py, PROMOTION_EXCEPTIONS, "PublishExecutionError")?.call1((message,))?,
-    ))
+    )))
 }
 
 /// The single publish event recorded for this promotion.
@@ -298,15 +295,18 @@ fn execute_publish<'py>(
             &deployment_id,
             None,
         )?;
-        if !request.getattr("operation")?.eq("rollback")? {
-            refuse_stale_upstreams(
-                py,
+        if !request.getattr("operation")?.eq("rollback")?
+            && let Some(message) = stale_upstream_message(
                 client,
                 &metadata_database,
                 &default_database,
                 &deployment_id,
                 &binding_request,
-            )?;
+            )?
+        {
+            return Err(PyErr::from_value(
+                attr(py, PROMOTION_EXCEPTIONS, "PublishExecutionError")?.call1((message,))?,
+            ));
         }
         let view_class: Any<'py> = attr(py, PROMOTION_MODELS, "PublishedView")?;
         let mut views: Vec<(Any<'py>, Any<'py>)> = Vec::new();

@@ -470,6 +470,7 @@ type DeploymentPromotionPreview = {
 		logicalName: string;
 		physicalName: string;
 	}[];
+	blockedReason: string | null;
 };
 
 export type DeploymentDetail = Deployment & {

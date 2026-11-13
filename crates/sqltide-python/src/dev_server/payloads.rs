@@ -4,7 +4,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use super::support::attr;
+use crate::deployment_resolution::build_publish_binding_request;
 use crate::planner_support::{deployment_id_from_physical_name, logical_name_from_physical_name};
+use crate::promotion_command::stale_upstream_message;
 use crate::py_kwargs;
 
 fn list_of<'py>(py: Python<'py>, items: Vec<Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyAny>> {
@@ -370,6 +372,7 @@ fn deployment_id_or_none(physical_name: Option<&str>) -> PyResult<Option<String>
 fn promotion_preview_payload<'py>(
     py: Python<'py>,
     preview: Option<&Bound<'py, PyAny>>,
+    blocked_reason: Option<String>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let Some(preview) = preview else {
         return Ok(py.None().into_bound(py));
@@ -416,6 +419,7 @@ fn promotion_preview_payload<'py>(
         additions = list_of(py, additions)?,
         replacements = list_of(py, replacements)?,
         removals = list_of(py, removals)?,
+        blockedReason = blocked_reason,
     )?
     .into_any())
 }
@@ -510,6 +514,24 @@ pub(crate) fn build_deployment_detail_payload<'py>(
             promotion_preview = Some(candidate);
         }
     }
+    // The same refusal `sqt deployment promote` and the promote route apply, shown before it runs.
+    let blocked_reason: Option<String> = match &promotion_preview {
+        None => None,
+        Some(_) => {
+            let metadata: Bound<'py, PyAny> = metadata_database.into_pyobject(py)?.into_any();
+            let target: Bound<'py, PyAny> = database.into_pyobject(py)?.into_any();
+            let identifier: Bound<'py, PyAny> = deployment_id.into_pyobject(py)?.into_any();
+            let request: Bound<'py, PyAny> = build_publish_binding_request(
+                py,
+                &connection,
+                &metadata,
+                &target,
+                &identifier,
+                Some(inspected.clone()),
+            )?;
+            stale_upstream_message(&connection, &metadata, &target, &identifier, &request)?
+        }
+    };
     let orphaned: Vec<String> = match &promotion_preview {
         None => Vec::new(),
         Some(preview) => preview
@@ -526,7 +548,7 @@ pub(crate) fn build_deployment_detail_payload<'py>(
     payload.set_item("models", list_of(py, models)?)?;
     payload.set_item(
         "promotionPreview",
-        promotion_preview_payload(py, promotion_preview.as_ref())?,
+        promotion_preview_payload(py, promotion_preview.as_ref(), blocked_reason)?,
     )?;
     payload.set_item(
         "wouldOrphan",

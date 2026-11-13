@@ -1471,6 +1471,91 @@ def build_fake_partial_promotion_connection() -> FakeDeploymentConnection:
     )
 
 
+DEPLOYMENT_SUPERSEDED_ID: str = "20260405T120000Z_ee77aa"
+
+
+def build_fake_stale_upstream_connection(
+    *, upstream_deployment_id: str
+) -> FakeDeploymentConnection:
+    """A staged downstream whose view reads the supplied deployment's ``tbl__orders`` table."""
+
+    active_orders: str = f"tbl__orders__{DEPLOYMENT_ACTIVE_ID}"
+    staged_relations: tuple[str, ...] = (
+        f"tbl__revenue__{DEPLOYMENT_STAGED_ID}",
+        f"mv__revenue__{DEPLOYMENT_STAGED_ID}",
+    )
+    column: CatalogColumn = CatalogColumn(name="order_id", type="String")
+    return FakeDeploymentConnection(
+        catalog=CatalogSnapshot(
+            identity=CatalogIdentity(
+                adapter=AdapterIdentity(name="clickhouse"), database="analytics"
+            ),
+            warehouse_timezone="UTC",
+            relations=(
+                CatalogRelation(
+                    name=active_orders,
+                    engine="ReplacingMergeTree",
+                    columns=(column,),
+                    order_by=("order_id",),
+                ),
+                CatalogRelation(
+                    name="tbl__orders",
+                    engine="View",
+                    columns=(column,),
+                    source_relation_names=(active_orders,),
+                    stable_binding_name=active_orders,
+                ),
+                CatalogRelation(
+                    name=staged_relations[0],
+                    engine="ReplacingMergeTree",
+                    columns=(column,),
+                    order_by=("order_id",),
+                ),
+                CatalogRelation(
+                    name=staged_relations[1],
+                    engine="MaterializedView",
+                    columns=(column,),
+                    source_relation_names=(f"tbl__orders__{upstream_deployment_id}",),
+                    target_relation_name=staged_relations[0],
+                ),
+            ),
+        ),
+        results_by_query=build_deployment_stats_result(
+            storage_rows=((active_orders, 1000, 4096), (staged_relations[0], 60, 640))
+        ),
+        warehouse_timestamp="2026-04-10 01:00:00.000",
+        inventory=AdapterDeploymentInventory(
+            deployments=(
+                build_deployment_record(
+                    deployment_id=DEPLOYMENT_ACTIVE_ID,
+                    relations=(active_orders,),
+                    status="published",
+                ),
+                build_deployment_record(
+                    deployment_id=DEPLOYMENT_STAGED_ID,
+                    relations=staged_relations,
+                    status="staged",
+                ),
+            ),
+            publish_events=(
+                AdapterPublishEventRecord(
+                    deployment_id=DEPLOYMENT_ACTIVE_ID,
+                    published_at="2026-04-08 09:15:00.000000",
+                    logical_view_names=("tbl__orders",),
+                ),
+            ),
+        ),
+        managed_state=InspectedManagedTableState(
+            active_bindings=(
+                InspectedActiveTableBinding(
+                    database="analytics", logical_name="tbl__orders", physical_name=active_orders
+                ),
+            ),
+            physical_candidates=(),
+        ),
+    )
+
+
 def build_fake_candidate_only_promotion_connection() -> FakeDeploymentConnection:
     """A renamed binding whose staged candidate appears new but removes its live predecessor."""
 

@@ -12,13 +12,16 @@ from tests.unit.src.sqltide.dev_server._test_types import (
     DeploymentInitialPublishSafetyTestCase,
     DeploymentPartialPromotionTestCase,
     DeploymentsPayloadTestCase,
+    DeploymentStaleUpstreamTestCase,
 )
 from tests.unit.src.sqltide.dev_server.helpers import (
     DEPLOYMENT_ACTIVE_ID,
     DEPLOYMENT_STAGED_ID,
+    DEPLOYMENT_SUPERSEDED_ID,
     build_fake_candidate_only_promotion_connection,
     build_fake_deployment_connection,
     build_fake_partial_promotion_connection,
+    build_fake_stale_upstream_connection,
 )
 
 
@@ -220,6 +223,46 @@ def test_given_unknown_deployment_when_building_detail_then_no_payload_is_return
     )
 
     assert payload == test_case.expected_payload
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        DeploymentStaleUpstreamTestCase(
+            description="downstream reading the published upstream stays promotable",
+            upstream_deployment_id=DEPLOYMENT_ACTIVE_ID,
+            expected_blocked_reason=None,
+        ),
+        DeploymentStaleUpstreamTestCase(
+            description="downstream reading a superseded upstream shows the promote refusal",
+            upstream_deployment_id=DEPLOYMENT_SUPERSEDED_ID,
+            expected_blocked_reason=(
+                f"Deployment {DEPLOYMENT_STAGED_ID} reads an upstream version that is no longer "
+                "published, so it cannot be promoted:\n"
+                f"- tbl__revenue reads tbl__orders__{DEPLOYMENT_SUPERSEDED_ID}, but tbl__orders "
+                f"now reads tbl__orders__{DEPLOYMENT_ACTIVE_ID}\n"
+                "Rebuild the candidate with `sqt build --select tbl__revenue`, then promote that "
+                "build by the ID it prints."
+            ),
+        ),
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_staged_downstream_when_previewing_then_stale_upstream_refusal_is_shown(
+    test_case: DeploymentStaleUpstreamTestCase,
+) -> None:
+    payload: dict[str, object] | None = build_deployment_detail_payload(
+        connection=build_fake_stale_upstream_connection(
+            upstream_deployment_id=test_case.upstream_deployment_id
+        ),
+        database="analytics",
+        metadata_database="analytics",
+        deployment_id=DEPLOYMENT_STAGED_ID,
+    )
+
+    resolved: dict[str, object] = cast(dict[str, object], payload)
+    preview: dict[str, object] = cast(dict[str, object], resolved["promotionPreview"])
+    assert preview["blockedReason"] == test_case.expected_blocked_reason
 
 
 if __name__ == "__main__":
