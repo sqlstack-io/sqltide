@@ -1,10 +1,13 @@
 //! Deployment promotion: rebind stable logical views to a staged deployment and record the
 //! publication, under the target mutation lock.
 
+use std::collections::{HashMap, HashSet};
+
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use sqltide_planner::direct::sha256_hex;
+use sqltide_planner::naming::{is_deployment_id, split_physical_name};
 
 use crate::deployment_resolution::{build_publish_binding_request, resolve_publish_deployment_id};
 use crate::dev_server::support::attr;
@@ -14,11 +17,123 @@ use crate::workflow_statements::{mutation, numbered};
 
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const PROMOTION_MODELS: &str = "sqltide.executor.promotion.models";
+const PROMOTION_EXCEPTIONS: &str = "sqltide.executor.promotion.exceptions";
 
 type Any<'py> = Bound<'py, PyAny>;
 
 fn items<'py>(value: &Any<'py>, field: &str) -> PyResult<Vec<Any<'py>>> {
     value.getattr(field)?.try_iter()?.collect()
+}
+
+/// Why promoting a deployment must be refused, when one of its relations reads another
+/// deployment's physical table that will not be its upstream's published version after the
+/// promotion. Those rows come from a version consumers no longer read, the candidate was
+/// compared against it, and janitor may drop it. Rebinding instead would publish something
+/// nobody reviewed.
+pub(crate) fn stale_upstream_message<'py>(
+    client: &Any<'py>,
+    metadata_database: &Any<'py>,
+    default_database: &Any<'py>,
+    deployment_id: &Any<'py>,
+    binding_request: &Any<'py>,
+) -> PyResult<Option<String>> {
+    let default_text: String = default_database.extract()?;
+    let catalog: Any<'py> = client.call_method1("load_catalog", (default_database,))?;
+    let relations: Vec<Any<'py>> = items(&catalog, "relations")?;
+    // Each stable name and the physical relation it reads once this deployment is published.
+    let mut published: HashMap<String, String> = HashMap::new();
+    for relation in &relations {
+        let binding: Any<'py> = relation.getattr("stable_binding_name")?;
+        if !binding.is_none() {
+            published.insert(relation.getattr("name")?.extract()?, binding.extract()?);
+        }
+    }
+    let mut own: HashSet<String> = HashSet::new();
+    for binding in items(binding_request, "bindings")? {
+        if binding.getattr("database")?.extract::<String>()? != default_text {
+            continue;
+        }
+        let physical: String = binding.getattr("physical_name")?.extract()?;
+        published.insert(
+            binding.getattr("logical_name")?.extract()?,
+            physical.clone(),
+        );
+        own.insert(physical);
+    }
+    // Stable names this promotion removes are no longer published either.
+    for removal in items(binding_request, "removals")? {
+        if removal.getattr("database")?.extract::<String>()? == default_text {
+            published.remove(&removal.getattr("logical_name")?.extract::<String>()?);
+        }
+    }
+    // (relation of this deployment, the physical table it reads, what its stable name publishes)
+    let mut stale: Vec<(String, String, Option<String>)> = Vec::new();
+    for relation in &relations {
+        let name: String = relation.getattr("name")?.extract()?;
+        let target: Option<String> = relation.getattr("target_relation_name")?.extract()?;
+        let reader: String = match target {
+            Some(target) if own.contains(&target) => target,
+            _ if own.contains(&name) => name,
+            _ => continue,
+        };
+        for source in items(relation, "source_relation_names")? {
+            let source: String = source.extract()?;
+            let Some((logical, suffix)) = split_physical_name(&source) else {
+                continue;
+            };
+            if own.contains(&source) || !is_deployment_id(suffix) {
+                continue;
+            }
+            let current: Option<&String> = published.get(logical);
+            if current != Some(&source) {
+                stale.push((reader.clone(), source.clone(), current.cloned()));
+            }
+        }
+    }
+    if stale.is_empty() {
+        return Ok(None);
+    }
+    let mut models: HashMap<String, String> = HashMap::new();
+    let inventory: Any<'py> =
+        client.call_method1("load_deployment_inventory", (metadata_database,))?;
+    for deployment in items(&inventory, "deployments")? {
+        if deployment.getattr("deployment_id")?.eq(deployment_id)? {
+            for mapping in items(&deployment, "prepared_object_mappings")? {
+                models.insert(
+                    mapping.getattr("physical_name")?.extract()?,
+                    mapping.getattr("logical_model_name")?.extract()?,
+                );
+            }
+        }
+    }
+    // The model's name, or the reader's stable name when the inventory has no mapping for it.
+    let model = |reader: &String| {
+        models.get(reader).cloned().unwrap_or_else(|| {
+            split_physical_name(reader)
+                .map_or_else(|| reader.clone(), |(logical, _)| logical.to_owned())
+        })
+    };
+    let mut lines: Vec<String> = Vec::new();
+    let mut selected: Vec<String> = Vec::new();
+    for (reader, source, current) in &stale {
+        let (logical, _) = split_physical_name(source).unwrap_or((source, ""));
+        let now: String = current.as_ref().map_or_else(
+            || format!("{logical} is not published"),
+            |current| format!("{logical} now reads {current}"),
+        );
+        lines.push(format!("- {} reads {source}, but {now}", model(reader)));
+        if !selected.contains(&model(reader)) {
+            selected.push(model(reader));
+        }
+    }
+    Ok(Some(format!(
+        "Deployment {} reads an upstream version that is no longer published, so it cannot \
+         be promoted:\n{}\nRebuild the candidate with `sqt build --select {}`, then promote \
+         that build by the ID it prints.",
+        deployment_id.str()?,
+        lines.join("\n"),
+        selected.join(" "),
+    )))
 }
 
 /// The single publish event recorded for this promotion.
@@ -180,6 +295,19 @@ fn execute_publish<'py>(
             &deployment_id,
             None,
         )?;
+        if !request.getattr("operation")?.eq("rollback")?
+            && let Some(message) = stale_upstream_message(
+                client,
+                &metadata_database,
+                &default_database,
+                &deployment_id,
+                &binding_request,
+            )?
+        {
+            return Err(PyErr::from_value(
+                attr(py, PROMOTION_EXCEPTIONS, "PublishExecutionError")?.call1((message,))?,
+            ));
+        }
         let view_class: Any<'py> = attr(py, PROMOTION_MODELS, "PublishedView")?;
         let mut views: Vec<(Any<'py>, Any<'py>)> = Vec::new();
         let mut published: Vec<Any<'py>> = Vec::new();

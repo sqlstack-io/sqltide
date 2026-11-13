@@ -389,10 +389,16 @@
 										: 's'} ({formatBytes(detail.wouldOrphan.bytes)}) will no longer be live.
 								{/if}
 							</div>
+							{#if detail.promotionPreview.blockedReason !== null}
+								<div
+									class="whitespace-pre-wrap break-words pb-2 font-mono text-[10.5px] leading-snug"
+									style:color="var(--sb-error)"
+								>{detail.promotionPreview.blockedReason}</div>
+							{/if}
 							<button
 								class="bg-primary text-primary-foreground w-full rounded-[3px] px-3 py-1.5 text-[12px] font-medium disabled:opacity-50"
 								onclick={() => void promote()}
-								disabled={promoting || !promoteAllowed}
+								disabled={promoting || !promoteAllowed || detail.promotionPreview.blockedReason !== null}
 								title={promoteAllowed ? undefined : 'Requires the deployment.promote permission'}
 							>
 								{promoting

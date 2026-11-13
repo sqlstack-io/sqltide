@@ -626,3 +626,13 @@ class VirtualDownstreamOnlyChangeIntegrationTestCase:
     description: str
     expected_after_downstream_promotion: tuple[str, ...]
     expected_after_upstream_promotion: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class VirtualStaleUpstreamPromotionIntegrationTestCase:
+    description: str
+    upstream_deployment_id: str
+    downstream_deployment_id: str
+    rebuilt_deployment_id: str
+    expected_error_fragments: tuple[str, ...]
+    expected_after_rebuild: tuple[str, ...]

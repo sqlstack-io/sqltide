@@ -647,6 +647,13 @@ class DeploymentPartialPromotionTestCase:
 
 
 @dataclass(frozen=True)
+class DeploymentStaleUpstreamTestCase:
+    description: str
+    upstream_deployment_id: str
+    expected_blocked_reason: str | None
+
+
+@dataclass(frozen=True)
 class BoundRelationStatsTestCase:
     description: str
     stats: tuple[tuple[str, int, int, int], ...]
