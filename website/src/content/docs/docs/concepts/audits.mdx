@@ -86,17 +86,15 @@ upstream models. A trailing `+` is not supported for audits.
 ## Staged audits
 
 ```bash
-DEPLOYMENT_ID="replace-with-deployment-id"
-sqt deployment audit "$DEPLOYMENT_ID"
+sqt deployment audit --latest
 ```
 
 This virtual-environment command resolves refs to deployment tables. The command combines
 staged-versus-active comparisons, replay coverage, and data-quality results into an overall
-readiness assessment: `ready`, `caution`, or `not_ready`. Here, **audit** names the operation and
-**assessment** names its result.
+result: `ready`, `caution`, or `not_ready`.
 
-`deployment audit` does not accept `--select`. Error-severity failures produce a `not_ready`
-assessment, but SQLTide does not enforce that result as a promotion lock. Warning-severity
+`deployment audit` does not accept `--select`. An error-severity failure makes the result
+`not_ready`, but `sqt deployment promote` does not check the result. Warning-severity
 failures are included in the results without changing the assessment by themselves. See
 [Virtual Environments](/concepts/deployments#audit-staged-data) for the meaning of each assessment.
 

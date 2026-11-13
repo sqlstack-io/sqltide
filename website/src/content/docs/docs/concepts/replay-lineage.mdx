@@ -20,13 +20,9 @@ The normalized columns are `_replay_partition`, `_replay_offset`, `_replay_times
 
 ## Inclusive, at-least-once cutoffs
 
-Every replay boundary is inclusive. SQLTide intentionally allows overlap between rows handled
-by an attached live materialized view and rows inserted by replay. This avoids missing data at the
-cutoff, but it is not an exactly-once guarantee.
-
-Replay includes rows at boundary `B`, while the attached live materialized view may also deliver
-those same boundary rows. This deliberate at-least-once overlap closes the gap between retained
-history and live ingestion; it does not deduplicate the target.
+Every replay boundary is inclusive. A row at boundary `B` can reach the target twice: once through
+the live materialized view and once through replay. This way no row is missed, but SQLTide does
+not remove the duplicate.
 
 Model SQL and ClickHouse engines own deduplication or aggregate idempotency.
 
@@ -87,8 +83,8 @@ split, `bounded_replay_fallback` controls the result:
 
 `--full-refresh` forces full replay for selected virtual-environment models. `--start-time` requests
 a bounded replay from an explicit time. Virtual environments require active published roots and may
-seed pre-window history. Direct mode performs an unseeded destructive rebuild, preserves source
-relations unchanged, and intentionally omits pre-window derived output.
+seed pre-window history. Direct mode drops and rebuilds the selected models, leaves sources
+unchanged, and leaves the model tables without rows from before the start time.
 
 Start-time boundaries are UTC instants, not warehouse-local wall times. Generated replay SQL uses
 explicit UTC `DateTime64` literals so server timezone and daylight-saving transitions cannot shift or

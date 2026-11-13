@@ -15,8 +15,8 @@ Builds emit a heartbeat every 10 seconds. A run without a terminal fact appears 
 | `unresponsive` | No signal has arrived for 45 seconds |
 | `presumed failed` | No signal has arrived for the configured safety window; default `10m` |
 
-These are derived display states rather than persisted outcomes. They can reverse if a delayed
-heartbeat or terminal event arrives. Configure the safety window with
+SQLTide works these states out from heartbeats and does not record them, so a run returns to
+`running` or finishes if a late heartbeat or its final event arrives. Configure the safety window with
 `[defaults].run_presumed_failed_after`.
 
 ## Cancellation and recovery

@@ -3,15 +3,14 @@ title: "sqt deployment"
 description: "Discover, inspect, compare, audit, promote, and roll back virtual deployments."
 ---
 
-The deployment command family uses explicit resource operations:
+List, inspect, audit, promote and roll back the deployments that virtual builds create:
 
 ```bash
-DEPLOYMENT_ID="replace-with-deployment-id"
 sqt deployment list
-sqt deployment show "$DEPLOYMENT_ID"
-sqt deployment diff "$DEPLOYMENT_ID"
-sqt deployment audit "$DEPLOYMENT_ID"
-sqt deployment promote "$DEPLOYMENT_ID"
+sqt deployment show --latest
+sqt deployment diff --latest
+sqt deployment audit --latest
+sqt deployment promote --latest
 sqt deployment rollback --previous
 ```
 
@@ -23,8 +22,8 @@ retention cleanup. Audit and rollback remain CLI operations.
 
 ## List and show
 
-`deployment list` reconstructs authoritative inventory from append-only lifecycle metadata and live
-ClickHouse catalog evidence. Deployments are reported as `active`, `staged`, `superseded`,
+`deployment list` shows every deployment SQLTide recorded and checks each against the tables in
+ClickHouse. Deployments are reported as `active`, `staged`, `superseded`,
 `incomplete`, `metadata_missing`, or `physical_missing`.
 
 `deployment show <deployment-id>` displays one deployment's persisted status, roots, physical
@@ -41,9 +40,8 @@ Diff is read-only.
 
 ## Audit
 
-`deployment audit <deployment-id>` combines staged-versus-active comparison, replay coverage, and
-applicable SQL audits. The audit is the operation; its overall readiness assessment is `ready`,
-`caution`, or `not_ready`:
+`deployment audit` compares the staged deployment with what consumers read now, checks replay
+coverage and runs the SQL audits that apply, then reports `ready`, `caution` or `not_ready`:
 
 - `ready` means the available evidence satisfies the configured checks and no error-severity SQL
   audit failed.
@@ -54,15 +52,16 @@ The command does not accept `--select`. A successful command exits 0 even when t
 assessment is `not_ready`.
 
 <Warning>
-  Readiness is an operator safety signal, not an enforced promotion lock. Treat `not_ready` as a
-  reason to stop and investigate.
+  `deployment promote` does not check this result and will promote a `not_ready` deployment. Find
+  out why it is `not_ready` before you promote it.
 </Warning>
 
 ## Promote
 
-`deployment promote <deployment-id>` atomically replaces each stable `tbl__*` view so it points to
-the selected deployment table. The complete graph is not switched in one transaction; bindings are
-replaced one relation at a time and the command reports adapter atomicity.
+`deployment promote` points each stable `tbl__*` view at the deployment's table. Each view switches
+atomically, but the views switch one at a time, not all together. It refuses a deployment built on
+an upstream model version that is no longer published; rebuild that model with
+`sqt build --select <model>` and promote the new build.
 
 ## Rollback
 
@@ -72,14 +71,16 @@ Both forms restore the complete set of stable bindings and require confirmation 
 `--auto-approve` is supplied. `--json` requires `--auto-approve`.
 
 Rollback only accepts successfully published deployments whose complete physical binding set is
-still available. It rejects active-view drift rather than performing a partial rollback.
+still available. If a stable view no longer points where SQLTide last left it, rollback refuses
+and changes nothing.
 
 <Warning>
   Rollback switches definitions and bindings. It is not point-in-time data recovery: retained
   streaming deployment tables can continue receiving rows after their original publication.
 </Warning>
 
-Show, audit, promote, and explicit rollback require a positional deployment ID. SQLTide never
-selects a sole or latest candidate implicitly. Use `deployment list` to discover generated IDs.
-Older deployment objects remain available for comparison, rollback, diagnosis, repair, and top-level
-`sqt janitor` cleanup.
+Show, diff, audit and promote take a deployment ID, or `--latest` for the most recently built
+deployment. `promote --latest` refuses when that deployment is already published or when more than
+one deployment is staged; then pass an ID from `deployment list`. Rollback takes an ID or
+`--previous`. Older deployments remain available for comparison, rollback, diagnosis, repair, and
+top-level `sqt janitor` cleanup.

@@ -19,10 +19,8 @@ not fail the command.
 Selectors support bare model names, `pipeline:<name>`, and optional leading `+` for upstream
 models. Multiple selectors are repeatable. Trailing `+` is not accepted by audit selection.
 
-Live audits respect each audit's post-build warmup and report an ineligible audit as deferred. Use
-`--force` for an intentional early evaluation; the result still records the audit's effective
-cadence and warmup policy.
+An audit still in its post-build warmup is reported as deferred instead of run. `--force` runs it
+anyway; the result still records the audit's cadence and warmup.
 
-Use [`sqt deployment audit <deployment-id>`](/cli/deployment) to audit staged data and produce an
-overall readiness assessment before promotion. Live audit and staged deployment assessment are
-deliberately separate operations.
+To check a staged deployment before you promote it, run
+[`sqt deployment audit --latest`](/cli/deployment). `sqt audit` checks only what consumers read now.

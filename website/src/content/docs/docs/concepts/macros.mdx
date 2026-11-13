@@ -3,8 +3,8 @@ title: "Python Macros"
 description: "Invocation-scoped Python functions that generate SQL at compile time."
 ---
 
-Macros are trusted project-local Python functions. SQLTide loads one deterministic registry per
-compile invocation and expands calls before SQL analysis.
+Macros are Python functions in your project that return SQL. SQLTide runs them as trusted code
+each time it compiles, and expands each call before it checks the SQL.
 
 ```text
 macros/

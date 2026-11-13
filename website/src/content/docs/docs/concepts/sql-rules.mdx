@@ -78,7 +78,7 @@ selectors in one entry form a union. Layout formatting validates selector owners
 connection-free compilation before writing; ignores also exclude semantic fixes.
 Inline `sqt: ignore` / `sqb: ignore` comments are rejected, not treated as suppressions.
 
-Intentional opt-outs are `sql_analysis false` in a MODEL, TEST, or AUDIT header,
+To skip SQL Rules, use `sql_analysis false` in a MODEL, TEST, or AUDIT header,
 `[settings] sql_analysis = false` in project configuration, or `--no-sql-analysis` for one
 command. They skip configurable SQL Rules, **not** mandatory type inference, dependency,
 replay, or realization validation. Layout-only formatting remains available for opted-out SQL.

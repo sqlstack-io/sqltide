@@ -62,8 +62,8 @@ _sqltide_virtual_publications
 
 Direct mode treats project declarations, the live catalog, and live data as authoritative.
 `_sqltide_direct_fingerprints` provides SQL baseline history for diffs and changed-model selection.
-Ownership-generation and target-lock records also protect mutations; a familiar object name alone
-is not deletion authority.
+Ownership and target-lock records also protect changes: SQLTide never drops an object only because
+its name looks like one of its own.
 
 Execution observability uses three append-only tables:
 

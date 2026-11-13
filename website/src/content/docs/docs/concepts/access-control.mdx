@@ -64,7 +64,7 @@ Each grant contains exactly one scope:
 | `scope: project` | The served project | Reload, project-wide quality, messages, automation |
 | `scope: target` | The selected warehouse target | Messages, force-kill, cleanup, reset, automation |
 
-The permission vocabulary is intentionally closed:
+These are the only permissions; there is no way to add your own:
 
 | Permission | Allows |
 |---|---|
@@ -114,8 +114,8 @@ missing pipelines: customer_exports
 target: prod
 ```
 
-There is no partial execution. Missing policies, missing assignments, stale roles, target
-mismatches, unknown pipeline ownership, and incomplete pipeline coverage all fail closed.
+Nothing runs partly. Missing policies, missing assignments, stale roles, target mismatches, unknown
+pipeline ownership and incomplete pipeline coverage all refuse the request.
 
 <Tip>
   Prefer several small roles that describe jobs people perform over one broad operator role. Users

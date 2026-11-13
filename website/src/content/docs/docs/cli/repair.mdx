@@ -6,21 +6,19 @@ description: "Re-point one stable view to an explicit deployment table."
 Repair one broken or incorrect virtual-environment binding:
 
 ```bash
-DEPLOYMENT_ID="replace-with-deployment-id"
-sqt repair active-view \
-  --table tbl__orders \
-  --deployment-id "$DEPLOYMENT_ID"
+sqt doctor
+sqt repair active-view --table tbl__orders --deployment-id 20260729T120000Z_ab12cd
 ```
 
 The command derives `tbl__orders__<deployment_id>`, atomically replaces the stable view binding,
 and emits the resulting table and target names as JSON.
 
-Both `--table` and `--deployment-id` are required. Use [`sqt doctor`](/cli/doctor) first to inspect
-available candidates and verify the intended target.
+Both `--table` and `--deployment-id` are required. [`sqt doctor`](/cli/doctor) lists each stable
+view with the deployments it can point at; pass one of those IDs.
 
 <Warning>
-  Repair is an explicit operator mutation. It does not compile the graph, run audits, verify graph
-  consistency, or switch related views.
+  Repair changes only this one view. It does not compile the project, run audits, check that the
+  other views still match, or switch them.
 </Warning>
 
 `repair active-view` requires virtual environments.

@@ -13,8 +13,8 @@ The UI launches direct, virtual, and mixed plans through the same
 `sqt build --auto-approve --events` execution path as the CLI. Protected pipelines still require
 their exact configured confirmation values. Virtual work remains staged until promotion.
 
-The displayed plan is a snapshot, not a lock. SQLTide performs a fresh command invocation for
-the build, records its own warehouse evidence, and never executes SQL copied from an older plan.
+The plan you see reserves nothing. When you launch the build, SQLTide plans again against the
+warehouse as it is then, so the build can differ from the plan you saw.
 
 The UI is pinned to the target and database used to launch `sqt dev`. Displayed commands omit that
 internal context, and the command box rejects target, database, connection, project, and variable
@@ -25,5 +25,5 @@ tokens.
 <span id="cancellation-and-recovery"></span>
 
 After launch, inspect durable execution state in [Runs](/ui/runs). After a virtual build, use
-Deployments for inventory, comparison, promotion, and cleanup. Assessment and rollback remain
-available through the CLI. See [Virtual Environments](/concepts/deployments).
+Deployments for inventory, comparison, promotion, and cleanup. Run `sqt deployment audit --latest`
+and `sqt deployment rollback` from the CLI. See [Virtual Environments](/concepts/deployments).

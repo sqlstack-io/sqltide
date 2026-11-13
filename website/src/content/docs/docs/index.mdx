@@ -6,10 +6,9 @@ description: "Declarative streaming data pipelines for ClickHouse."
 SQLTide compiles typed SQL models into ClickHouse tables and materialized views, plans their
 dependencies, and rebuilds them from retained streaming history.
 
-These guides describe **SQLTide 0.60.0**. New to SQLTide? Run [`sqt playground`](/docs/cli/playground/)
-for a ready-made orders project you run locally with Docker, then follow the
-[local quickstart](/docs/quickstart/) to build your own: one adopted input table, one typed model,
-and a live insert.
+New to SQLTide? The [quickstart](/docs/quickstart/) runs [`sqt playground`](/docs/cli/playground/),
+a ready-made orders project that runs locally with Docker, and takes a model change from build to
+promotion in six steps.
 
 Each pipeline has an effective operational mode:
 
@@ -39,11 +38,11 @@ seeds, UDF management, or a generic multi-warehouse abstraction.
 ## Choose a workflow
 
 <CardGroup cols={2}>
-  <Card title="Playground" icon="cart-shopping" href="/docs/cli/playground/">
-    Copy a ready-made orders project, then plan, build a candidate, and promote it locally with Docker.
+  <Card title="Quickstart" icon="bolt" href="/docs/quickstart/">
+    Start the playground, build a changed model beside the published one, and promote it.
   </Card>
-  <Card title="Direct-mode quickstart" icon="bolt" href="/quickstart">
-    Build a small adopted-source pipeline against local ClickHouse.
+  <Card title="Playground" icon="cart-shopping" href="/docs/cli/playground/">
+    Both playground templates, including order events streaming from Redpanda.
   </Card>
   <Card title="Direct mode" icon="arrows-rotate" href="/concepts/direct-mode">
     Understand destructive rebuilds, replay, failure, and rerun behavior.

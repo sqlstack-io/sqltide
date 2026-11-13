@@ -13,9 +13,8 @@ Use **Run audits** or **Run tests** to execute checks from the UI. Checks run se
 ClickHouse target is not flooded with concurrent scans. Running a check reads warehouse data and
 records its result; it does not rebuild model relations.
 
-Result state is tied to the current definition and execution context. The UI identifies stale
-results caused by binding, definition, execution, or schedule changes rather than presenting them as
-current evidence.
+When a check's binding, definition, SQL or schedule changes after its last run, the UI marks that
+result as stale.
 
 For authored syntax and command-line execution, see [Audits](/concepts/audits) and
 [SQL Testing](/concepts/testing).
