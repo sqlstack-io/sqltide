@@ -133,6 +133,12 @@ fn table_properties(
     for property in properties(create_table) {
         if let Some(ttl_payload) = object(property.get("merge_tree_t_t_l")) {
             ttl = match ttl_payload.get("expressions").and_then(Value::as_array) {
+                // Keep a WHERE, GROUP BY, or SET clause, so a changed clause is not hidden.
+                Some(_) if has_ttl_clauses(ttl_payload) => {
+                    let clause: String =
+                        dialect.generate(&Value::Object(property.clone()), false)?;
+                    Some(clause.strip_prefix("TTL ").unwrap_or(&clause).to_owned())
+                }
                 Some(expressions) if !expressions.is_empty() => Some(
                     expressions
                         .iter()
@@ -467,6 +473,99 @@ pub fn validate_insert_query(sql: &str, dialect: &SqlDialect) -> AnalysisResult<
 /// Returns parse or generation failures.
 pub fn canonicalize_sql(sql: &str, dialect: &SqlDialect) -> AnalysisResult<String> {
     dialect.generate(&dialect.parse_one(sql)?, false)
+}
+
+/// Whether a TTL has a WHERE, GROUP BY, or SET clause, which Polyglot keeps for the whole TTL
+/// rather than for its element, cutting off any elements after it.
+fn has_ttl_clauses(ttl: &Object) -> bool {
+    ["where_", "group", "aggregates"]
+        .iter()
+        .any(|key| ttl.get(*key).is_some_and(|clause| !clause.is_null()))
+}
+
+/// One MergeTree TTL in the canonical form ClickHouse stores it: each simple `INTERVAL n UNIT`
+/// becomes a `toInterval<Unit>(n)` call with a numeric `n`, and a bare `DELETE` action, the
+/// default, is dropped.
+///
+/// # Errors
+///
+/// Returns parse or generation failures, and refuses a TTL with a WHERE, GROUP BY, or SET clause,
+/// which Polyglot cannot represent faithfully.
+pub fn canonicalize_ttl(ttl: &str, dialect: &SqlDialect) -> AnalysisResult<String> {
+    let mut tree: Value = dialect.parse_one(&format!(
+        "CREATE TABLE t (x Int8) ENGINE = MergeTree ORDER BY tuple() TTL {ttl}"
+    ))?;
+    let clauses: bool = object(tree.get("create_table"))
+        .into_iter()
+        .flat_map(properties)
+        .filter_map(|property| object(property.get("merge_tree_t_t_l")))
+        .any(has_ttl_clauses);
+    if clauses {
+        return Err(AnalysisError::new(
+            "A TTL with a WHERE, GROUP BY, or SET clause has no canonical form",
+        ));
+    }
+    canonical_ttl_nodes(&mut tree);
+    dialect.generate(&tree, false)
+}
+
+fn canonical_ttl_nodes(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            if let Some(replacement) = canonical_ttl_node(fields) {
+                *value = replacement;
+                canonical_ttl_nodes(value);
+                return;
+            }
+            fields.values_mut().for_each(canonical_ttl_nodes);
+        }
+        Value::Array(items) => items.iter_mut().for_each(canonical_ttl_nodes),
+        _ => {}
+    }
+}
+
+/// The canonical replacement for one node, or `None` when it is already canonical.
+fn canonical_ttl_node(fields: &Object) -> Option<Value> {
+    if let Some(interval) = object(fields.get("interval")) {
+        let unit: &Object = object(interval.get("unit"))?;
+        if unit.get("type").and_then(Value::as_str) != Some("simple") {
+            return None;
+        }
+        let unit: &str = unit.get("unit").and_then(Value::as_str)?;
+        return Some(json!({"function": {
+            "name": format!("toInterval{unit}"),
+            "args": [interval.get("this")?],
+            "distinct": false,
+            "trailing_comments": [],
+            "use_bracket_syntax": false,
+            "no_parens": false,
+            "quoted": false,
+        }}));
+    }
+    if let Some(function) = object(fields.get("function")) {
+        let name: &str = function.get("name").and_then(Value::as_str)?;
+        let [argument] = function.get("args").and_then(Value::as_array)?.as_slice() else {
+            return None;
+        };
+        let literal: &Object = object(argument.get("literal"))?;
+        let numeric: bool = literal.get("literal_type").and_then(Value::as_str) == Some("string")
+            && literal
+                .get("value")
+                .and_then(Value::as_str)
+                .is_some_and(|amount| amount.parse::<f64>().is_ok());
+        if !name.starts_with("toInterval") || !numeric {
+            return None;
+        }
+        let mut function: Object = function.clone();
+        function["args"][0]["literal"]["literal_type"] = json!("number");
+        return Some(json!({"function": function}));
+    }
+    let action: &Object = object(fields.get("merge_tree_t_t_l_action"))?;
+    let bare_delete: bool = action.get("delete") == Some(&json!({"boolean": {"value": true}}))
+        && ["recompress", "to_disk", "to_volume"]
+            .iter()
+            .all(|key| action.get(*key).is_none_or(Value::is_null));
+    bare_delete.then(|| action.get("this").cloned()).flatten()
 }
 
 /// One dialect-safe SQL string literal.

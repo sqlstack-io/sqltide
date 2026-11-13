@@ -69,6 +69,20 @@ _PERSISTED_NORMALIZED_QUERY: str = (
             expected_settings=(("index_granularity", "8192"),),
         ),
         CatalogSqlAnalysisTestCase(
+            description="keeps a ttl where clause instead of dropping it",
+            sql=(
+                "CREATE TABLE analytics.events (`at` DateTime, `x` UInt8) ENGINE = MergeTree "
+                "ORDER BY at TTL at + toIntervalMonth('1'), at + toIntervalDay(7) WHERE x = 1 "
+                "SETTINGS index_granularity = 8192"
+            ),
+            expected_query_fragment="None",
+            expected_first_source=(None, None),
+            expected_direct_source=(None, None),
+            expected_target_relation=(None, None),
+            expected_ttl="at + toIntervalMonth('1'), at + toIntervalDay(7) WHERE x = 1",
+            expected_settings=(("index_granularity", "8192"),),
+        ),
+        CatalogSqlAnalysisTestCase(
             description="parses captured clickhouse materialized view query",
             sql=_CAPTURED_CREATE_MATERIALIZED_VIEW_QUERY,
             expected_query_fragment="FROM slice12b.kafka__orders",

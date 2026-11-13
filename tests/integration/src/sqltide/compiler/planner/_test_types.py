@@ -28,6 +28,17 @@ class PlannerNormalizedTypeNoOpIntegrationTestCase:
 
 
 @dataclass(frozen=True)
+class PlannerTtlAfterPublishIntegrationTestCase:
+    description: str
+    deployment_id: str
+    created_at: str
+    boundary_time: str
+    published_ttl: str
+    desired_ttl: str
+    expected_change_type: PlannedChangeType
+
+
+@dataclass(frozen=True)
 class PlannerSqlChangeAfterPublishIntegrationTestCase:
     description: str
     deployment_id: str
