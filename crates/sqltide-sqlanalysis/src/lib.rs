@@ -23,8 +23,8 @@ mod vocabulary;
 
 pub use catalog::{
     CatalogAnalysis, RelationIdentity, analyze_catalog, canonicalize_setting, canonicalize_sql,
-    canonicalize_ttl, expression_list, render_string_literal, validate_insert_query,
-    validate_query,
+    canonicalize_ttl, expression_list, render_string_literal, table_setting_sql,
+    validate_insert_query, validate_query,
 };
 pub use model::{ModelError, ParsedModel, analyze_model};
 pub use projections::{Projection, ProjectionTypeCache};

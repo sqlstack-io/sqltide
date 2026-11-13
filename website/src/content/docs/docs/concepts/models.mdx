@@ -78,6 +78,11 @@ An explicit model `ttl` overrides `[defaults].model_ttl`. SQLTide validates the 
 expression against the model's output columns and includes it in table storage identity, desired
 state, and drift detection.
 
+Each `settings` value must be exactly one SQL value, such as `8192`, `true`, or `'hot'`. A bare
+word such as `hot` is written as the string literal `'hot'`, except `default`, `inf`, `infinity`,
+and `nan`, which ClickHouse reads as values. A value with more than one token, such as `1 2`, fails
+the compile.
+
 ## Driving references
 
 A model has exactly one untyped driving input:
