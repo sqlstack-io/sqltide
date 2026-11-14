@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.70.1](https://github.com/sqlstack-io/sqltide/compare/v0.70.0...v0.70.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **ui:** start the UI demo over on a new engine ([#415](https://github.com/sqlstack-io/sqltide/issues/415)) ([9fa4098](https://github.com/sqlstack-io/sqltide/commit/9fa40988ba22c86d7fbab04363c652fea7350d98))
+
 ## [0.70.0](https://github.com/sqlstack-io/sqltide/compare/v0.69.1...v0.70.0) (2026-11-14)
 
 
