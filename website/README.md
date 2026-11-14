@@ -34,7 +34,9 @@ isolated, which the engine needs.
 
 Refresh both files with `node ui/scripts/prepare-demo.mjs`, which runs the playground with Docker
 and the installed `sqt`. CI runs it with `--check`, which fails when `prepared.json` no longer
-matches what `sqt` does. `tests/ui-demo.test.mjs` opens every recorded page and fails on any
+matches what `sqt` does apart from its version. Each release PR writes the new version into
+`preparedWith` and the recorded `/api/status`, so the demo shows the release it was built with.
+`tests/ui-demo.test.mjs` opens every recorded page and fails on any
 unrecorded request, runs every prepared action on the real engine, and checks each fallback. The
 tests serve the build with `scripts/serve.mjs`, which applies `public/_headers` as Pages does.
 

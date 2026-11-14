@@ -12,6 +12,16 @@
           "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "json",
+          "path": "ui/src/lib/demo/prepared.json",
+          "jsonpath": "$.preparedWith"
+        },
+        {
+          "type": "json",
+          "path": "ui/src/lib/demo/recordings.json",
+          "jsonpath": "$.responses['/api/status'].body.toolVersion"
         }
       ],
       "changelog-sections": [
