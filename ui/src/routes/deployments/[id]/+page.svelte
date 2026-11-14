@@ -376,19 +376,21 @@
 							{isInitialPublish ? 'Publish' : isPartialPromotion ? 'Resume promotion' : 'Promote'}
 						</div>
 						<div class="px-3 py-2.5">
-							<div class="text-muted-foreground pb-2 text-[11.5px]">
-								{#if isInitialPublish}
-									This operation adds {additionCount} live binding{additionCount === 1 ? '' : 's'}.
-									It replaces 0 and removes 0 live bindings.
-								{:else}
-									Bindings change one at a time, not all together. This operation adds
-									{additionCount}, replaces {replacementCount}, and removes {removalCount}. After
-									promotion, {detail.wouldOrphan.relationCount} physical relation{detail.wouldOrphan
-										.relationCount === 1
-										? ''
-										: 's'} ({formatBytes(detail.wouldOrphan.bytes)}) will no longer be live.
-								{/if}
-							</div>
+							{#if detail.state !== 'incomplete'}
+								<div class="text-muted-foreground pb-2 text-[11.5px]">
+									{#if isInitialPublish}
+										This operation adds {additionCount} live binding{additionCount === 1 ? '' : 's'}.
+										It replaces 0 and removes 0 live bindings.
+									{:else}
+										Bindings change one at a time, not all together. This operation adds
+										{additionCount}, replaces {replacementCount}, and removes {removalCount}. After
+										promotion, {detail.wouldOrphan.relationCount} physical relation{detail.wouldOrphan
+											.relationCount === 1
+											? ''
+											: 's'} ({formatBytes(detail.wouldOrphan.bytes)}) will no longer be live.
+									{/if}
+								</div>
+							{/if}
 							{#if detail.promotionPreview.blockedReason !== null}
 								<div
 									class="whitespace-pre-wrap break-words pb-2 font-mono text-[10.5px] leading-snug"

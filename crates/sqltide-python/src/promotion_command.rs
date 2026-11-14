@@ -25,6 +25,16 @@ fn items<'py>(value: &Any<'py>, field: &str) -> PyResult<Vec<Any<'py>>> {
     value.getattr(field)?.try_iter()?.collect()
 }
 
+/// Why a deployment whose build has not filled every table, because it failed or is still
+/// running, cannot be promoted. The by-ID and `--latest` refusals and the UI's promotion preview
+/// all show this text.
+pub(crate) fn incomplete_message(deployment_id: &str) -> String {
+    format!(
+        "Deployment {deployment_id} has not finished building (its build failed or is still \
+         running), so it cannot be promoted. Promote a build once it finishes, by the ID it prints."
+    )
+}
+
 /// Why promoting a deployment must be refused, when one of its relations reads another
 /// deployment's physical table that will not be its upstream's published version after the
 /// promotion. Those rows come from a version consumers no longer read, the candidate was

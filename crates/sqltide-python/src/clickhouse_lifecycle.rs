@@ -19,6 +19,9 @@ const VIEW_ENGINE: &str = "View";
 const DEPLOYMENTS_TABLE: &str = "_sqltide_virtual_deployments";
 const OBJECT_STATE_TABLE: &str = "_sqltide_virtual_object_state";
 const PUBLISH_HISTORY_TABLE: &str = "_sqltide_virtual_publications";
+const PROGRESS_TABLE: &str = "_sqltide_virtual_deployment_progress";
+const STAGE_STARTED: &str = "started";
+const STAGE_COMPLETED: &str = "completed";
 const PUBLISH_OPERATION_COLUMN: &str = "operation";
 const PUBLISH_PREVIOUS_DEPLOYMENT_COLUMN: &str = "previous_deployment_id";
 const DEPLOYMENT_STATUS_INCOMPLETE: &str = "incomplete";
@@ -230,12 +233,13 @@ fn deployment_record<'py>(
     row: &DeploymentRow,
     objects: &[ObjectRow],
     publications: &[PublishRow],
+    unfinished: &BTreeSet<String>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let owned: Vec<&ObjectRow> = objects
         .iter()
         .filter(|object_row| object_row.deployment_id == row.deployment_id)
         .collect();
-    let status: &str = if !row.header_present {
+    let status: &str = if !row.header_present || unfinished.contains(&row.deployment_id) {
         DEPLOYMENT_STATUS_INCOMPLETE
     } else if publications
         .iter()
@@ -377,6 +381,30 @@ fn load_clickhouse_deployment_inventory<'py>(
         },
     )?;
     let publications: Vec<PublishRow> = publish_rows(connection, database)?;
+    // Builds that recorded their start but not their completion failed while filling their
+    // tables. Deployments from before this record existed have neither, and stay complete.
+    let progress: Vec<(String, String)> = metadata_rows(
+        connection,
+        || {
+            query_mappings(
+                connection,
+                format!("SELECT DISTINCT deployment_id, stage FROM {database}.{PROGRESS_TABLE}"),
+            )
+        },
+        |row| Ok((field(row, "deployment_id")?, field(row, "stage")?)),
+    )?;
+    let completed: BTreeSet<&str> = progress
+        .iter()
+        .filter(|(_, stage)| stage == STAGE_COMPLETED)
+        .map(|(deployment_id, _)| deployment_id.as_str())
+        .collect();
+    let unfinished: BTreeSet<String> = progress
+        .iter()
+        .filter(|(deployment_id, stage)| {
+            stage == STAGE_STARTED && !completed.contains(deployment_id.as_str())
+        })
+        .map(|(deployment_id, _)| deployment_id.clone())
+        .collect();
     let persisted: BTreeSet<&str> = deployments
         .iter()
         .map(|row| row.deployment_id.as_str())
@@ -402,7 +430,7 @@ fn load_clickhouse_deployment_inventory<'py>(
     }
     let records: Vec<Bound<'py, PyAny>> = deployments
         .iter()
-        .map(|row| deployment_record(py, row, &objects, &publications))
+        .map(|row| deployment_record(py, row, &objects, &publications, &unfinished))
         .collect::<PyResult<_>>()?;
     let publication_ids: BTreeSet<&str> = publications
         .iter()

@@ -9,6 +9,7 @@ use crate::cli::playground::run_playground_query;
 use crate::cli::python::{flag, getattr_none, getattr_or, print_to, user_error};
 use crate::cli::sql::run_sql;
 use crate::dev_server::support::attr;
+use crate::promotion_command::incomplete_message;
 
 const NATIVE: &str = "sqltide._native";
 const COMPILE_MODELS: &str = "sqltide.compiler.compile.models";
@@ -18,6 +19,7 @@ const DEFAULT_DEV_SERVER_PORT: i64 = 8000;
 const DEFAULT_SESSION_TTL_SECONDS: i64 = 43200;
 /// `DeploymentLifecycleState.STAGED`: built, complete and never published.
 const STAGED_STATE: &str = "staged";
+const INCOMPLETE_STATE: &str = "incomplete";
 const TRUE_ENV_VALUES: [&str; 3] = ["1", "true", "yes"];
 /// Each handler name and where its default implementation lives.
 const DEFAULT_HANDLERS: [(&str, &str, &str); 18] = [
@@ -114,6 +116,9 @@ fn latest_deployment<'py>(
                 &format!("The newest deployment, {newest}, is already published."),
                 Some("Build a new deployment, or name the one to promote."),
             ));
+        }
+        if newest_state == INCOMPLETE_STATE {
+            return Err(user_error(py, &incomplete_message(&newest), None));
         }
         if newest_state != STAGED_STATE {
             return Err(user_error(

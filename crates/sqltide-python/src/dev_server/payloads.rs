@@ -6,7 +6,7 @@ use pyo3::types::{PyDict, PyList};
 use super::support::attr;
 use crate::deployment_resolution::build_publish_binding_request;
 use crate::planner_support::{deployment_id_from_physical_name, logical_name_from_physical_name};
-use crate::promotion_command::stale_upstream_message;
+use crate::promotion_command::{incomplete_message, stale_upstream_message};
 use crate::py_kwargs;
 
 fn list_of<'py>(py: Python<'py>, items: Vec<Bound<'py, PyAny>>) -> PyResult<Bound<'py, PyAny>> {
@@ -548,7 +548,19 @@ pub(crate) fn build_deployment_detail_payload<'py>(
     payload.set_item("models", list_of(py, models)?)?;
     payload.set_item(
         "promotionPreview",
-        promotion_preview_payload(py, promotion_preview.as_ref(), blocked_reason)?,
+        if state.eq(lifecycle.getattr("INCOMPLETE")?)? {
+            // Promotion refuses before computing any binding change, so the preview shows only why.
+            py_kwargs!(py;
+                classification = "promotion",
+                additions = PyList::empty(py),
+                replacements = PyList::empty(py),
+                removals = PyList::empty(py),
+                blockedReason = incomplete_message(deployment_id),
+            )?
+            .into_any()
+        } else {
+            promotion_preview_payload(py, promotion_preview.as_ref(), blocked_reason)?
+        },
     )?;
     payload.set_item(
         "wouldOrphan",

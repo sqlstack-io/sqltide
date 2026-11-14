@@ -1,17 +1,23 @@
 from pathlib import Path
+from typing import cast
 
 import pytest
 from clickhouse_connect.driver.client import Client
 
-from sqltide._native import run_cli
+from sqltide._native import build_deployment_detail_payload, run_cli
+from sqltide.adapter.classes.adapter_connection import AdapterConnection
+from sqltide.adapter.models import AdapterConnectionConfig
+from sqltide.adapters.clickhouse.classes.clickhouse_adapter import ClickHouseAdapter
 from tests.integration.src.sqltide.cli._test_types import (
     VirtualArrivalFreeUpstreamIntegrationTestCase,
     VirtualDownstreamOnlyChangeIntegrationTestCase,
+    VirtualFailedReplayPromotionIntegrationTestCase,
     VirtualStaleUpstreamPromotionIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
     write_arrival_free_report,
     write_arrival_free_totals,
+    write_failing_report,
     write_upstream_source_models,
     write_upstream_source_project,
 )
@@ -235,3 +241,97 @@ def test_given_upstream_without_arrival_column_when_downstream_changes_then_buil
     build_and_promote()
     insert(4, "order-newest-large", 450)
     assert report() == test_case.expected_after_changed_model
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        VirtualFailedReplayPromotionIntegrationTestCase(
+            description="a build that fails while filling its tables cannot be promoted",
+            failed_deployment_id="20991231T100000Z_failed",
+            expected_refusal=(
+                "Deployment 20991231T100000Z_failed has not finished building (its build failed "
+                "or is still running), so it cannot be promoted. Promote a build once it "
+                "finishes, by the ID it prints."
+            ),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_build_failing_during_replay_when_promoting_then_promotion_is_refused(
+    test_case: VirtualFailedReplayPromotionIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project: Path = tmp_path / "project"
+    options: tuple[str, ...] = ("--project-dir", str(project))
+    write_upstream_source_project(project, clickhouse_connection_settings, clickhouse_database)
+    clickhouse_client.command(
+        f"CREATE TABLE {clickhouse_database}.orders_input (event_partition Int32, "
+        "event_offset Int64, event_time DateTime64(3), order_id String, amount_cents UInt64) "
+        "ENGINE = MergeTree ORDER BY (event_partition, event_offset)"
+    )
+    clickhouse_client.command(
+        f"INSERT INTO {clickhouse_database}.orders_input VALUES "
+        "(0, 1, now64(3), 'order-small', 75), (0, 2, now64(3), 'order-large', 300)"
+    )
+
+    def build(*arguments: str) -> int:
+        return run_cli(("sqt", "build", "--auto-approve", *arguments, *options))
+
+    def promote(*arguments: str) -> int:
+        return run_cli(("sqt", "deployment", "promote", *arguments, *options))
+
+    def published_report() -> tuple[str, tuple[str, ...]]:
+        source: str = clickhouse_client.query(
+            "SELECT create_table_query FROM system.tables "
+            f"WHERE database = '{clickhouse_database}' AND name = 'tbl__order_report'"
+        ).result_rows[0][0]
+        rows: tuple[str, ...] = tuple(
+            row[0]
+            for row in clickhouse_client.query(
+                f"SELECT order_id FROM {clickhouse_database}.tbl__order_report ORDER BY order_id"
+            ).result_rows
+        )
+        return source, rows
+
+    assert build() == 0
+    assert promote("--latest") == 0
+    before: tuple[str, tuple[str, ...]] = published_report()
+
+    # The report's replay raises after the build has recorded its deployment.
+    write_failing_report(project)
+    assert build("--deployment-id", test_case.failed_deployment_id) == 1
+    capsys.readouterr()
+
+    for arguments in (("--latest",), (test_case.failed_deployment_id,)):
+        assert promote(*arguments) == 1
+        assert test_case.expected_refusal in capsys.readouterr().err
+    assert published_report() == before
+
+    connection: AdapterConnection = ClickHouseAdapter().connect(
+        AdapterConnectionConfig(
+            host=clickhouse_connection_settings.host,
+            port=clickhouse_connection_settings.port,
+            username=clickhouse_connection_settings.username,
+            password=clickhouse_connection_settings.password,
+            database=clickhouse_database,
+        )
+    )
+    try:
+        detail: dict[str, object] | None = build_deployment_detail_payload(
+            connection=connection,
+            database=clickhouse_database,
+            metadata_database=clickhouse_database,
+            deployment_id=test_case.failed_deployment_id,
+        )
+    finally:
+        connection.close()
+    preview: dict[str, object] = cast(
+        dict[str, object], cast(dict[str, object], detail)["promotionPreview"]
+    )
+    assert preview["blockedReason"] == test_case.expected_refusal
