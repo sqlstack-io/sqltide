@@ -86,8 +86,10 @@ export function labelRunStepId(
 		assert_candidate_unpublished: 'Confirm deployment is unpublished',
 		wait_for_virtual_live_stabilization: 'Wait for source stabilization',
 		wait_for_live_stabilization: 'Wait for source stabilization',
+		record_population_started: 'Record build start',
 		capture_boundary_time: 'Capture replay boundary',
 		read_boundary_time: 'Read replay boundary',
+		record_population_completed: 'Record build completion',
 		replace_active_view: 'Repair active view'
 	};
 	if (exact[stepId]) return exact[stepId];

@@ -88,7 +88,7 @@ def test_given_current_manifest_nodes_when_rendering_status_query_then_all_ui_st
         RunEventInsertsTestCase(
             description="prepends the idempotent migration for the first event",
             include_migration=True,
-            expected_statement_count=22,
+            expected_statement_count=23,
             expected_insert_fragment="CREATE DATABASE IF NOT EXISTS metadata;",
             expected_values_fragment=("emitted_at DateTime64(3, 'UTC') DEFAULT now64(3, 'UTC')"),
         ),

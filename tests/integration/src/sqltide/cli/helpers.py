@@ -2397,3 +2397,26 @@ def write_arrival_free_report(project: Path, *, minimum: int) -> None:
     (project / "pipelines" / "pl__orders" / "order_report.sql").write_text(
         _ARRIVAL_FREE_REPORT_SQL.format(minimum=minimum), encoding="utf-8"
     )
+
+
+_FAILING_REPORT_SQL: str = """
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset,
+  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp,
+  CAST(_replay_landed_at AS DateTime64(3)) AS _replay_landed_at
+FROM __ref("order_totals")
+WHERE throwIf(amount_cents > 0, 'order report replay failed') = 0
+"""
+
+
+def write_failing_report(project: Path) -> None:
+    """A downstream report whose replay raises on the first row it reads."""
+
+    (project / "pipelines" / "pl__orders" / "order_report.sql").write_text(
+        _FAILING_REPORT_SQL, encoding="utf-8"
+    )

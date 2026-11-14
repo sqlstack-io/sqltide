@@ -404,7 +404,7 @@ def test_given_metadata_migration_when_rendering_then_manifest_ddl_and_legacy_dr
 ) -> None:
     rendered: tuple[str, ...] = render_clickhouse_metadata_migration_statements("metadata")
 
-    assert rendered[-3] == test_case.expected_ddl
+    assert rendered[-4] == test_case.expected_ddl
     assert rendered[-2] == test_case.expected_drop
 
 
@@ -412,11 +412,11 @@ def test_given_metadata_migration_when_rendering_then_manifest_ddl_and_legacy_dr
     "test_case",
     [
         ManifestMigrationWorkflowTestCase(
-            description="records schema version eight last",
+            description="records schema version nine last",
             expected_last_statement=(
                 "INSERT INTO metadata._sqltide_schema_versions (version, applied_at) "
-                "SELECT 8, now64(3, 'UTC') WHERE NOT EXISTS (SELECT 1 FROM "
-                "metadata._sqltide_schema_versions WHERE version = 8);"
+                "SELECT 9, now64(3, 'UTC') WHERE NOT EXISTS (SELECT 1 FROM "
+                "metadata._sqltide_schema_versions WHERE version = 9);"
             ),
         )
     ],

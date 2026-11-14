@@ -643,3 +643,10 @@ class VirtualStaleUpstreamPromotionIntegrationTestCase:
     rebuilt_deployment_id: str
     expected_error_fragments: tuple[str, ...]
     expected_after_rebuild: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class VirtualFailedReplayPromotionIntegrationTestCase:
+    description: str
+    failed_deployment_id: str
+    expected_refusal: str

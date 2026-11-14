@@ -105,6 +105,7 @@ def test_given_empty_inventory_when_resolving_publish_without_deployment_id_then
                 ("_sqltide_sensor_overrides", "MergeTree"),
                 ("_sqltide_sensor_steps", "MergeTree"),
                 ("_sqltide_sensor_ticks", "MergeTree"),
+                ("_sqltide_virtual_deployment_progress", "MergeTree"),
                 ("_sqltide_virtual_deployments", "MergeTree"),
                 ("_sqltide_virtual_object_state", "MergeTree"),
                 ("_sqltide_virtual_publications", "MergeTree"),

@@ -24,7 +24,9 @@ retention cleanup. Audit and rollback remain CLI operations.
 
 `deployment list` shows every deployment SQLTide recorded and checks each against the tables in
 ClickHouse. Deployments are reported as `active`, `staged`, `superseded`,
-`incomplete`, `metadata_missing`, or `physical_missing`.
+`incomplete`, `metadata_missing`, or `physical_missing`. A deployment is `incomplete` until its
+build has filled every table, so a build that is still running or that failed, for example because
+a model raised an error during replay, is `incomplete`.
 
 `deployment show <deployment-id>` displays one deployment's persisted status, roots, physical
 relations, missing relations, active bindings, and latest publication time. Both operations are
@@ -61,7 +63,9 @@ assessment is `not_ready`.
 `deployment promote` points each stable `tbl__*` view at the deployment's table. Each view switches
 atomically, but the views switch one at a time, not all together. It refuses a deployment built on
 an upstream model version that is no longer published; rebuild that model with
-`sqt build --select <model>` and promote the new build.
+`sqt build --select <model>` and promote the new build. It also refuses an `incomplete`
+deployment, by ID or with `--latest`. When a build fails, fix the failure, run `sqt build` again,
+and promote that build.
 
 ## Rollback
 

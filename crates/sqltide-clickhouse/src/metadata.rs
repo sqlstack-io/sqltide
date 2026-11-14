@@ -3,7 +3,7 @@
 
 use sha2::{Digest, Sha256};
 
-const SCHEMA_VERSION: u32 = 8;
+const SCHEMA_VERSION: u32 = 9;
 const BOUNDARY_PARTITION_PREFIX: &str = "_replay_partition=";
 const OBJECT_STATE_KIND_DEPLOYMENT: &str = "deployment";
 const NOW: &str = "now64(3, 'UTC')";
@@ -19,6 +19,13 @@ const OBJECT_STATE_TABLE: (&str, &str) = (
 const DEPLOYMENTS_TABLE: (&str, &str) = (
     "_sqltide_virtual_deployments",
     "(\n    deployment_id String,\n    workflow_fingerprint String,\n    replay_lineage_mode String,\n    boundary_time DateTime64(3, 'UTC'),\n    created_at DateTime64(3, 'UTC'),\n    tool_version String\n) ENGINE = MergeTree\nORDER BY (deployment_id)",
+);
+/// The population stages a virtual build records: `started` before its deployment row, and
+/// `completed` once every replay has filled its table. A deployment row with a start but no
+/// completion is a build that failed while filling its tables.
+const DEPLOYMENT_PROGRESS_TABLE: (&str, &str) = (
+    "_sqltide_virtual_deployment_progress",
+    "(\n    deployment_id String,\n    stage LowCardinality(String),\n    recorded_at DateTime64(3, 'UTC')\n) ENGINE = MergeTree\nORDER BY (deployment_id, stage)",
 );
 const DEPLOYMENT_WATERMARKS_TABLE: (&str, &str) = (
     "_sqltide_virtual_replay_boundaries",
@@ -293,6 +300,7 @@ pub fn migration_statements(database: &str) -> Vec<String> {
         SENSOR_LEASES_TABLE,
         DEAD_LETTERS_TABLE,
         MANIFESTS_TABLE,
+        DEPLOYMENT_PROGRESS_TABLE,
     ]
     .into_iter()
     .map(|table| create_table(database, table))

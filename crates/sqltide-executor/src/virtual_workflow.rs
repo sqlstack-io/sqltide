@@ -10,6 +10,7 @@ use crate::workflow::{
 const DEPLOYMENTS_TABLE: &str = "_sqltide_virtual_deployments";
 const WATERMARKS_TABLE: &str = "_sqltide_virtual_replay_boundaries";
 const PUBLISH_HISTORY_TABLE: &str = "_sqltide_virtual_publications";
+const PROGRESS_TABLE: &str = "_sqltide_virtual_deployment_progress";
 const WATERMARK_COLUMNS: &str = "(deployment_id, root_database_name, root_object_type, \
     root_object_name, anchor_database_name, anchor_object_type, anchor_object_name, \
     boundary_kind, value_kind, partition_value, lower_value, cutoff_value, cutoff_inclusive, \
@@ -198,6 +199,13 @@ pub fn statements(input: &Input) -> Vec<Statement> {
         Intent::Wait,
         wait_sql(input.stabilization_seconds),
     ));
+    // Recorded before the deployment row, so a build that stops before the completion row below
+    // reads as incomplete rather than staged.
+    statements.push(Statement::mutation(
+        "record_population_started",
+        Phase::Boundary,
+        &progress_sql(input, "started"),
+    ));
     statements.push(Statement::new(
         "capture_boundary_time",
         Phase::Boundary,
@@ -268,7 +276,23 @@ pub fn statements(input: &Input) -> Vec<Statement> {
             escape_literal(&input.deployment_id)
         ),
     ));
+    statements.push(Statement::mutation(
+        "record_population_completed",
+        Phase::Finalization,
+        &progress_sql(input, "completed"),
+    ));
     statements
+}
+
+/// Records one population stage of the deployment once, so a rerun does not repeat it.
+fn progress_sql(input: &Input, stage: &str) -> String {
+    let table: String = format!("{}.{PROGRESS_TABLE}", input.metadata_database);
+    let deployment_id: String = escape_literal(&input.deployment_id);
+    format!(
+        "INSERT INTO {table} (deployment_id, stage, recorded_at)\nSELECT '{deployment_id}', \
+         '{stage}', now64(3, 'UTC')\nWHERE NOT EXISTS (SELECT 1 FROM {table} WHERE deployment_id \
+         = '{deployment_id}' AND stage = '{stage}');"
+    )
 }
 
 fn preflight(input: &Input) -> Vec<Statement> {

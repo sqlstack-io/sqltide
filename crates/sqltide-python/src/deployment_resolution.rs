@@ -16,6 +16,7 @@ use crate::executor::{
     obsolete_binding_removals, publish_stable_bindings, select_rollback_publications,
 };
 use crate::model_sql::chained;
+use crate::promotion_command::incomplete_message;
 
 const ADAPTER_MODELS: &str = "sqltide.adapter.models";
 const ADAPTER_CONSTANTS: &str = "sqltide.adapter.constants";
@@ -917,10 +918,7 @@ pub(crate) fn build_publish_binding_request<'py>(
     };
     let incomplete: Value<'py> = incomplete_status(py)?;
     if deployment.getattr("status")?.eq(&incomplete)? {
-        return Err(publish_error(
-            py,
-            format!("Deployment '{deployment_text}' is incomplete and cannot be published"),
-        ));
+        return Err(publish_error(py, incomplete_message(&deployment_text)));
     }
     let existing: Value<'py> = client
         .call_method1("load_catalog", (default_database,))?

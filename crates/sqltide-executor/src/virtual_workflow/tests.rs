@@ -109,6 +109,7 @@ fn orders_every_phase_and_names_each_step() {
                 "stabilization",
                 "wait"
             ),
+            ("record_population_started", "boundary", "mutation"),
             ("capture_boundary_time", "boundary", "mutation"),
             ("capture_watermark_orders", "replay", "mutation"),
             ("assert_qualifying_input_orders", "replay", "assertion"),
@@ -122,7 +123,15 @@ fn orders_every_phase_and_names_each_step() {
             ("read_readiness_items", "audit", "query"),
             ("assert_readiness_items", "audit", "assertion"),
             ("read_boundary_time", "audit", "query"),
+            ("record_population_completed", "finalization", "mutation"),
         ]
+    );
+    assert_eq!(
+        statements[statements.len() - 1].sql,
+        "INSERT INTO meta._sqltide_virtual_deployment_progress (deployment_id, stage, \
+         recorded_at)\nSELECT 'dep', 'completed', now64(3, 'UTC')\nWHERE NOT EXISTS (SELECT 1 \
+         FROM meta._sqltide_virtual_deployment_progress WHERE deployment_id = 'dep' AND stage = \
+         'completed');"
     );
     assert_eq!(statements[6].sql, "CREATE TABLE m2;");
     assert_eq!(
@@ -137,7 +146,7 @@ fn orders_every_phase_and_names_each_step() {
 fn captures_offset_watermarks_up_to_the_boundary_time() {
     let statements = statements(&input(vec![root("orders", Mode::Offsets, 1)]));
     assert_eq!(
-        statements[13].sql,
+        statements[14].sql,
         "INSERT INTO meta._sqltide_virtual_replay_boundaries (deployment_id, root_database_name, \
          root_object_type, root_object_name, anchor_database_name, anchor_object_type, \
          anchor_object_name, boundary_kind, value_kind, partition_value, lower_value, \
@@ -163,15 +172,15 @@ fn bounds_forced_scalar_qualifying_input_from_the_start_time() {
     let mut absent: Root = root("events", Mode::Cursor, 1);
     absent.anchor_existed_at_confirmation = false;
     let statements = statements(&input(vec![forced, unset, absent]));
-    assert!(statements[14].sql.ends_with(
+    assert!(statements[15].sql.ends_with(
         "AND source._replay_landed_at <= CAST(watermark.cutoff_value AS DateTime64(3, 'UTC')) \
          AND source._replay_landed_at >= toDateTime64('2026-01-01 00:00:00', 3, 'UTC')) AS \
          qualifying_rows);"
     ));
     assert!(
-        statements[17]
+        statements[18]
             .sql
             .ends_with("CAST(watermark.cutoff_value AS UInt64) AND false) AS qualifying_rows);")
     );
-    assert_eq!(statements[20].sql, "SELECT 0;");
+    assert_eq!(statements[21].sql, "SELECT 0;");
 }

@@ -284,6 +284,8 @@ def create_streambuild_metadata(
     execute_rendered_statements(
         client=client, statements=connection.render_migrate_metadata_state(database)
     )
+    # StreamBuild never had the deployment progress table; it arrived after the rename.
+    client.command(f"DROP TABLE {database}._sqltide_virtual_deployment_progress")
     metadata_tables: tuple[str, ...] = tuple(
         str(row[0])
         for row in client.query(
@@ -322,5 +324,5 @@ def expected_metadata_table_state(
 ) -> tuple[frozenset[str], tuple[tuple[int, ...], ...]]:
     return (
         frozenset(table_prefix + name.removeprefix("_sqltide_") for name in metadata_tables),
-        ((8,),),
+        ((9,),),
     )
