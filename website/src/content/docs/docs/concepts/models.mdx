@@ -169,5 +169,6 @@ predicates on their input query instead.
 
 Common engines include `MergeTree`, `ReplacingMergeTree`, `SummingMergeTree`, and
 `AggregatingMergeTree`, including replicated variants. Engine choice is part of replay correctness:
-the replay cutoff is inclusive, so authored SQL and storage engines must tolerate duplicate delivery
-where necessary.
+rows that arrive while a build runs can be delivered twice, once by the live view and once by replay
+(see [replay lineage](/docs/concepts/replay-lineage/#inclusive-at-least-once-cutoffs)). A plain
+`MergeTree` target holds those duplicates unless the model SQL or the engine handles them.
