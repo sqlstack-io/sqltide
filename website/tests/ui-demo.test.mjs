@@ -126,7 +126,9 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
 });
 
 test('without cross-origin isolation the demo says so and plays the recording', async ({ page }) => {
+  // Only the page's own headers decide isolation; other requests the page may drop mid-flight.
   await page.route('**/demo/**', async (route) => {
+    if (route.request().resourceType() !== 'document') return route.continue();
     const response = await route.fetch();
     const headers = response.headers();
     delete headers['cross-origin-embedder-policy'];

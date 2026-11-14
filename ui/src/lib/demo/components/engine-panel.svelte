@@ -106,7 +106,8 @@
 				</div>
 				<table class="w-full text-left">
 					<tbody>
-						{#each snapshot.orders as order (order.order_id)}
+						<!-- Rows as the engine returns them: an order a build wrote twice shows twice. -->
+						{#each snapshot.orders as order, index (`${index}:${order.order_id}`)}
 							<tr><td>#{order.order_id}</td><td>{order.status}</td><td class="text-right">{dollars(order.total_cents)}</td></tr>
 						{/each}
 					</tbody>

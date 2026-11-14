@@ -23,11 +23,23 @@ for (const [from, to] of Object.entries(redirects)) {
 const ui = new URL('../ui/', root);
 const chdb = new URL('node_modules/chdb-wasm/', root);
 const { version: engineVersion } = JSON.parse(await readFile(new URL('package.json', chdb), 'utf8'));
-// The parts are cached for good, so their path names the exact bytes: gzip output can differ
-// between builds of the same version, and a half-cached old part must never join a new one.
+// The engine's files are cached for good, so their path names the exact bytes: gzip output can
+// differ between builds of the same version, and a half-cached old part must never join a new one.
 const wasm = await readFile(new URL('dist/chdb.wasm', chdb));
 const packed = gzipSync(wasm, { level: 9 });
-const engineBase = `/demo/engine/${engineVersion}-${createHash('sha256').update(packed).digest('hex').slice(0, 12)}/`;
+// The engine's worker hands Emscripten the downloaded wasm as bytes (wasmBinary), and Firefox then
+// never finishes starting it; streaming the same blob URL starts in about a second in every browser.
+const workerSource = await readFile(new URL('dist/worker.js', chdb), 'utf8');
+const wasmAsBytes = `        const bytes = await fetchWithProgress(payload.wasmUrl, id);
+        if (bytes)
+            moduleOpts.wasmBinary = bytes;`;
+if (!workerSource.includes(wasmAsBytes)) throw new Error(`chdb-wasm ${engineVersion}'s worker no longer loads the wasm as bytes; recheck the Firefox start.`);
+const worker = workerSource.replace(
+  wasmAsBytes,
+  `        moduleOpts.locateFile = (path, prefix) => (path.endsWith('.wasm') ? payload.wasmUrl : prefix + path);`,
+);
+const engineHash = createHash('sha256').update(packed).update(worker).digest('hex').slice(0, 12);
+const engineBase = `/demo/engine/${engineVersion}-${engineHash}/`;
 if (!existsSync(new URL('node_modules/', ui))) {
   // The UI's lockfile needs the npm it pins, as `make ui-install` uses.
   const { packageManager } = JSON.parse(await readFile(new URL('package.json', ui), 'utf8'));
@@ -44,9 +56,10 @@ await cp(new URL('build/', ui), demo, { recursive: true });
 // at most 25 MiB, and the page joins and gunzips them.
 const engine = new URL(engineBase.slice(1), output);
 await mkdir(engine, { recursive: true });
-for (const file of ['index.js', 'async.js', 'bindings.js', 'platform.js', 'protocol.js', 'status.js', 'worker.js', 'chdb.mjs']) {
+for (const file of ['index.js', 'async.js', 'bindings.js', 'platform.js', 'protocol.js', 'status.js', 'chdb.mjs']) {
   await copyFile(new URL(`dist/${file}`, chdb), new URL(file, engine));
 }
+await writeFile(new URL('worker.js', engine), worker);
 await copyFile(new URL('LICENSE', chdb), new URL('LICENSE', engine));
 const half = Math.ceil(packed.length / 2);
 const parts = [packed.subarray(0, half), packed.subarray(half)];
