@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.68.2](https://github.com/sqlstack-io/sqltide/compare/v0.68.1...v0.68.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **planner:** start a virtual replay below an upstream model without its arrival column ([#402](https://github.com/sqlstack-io/sqltide/issues/402)) ([8ea7211](https://github.com/sqlstack-io/sqltide/commit/8ea7211efb611736e834f74dc0a43ffbfa377c34))
+
+
+### Documentation
+
+* lead every guide with the playground and drop stale pins and placeholders ([#401](https://github.com/sqlstack-io/sqltide/issues/401)) ([9ebbfb5](https://github.com/sqlstack-io/sqltide/commit/9ebbfb524d360b2de0fc46cc31e0c23e33cc6903))
+
 ## [0.68.1](https://github.com/sqlstack-io/sqltide/compare/v0.68.0...v0.68.1) (2026-11-13)
 
 
