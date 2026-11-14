@@ -17,7 +17,11 @@ for (const [from, to] of Object.entries(redirects)) {
 // The UI demo at /demo/: the package's UI, built to answer its API from recorded responses. Each
 // recorded page gets its own copy of the app shell, so a reload or shared link opens that page.
 const ui = new URL('../ui/', root);
-if (!existsSync(new URL('node_modules/', ui))) execFileSync('npm', ['ci'], { cwd: ui, stdio: 'inherit' });
+if (!existsSync(new URL('node_modules/', ui))) {
+  // The UI's lockfile needs the npm it pins, as `make ui-install` uses.
+  const { packageManager } = JSON.parse(await readFile(new URL('package.json', ui), 'utf8'));
+  execFileSync('npx', ['--yes', packageManager, 'ci'], { cwd: ui, stdio: 'inherit' });
+}
 execFileSync('npm', ['run', 'build'], {
   cwd: ui,
   stdio: 'inherit',
