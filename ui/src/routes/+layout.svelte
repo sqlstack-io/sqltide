@@ -10,13 +10,15 @@
 	import CompileErrorScreen from '$lib/presentation/components/compile-error-screen.svelte';
 	import DemoBanner from '$lib/demo/components/demo-banner.svelte';
 	import EnginePanel from '$lib/demo/components/engine-panel.svelte';
-	import { demo } from '$lib/demo/main/demo-state';
+	import { getDemo } from '$lib/demo/main/get-demo';
+	import type { DemoState } from '$lib/demo/types';
 	import { getApp } from '$lib/api/main/project/get-app';
 	import { initializeBootstrap } from '$lib/api/main/project/initialize-bootstrap';
 
 	let { children } = $props();
 	const app = getApp();
 	const auth = getAuth();
+	const demo: DemoState = getDemo().demo;
 
 	$effect(() => {
 		if (auth.phase === 'unauthenticated' && page.route.id !== '/login') {

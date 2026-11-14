@@ -208,7 +208,7 @@
 
 		<div class="flex flex-col gap-4 lg:flex-row">
 			<div class="min-w-0 flex-1 overflow-hidden rounded-[4px] border border-border">
-				<div class="flex items-center gap-3 border-b border-border px-3 py-1.5">
+				<div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-1.5">
 					<div class="flex shrink-0 overflow-hidden rounded-[3px] border border-border">
 						<button
 							aria-pressed={tab === 'graph'}
@@ -227,11 +227,11 @@
 					</div>
 					{#if tab === 'graph'}
 						<EdgeLegend compact />
-						<span class="text-[var(--sb-text-faint)] ml-auto font-mono text-[10px]">
+						<span class="text-[var(--sb-text-faint)] ml-auto whitespace-nowrap font-mono text-[10px]">
 							{isInitialPublish ? 'node shows new staged relation' : 'node shows live → staged'}
 						</span>
 					{:else}
-						<span class="text-[var(--sb-text-faint)] ml-auto font-mono text-[10px]">
+						<span class="text-[var(--sb-text-faint)] ml-auto whitespace-nowrap font-mono text-[10px]">
 							{diff === null ? 'comparing…' : `${diff.fromEndpoint} → ${diff.toEndpoint}`}
 						</span>
 					{/if}

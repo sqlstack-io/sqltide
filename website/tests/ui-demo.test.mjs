@@ -53,7 +53,9 @@ test('the real engine runs the story in the page, and the promotion switches the
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await expect(page.getByRole('progressbar', { name: 'Engine loading' })).toBeVisible();
 
+  // On a screen this narrow the panel starts as a rail beside the page.
   const panel = page.getByRole('complementary', { name: 'Live engine' });
+  await panel.getByRole('button', { name: 'Show live engine' }).click({ timeout: 180_000 });
   const reads = panel.getByTestId('engine-reads');
   await expect(reads).toContainText('Reads the current version (all orders)', { timeout: 180_000 });
   await expect(page.getByRole('note')).toContainText('Plan, diff and run history are recorded.');

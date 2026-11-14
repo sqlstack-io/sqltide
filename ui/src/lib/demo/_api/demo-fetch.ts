@@ -1,29 +1,8 @@
 import recordings from '../recordings.json';
-import type { TableSize } from '../_engine/engine';
-
-/** What every write in the recorded demo returns, and what the UI shows for it. */
-export const DEMO_READ_ONLY_MESSAGE: string =
-	'This is a read-only UI demo with example data. Run `sqt playground` to try it with ClickHouse on your machine.';
-
-/** What a write other than the staged promotion returns while the real engine runs. */
-export const DEMO_ONE_ACTION_MESSAGE: string =
-	'This demo runs one action on its engine: promoting the staged deployment. Run `sqt playground` to try the rest with ClickHouse on your machine.';
+import { DEMO_ONE_ACTION_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '../constants';
+import type { DemoEngineLink, TableSize } from '../types';
 
 type Recording = { status: number; body: unknown };
-
-/**
- * The real engine as the API sees it: null while it loads, or in the recorded demo. `promote` runs
- * the promotion's statements, then the API answers from the recording made after it.
- */
-export type DemoEngineLink = {
-	/** False once the visitor has switched to the recording. */
-	active(): boolean;
-	ready(): { promote(): Promise<void>; tableSizes(): Promise<Map<string, TableSize>> } | null;
-	/** Waits for the engine; rejects when it cannot start. */
-	whenReady(): Promise<{ promote(): Promise<void> }>;
-	promoted(): boolean;
-	markPromoted(): void;
-};
 
 function reply(status: number, body: unknown): Response {
 	return new Response(JSON.stringify(body), {
@@ -48,8 +27,8 @@ type Deployment = {
 
 /** A recorded deployment with its row and byte counts read from the engine now. */
 function withSizes(deployment: Deployment, sizes: Map<string, TableSize>): Deployment {
-	const size = (name: string | null): TableSize | undefined => (name === null ? undefined : sizes.get(name));
-	const total = (field: keyof TableSize): number =>
+	const size: (name: string | null) => TableSize | undefined = (name) => (name === null ? undefined : sizes.get(name));
+	const total: (field: keyof TableSize) => number = (field) =>
 		deployment.physicalRelationNames.reduce((sum, name) => sum + (size(name)?.[field] ?? 0), 0);
 	return {
 		...deployment,
@@ -114,7 +93,7 @@ export function installDemoFetch(engine: DemoEngineLink | null = null): void {
 			console.error(`UI demo has no recording for GET ${url.pathname}${url.search}`);
 			return reply(404, { detail: `No recording for ${url.pathname}` });
 		}
-		const live = engine?.ready() ?? null;
+		const live: ReturnType<DemoEngineLink['ready']> = engine?.ready() ?? null;
 		if (live !== null && recording.status === 200 && /^\/api\/deployments(\/[^/]+)?$/.test(url.pathname)) {
 			let sizes: Map<string, TableSize>;
 			try {
@@ -123,7 +102,7 @@ export function installDemoFetch(engine: DemoEngineLink | null = null): void {
 				console.warn('The demo engine could not read table sizes; showing the recorded ones.', error);
 				return reply(recording.status, recording.body);
 			}
-			const body = recording.body as Deployment & { deployments?: Deployment[] };
+			const body: Deployment & { deployments?: Deployment[] } = recording.body as Deployment & { deployments?: Deployment[] };
 			return reply(
 				200,
 				body.deployments === undefined

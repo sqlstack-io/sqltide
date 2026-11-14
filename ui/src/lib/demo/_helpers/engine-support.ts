@@ -1,8 +1,5 @@
-/** Whether this browser runs the demo's real engine, and if not, the note that says why. */
-export type EngineSupport = { real: true } | { real: false; reason: string };
-
-/** The key a visitor's choice of the recording is kept under for this tab. */
-export const RECORDING_CHOICE_KEY: string = 'sqltide-demo-recording';
+import { RECORDING_CHOICE_KEY } from '../constants';
+import type { EngineSupport } from '../types';
 
 // The smallest module with a 64-bit memory; only browsers with Memory64 accept it.
 const MEMORY64_PROBE: Uint8Array<ArrayBuffer> = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 1]);
@@ -18,11 +15,13 @@ type BrowserFacts = {
 	chosenRecording: boolean;
 };
 
+type NavigatorWithHints = Navigator & {
+	userAgentData?: { mobile?: boolean };
+	connection?: { saveData?: boolean };
+};
+
 function browserFacts(): BrowserFacts {
-	const navigatorWithHints = navigator as Navigator & {
-		userAgentData?: { mobile?: boolean };
-		connection?: { saveData?: boolean };
-	};
+	const navigatorWithHints: NavigatorWithHints = navigator;
 	let chosenRecording: boolean = false;
 	try {
 		chosenRecording = sessionStorage.getItem(RECORDING_CHOICE_KEY) === '1';

@@ -1,15 +1,31 @@
-import type { DemoEngine, EngineProgress } from '../_engine/engine';
+import type { DemoController, DemoEngine, DemoState, EngineProgress } from '../types';
 
-/**
- * Where the demo's answers come from. `real`: the engine in this tab, which may still be loading.
- * `failed`: the engine could not start, and the visitor has not yet chosen the recording.
- */
-export type DemoMode =
-	| { kind: 'recorded'; reason: string }
-	| { kind: 'real'; progress: EngineProgress | null; engine: DemoEngine | null }
-	| { kind: 'failed'; error: string };
+export function createDemoState(): DemoController {
+	const demo: DemoState = $state({ mode: { kind: 'recorded', reason: '' }, promoted: false });
 
-export const demo: { mode: DemoMode; promoted: boolean } = $state({
-	mode: { kind: 'recorded', reason: '' },
-	promoted: false
-});
+	function useRecording(reason: string): void {
+		demo.mode = { kind: 'recorded', reason };
+	}
+
+	function startEngine(): void {
+		demo.mode = { kind: 'real', progress: null, engine: null };
+	}
+
+	function showProgress(progress: EngineProgress): void {
+		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress, engine: null };
+	}
+
+	function engineReady(engine: DemoEngine): void {
+		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress: null, engine };
+	}
+
+	function engineFailed(error: string): void {
+		demo.mode = { kind: 'failed', error };
+	}
+
+	function markPromoted(): void {
+		demo.promoted = true;
+	}
+
+	return { demo, useRecording, startEngine, showProgress, engineReady, engineFailed, markPromoted };
+}

@@ -1,8 +1,11 @@
 <!-- Shown on every page of the UI demo build: where the demo's answers come from. The docs live at the website root, outside the demo's base path. -->
 <script lang="ts">
-	import { RECORDING_CHOICE_KEY } from '../_engine/support';
-	import type { EngineProgress } from '../_engine/engine';
-	import { demo } from '../_state/demo.state.svelte';
+	import { RECORDING_CHOICE_KEY } from '../constants';
+	import { getDemo } from '../main/get-demo';
+	import type { DemoController, DemoState, EngineProgress } from '../types';
+
+	const controller: DemoController = getDemo();
+	const demo: DemoState = controller.demo;
 
 	function useRecording(): void {
 		sessionStorage.setItem(RECORDING_CHOICE_KEY, '1');
@@ -10,7 +13,7 @@
 	}
 
 	function continueWithRecording(): void {
-		demo.mode = { kind: 'recorded', reason: 'The real engine couldn’t start here, so this is the recording.' };
+		controller.useRecording('The real engine couldn’t start here, so this is the recording.');
 	}
 
 	function useEngine(): void {

@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
-import {
-	DEMO_ONE_ACTION_MESSAGE,
-	DEMO_READ_ONLY_MESSAGE,
-	installDemoFetch,
-	type DemoEngineLink
-} from '$lib/demo/_api/demo-fetch';
-import type { TableSize } from '$lib/demo/_engine/engine';
+import { installDemoFetch } from '$lib/demo/_api/demo-fetch';
+import { DEMO_ONE_ACTION_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '$lib/demo/constants';
+import type { DemoEngine, DemoEngineLink, TableSize } from '$lib/demo/types';
 import recordings from '$lib/demo/recordings.json';
 
 describe('UI demo fetch', () => {
@@ -54,6 +50,8 @@ describe('UI demo fetch', () => {
 	});
 });
 
+type DeploymentList = { deployments: { deploymentId: string; state: string }[] };
+
 describe('UI demo fetch with the real engine', () => {
 	const staged: string = recordings.promotion.deploymentId;
 	let promoted: boolean;
@@ -63,8 +61,8 @@ describe('UI demo fetch with the real engine', () => {
 		promoted = false;
 		promote = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
 		// Every table in the engine holds 7 rows and 100 bytes, whatever was recorded.
-		const sizes = { get: () => ({ rows: 7, bytes: 100 }) } as unknown as Map<string, TableSize>;
-		const engine = { promote, tableSizes: async () => sizes };
+		const sizes: Map<string, TableSize> = { get: () => ({ rows: 7, bytes: 100 }) } as unknown as Map<string, TableSize>;
+		const engine: Pick<DemoEngine, 'promote' | 'tableSizes'> = { promote, tableSizes: async () => sizes };
 		const link: DemoEngineLink = {
 			active: () => true,
 			ready: () => engine,
@@ -82,14 +80,14 @@ describe('UI demo fetch with the real engine', () => {
 	afterEach(() => vi.unstubAllGlobals());
 
 	it('given the staged deployment when promoted then the engine promotes and later GETs answer from after the promotion', async () => {
-		const before = await (await fetch('/api/deployments')).json();
+		const before: DeploymentList = await (await fetch('/api/deployments')).json();
 
 		const response: Response = await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
-		const after = await (await fetch('/api/deployments')).json();
+		const after: DeploymentList = await (await fetch('/api/deployments')).json();
 
 		expect(promote).toHaveBeenCalledOnce();
 		expect(await response.json()).toEqual(recordings.promotion.response.body);
-		const state = (body: { deployments: { deploymentId: string; state: string }[] }): string | undefined =>
+		const state: (body: DeploymentList) => string | undefined = (body) =>
 			body.deployments.find((deployment) => deployment.deploymentId === staged)?.state;
 		expect([state(before), state(after)]).toEqual(['staged', 'active']);
 	});

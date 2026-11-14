@@ -1,9 +1,9 @@
 <!-- The real engine's own answers, refreshed every two seconds: what the consumer query returns now, which version it reads, and how many rows each version holds. -->
 <script lang="ts">
 	import { base } from '$app/paths';
-	import recordings from '../recordings.json';
-	import type { DemoEngine } from '../_engine/engine';
-	import { demo } from '../_state/demo.state.svelte';
+	import { recordedDeploymentIds } from '../_api/recorded-deployments';
+	import { getDemo } from '../main/get-demo';
+	import type { DemoEngine, DemoState } from '../types';
 
 	type Props = { engine: DemoEngine };
 	let { engine }: Props = $props();
@@ -11,12 +11,15 @@
 	type Order = { order_id: string; status: string; total_cents: string };
 	type Snapshot = { orders: Order[]; total: number; reads: string; versions: { id: string; rows: number }[] };
 
-	const published: string = recordings.responses['/api/deployments'].body.deployments.find(
-		(deployment) => deployment.state === 'active'
-	)!.deploymentId;
-	const staged: string = recordings.promotion.deploymentId;
+	const demo: DemoState = getDemo().demo;
+	const { published, staged }: { published: string; staged: string } = recordedDeploymentIds();
 
-	let open = $state<boolean>(true);
+	// Docked beside the page, the panel leaves narrower screens too little room, so it starts as a
+	// rail there; a promotion opens it to show the switch.
+	let open = $state<boolean>(globalThis.innerWidth >= 1600);
+	$effect(() => {
+		if (demo.promoted) open = true;
+	});
 	let adding = $state<boolean>(true);
 	let snapshot = $state<Snapshot | null>(null);
 	let error = $state<string | null>(null);
@@ -54,7 +57,7 @@
 
 	async function toggleOrders(): Promise<void> {
 		if (engine.addingOrders) engine.stopOrders();
-		else await engine.startOrders(4000);
+		else await engine.startOrders();
 		adding = engine.addingOrders;
 	}
 
