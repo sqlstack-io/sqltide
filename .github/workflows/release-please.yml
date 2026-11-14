@@ -105,7 +105,7 @@ jobs:
             exit 1
           fi
           unexpected_files="$(gh pr view "${release_pr}" --repo "${GITHUB_REPOSITORY}" \
-            --json files --jq '[.files[].path | select(. != ".release-please-manifest.json" and . != "CHANGELOG.md" and . != "pyproject.toml" and . != "uv.lock" and . != "Cargo.toml" and . != "Cargo.lock" and . != "ui/src/lib/demo/prepared.json" and . != "ui/src/lib/demo/recordings.json")] | join("\n")')"
+            --json files --jq '[.files[].path | select(. != ".release-please-manifest.json" and . != "CHANGELOG.md" and . != "pyproject.toml" and . != "uv.lock" and . != "Cargo.toml" and . != "Cargo.lock" and . != "ui/src/lib/demo/recordings.json")] | join("\n")')"
           if [[ -n "${unexpected_files}" ]]; then
             echo "Release pull request contains non-metadata changes:" >&2
             echo "${unexpected_files}" >&2
