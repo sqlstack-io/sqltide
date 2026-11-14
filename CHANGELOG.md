@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.69.0](https://github.com/sqlstack-io/sqltide/compare/v0.68.3...v0.69.0) (2026-11-14)
+
+
+### Features
+
+* **ui:** add a read-only UI demo served under a base path ([#406](https://github.com/sqlstack-io/sqltide/issues/406)) ([2d88e8e](https://github.com/sqlstack-io/sqltide/commit/2d88e8e2062c6a5aaf718a345338a68266d1fe42))
+
 ## [0.68.3](https://github.com/sqlstack-io/sqltide/compare/v0.68.2...v0.68.3) (2026-11-14)
 
 
