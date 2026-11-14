@@ -6923,6 +6923,14 @@ def run_dev_deployment_promotion(
     deployment_id: str,
     project_dir: Path,
 ) -> dict[str, object]: ...
+def run_dev_deployment_rollback(
+    *,
+    connection: AdapterConnection,
+    database: str,
+    metadata_database: str,
+    deployment_id: str,
+    project_dir: Path,
+) -> dict[str, object]: ...
 def run_dev_deployment_cleanup(
     *,
     connection: AdapterConnection,

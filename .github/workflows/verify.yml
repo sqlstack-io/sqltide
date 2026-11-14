@@ -20,6 +20,7 @@ jobs:
       e2e: ${{ steps.scope.outputs.e2e }}
       browser: ${{ steps.scope.outputs.browser }}
       packaging: ${{ steps.scope.outputs.packaging }}
+      demo: ${{ steps.scope.outputs.demo }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,16 +38,18 @@ jobs:
               echo "e2e=$2"
               echo "browser=$3"
               echo "packaging=$4"
+              echo "demo=$5"
             } >> "${GITHUB_OUTPUT}"
           }
 
           if [[ "${EVENT_NAME}" != "pull_request" ]]; then
-            write_scope true true true true
+            write_scope true true true true true
             exit 0
           fi
 
           focused=true
           packaging=false
+          demo=false
           browser=false
           changed=false
           while IFS= read -r -d '' path; do
@@ -54,6 +57,12 @@ jobs:
             case "${path}" in
               Cargo.*|crates/*|pyproject.toml|src/sqltide/_native.pyi|.github/workflows/build-distributions.yml|.github/workflows/publish.yml)
                 packaging=true
+                ;;
+            esac
+            # What sqt plans and writes, which the UI demo prepared ahead, and what runs it in chdb-wasm.
+            case "${path}" in
+              Cargo.*|crates/*|src/sqltide/*|pyproject.toml|uv.lock|ui/scripts/prepare-demo.mjs|ui/scripts/demo-engine.*|ui/scripts/check-demo-readers.mjs|ui/src/lib/demo/*|ui/src/lib/demo-readers/*|website/package*.json|.github/workflows/verify.yml)
+                demo=true
                 ;;
             esac
             case "${path}" in
@@ -74,11 +83,11 @@ jobs:
           done < <(git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}")
 
           if [[ "${changed}" != "true" || "${focused}" != "true" ]]; then
-            write_scope true true true "${packaging}"
+            write_scope true true true "${packaging}" "${demo}"
             exit 0
           fi
 
-          write_scope false false "${browser}" "${packaging}"
+          write_scope false false "${browser}" "${packaging}" "${demo}"
 
   checks:
     name: Static, UI, and unit checks
@@ -220,6 +229,52 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  demo:
+    name: UI demo matches sqt and runs on its engine
+    needs: changes
+    if: needs.changes.outputs.demo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.12.3"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@v4
+        with:
+          # chdb-wasm needs Memory64, which Node has from 23.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            website/package-lock.json
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Python
+        run: uv python install "$(cat .python-version)"
+      - name: Install dependencies
+        run: uv sync --locked --all-groups
+      - name: Install UI and website dependencies
+        run: |
+          make ui-install
+          cd website && npm ci
+      - name: Prepare the demo again with sqt and compare
+        working-directory: ui
+        env:
+          SQT: ${{ github.workspace }}/.venv/bin/sqt
+        run: node scripts/prepare-demo.mjs --check
+      - name: Compare the demo's warehouse readers with sqt dev
+        run: node ui/scripts/check-demo-readers.mjs
+      - name: Run every prepared action on the demo's engine
+        working-directory: ui
+        env:
+          CHDB_WASM: ${{ github.workspace }}/website/node_modules/chdb-wasm
+        run: npx vitest run --config scripts/demo-engine.config.ts
+
   distributions:
     name: Distributions
     needs: changes
@@ -233,7 +288,7 @@ jobs:
   verify:
     name: Verify
     if: always()
-    needs: [changes, checks, integration, e2e, browser, distributions, website]
+    needs: [changes, checks, integration, e2e, browser, demo, distributions, website]
     runs-on: ubuntu-latest
     steps:
       - name: Confirm all required verification jobs passed
@@ -243,6 +298,7 @@ jobs:
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
+          DEMO_RESULT: ${{ needs.demo.result }}
           DISTRIBUTIONS_RESULT: ${{ needs.distributions.result }}
           WEBSITE_RESULT: ${{ needs.website.result }}
         run: |
@@ -251,7 +307,7 @@ jobs:
             exit 1
           fi
           for result in "${INTEGRATION_RESULT}" "${E2E_RESULT}" "${BROWSER_RESULT}" \
-            "${DISTRIBUTIONS_RESULT}"; do
+            "${DEMO_RESULT}" "${DISTRIBUTIONS_RESULT}"; do
             if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
               echo "A selected verification suite did not pass: ${result}" >&2
               exit 1

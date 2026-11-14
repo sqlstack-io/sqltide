@@ -17,8 +17,9 @@ for (const [from, to] of Object.entries(redirects)) {
 }
 
 // The UI demo at /demo/: the package's UI, built to answer its API from recorded responses, or, on
-// desktop browsers that can run it, from a real ClickHouse engine (chdb-wasm) in the page. Each
-// recorded page gets its own copy of the app shell, so a reload or shared link opens that page.
+// desktop browsers that can run it, from a real ClickHouse engine (chdb-wasm) in the page that runs
+// the SQL sqt prepared. Each recorded page gets its own copy of the app shell, so a reload or shared
+// link opens that page.
 const ui = new URL('../ui/', root);
 const chdb = new URL('node_modules/chdb-wasm/', root);
 const { version: engineVersion } = JSON.parse(await readFile(new URL('package.json', chdb), 'utf8'));
@@ -55,13 +56,16 @@ await writeFile(new URL('manifest.json', engine), JSON.stringify({
   wasmBytes: wasm.length,
   parts: parts.map((part, index) => ({ name: `chdb.wasm.gz.${index}`, bytes: part.length })),
 }));
-const { pages, promotion } = JSON.parse(await readFile(new URL('src/lib/demo/recordings.json', ui), 'utf8'));
-for (const path of new Set([...pages, ...promotion.pages].map((page) => new URL(page, 'http://demo').pathname))) {
+const { pages } = JSON.parse(await readFile(new URL('src/lib/demo/recordings.json', ui), 'utf8'));
+for (const path of new Set(pages.map((page) => new URL(page, 'http://demo').pathname))) {
   if (path === '/') continue;
   const directory = new URL(`${path.slice(1)}/`, demo);
   await mkdir(directory, { recursive: true });
   await copyFile(new URL('index.html', demo), new URL('index.html', directory));
 }
+// Pages the engine creates, such as a new run, have no copy; Pages answers them with the nearest
+// 404.html, which is the app shell too.
+await copyFile(new URL('index.html', demo), new URL('404.html', demo));
 
 // Keep unselected alternatives out of production. The selected hero lives in the homepage.
 const home = await readFile(new URL('index.html', output), 'utf8');

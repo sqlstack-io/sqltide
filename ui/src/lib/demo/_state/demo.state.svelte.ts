@@ -1,31 +1,31 @@
-import type { DemoController, DemoEngine, DemoState, EngineProgress } from '../types';
+import type { DemoController, DemoState, EngineProgress, LiveDemo } from '../types';
 
 export function createDemoState(): DemoController {
-	const demo: DemoState = $state({ mode: { kind: 'recorded', reason: '' }, promoted: false });
+	const demo: DemoState = $state({ mode: { kind: 'recorded', reason: '' } });
+
+	let chooseRecording: () => void = () => undefined;
+	const recordingChosen: Promise<void> = new Promise<void>((resolve) => (chooseRecording = resolve));
 
 	function useRecording(reason: string): void {
 		demo.mode = { kind: 'recorded', reason };
+		chooseRecording();
 	}
 
 	function startEngine(): void {
-		demo.mode = { kind: 'real', progress: null, engine: null };
+		demo.mode = { kind: 'real', progress: null, live: null };
 	}
 
 	function showProgress(progress: EngineProgress): void {
-		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress, engine: null };
+		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress, live: null };
 	}
 
-	function engineReady(engine: DemoEngine): void {
-		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress: null, engine };
+	function engineReady(live: LiveDemo): void {
+		if (demo.mode.kind === 'real') demo.mode = { kind: 'real', progress: null, live };
 	}
 
 	function engineFailed(error: string): void {
 		demo.mode = { kind: 'failed', error };
 	}
 
-	function markPromoted(): void {
-		demo.promoted = true;
-	}
-
-	return { demo, useRecording, startEngine, showProgress, engineReady, engineFailed, markPromoted };
+	return { demo, recordingChosen, useRecording, startEngine, showProgress, engineReady, engineFailed };
 }

@@ -56,6 +56,20 @@ createServer((request, response) => {
     if (request.method === 'HEAD') return response.end();
     createReadStream(file).pipe(response);
   } catch {
+    // Like Pages, answer with the nearest 404.html above the path, such as the UI demo's app shell.
+    const parts = url.pathname.split('/').slice(1, -1);
+    for (let depth = parts.length; depth >= 0; depth -= 1) {
+      const page = normalize(join(root, ...parts.slice(0, depth), '404.html'));
+      if (!page.startsWith(normalize(root) + sep)) break;
+      try {
+        const body = readFileSync(page);
+        const headers = { 'Content-Type': types['.html'] };
+        for (const rule of rules.filter((rule) => rule.pattern.test(url.pathname))) Object.assign(headers, rule.headers);
+        return response.writeHead(404, headers).end(body);
+      } catch {
+        // no 404.html at this level
+      }
+    }
     response.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
   }
 }).listen(port, '127.0.0.1');

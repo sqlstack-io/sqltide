@@ -41,6 +41,7 @@ describe('run history scopes', () => {
 			run('audit', 'scheduled'),
 			run('test', 'direct'),
 			run('deployment promote', 'virtual'),
+			run('deployment rollback', 'virtual_environment'),
 			run('destroy pipelines', 'destructive'),
 			run('reset target', 'destructive'),
 			run('janitor', 'virtual')
@@ -51,7 +52,8 @@ describe('run history scopes', () => {
 		]);
 		expect(runsInScope(runs, 'tests').map((item) => item.invocationId)).toEqual(['test-direct']);
 		expect(runsInScope(runs, 'deployments').map((item) => item.invocationId)).toEqual([
-			'deployment promote-virtual'
+			'deployment promote-virtual',
+			'deployment rollback-virtual_environment'
 		]);
 		expect(runsInScope(runs, 'destruction').map((item) => item.invocationId)).toEqual([
 			'destroy pipelines-destructive',

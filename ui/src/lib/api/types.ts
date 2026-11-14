@@ -210,6 +210,8 @@ export type PromoteResult = {
 	deploymentId: string;
 	publishedViews: { logicalName: string; physicalName: string }[];
 	graphAtomicPublish: boolean;
+	/** The deployment a rollback replaced; promotions do not report it. */
+	previousDeploymentId?: string;
 };
 
 export type CleanupResult = {

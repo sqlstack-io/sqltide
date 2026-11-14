@@ -1,7 +1,7 @@
 //! Deployment lifecycle mutations the dev server runs as recorded, observable invocations, and
 //! the deployment comparison payload.
 
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PySet, PyString, PyTuple};
 
@@ -11,6 +11,7 @@ use crate::handling::while_handling;
 use crate::py_kwargs;
 
 const PROMOTE_COMMAND: &str = "deployment promote";
+const ROLLBACK_COMMAND: &str = "deployment rollback";
 const CLEANUP_COMMAND: &str = "janitor";
 const VIRTUAL_ENVIRONMENT_MODE: &str = "virtual_environment";
 
@@ -147,6 +148,119 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
     project_dir: &Any<'py>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let py: Python<'py> = connection.py();
+    run_recorded_publish(
+        connection,
+        database,
+        metadata_database,
+        deployment_id,
+        project_dir,
+        PROMOTE_COMMAND,
+        || {
+            attr(py, "sqltide.executor.promotion.models", "PublishRequest")?.call(
+                (),
+                Some(&py_kwargs!(py; deployment_id = deployment_id, metadata_database = metadata_database, default_database = database)?),
+            )
+        },
+    )
+}
+
+/// Roll the active deployment back to a superseded one, recording it as a run the UI can follow.
+///
+/// Only a superseded deployment is a rollback target here, and the rollback is resolved before
+/// the run starts, so a refused target changes nothing and records no run.
+#[pyfunction]
+#[pyo3(signature = (*, connection, database, metadata_database, deployment_id, project_dir))]
+pub(crate) fn run_dev_deployment_rollback<'py>(
+    connection: &Any<'py>,
+    database: &Any<'py>,
+    metadata_database: &Any<'py>,
+    deployment_id: &Any<'py>,
+    project_dir: &Any<'py>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let py: Python<'py> = connection.py();
+    let inventory: Any<'py> = call(
+        py,
+        "sqltide._native",
+        "load_deployments",
+        py_kwargs!(py; client = connection, metadata_database = metadata_database, default_database = database)?,
+    )?;
+    let mut state: Option<String> = None;
+    for item in inventory.getattr("deployments")?.try_iter()? {
+        let item: Any<'py> = item?;
+        if item.getattr("deployment_id")?.eq(deployment_id)? {
+            state = Some(item.getattr("state")?.getattr("value")?.extract()?);
+            break;
+        }
+    }
+    let shown: String = deployment_id.str()?.extract()?;
+    match state.as_deref() {
+        Some("superseded") => {}
+        Some(state) => {
+            return Err(PyValueError::new_err(format!(
+                "Deployment '{shown}' is {state}, not superseded; only a superseded deployment \
+                 can be rolled back to"
+            )));
+        }
+        None => {
+            return Err(PyValueError::new_err(format!(
+                "Deployment '{shown}' was not found"
+            )));
+        }
+    }
+    let request: Any<'py> = attr(py, "sqltide.executor.promotion.models", "RollbackRequest")?
+        .call(
+            (),
+            Some(&py_kwargs!(py;
+                deployment_id = deployment_id,
+                previous = false,
+                metadata_database = metadata_database,
+                default_database = database,
+            )?),
+        )?;
+    let plan: Any<'py> = call(
+        py,
+        "sqltide._native",
+        "resolve_deployment_rollback",
+        py_kwargs!(py; request = request, client = connection)?,
+    )?;
+    let previous_deployment_id: Any<'py> = plan.getattr("current_deployment_id")?;
+    let target_deployment_id: Any<'py> = plan.getattr("target_deployment_id")?;
+    let payload: Bound<'py, PyDict> = run_recorded_publish(
+        connection,
+        database,
+        metadata_database,
+        &target_deployment_id,
+        project_dir,
+        ROLLBACK_COMMAND,
+        || {
+            attr(py, "sqltide.executor.promotion.models", "PublishRequest")?.call(
+                (),
+                Some(&py_kwargs!(py;
+                    deployment_id = &target_deployment_id,
+                    metadata_database = metadata_database,
+                    default_database = database,
+                    operation = "rollback",
+                    previous_deployment_id = &previous_deployment_id,
+                )?),
+            )
+        },
+    )?;
+    payload.set_item("previousDeploymentId", previous_deployment_id)?;
+    Ok(payload)
+}
+
+/// Publish one deployment as a recorded run: `run_started`, the publish, `run_completed`, and
+/// the terminal invocation record, with the published views as the payload.
+fn run_recorded_publish<'py>(
+    connection: &Any<'py>,
+    database: &Any<'py>,
+    metadata_database: &Any<'py>,
+    deployment_id: &Any<'py>,
+    project_dir: &Any<'py>,
+    command: &str,
+    publish_request: impl FnOnce() -> PyResult<Any<'py>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let py: Python<'py> = connection.py();
     let started: Bound<'py, PyTuple> = start(py)?;
     let sink: Any<'py> = attr(py, "sqltide._native", "RunEventSink")?.call(
         (),
@@ -166,8 +280,8 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         "run_started",
         (),
         Some(&py_kwargs!(py;
-            command = PROMOTE_COMMAND,
-            display_command = fstring(py, &[literal(py, "sqt deployment promote "), deployment_id.clone()])?,
+            command = command,
+            display_command = fstring(py, &[literal(py, &format!("sqt {command} ")), deployment_id.clone()])?,
             mode = VIRTUAL_ENVIRONMENT_MODE,
             total_statements = 0,
             selected_node_count = selected_node_count,
@@ -175,10 +289,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         )?),
     )?;
     let published: PyResult<Any<'py>> = (|| {
-        let request: Any<'py> = attr(py, "sqltide.executor.promotion.models", "PublishRequest")?.call(
-            (),
-            Some(&py_kwargs!(py; deployment_id = deployment_id, metadata_database = metadata_database, default_database = database)?),
-        )?;
+        let request: Any<'py> = publish_request()?;
         call(
             py,
             "sqltide._native",
@@ -202,7 +313,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
                     &started,
                     project_dir,
                     database,
-                    PROMOTE_COMMAND,
+                    command,
                     deployment_id.clone(),
                     "failed",
                     py.None().into_bound(py),
@@ -231,7 +342,7 @@ pub(crate) fn run_dev_deployment_promotion<'py>(
         &started,
         project_dir,
         database,
-        PROMOTE_COMMAND,
+        command,
         result.getattr("deployment_id")?,
         "succeeded",
         PyString::new(py, "applied").into_any(),
@@ -408,6 +519,7 @@ fn deployment_diff_payload<'py>(result: &Any<'py>) -> PyResult<Bound<'py, PyDict
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(promotion_executed_logical_ids, module)?)?;
     module.add_function(wrap_pyfunction!(run_dev_deployment_promotion, module)?)?;
+    module.add_function(wrap_pyfunction!(run_dev_deployment_rollback, module)?)?;
     module.add_function(wrap_pyfunction!(run_dev_deployment_cleanup, module)?)?;
     module.add_function(wrap_pyfunction!(build_deployment_diff_payload, module)?)?;
     module.add_function(wrap_pyfunction!(deployment_diff_payload_py, module)?)

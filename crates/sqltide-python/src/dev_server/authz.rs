@@ -480,12 +480,14 @@ pub(crate) fn require_run_cancel(
     )
 }
 
-/// Require `DEPLOYMENT_PROMOTE` over every pipeline the promotion changes.
+/// Require `DEPLOYMENT_PROMOTE` over every pipeline publishing `deployment_id` changes, for
+/// its `operation`: a promotion, or a rollback to that deployment.
 pub(crate) fn require_promotion(
     call: &Call<'_, '_>,
     analysis: &Bound<'_, PyAny>,
     deployment_id: &str,
     logical_ids: &Bound<'_, PyAny>,
+    operation: &str,
 ) -> Outcome<()> {
     let list = pyo3::types::PyList::new(
         call.py,
@@ -499,7 +501,7 @@ pub(crate) fn require_promotion(
         Some(pipelines) if !pipelines.is_empty() => pipelines,
         _ => {
             return Err(unresolved(format!(
-                "Cannot resolve pipeline scope for deployment '{deployment_id}' promotion"
+                "Cannot resolve pipeline scope for deployment '{deployment_id}' {operation}"
             )));
         }
     };
@@ -510,7 +512,11 @@ pub(crate) fn require_promotion(
             permission: "DEPLOYMENT_PROMOTE",
             grant_scope: None,
             affected_pipelines: pipelines,
-            denial_message: "Promoting this deployment is not permitted".to_owned(),
+            denial_message: if operation == "rollback" {
+                "Rolling back to this deployment is not permitted".to_owned()
+            } else {
+                "Promoting this deployment is not permitted".to_owned()
+            },
         },
     )
 }

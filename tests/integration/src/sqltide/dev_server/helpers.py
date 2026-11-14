@@ -14,7 +14,12 @@ from tests.integration.src.sqltide.adapters.clickhouse.helpers import (
     build_compiled_example_pipeline,
     render_create_table_ddl,
 )
-from tests.integration.src.sqltide.cli.helpers import write_audit_project_files
+from tests.integration.src.sqltide.cli.helpers import (
+    write_audit_project_files,
+    write_upstream_source_models,
+    write_upstream_source_project,
+)
+from tests.integration.src.sqltide.conftest import ClickHouseConnectionSettings
 from tests.integration.src.sqltide.executor.backfill.helpers import require_managed_source
 from tests.unit.src.sqltide.compiler.audit_discovery.helpers import write_sql_audit_file
 from tests.unit.src.sqltide.compiler.discovery.helpers import write_project_toml
@@ -207,3 +212,45 @@ def page_coordinates(page: dict[str, object]) -> tuple[tuple[object, object], ..
 
 def page_cursor(page: dict[str, object]) -> dict[str, object]:
     return cast("dict[str, object]", page["nextCursor"])
+
+
+def write_rollback_history(
+    *,
+    project: Path,
+    settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    database: str,
+    first_deployment_id: str,
+    second_deployment_id: str,
+    staged_deployment_id: str,
+) -> None:
+    """Build and promote two deployments in order, then build a third left staged."""
+
+    write_upstream_source_project(project, settings, database)
+    clickhouse_client.command(
+        f"CREATE TABLE {database}.orders_input (event_partition Int32, event_offset Int64, "
+        "event_time DateTime64(3), order_id String, amount_cents UInt64) "
+        "ENGINE = MergeTree ORDER BY (event_partition, event_offset)"
+    )
+    clickhouse_client.command(
+        f"INSERT INTO {database}.orders_input VALUES "
+        "(0, 1, now64(3), 'order-small', 75), (0, 2, now64(3), 'order-large', 300)"
+    )
+    _build(project, first_deployment_id)
+    _promote(project, first_deployment_id)
+    # Change both models so the second deployment supersedes every binding of the first.
+    write_upstream_source_models(project, totals_minimum=10, report_minimum=100)
+    _build(project, second_deployment_id)
+    _promote(project, second_deployment_id)
+    write_upstream_source_models(project, totals_minimum=10, report_minimum=200)
+    _build(project, staged_deployment_id)
+
+
+def _build(project: Path, deployment_id: str) -> None:
+    arguments: tuple[str, ...] = ("--deployment-id", deployment_id, "--project-dir", str(project))
+    assert _native.run_cli(("sqt", "build", "--auto-approve", *arguments)) == 0
+
+
+def _promote(project: Path, deployment_id: str) -> None:
+    arguments: tuple[str, ...] = (deployment_id, "--project-dir", str(project))
+    assert _native.run_cli(("sqt", "deployment", "promote", *arguments)) == 0

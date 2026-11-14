@@ -50,6 +50,9 @@ _DECLARED_MUTATION_POLICIES: dict[tuple[str, str], str] = {
     ("POST", "/api/deployments/{deployment_id}/promote"): (
         "deployment.promote via require_promotion_authorization"
     ),
+    ("POST", "/api/deployments/{deployment_id}/rollback"): (
+        "deployment.promote over the target deployment via require_promotion_authorization"
+    ),
     ("POST", "/api/deployments/cleanup"): ("deployment.cleanup via require_cleanup_authorization"),
     ("POST", "/api/destruction/plans"): (
         "pipeline.destroy or target.reset via require_destruction_authorization"

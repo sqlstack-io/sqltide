@@ -7,7 +7,7 @@
 	import EdgeLegend from '$lib/presentation/components/lineage/edge-legend.svelte';
 	import FactRow from '$lib/presentation/components/fact-row.svelte';
 	import { fetchDeploymentDiff } from '$lib/api/main/deployments/fetch-deployment-diff';
-	import { promoteDeployment } from '$lib/api/main/deployments/promote-deployment';
+	import { publishDeployment } from '$lib/api/main/deployments/publish-deployment';
 	import { getProject } from '$lib/api/main/project/get-project';
 	import { goto } from '$app/navigation';
 	import { refreshDeployments } from '$lib/api/main/project/refresh-deployments';
@@ -36,8 +36,11 @@
 	let promoting = $state<boolean>(false);
 	let promoteError = $state<string | null>(null);
 	const promoteAllowed = $derived(canAnyPipeline('deployment.promote'));
+	let rollingBack = $state<boolean>(false);
+	let rollbackError = $state<string | null>(null);
 	let diffRequestGeneration = 0;
 	let promotionRequestGeneration = 0;
+	let rollbackRequestGeneration = 0;
 
 	$effect(() => {
 		void deployment.load(deploymentId);
@@ -48,11 +51,14 @@
 		void deploymentId;
 		diffRequestGeneration += 1;
 		promotionRequestGeneration += 1;
+		rollbackRequestGeneration += 1;
 		tab = 'graph';
 		diff = null;
 		diffError = null;
 		promoting = false;
 		promoteError = null;
+		rollingBack = false;
+		rollbackError = null;
 	});
 
 	async function promote(): Promise<void> {
@@ -61,7 +67,7 @@
 		promoting = true;
 		promoteError = null;
 		try {
-			const result: Awaited<ReturnType<typeof promoteDeployment>> = await promoteDeployment(requestedId);
+			const result: Awaited<ReturnType<typeof publishDeployment>> = await publishDeployment(requestedId, 'promote');
 			if (deploymentId !== requestedId || promotionRequestGeneration !== requestGeneration) return;
 			await refreshDeployments();
 			if (deploymentId !== requestedId || promotionRequestGeneration !== requestGeneration) return;
@@ -70,6 +76,25 @@
 			if (deploymentId === requestedId && promotionRequestGeneration === requestGeneration) {
 				promoteError = String(error);
 				promoting = false;
+			}
+		}
+	}
+
+	async function rollback(): Promise<void> {
+		const requestedId: string = deploymentId;
+		const requestGeneration: number = ++rollbackRequestGeneration;
+		rollingBack = true;
+		rollbackError = null;
+		try {
+			const result: Awaited<ReturnType<typeof publishDeployment>> = await publishDeployment(requestedId, 'rollback');
+			if (deploymentId !== requestedId || rollbackRequestGeneration !== requestGeneration) return;
+			await refreshDeployments();
+			if (deploymentId !== requestedId || rollbackRequestGeneration !== requestGeneration) return;
+			await goto(`${base}/runs/${result.invocationId}`);
+		} catch (error) {
+			if (deploymentId === requestedId && rollbackRequestGeneration === requestGeneration) {
+				rollbackError = String(error);
+				rollingBack = false;
 			}
 		}
 	}
@@ -139,6 +164,9 @@
 	const removalCount: number = $derived(detail?.promotionPreview?.removals.length ?? 0);
 	const isPartialPromotion: boolean = $derived(
 		detail?.state === 'active' && detail.promotionPreview !== null
+	);
+	const canRollBack: boolean = $derived(
+		detail?.state === 'superseded' && detail.missingRelationNames.length === 0
 	);
 	const changedLogicalNames: Set<string> = $derived(
 		new Set([
@@ -348,7 +376,7 @@
 					</div>
 				{/if}
 
-				{#if detail.state === 'superseded'}
+				{#if canRollBack}
 					<div class="rounded-[4px] border border-border">
 						<div
 							class="text-[var(--sb-text-faint)] border-b border-border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em]"
@@ -358,12 +386,25 @@
 						<div class="px-3 py-2.5">
 							<div class="text-muted-foreground pb-2 text-[11.5px]">
 								This deployment's relations are still on disk, so it remains a rollback target
-								until the janitor removes them.
+								until the janitor removes them. Rolling back makes it live again; bindings change
+								one at a time, not all together.
 							</div>
-							<code
-								class="block rounded-[3px] border border-border bg-[var(--sb-hover)] px-2 py-1.5 text-[11.5px]"
-								>sqt deployment rollback {detail.deploymentId}</code
+							<button
+								class="bg-primary text-primary-foreground w-full rounded-[3px] px-3 py-1.5 text-[12px] font-medium disabled:opacity-50"
+								onclick={() => void rollback()}
+								disabled={rollingBack || !promoteAllowed}
+								title={promoteAllowed ? undefined : 'Requires the deployment.promote permission'}
 							>
+								{rollingBack ? 'rolling back…' : 'Roll back'}
+							</button>
+							{#if rollbackError !== null}
+								<div class="pt-2">
+									<ErrorPreview text={rollbackError} title="Rollback failed" clamp="line-clamp-3" class="max-w-full" />
+								</div>
+							{/if}
+							<div class="text-[var(--sb-text-faint)] pt-2 font-mono text-[10.5px]">
+								sqt deployment rollback {detail.deploymentId}
+							</div>
 						</div>
 					</div>
 				{/if}

@@ -557,13 +557,48 @@ fn promote_deployment(call: &Call<'_, '_>) -> Outcome<HttpReply> {
                 py_kwargs!(py; connection = &client, metadata_database = database(call), deployment_id = deployment_id.as_str())?,
             )?)
         })?;
-        authz::require_promotion(call, &analysis, &deployment_id, &logical_ids)?;
+        authz::require_promotion(call, &analysis, &deployment_id, &logical_ids, "promotion")?;
     }
     let result = locked(call, || {
         Ok(invoke(
             py,
             NATIVE,
             "run_dev_deployment_promotion",
+            py_kwargs!(py;
+                connection = &client,
+                database = database(call),
+                metadata_database = database(call),
+                deployment_id = deployment_id.as_str(),
+                project_dir = call.service(|services| &services.project_dir),
+            )?,
+        )?)
+    });
+    call.payload(&catching(py, result, &[ADAPTER_ERROR, VALUE_ERROR])?)
+}
+
+/// Roll the active deployment back to a superseded one, authorized like promoting that
+/// deployment.
+fn rollback_deployment(call: &Call<'_, '_>) -> Outcome<HttpReply> {
+    let py: Python<'_> = call.py;
+    let deployment_id: String = call.path[0].text().to_owned();
+    let client = required_connection(call)?;
+    if !authz::is_system_admin(call)? {
+        let analysis = servable(call)?;
+        let logical_ids = locked(call, || {
+            Ok(invoke(
+                py,
+                NATIVE,
+                "promotion_executed_logical_ids",
+                py_kwargs!(py; connection = &client, metadata_database = database(call), deployment_id = deployment_id.as_str())?,
+            )?)
+        })?;
+        authz::require_promotion(call, &analysis, &deployment_id, &logical_ids, "rollback")?;
+    }
+    let result = locked(call, || {
+        Ok(invoke(
+            py,
+            NATIVE,
+            "run_dev_deployment_rollback",
             py_kwargs!(py;
                 connection = &client,
                 database = database(call),
@@ -1402,6 +1437,11 @@ pub(crate) fn routes() -> Vec<Route<Endpoint>> {
             POST,
             "/api/deployments/{deployment_id}/promote",
             Endpoint::new(promote_deployment).path(&[TEXT]),
+        ),
+        Route::new(
+            POST,
+            "/api/deployments/{deployment_id}/rollback",
+            Endpoint::new(rollback_deployment).path(&[TEXT]),
         ),
         Route::new(
             POST,

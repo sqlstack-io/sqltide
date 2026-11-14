@@ -33,7 +33,7 @@ export function buildRunGraph(input: RunGraphInput): RunGraphPresentation {
 	);
 	const command: string = input.startedEvent?.command ?? input.record?.command ?? input.commandLine;
 	const operation: RunGraphOperation =
-		command === 'deployment promote'
+		command === 'deployment promote' || command === 'deployment rollback'
 			? 'promotion'
 			: command === 'destroy pipelines' || command === 'reset target'
 				? 'destruction'
