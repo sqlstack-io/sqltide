@@ -418,6 +418,12 @@
 						</div>
 					</div>
 
+					{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && project.audits.length === 0 && project.tests.length === 0}
+						<p class="text-muted-foreground mt-3 border-t border-[var(--border-subtle)] pt-2.5 text-[11.5px]" data-testid="demo-no-audits">
+							This playground defines no audits or tests.
+						</p>
+					{/if}
+
 					{#if worstAudit && worstAudit.result}
 						<div class="mt-3 border-t border-[var(--border-subtle)] pt-2.5">
 							<div class="flex items-center gap-2">

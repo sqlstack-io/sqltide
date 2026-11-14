@@ -73,7 +73,7 @@ const TIME_DEPENDENT = {
 	]
 };
 
-/** Warehouse-health fields a browser engine cannot measure; the readers report them as unavailable. */
+/** Warehouse-health fields a browser engine cannot measure; the readers leave them empty without these warnings. */
 const BROWSER_WARNINGS = [
 	'Disk capacity is unavailable.',
 	'Main-path inode metrics are unavailable.',
@@ -88,7 +88,7 @@ function asBrowserHealth(health) {
 		disks: [],
 		inodes: { total: null, free: null, status: 'unknown' },
 		memory: null,
-		warnings: [...BROWSER_WARNINGS, ...health.warnings.filter((warning) => !BROWSER_WARNINGS.includes(warning))]
+		warnings: health.warnings.filter((warning) => !BROWSER_WARNINGS.includes(warning))
 	};
 }
 
@@ -401,7 +401,7 @@ async function main() {
 	console.log('Allowed time-dependent differences that occurred:');
 	if (report.allowed.size === 0) console.log('  none');
 	for (const [pattern, count] of report.allowed) console.log(`  ${pattern}: ${count}`);
-	console.log('Browser-unavailable warehouseHealth fields (expected as unavailable): availability, status, warnings, disks, inodes, memory.');
+	console.log('Browser-unavailable warehouseHealth fields (expected empty): availability, status, disks, inodes, memory and their warnings.');
 	if (report.failures.length > 0) {
 		console.error(`\n${report.failures.length} unexpected differences:\n${report.failures.join('\n')}`);
 		process.exit(1);

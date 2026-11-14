@@ -29,6 +29,6 @@ describe('warehouse health API', () => {
 			deadLetters: [],
 			tables: [{ name: 'orders', rows: 5, bytesOnDisk: 900, activeParts: 1 }]
 		});
-		expect(health.warnings).toContain('Disk capacity is unavailable.');
+		expect(health.warnings).toEqual([]);
 	});
 });

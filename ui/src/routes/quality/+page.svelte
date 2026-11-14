@@ -224,6 +224,12 @@
 </AppTopbar>
 
 <div class="min-h-0 flex-1 overflow-y-auto">
+	{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && project.audits.length === 0 && project.tests.length === 0}
+		<p class="text-muted-foreground mx-[18px] mt-[18px] rounded-[4px] border border-border p-3.5 text-[12px]" data-testid="demo-no-audits">
+			This playground defines no audits or tests, so there is nothing to run here. Run
+			<code class="font-mono">sqt playground --template streaming</code> to try audits and tests with ClickHouse on your machine.
+		</p>
+	{/if}
 	<div class="px-[18px] pt-[18px]">
 		<SchedulerStatus payload={scheduler.payload} loading={scheduler.loading} error={scheduler.error} />
 	</div>

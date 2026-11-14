@@ -23,17 +23,19 @@
 	async function refresh(): Promise<void> {
 		const database: string = engine.database;
 		try {
-			const [orders, [{ total }], [view], versions] = await Promise.all([
-				engine.rows<Order>(
-					`SELECT order_id, status, total_cents FROM ${database}.tbl__order_report ORDER BY order_id DESC LIMIT 5`
-				),
-				engine.rows<{ total: string }>(`SELECT count() AS total FROM ${database}.tbl__order_report`),
+			// The engine runs queries in the order they arrive, and an action's statements can land
+			// between them, so the view is read first: the rows then come from the version it names.
+			const [[view], versions, orders, [{ total }]] = await Promise.all([
 				engine.rows<{ query: string }>(
 					`SELECT as_select AS query FROM system.tables WHERE database = '${database}' AND name = 'tbl__order_report'`
 				),
 				engine.rows<Version>(
 					`SELECT name, total_rows AS rows FROM system.tables WHERE database = '${database}' AND startsWith(name, '${PHYSICAL_PREFIX}') AND engine != 'View' ORDER BY name`
-				)
+				),
+				engine.rows<Order>(
+					`SELECT order_id, status, total_cents FROM ${database}.tbl__order_report ORDER BY order_id DESC LIMIT 5`
+				),
+				engine.rows<{ total: string }>(`SELECT count() AS total FROM ${database}.tbl__order_report`)
 			]);
 			const ids: string[] = versions.map((version) => version.name.slice(PHYSICAL_PREFIX.length));
 			snapshot = {

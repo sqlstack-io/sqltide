@@ -1,7 +1,7 @@
 /**
  * Warehouse health a browser engine can report. Disk capacity, inodes and server memory describe
  * the machine a ClickHouse server runs on, which an in-browser engine does not have, so they are
- * reported as unavailable with the warnings the server uses for missing evidence.
+ * left empty without the server's missing-evidence warnings, and the demo hides them.
  */
 import type { JsonObject, Query } from '../types.ts';
 import { pyStr, quoteString, toInt } from '../_helpers/values.ts';
@@ -10,12 +10,6 @@ const CAPACITY_WARNING_AVAILABLE_FRACTION: number = 0.15;
 const CAPACITY_CRITICAL_AVAILABLE_FRACTION: number = 0.05;
 const DEAD_LETTERS_TABLE: string = '_sqltide_dead_letters';
 const DEAD_LETTER_PAYLOAD_CHARACTERS: number = 500;
-/** What a browser engine cannot measure, in the words the server uses for missing evidence. */
-const BROWSER_HEALTH_WARNINGS: readonly string[] = [
-	'Disk capacity is unavailable.',
-	'Main-path inode metrics are unavailable.',
-	'Meaningful memory context is unavailable.'
-];
 
 /** Run an optional probe; a failure only adds its warning. */
 async function optional<T>(warnings: string[], warning: string, probe: () => Promise<T | null>): Promise<T | null> {
@@ -67,7 +61,7 @@ export async function readWarehouseHealth(
 	template: JsonObject | null
 ): Promise<JsonObject> {
 	const started: number = performance.now();
-	const warnings: string[] = [...BROWSER_HEALTH_WARNINGS];
+	const warnings: string[] = [];
 	const server: { version: string; uptime_seconds: unknown } | null = await optional(
 		warnings,
 		'Server identity is unavailable.',

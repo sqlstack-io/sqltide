@@ -41,7 +41,8 @@
 		<div class="flex flex-col gap-5 p-[18px]">
 			<section class="rounded-[4px] border border-border">
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--border-subtle)] px-3.5 py-2.5">
-					<WarehouseHealthStatus status={health.status} />
+					<!-- The status grades disk and inode capacity, which the UI demo's in-browser engine does not have. -->
+					{#if import.meta.env.VITE_SQLTIDE_DEMO !== '1'}<WarehouseHealthStatus status={health.status} />{/if}
 					<span class="font-mono text-[11px]">{health.adapter}{health.version ? ` ${health.version}` : ''}</span>
 					<span class="text-muted-foreground font-mono text-[10.5px]">{health.database}</span>
 					<span class="text-muted-foreground ml-auto font-mono text-[10.5px]">

@@ -77,6 +77,12 @@ export async function startChdbEngine(
 
 	const generator: OrderGeneratorResource = createOrderGeneratorResource(addOrder);
 
+	// The browser gives the engine a fixed pool of threads. Its default asynchronous file reads and
+	// one pipeline thread per core can use them all up ("Cannot schedule a task"), and the demo's
+	// tables are small, so it reads synchronously on two threads. Settings last for the connection.
+	await run('SET max_threads = 2');
+	await run(`SET local_filesystem_read_method = 'pread'`);
+
 	const engine: DemoEngine = {
 		database,
 		run,

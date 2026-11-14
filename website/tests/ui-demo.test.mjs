@@ -70,6 +70,9 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
   const before = await sourceRows();
   expect(before).toBeGreaterThanOrEqual(3);
   await expect.poll(sourceRows, { timeout: 30_000 }).toBeGreaterThan(before);
+  // Its warehouse card shows nothing a browser engine cannot measure.
+  await expect(page.getByTestId('warehouse-health-summary')).not.toContainText('Disk capacity');
+  await expect(page.getByTestId('warehouse-health-summary')).not.toContainText('Inodes');
 
   // The engine lives in this tab, so from here on the test moves with the app's own links: a
   // reload would start the story over.
@@ -79,6 +82,10 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
   await sidebar('Warehouse');
   await expect(page.getByTestId('demo-no-capacity')).toBeVisible();
   await expect(page.getByText('clickhouse 25.8')).toHaveCount(0);
+
+  // The playground defines no audits or tests, and Quality says so.
+  await sidebar('Quality');
+  await expect(page.getByTestId('demo-no-audits')).toContainText('sqt playground --template streaming');
 
   // A name the demo has no plan for says so; the pipeline plans and executes on the engine.
   await sidebar('Plan');
@@ -101,17 +108,19 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
   const built = await newest();
   await page.locator(`a[href="/demo/deployments/${built}"]`).first().click();
   await page.getByRole('button', { name: 'Promote', exact: true }).click();
-  await expect(page).toHaveURL(/\/demo\/runs\//);
+  // The page opens the run once the engine has run the switch's statements.
+  await expect(page).toHaveURL(/\/demo\/runs\//, { timeout: 30_000 });
   await expect.poll(readsNow, { timeout: 30_000 }).toBe(built);
-  await expect(panel.locator('tbody')).not.toContainText('pending');
+  await expect(panel.locator('tbody')).not.toContainText('pending', { timeout: 30_000 });
 
   await sidebar('Deployments');
   await page.locator(`a[href="/demo/deployments/${published}"]`).first().click();
   await page.getByRole('button', { name: 'Roll back', exact: true }).click();
-  await expect(page).toHaveURL(/\/demo\/runs\//);
+  await expect(page).toHaveURL(/\/demo\/runs\//, { timeout: 30_000 });
   await expect.poll(readsNow, { timeout: 30_000 }).toBe(published);
 
   await sidebar('Runs');
+  await page.getByRole('button', { name: /^Deployments \d+$/ }).click();
   await expect(page.getByText('deployment rollback').first()).toBeVisible();
   expect(errors).toEqual([]);
 });

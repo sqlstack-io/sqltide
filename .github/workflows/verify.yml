@@ -262,6 +262,8 @@ jobs:
         run: |
           make ui-install
           cd website && npm ci
+      - name: Build the UI sqt dev serves
+        run: make ui-build
       - name: Prepare the demo again with sqt and compare
         working-directory: ui
         env:
