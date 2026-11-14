@@ -1429,7 +1429,7 @@ wheels = [
 
 [[package]]
 name = "sqltide"
-version = "0.70.0"
+version = "0.70.1"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
