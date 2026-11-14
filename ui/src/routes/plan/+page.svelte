@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import PlayIcon from '@lucide/svelte/icons/play';
@@ -111,7 +112,7 @@
 				changed,
 				includeMissingUpstream
 			);
-			await goto(`/runs/${startResult.invocationId}?live=1`);
+			await goto(`${base}/runs/${startResult.invocationId}?live=1`);
 		} catch (error) {
 			executeError = error instanceof Error ? error.message : String(error);
 		} finally {

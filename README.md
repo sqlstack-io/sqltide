@@ -40,6 +40,10 @@ consumer's query. Add `--template streaming` for the same workflow over live ord
 Redpanda. Each project's `README.md` walks through every command; see the
 [playground reference](https://sqltide.io/docs/cli/playground/).
 
+To look around the development UI before installing anything, open the
+[UI demo](https://sqltide.io/demo/): the same UI in your browser on recorded example data,
+read-only.
+
 ![SQLTide lineage view showing an orders pipeline](https://raw.githubusercontent.com/sqlstack-io/sqltide/main/.github/sqltide-ui.png)
 
 ## Key features

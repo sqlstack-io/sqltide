@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import FactRow from '$lib/presentation/components/fact-row.svelte';
@@ -95,7 +96,7 @@
 				value={project.defaults.managedSourceTtl ?? 'none'}
 				mono
 			/>
-			<a href="/sources" class="text-primary mt-2 inline-block font-mono text-[11px] hover:underline"
+			<a href="{base}/sources" class="text-primary mt-2 inline-block font-mono text-[11px] hover:underline"
 				>See Sources →</a
 			>
 		</div>

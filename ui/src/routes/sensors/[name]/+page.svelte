@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
@@ -60,7 +61,7 @@
 	<div class="max-w-[880px] space-y-4">
 		<a
 			class="text-muted-foreground hover:text-foreground flex w-fit items-center gap-1.5 font-mono text-[11px]"
-			href="/sensors"
+			href="{base}/sensors"
 		>
 			<ArrowLeftIcon size={12} />
 			all sensors

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 	import EyeIcon from '@lucide/svelte/icons/eye';
@@ -54,7 +55,7 @@
 
 	async function signOut(): Promise<void> {
 		await logout();
-		window.location.assign('/login');
+		window.location.assign(`${base}/login`);
 	}
 
 	async function reloadDefinitions(): Promise<void> {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import ReplaceIcon from '@lucide/svelte/icons/replace';
@@ -29,7 +30,7 @@
 
 <AppTopbar title={modelName}>
 	<a
-		href="/plan?select={modelName}"
+		href="{base}/plan?select={modelName}"
 		class="bg-primary flex items-center gap-1.5 rounded-[4px] px-2.5 py-1.5 font-mono text-[11px] text-white"
 	>
 		<ReplaceIcon size={12} /> Plan rebuild
@@ -40,19 +41,19 @@
 	{#if !model}
 		<div class="px-[18px] py-10 text-center">
 			<p class="text-muted-foreground text-[13px]">No model named <code>{modelName}</code>.</p>
-			<a href="/catalog" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
+			<a href="{base}/catalog" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
 				>← Back to catalog</a
 			>
 		</div>
 	{:else}
 		<div class="flex items-center gap-2.5 border-b border-border px-[18px] py-2.5">
 			<a
-				href="/catalog"
+				href="{base}/catalog"
 				class="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"
 				><ArrowLeftIcon size={12} /> Catalog</a
 			>
 			<span class="text-[var(--sb-text-faint)]">/</span>
-			<a href="/pipelines/{model.pipeline}" class="text-primary font-mono text-[11px]"
+			<a href="{base}/pipelines/{model.pipeline}" class="text-primary font-mono text-[11px]"
 				>{model.pipeline}</a
 			>
 			<div class="ml-auto flex items-center gap-3">
@@ -134,7 +135,7 @@
 							<div class="flex items-center gap-2 border-b border-[var(--border-subtle)] py-1.5">
 								<a
 									class="text-primary font-mono text-[11.5px] hover:underline"
-									href={ref.isSource ? `/sources/${ref.name}` : `/catalog/${ref.name}`}
+									href={ref.isSource ? `${base}/sources/${ref.name}` : `${base}/catalog/${ref.name}`}
 									>{ref.name}</a
 								>
 								<span
@@ -161,7 +162,7 @@
 						{/if}
 						{#each downstream as child (child.name)}
 							<div class="flex items-center gap-2 border-b border-[var(--border-subtle)] py-1.5">
-								<a class="text-primary font-mono text-[11.5px] hover:underline" href="/catalog/{child.name}"
+								<a class="text-primary font-mono text-[11.5px] hover:underline" href="{base}/catalog/{child.name}"
 									>{child.name}</a
 								>
 								<span class="ml-auto"><StatusPill status={child.status} /></span>
@@ -257,7 +258,7 @@
 					<div class="pb-2"><AnchorBadge anchor={model.anchor} showReason /></div>
 					<FactRow label="Driving input" value={model.drivingInput ?? 'none'} mono />
 					{#if source}
-						<FactRow label="Root source" value={source.name} href="/sources/{source.name}" />
+						<FactRow label="Root source" value={source.name} href="{base}/sources/{source.name}" />
 						<FactRow label="Boundary" value={source.boundaryMode} mono />
 					{/if}
 					{#if model.live.recordedCoverage}

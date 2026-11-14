@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { SOURCE_KIND_LABEL } from '$lib/domain/constants';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import Sparkline from '$lib/presentation/components/sparkline.svelte';
@@ -44,7 +45,7 @@
 				<tr>
 					<td class="px-[18px]">
 						<a
-							href="/sources/{source.name}"
+							href="{base}/sources/{source.name}"
 							class="text-primary code text-[12.5px] font-medium hover:underline">{source.name}</a
 						>
 						<div class="text-[var(--sb-text-faint)] code pt-0.5 text-[10.5px]">

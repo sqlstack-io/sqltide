@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { RunEvent } from '$lib/api/types';
 import type {
 	RunActivityPresentation,
@@ -44,7 +45,7 @@ function buildRetryHref(
 	for (const selector of startedEvent?.selectors ?? []) params.append('select', selector);
 	if (startedEvent?.startTime) params.set('start', startedEvent.startTime);
 	const query: string = params.toString();
-	return query ? `/plan?${query}` : '/plan';
+	return query ? `${base}/plan?${query}` : `${base}/plan`;
 }
 
 function calculateDurationSeconds(

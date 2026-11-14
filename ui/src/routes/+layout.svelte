@@ -1,12 +1,14 @@
 <script lang="ts">
 	import './layout.css';
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { getAuth } from '$lib/auth/main/get-auth';
 	import AppSidebar from '$lib/presentation/components/app-sidebar.svelte';
 	import AppVersionNotice from '$lib/presentation/components/app-version-notice.svelte';
 	import CompileErrorScreen from '$lib/presentation/components/compile-error-screen.svelte';
+	import DemoBanner from '$lib/demo/components/demo-banner.svelte';
 	import { getApp } from '$lib/api/main/project/get-app';
 	import { initializeBootstrap } from '$lib/api/main/project/initialize-bootstrap';
 
@@ -15,10 +17,10 @@
 	const auth = getAuth();
 
 	$effect(() => {
-		if (auth.phase === 'unauthenticated' && page.url.pathname !== '/login') {
-			void goto('/login');
-		} else if (auth.phase === 'authenticated' && page.url.pathname === '/login') {
-			void goto('/');
+		if (auth.phase === 'unauthenticated' && page.route.id !== '/login') {
+			void goto(`${base}/login`);
+		} else if (auth.phase === 'authenticated' && page.route.id === '/login') {
+			void goto(`${base}/`);
 		}
 	});
 
@@ -28,17 +30,17 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href="/favicon.png" />
+	<link rel="icon" href="{base}/favicon.png" />
 	{#if app.phase !== 'ready'}
 		<title>SQLTide</title>
 	{/if}
 </svelte:head>
 
-{#if auth.phase === 'unauthenticated' && page.url.pathname !== '/login'}
+{#if auth.phase === 'unauthenticated' && page.route.id !== '/login'}
 	<div class="text-muted-foreground grid h-screen place-items-center font-mono text-[13px]">
 		redirecting to sign in…
 	</div>
-{:else if page.url.pathname === '/login'}
+{:else if page.route.id === '/login'}
 	{@render children()}
 {:else if auth.phase === 'error'}
 	<div class="grid h-screen place-items-center p-6 text-center">
@@ -50,10 +52,15 @@
 {:else if auth.phase === 'loading'}
 	<div class="text-muted-foreground grid h-screen place-items-center font-mono text-[13px]">authenticating…</div>
 {:else if app.phase === 'ready'}
-	<div class="flex h-screen overflow-hidden">
-		<AppSidebar />
-		<div class="flex min-w-0 flex-1 flex-col">
-			{@render children()}
+	<div class="flex h-screen flex-col overflow-hidden">
+		{#if import.meta.env.VITE_SQLTIDE_DEMO === '1'}
+			<DemoBanner />
+		{/if}
+		<div class="flex min-h-0 flex-1 overflow-hidden">
+			<AppSidebar />
+			<div class="flex min-w-0 flex-1 flex-col">
+				{@render children()}
+			</div>
 		</div>
 	</div>
 {:else if app.phase === 'loading'}

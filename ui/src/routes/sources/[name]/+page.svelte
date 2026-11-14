@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import MessageSquareTextIcon from '@lucide/svelte/icons/message-square-text';
@@ -56,14 +57,14 @@
 	{#if !source}
 		<div class="px-[18px] py-10 text-center">
 			<p class="text-muted-foreground text-[13px]">No source named <code>{sourceName}</code>.</p>
-			<a href="/sources" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
+			<a href="{base}/sources" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
 				>← Back to sources</a
 			>
 		</div>
 	{:else}
 		<div class="flex items-center gap-2.5 border-b border-border px-[18px] py-2.5">
 			<a
-				href="/sources"
+				href="{base}/sources"
 				class="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"
 				><ArrowLeftIcon size={12} /> Sources</a
 			>
@@ -72,7 +73,7 @@
 			<span class="sb-tag code">{source.boundaryMode}</span>
 			{#if source.kind === 'kafka'}
 				<a
-					href="/sources/{sourceName}/messages"
+					href="{base}/sources/{sourceName}/messages"
 					class="text-primary ml-auto flex items-center gap-1 font-mono text-[11px] hover:underline"
 					><MessageSquareTextIcon size={12} /> Browse messages</a
 				>
@@ -156,7 +157,7 @@
 								<div class="border-b border-[var(--border-subtle)] px-3 py-2 last:border-b-0">
 									<div class="flex items-baseline gap-2 pb-1">
 										<a
-											href="/catalog/{row.modelName}"
+											href="{base}/catalog/{row.modelName}"
 											class="text-primary code text-[11.5px] hover:underline">{row.modelName}</a
 										>
 										<span class="text-muted-foreground ml-auto font-mono text-[10px]">

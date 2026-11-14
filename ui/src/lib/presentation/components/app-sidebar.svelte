@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import ServerIcon from '@lucide/svelte/icons/server';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
@@ -32,23 +33,24 @@
 	);
 
 	function isActive(href: string): boolean {
-		if (href === '/') return page.url.pathname === '/';
-		return page.url.pathname.startsWith(href);
+		const path: string = page.url.pathname.slice(base.length) || '/';
+		if (href === '/') return path === '/';
+		return path.startsWith(href);
 	}
 
 </script>
 
 <aside
-	class="bg-sidebar flex h-screen w-14 shrink-0 flex-col border-r border-[var(--sidebar-border)] px-1 py-3 md:w-56 md:px-2.5 md:py-3.5"
+	class="bg-sidebar flex h-full w-14 shrink-0 flex-col border-r border-[var(--sidebar-border)] px-1 py-3 md:w-56 md:px-2.5 md:py-3.5"
 >
 	<div class="flex items-center justify-center gap-2 px-1 pb-3 md:justify-start md:px-2 md:pb-4">
 		<!-- The website's logo files (website/public/assets): two files rather than one
 		     recoloured asset, because the cyan mark stays constant while the wordmark
 		     inverts. The collapsed sidebar shows the mark alone, as the favicon does. -->
-		<img src="/favicon.png" alt="SQLTide" class="h-[18px] w-auto md:hidden" />
+		<img src="{base}/favicon.png" alt="SQLTide" class="h-[18px] w-auto md:hidden" />
 		<span class="hidden md:grid">
-			<img src="/logo-on-dark.png" alt="SQLTide" class="logo-dark h-[24px] w-auto" />
-			<img src="/logo-on-light.png" alt="SQLTide" class="logo-light h-[24px] w-auto" />
+			<img src="{base}/logo-on-dark.png" alt="SQLTide" class="logo-dark h-[24px] w-auto" />
+			<img src="{base}/logo-on-light.png" alt="SQLTide" class="logo-light h-[24px] w-auto" />
 			<a
 				href="https://sqlstack.io"
 				target="_blank"
@@ -89,7 +91,7 @@
 			{#each group.items as item (item.href)}
 				{@const Glyph = item.icon}
 				<a
-					href={item.href}
+					href={base + item.href}
 					title={item.label}
 					class="relative flex items-center justify-center gap-2.5 rounded-md px-2 py-2 text-[13px] md:justify-start md:px-3 {isActive(
 						item.href
@@ -115,7 +117,7 @@
 		{#each footerItems as item (item.href)}
 			{@const Glyph = item.icon}
 		<a
-			href={item.href}
+			href={base + item.href}
 			title={item.label}
 			class="text-[var(--sidebar-foreground)] hover:bg-[var(--sb-hover)] hover:text-foreground flex items-center justify-center gap-2.5 rounded-md px-2 py-2 text-[13px] md:justify-start md:px-3"
 			>

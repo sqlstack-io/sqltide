@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import { formatBytes } from '$lib/formatting/main/format-bytes';
@@ -151,7 +152,7 @@
 									<td class="code px-3 py-1.5 text-[11.5px]">
 										{#if topic.sources.length > 0}
 											<a
-												href="/sources/{topic.sources[0].name}/messages"
+												href="{base}/sources/{topic.sources[0].name}/messages"
 												class="text-primary hover:underline"
 												title="browse landed messages">{topic.name}</a
 											>
@@ -172,7 +173,7 @@
 										{:else}
 											{#each topic.sources as sourceLink (sourceLink.name)}
 												<a
-													href="/sources/{sourceLink.name}/messages"
+													href="{base}/sources/{sourceLink.name}/messages"
 													class="text-primary code mr-2 text-[11.5px] hover:underline"
 													title="browse landed messages">{sourceLink.name}</a
 												>

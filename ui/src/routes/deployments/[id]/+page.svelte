@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import ErrorPreview from '$lib/presentation/components/error-preview.svelte';
@@ -8,7 +9,6 @@
 	import { fetchDeploymentDiff } from '$lib/api/main/deployments/fetch-deployment-diff';
 	import { promoteDeployment } from '$lib/api/main/deployments/promote-deployment';
 	import { getProject } from '$lib/api/main/project/get-project';
-	import type { DeploymentDiff } from '$lib/api/types';
 	import { goto } from '$app/navigation';
 	import { refreshDeployments } from '$lib/api/main/project/refresh-deployments';
 	import { scopeDeploymentGraph } from '$lib/domain/main/graphs/scope-deployment-graph';
@@ -31,7 +31,7 @@
 		deployment.requestedId === deploymentId ? deployment.error : null
 	);
 	let tab = $state<'graph' | 'diff'>('graph');
-	let diff = $state<DeploymentDiff | null>(null);
+	let diff = $state<Awaited<ReturnType<typeof fetchDeploymentDiff>> | null>(null);
 	let diffError = $state<string | null>(null);
 	let promoting = $state<boolean>(false);
 	let promoteError = $state<string | null>(null);
@@ -65,7 +65,7 @@
 			if (deploymentId !== requestedId || promotionRequestGeneration !== requestGeneration) return;
 			await refreshDeployments();
 			if (deploymentId !== requestedId || promotionRequestGeneration !== requestGeneration) return;
-			await goto(`/runs/${result.invocationId}`);
+			await goto(`${base}/runs/${result.invocationId}`);
 		} catch (error) {
 			if (deploymentId === requestedId && promotionRequestGeneration === requestGeneration) {
 				promoteError = String(error);
@@ -155,7 +155,7 @@
 		<ErrorPreview text={loadError} title="Deployment failed to load" clamp="line-clamp-4" class="max-w-full" />
 	{:else if detail === null}
 		<div class="flex items-center gap-2 pb-3">
-			<a href="/deployments" class="text-muted-foreground hover:text-foreground text-[12px]"
+			<a href="{base}/deployments" class="text-muted-foreground hover:text-foreground text-[12px]"
 				>← deployments</a
 			>
 		</div>
@@ -181,7 +181,7 @@
 		</div>
 	{:else}
 		<div class="flex items-center gap-2 pb-3">
-			<a href="/deployments" class="text-muted-foreground hover:text-foreground text-[12px]"
+			<a href="{base}/deployments" class="text-muted-foreground hover:text-foreground text-[12px]"
 				>← deployments</a
 			>
 			<span
@@ -461,7 +461,7 @@
 							<td class="code text-[var(--sb-text-faint)] px-3 text-[11px]">
 								{#if model?.liveDeploymentId && model.liveDeploymentId !== deploymentId}
 									<a
-										href="/deployments/{model.liveDeploymentId}"
+										href="{base}/deployments/{model.liveDeploymentId}"
 										aria-label="Open live deployment {model.liveDeploymentId}"
 										class="text-primary hover:underline">{exactRelationName(replacement.fromPhysicalName)}</a
 									>

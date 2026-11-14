@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import ArrowUpRightIcon from '@lucide/svelte/icons/arrow-up-right';
 	import type { WarehouseHealth } from '$lib/warehouse-health/types';
 	import { formatAgo } from '$lib/formatting/main/format-ago';
@@ -44,7 +45,7 @@
 			{:else}
 				<span class="text-muted-foreground text-[11.5px]">No warehouse diagnostics in this snapshot.</span>
 			{/if}
-			<a href="/warehouse-health" class="text-primary ml-auto inline-flex items-center gap-1 font-mono text-[10.5px] hover:underline">
+			<a href="{base}/warehouse-health" class="text-primary ml-auto inline-flex items-center gap-1 font-mono text-[10.5px] hover:underline">
 				Inspect <ArrowUpRightIcon size={11} />
 			</a>
 		</div>

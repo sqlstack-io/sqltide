@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import { onMount } from 'svelte';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
@@ -265,7 +266,7 @@
 						<tr>
 							<td class="w-[220px] px-3 py-2.5 align-top sm:px-[18px]">
 								<a
-									href="/runs/{run.invocationId}"
+									href="{base}/runs/{run.invocationId}"
 									class="code text-primary text-[12px] hover:underline"
 									title={run.invocationId}>{run.invocationId.slice(0, 8)}</a
 								>

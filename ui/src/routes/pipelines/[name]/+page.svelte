@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -40,13 +41,13 @@
 
 <AppTopbar title={pipelineName}>
 	<a
-		href="/lineage?pipeline={pipelineName}"
+		href="{base}/lineage?pipeline={pipelineName}"
 		class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-[4px] border border-border px-2.5 py-1.5 font-mono text-[11px]"
 	>
 		<NetworkIcon size={12} /> Lineage
 	</a>
 	<a
-		href="/plan?select=pipeline:{pipelineName}"
+		href="{base}/plan?select=pipeline:{pipelineName}"
 		class="bg-primary flex items-center gap-1.5 rounded-[4px] px-2.5 py-1.5 font-mono text-[11px] text-white"
 	>
 		<ReplaceIcon size={12} /> Plan rebuild
@@ -57,14 +58,14 @@
 	{#if !pipeline}
 		<div class="px-[18px] py-10 text-center">
 			<p class="text-muted-foreground text-[13px]">No pipeline named <code>{pipelineName}</code>.</p>
-			<a href="/pipelines" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
+			<a href="{base}/pipelines" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
 				>← Back to pipelines</a
 			>
 		</div>
 	{:else}
 		<div class="flex items-center gap-2.5 border-b border-border px-[18px] py-2.5">
 			<a
-				href="/pipelines"
+				href="{base}/pipelines"
 				class="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"
 				><ArrowLeftIcon size={12} /> Pipelines</a
 			>
@@ -88,7 +89,7 @@
 									Source
 								</div>
 								<a
-									href="/sources/{source.name}"
+									href="{base}/sources/{source.name}"
 									class="text-primary font-mono text-[13px] font-medium hover:underline"
 									>{source.name}</a
 								>
@@ -204,7 +205,7 @@
 										>
 									{:else if row.model}
 										<a
-											href="/catalog/{row.name}"
+											href="{base}/catalog/{row.name}"
 											class="text-primary code truncate text-[12px] hover:underline">{row.name}</a
 										>
 									{/if}
@@ -262,14 +263,14 @@
 						</div>
 						{#each sideRefs as item (item.from + item.ref.name)}
 							<div class="flex items-center gap-2.5 border-b border-[var(--border-subtle)] py-2">
-								<a href="/catalog/{item.from}" class="text-primary code text-[11.5px] hover:underline"
+								<a href="{base}/catalog/{item.from}" class="text-primary code text-[11.5px] hover:underline"
 									>{item.from}</a
 								>
 								<span class="text-[var(--sb-text-faint)] font-mono text-[11px]">←</span>
 								<a
 									href={item.ref.isSource
-										? `/sources/${item.ref.name}`
-										: `/catalog/${item.ref.name}`}
+										? `${base}/sources/${item.ref.name}`
+										: `${base}/catalog/${item.ref.name}`}
 									class="text-muted-foreground hover:text-foreground code text-[11.5px] hover:underline"
 									>{item.ref.name}</a
 								>
@@ -329,7 +330,7 @@
 					{#each models as model (model.name)}
 					{@const counts = pipelineView.auditCounts(project, model.name)}
 						<div class="flex items-center gap-2 border-b border-[var(--border-subtle)] py-1.5">
-							<a href="/catalog/{model.name}" class="text-primary code truncate text-[11.5px] hover:underline"
+							<a href="{base}/catalog/{model.name}" class="text-primary code truncate text-[11.5px] hover:underline"
 								>{model.name}</a
 							>
 							<span class="ml-auto shrink-0 font-mono text-[10px]">
