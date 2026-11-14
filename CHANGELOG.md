@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.68.3](https://github.com/sqlstack-io/sqltide/compare/v0.68.2...v0.68.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deployment:** refuse to promote a build that failed while filling its tables ([#404](https://github.com/sqlstack-io/sqltide/issues/404)) ([2a681ac](https://github.com/sqlstack-io/sqltide/commit/2a681ac43b84712a542466fa41be1a867a6c0ebc))
+
 ## [0.68.2](https://github.com/sqlstack-io/sqltide/compare/v0.68.1...v0.68.2) (2026-11-14)
 
 
