@@ -54,7 +54,7 @@
           <div>
             <p class="eyebrow">Streaming SQL pipelines for ClickHouse</p>
             <h1 id="hero-title">Change live pipelines without downtime.</h1>
-            <p class="lede">Write each step of your pipeline as SQL. When you change one, SQLTide can build the new version next to the running one and fill it from the stream history it keeps in ClickHouse. Check the results, then switch your queries over.</p>
+            <p class="lede">Write each step of your pipeline as SQL. When you change a step, SQLTide can build the new version alongside the running one and fill it with the events already stored in ClickHouse. Check the results, then point your queries at the new version.</p>
             <div class="actions">
               <a class="button primary" href="/demo/">Try the demo</a>
               <a class="button" href="/docs/quickstart/">Quickstart</a>
@@ -64,7 +64,7 @@
           </div>
           <figure class="showcase virtual-showcase" data-showcase="virtual" data-stage="2" aria-labelledby="showcase-title">
             <div class="showcase-top"><span>Example</span><span>Orders pipeline</span></div>
-            <h2 id="showcase-title">Change a filter, check it, then switch.</h2>
+            <h2 id="showcase-title">Change a filter, compare the results, then switch your query to the new version.</h2>
             <div class="virtual-change"><span>The change: only report orders of $1 or more</span><code>amount_cents &gt;= 0 → <mark>&gt;= 100</mark></code></div>
             <div class="consumer-binding">
               <span>Your query doesn’t change</span>
@@ -91,8 +91,8 @@
             <div class="showcase-summary">
               <p class="stage-description">Compare the two versions. Your queries still read the current one, and both keep getting new events.</p>
             </div>
-            <div class="showcase-controls" hidden><button type="button" data-play>Play story</button><a href="/docs/quickstart/">Try it yourself →</a></div>
-            <figcaption>Switching moves one view at a time, not the whole pipeline. <a href="/docs/concepts/deployments/#promote">What promotion switches.</a></figcaption>
+            <div class="showcase-controls" hidden><button type="button" data-play>Play walkthrough</button><a href="/docs/quickstart/">Try it yourself →</a></div>
+            <figcaption>Switching moves one view at a time, not the whole pipeline. <a href="/docs/concepts/deployments/#promote">How switching works</a></figcaption>
           </figure>
         </section>
         <ul class="languages" aria-label="Product requirements"><li>ClickHouse</li><li>Python 3.12+</li><li>Open source · Apache-2.0</li></ul>

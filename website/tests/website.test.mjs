@@ -90,7 +90,7 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     await page.goto(route);
     const figure = page.locator('[data-showcase]');
     const virtual = route === '/';
-    const play = page.getByRole('button', { name: virtual ? 'Play story' : 'Play', exact: true });
+    const play = page.getByRole('button', { name: virtual ? 'Play walkthrough' : 'Play', exact: true });
     if (virtual) {
       await expect(figure.locator('.version-a')).toHaveText('Current version');
       await expect(figure.locator('.status-a')).toHaveText('Serving queries');
@@ -103,7 +103,7 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     await play.click();
     await page.clock.fastForward(3600);
     await expect(figure).toHaveAttribute('data-stage', '1');
-    await page.getByRole('button', { name: virtual ? 'Pause story' : 'Pause', exact: true }).click();
+    await page.getByRole('button', { name: virtual ? 'Pause walkthrough' : 'Pause', exact: true }).click();
     await page.clock.fastForward(10000);
     await expect(figure).toHaveAttribute('data-stage', '1');
     if (virtual) {
