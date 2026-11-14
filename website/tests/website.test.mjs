@@ -141,7 +141,7 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     if (virtual) {
       await page.getByRole('link', { name: 'Start with virtual mode', exact: true }).first().click();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Stage a pipeline change');
-      await expect(page.getByRole('heading', { name: '4. Promote', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '5. Promote', exact: true })).toBeVisible();
     }
   }
 });
