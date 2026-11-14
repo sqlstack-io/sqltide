@@ -21,6 +21,8 @@
 	let error = $state<string | null>(null);
 
 	async function refresh(): Promise<void> {
+		// While starting over the engine is empty, so its tables are missing; the panel waits.
+		if (restarting) return;
 		const database: string = engine.database;
 		try {
 			// The engine runs queries in the order they arrive, and an action's statements can land
@@ -63,11 +65,13 @@
 	}
 
 	let restarting = $state<boolean>(false);
+	// Kept apart from the reads' error, which the next successful read clears.
+	let restartError = $state<string | null>(null);
 
-	/** Puts the engine back where the story starts, without downloading it again. */
+	/** Puts a new engine where the story starts, from the download the browser has cached. */
 	async function startOver(): Promise<void> {
 		restarting = true;
-		error = null;
+		restartError = null;
 		engine.stopOrders();
 		try {
 			await live.story.startOver();
@@ -75,7 +79,7 @@
 			adding = true;
 			await onrestarted();
 		} catch (caught) {
-			error = caught instanceof Error ? caught.message : String(caught);
+			restartError = `Start over failed: ${caught instanceof Error ? caught.message : String(caught)}`;
 			adding = engine.addingOrders;
 		} finally {
 			restarting = false;
@@ -126,6 +130,9 @@
 			{/if}
 			{#if error !== null}
 				<div style:color="var(--sb-error)">{error}</div>
+			{/if}
+			{#if restartError !== null}
+				<div style:color="var(--sb-error)" role="alert">{restartError}</div>
 			{/if}
 			<div class="flex items-center justify-between gap-2 border-t border-border pt-2">
 				<span class="text-muted-foreground">{adding ? 'A new order arrives every 4 s.' : 'New orders are paused.'}</span>

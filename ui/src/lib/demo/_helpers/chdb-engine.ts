@@ -14,6 +14,7 @@ type ChdbModule = {
 };
 type ChdbClient = {
 	query(sql: string, format?: string): Promise<{ text(): string }>;
+	terminate(): Promise<void>;
 };
 
 type SizeRow = { name: string; rows: string | number | null; bytes: string | number | null };
@@ -25,14 +26,31 @@ export async function startChdbEngine(
 	database: string,
 	onProgress: (progress: EngineProgress) => void
 ): Promise<DemoEngine> {
-	const wasmUrl: string = await downloadEngine(base, onProgress);
-	let client: ChdbClient;
-	try {
-		const chdb: ChdbModule = await import(/* @vite-ignore */ `${base}index.js`);
-		client = await chdb.AsyncChdb.create({ moduleUrl: `${base}chdb.mjs`, wasmUrl });
-	} finally {
-		URL.revokeObjectURL(wasmUrl);
+	/**
+	 * A new engine in its own worker. The browser gives each worker a fixed pool of threads, which
+	 * the default asynchronous file reads and one pipeline thread per core can use up ("Cannot
+	 * schedule a task"); the demo's tables are small, so it reads synchronously on two threads.
+	 */
+	async function connect(progress: (progress: EngineProgress) => void): Promise<ChdbClient> {
+		const wasmUrl: string = await downloadEngine(base, progress);
+		let created: ChdbClient;
+		try {
+			const chdb: ChdbModule = await import(/* @vite-ignore */ `${base}index.js`);
+			created = await chdb.AsyncChdb.create({ moduleUrl: `${base}chdb.mjs`, wasmUrl });
+		} finally {
+			URL.revokeObjectURL(wasmUrl);
+		}
+		try {
+			await created.query('SET max_threads = 2');
+			await created.query(`SET local_filesystem_read_method = 'pread'`);
+		} catch (error) {
+			await created.terminate();
+			throw error;
+		}
+		return created;
 	}
+	// Null while a restart has stopped the old engine and the new one has not started.
+	let client: ChdbClient | null = await connect(onProgress);
 
 	// The engine deadlocks on overlapping queries, so every caller waits its turn.
 	let queue: Promise<unknown> = Promise.resolve();
@@ -40,6 +58,8 @@ export async function startChdbEngine(
 
 	function run(sql: string, format: string = 'TabSeparated'): Promise<string> {
 		const turn: Promise<string> = queue.then(async () => {
+			// A query sent to a stopped engine would wait forever, so it fails here instead.
+			if (client === null) throw new Error('The engine stopped while starting over. Use Start over again, or reload the page.');
 			try {
 				return (await client.query(sql, format)).text();
 			} catch (error) {
@@ -77,16 +97,22 @@ export async function startChdbEngine(
 
 	const generator: OrderGeneratorResource = createOrderGeneratorResource(addOrder);
 
-	// The browser gives the engine a fixed pool of threads. Its default asynchronous file reads and
-	// one pipeline thread per core can use them all up ("Cannot schedule a task"), and the demo's
-	// tables are small, so it reads synchronously on two threads. Settings last for the connection.
-	await run('SET max_threads = 2');
-	await run(`SET local_filesystem_read_method = 'pread'`);
-
 	const engine: DemoEngine = {
 		database,
 		run,
 		rows,
+		restart(): Promise<void> {
+			// Dropping the database instead runs out of the worker's threads, and dropped tables
+			// stay in memory for minutes; a new worker starts empty from the cached download.
+			const turn: Promise<void> = queue.then(async () => {
+				const stopping: ChdbClient | null = client;
+				client = null;
+				await stopping?.terminate();
+				client = await connect(() => undefined);
+			});
+			queue = turn.catch(() => undefined);
+			return turn;
+		},
 		async tableSizes(): Promise<Map<string, TableSize>> {
 			const sizes: SizeRow[] = await rows<SizeRow>(
 				`SELECT name, total_rows AS rows, total_bytes AS bytes FROM system.tables WHERE database = '${database}'`

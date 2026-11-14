@@ -114,6 +114,33 @@ describe('story', () => {
 		expect(demo.plan(new URLSearchParams(PLAN_QUERY))).toEqual({ status: 409, body: { detail: DEMO_OFF_STORY_MESSAGE } });
 	});
 
+	it('given the story left its prepared states when started over then the engine is reset, not dropped, and the plan answers again', async () => {
+		const ran: string[] = [];
+		let resets: number = 0;
+		const demo: DemoStory = createStoryResource(
+			story(),
+			async (sql: string) => {
+				ran.push(sql);
+			},
+			async () => {
+				resets += 1;
+			}
+		);
+		await demo.replaySetup(() => undefined);
+		await demo.build({ selectors: ['pipeline:pl__orders'], startTime: '2026-01-01T10:01:00Z', confirmations: [] });
+		await flush();
+		await demo.deploymentAction('promote', ran[1].split("', '")[1]);
+		ran.length = 0;
+
+		await demo.startOver();
+
+		expect(resets).toBe(1);
+		expect(ran.some((sql) => sql.startsWith('DROP'))).toBe(false);
+		expect(ran[0]).toMatch(/^CREATE TABLE db\.t__/);
+		expect(demo.stateName).toBe('nothing-staged');
+		expect(demo.plan(new URLSearchParams(PLAN_QUERY)).status).toBe(200);
+	});
+
 	it('given Execute on the deployment the plan proposed when promoted then that deployment is the one promoted', async () => {
 		const ran: string[] = [];
 		const demo: DemoStory = await started(ran);

@@ -22,7 +22,7 @@ export function installDemoFetch(): void {
 	const started: Promise<LiveDemo> = (async () => {
 		const { default: prepared } = (await import('../prepared.json')) as unknown as { default: PreparedDemo };
 		const engine: DemoEngine = await startChdbEngine(base, prepared.database, controller.showProgress);
-		const story: DemoStory = createStoryResource(prepared, engine.run);
+		const story: DemoStory = createStoryResource(prepared, engine.run, engine.restart);
 		await story.replaySetup((step: string, done: number, total: number) =>
 			controller.showProgress({ phase: 'replay', step, done, total })
 		);

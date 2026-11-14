@@ -20,11 +20,15 @@ The normalized columns are `_replay_partition`, `_replay_offset`, `_replay_times
 
 ## Inclusive, at-least-once cutoffs
 
-Every replay boundary is inclusive. A row at boundary `B` can reach the target twice: once through
-the live materialized view and once through replay. This way no row is missed, but SQLTide does
-not remove the duplicate.
+Every replay boundary is inclusive, and a build starts the live materialized view before it
+captures the boundary. Every row that arrives between those two steps, not only the row at boundary
+`B`, can reach the target twice: once through the live view and once through replay. This way no
+row is missed, but SQLTide does not remove the duplicates. The number of duplicated rows grows with
+the arrival rate and the time the build waits for the live view to stabilise. For example, with one
+order arriving every 20 ms during a build, 135 of 189 orders reached the new target twice.
 
-Model SQL and ClickHouse engines own deduplication or aggregate idempotency.
+A plain `MergeTree` target keeps every duplicate, so its row counts and sums are inflated. Model SQL
+or the engine, such as `ReplacingMergeTree` or idempotent aggregates, must handle them.
 
 ## Repeated offsets
 

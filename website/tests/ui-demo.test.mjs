@@ -94,6 +94,8 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
   await expect(page.getByTestId('demo-unprepared-selector')).toContainText('sqt playground');
   await picker.fill('pipeline:pl__orders');
   await page.getByRole('option', { name: /pipeline:pl__orders/ }).click();
+  // Its source records no landing times, so picking a start time says why and where to try it.
+  await expect(page.getByTestId('demo-no-replay-window')).toContainText('sqt playground --template streaming');
   await page.getByRole('button', { name: 'Execute' }).click({ timeout: 60_000 });
   await expect(page).toHaveURL(/\/demo\/runs\//);
   await expect(page.getByText('succeeded').first()).toBeVisible({ timeout: 120_000 });
@@ -122,6 +124,16 @@ test('on the real engine Execute, Promote and Roll back run, and every page read
   await sidebar('Runs');
   await page.getByRole('button', { name: /^Deployments \d+$/ }).click();
   await expect(page.getByText('deployment rollback').first()).toBeVisible();
+
+  // Start over brings the engine back to the story's start, so the pipeline plans again.
+  await panel.getByRole('button', { name: 'Start over' }).click();
+  await expect(panel.getByRole('button', { name: 'Start over' })).toBeEnabled({ timeout: 120_000 });
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await expect(panel.getByText('A new order arrives every 4 s.')).toBeVisible();
+  await sidebar('Plan');
+  await page.getByRole('combobox').fill('pipeline:pl__orders');
+  await page.getByRole('option', { name: /pipeline:pl__orders/ }).click();
+  await expect(page.getByRole('button', { name: 'Execute' })).toBeEnabled({ timeout: 60_000 });
   expect(errors).toEqual([]);
 });
 

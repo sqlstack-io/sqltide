@@ -109,6 +109,8 @@ export type DemoEngine = {
 	run(sql: string, format?: string): Promise<string>;
 	/** Rows of a query, as objects. */
 	rows<Row>(sql: string): Promise<Row[]>;
+	/** Replaces the engine with an empty one, after the queries already asked for. */
+	restart(): Promise<void>;
 	/** Each table's rows and bytes, as ClickHouse reports them. */
 	tableSizes(): Promise<Map<string, TableSize>>;
 	/** Adds an order to the source table every few seconds, as a stream would. */

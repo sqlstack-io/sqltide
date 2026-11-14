@@ -18,7 +18,12 @@ import type {
  * ahead of time (scripts/prepare-demo.mjs); this fills in the values that differ in each tab,
  * such as deployment IDs and times, and runs the SQL on the engine in order.
  */
-export function createStoryResource(prepared: PreparedDemo, run: (sql: string) => Promise<unknown>): DemoStory {
+export function createStoryResource(
+	prepared: PreparedDemo,
+	run: (sql: string) => Promise<unknown>,
+	/** Empties the engine for Start over; the browser replaces it, since dropping uses up its threads. */
+	reset: () => Promise<unknown> = () => run(`DROP DATABASE IF EXISTS ${prepared.database}`)
+): DemoStory {
 	const values: SlotValues = {
 		deployments: {},
 		uuids: {},
@@ -89,7 +94,7 @@ export function createStoryResource(prepared: PreparedDemo, run: (sql: string) =
 			acting = true;
 			stateName = null;
 			try {
-				await run(`DROP DATABASE IF EXISTS ${prepared.database}`);
+				await reset();
 				Object.assign(values, { deployments: {}, uuids: {}, roleStarts: {}, times: {}, startTime: null });
 				lastBuild = null;
 				await replaySetup(() => undefined);
