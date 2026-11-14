@@ -42,7 +42,7 @@ if (figure) {
     for (const button of figure.querySelectorAll('[data-step]')) {
       button.setAttribute('aria-pressed', String(Number(button.dataset.step) === state.step));
     }
-    play.textContent = figure.dataset.showcase === 'virtual' ? state.playing ? 'Pause story' : 'Play story' : state.playing ? 'Pause' : 'Play';
+    play.textContent = figure.dataset.showcase === 'virtual' ? state.playing ? 'Pause walkthrough' : 'Play walkthrough' : state.playing ? 'Pause' : 'Play';
     play.hidden = reduced.matches;
   };
   const stop = () => {
