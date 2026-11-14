@@ -20,20 +20,23 @@ npx playwright install chromium
 npm test
 ```
 
-`npm run build` also builds the package's UI from `../ui` as the UI demo at `/demo/`. It answers
-the UI's API from `ui/src/lib/demo/recordings.json`. In desktop Chrome, Edge and Firefox it also
-runs ClickHouse in the page (the `chdb-wasm` dependency, multi-threaded build): the engine replays
-the statements `sqt` wrote for each step, from `ui/src/lib/demo/engine-script.json`, adds orders to
-the source, and runs the promotion's statements when a visitor promotes. Deployment sizes then come
-from its tables. Other browsers, phones and Save-Data get the recording with a note saying why. The
-build gzips the engine into two files under `/demo/engine/<version>/`, because Pages serves files
-of at most 25 MiB, and `public/_headers` makes `/demo/*` cross-origin isolated, which the engine
-needs.
+`npm run build` also builds the package's UI from `../ui` as the UI demo at `/demo/`. In desktop
+Chrome, Edge and Firefox it runs ClickHouse in the page (the `chdb-wasm` dependency, multi-threaded
+build). `sqt` itself does not run in the browser: `ui/src/lib/demo/prepared.json` holds what it
+decided for each step of the story, worked out ahead by real `sqt` against real ClickHouse. That is
+every plan the Plan page offers and the SQL each Execute, Promote and Roll back runs, with
+deployment IDs, run IDs and times left as slots the page fills in. The page runs that SQL on the
+engine, adds orders to the source, and reads every page that shows the warehouse from the engine's
+tables. Other browsers, phones and Save-Data get the recording in `ui/src/lib/demo/recordings.json`,
+with a note saying why. The build gzips the engine into two files under `/demo/engine/<version>/`,
+because Pages serves files of at most 25 MiB, and `public/_headers` makes `/demo/*` cross-origin
+isolated, which the engine needs.
 
-Refresh both files each release with `node ui/scripts/record-demo.mjs`, which runs the playground
-with Docker and the installed `sqt`. `tests/ui-demo.test.mjs` opens every recorded page and fails
-on any unrecorded request, runs the story on the real engine, and checks each fallback. The tests
-serve the build with `scripts/serve.mjs`, which applies `public/_headers` as Pages does.
+Refresh both files with `node ui/scripts/prepare-demo.mjs`, which runs the playground with Docker
+and the installed `sqt`. CI runs it with `--check`, which fails when `prepared.json` no longer
+matches what `sqt` does. `tests/ui-demo.test.mjs` opens every recorded page and fails on any
+unrecorded request, runs every prepared action on the real engine, and checks each fallback. The
+tests serve the build with `scripts/serve.mjs`, which applies `public/_headers` as Pages does.
 
 `SQT` can select the installed baseline CLI. `CHROME_PATH` can select an existing Chromium binary.
 The example check creates the playground without starting it, compiles it before and after the

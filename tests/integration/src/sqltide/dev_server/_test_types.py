@@ -65,3 +65,14 @@ class MessageFacetsCorpusTestCase:
 class MessageSchemaResetTestCase:
     description: str
     expected_error_fragment: str
+
+
+@dataclass(frozen=True)
+class DeploymentRollbackRouteTestCase:
+    description: str
+    target_deployment_id: str
+    expected_status: int
+    expected_states: dict[str, str]
+    expected_previous_deployment_id: str | None
+    expected_error_message: str | None
+    expected_rollback_run_count: int

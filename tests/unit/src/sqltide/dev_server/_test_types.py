@@ -217,6 +217,16 @@ class OperationAuthorizationRouteTestCase:
 
 
 @dataclass(frozen=True)
+class DeploymentRollbackAuthorizationTestCase:
+    description: str
+    username: str
+    expected_status: int
+    expected_denial_message: str | None
+    expected_denied_permission: str | None
+    expected_rollback_calls: int
+
+
+@dataclass(frozen=True)
 class CapabilitiesTestCase:
     description: str
     expected_project: str

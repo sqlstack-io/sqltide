@@ -1,10 +1,10 @@
 import { test, expect, devices } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const { pages, promotion } = JSON.parse(
+const { pages, responses } = JSON.parse(
   readFileSync(new URL('../../ui/src/lib/demo/recordings.json', import.meta.url), 'utf8'),
 );
-const staged = promotion.deploymentId;
+const staged = responses['/api/deployments'].body.deployments.find((deployment) => deployment.state === 'staged').deploymentId;
 const chooseRecording = () => sessionStorage.setItem('sqltide-demo-recording', '1');
 
 test('every UI demo page renders from recordings, and writes stay read-only', async ({ page }) => {
@@ -18,8 +18,7 @@ test('every UI demo page renders from recordings, and writes stay read-only', as
       failures.push(`${page.url()}: ${message.text()}`);
     }
   });
-  // Pages the promotion created, such as its run, open from a reload or a shared link too.
-  for (const path of [...pages, ...promotion.pages]) {
+  for (const path of pages) {
     await page.goto(`/demo${path}`, { waitUntil: 'networkidle' });
     await expect(page.getByRole('note')).toContainText('UI demo with recorded example data');
     // The views a page loads on demand, which the recorder opens too.
@@ -44,8 +43,8 @@ test('every UI demo page renders from recordings, and writes stay read-only', as
   await expect(page.getByText('This is a read-only UI demo with example data.')).toBeVisible();
 });
 
-test('the real engine runs the story in the page, and the promotion switches the query', async ({ page }) => {
-  test.setTimeout(240_000);
+test('on the real engine Execute, Promote and Roll back run, and every page reads the engine', async ({ page }) => {
+  test.setTimeout(420_000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => message.type() === 'error' && errors.push(message.text()));
@@ -57,25 +56,72 @@ test('the real engine runs the story in the page, and the promotion switches the
   const panel = page.getByRole('complementary', { name: 'Live engine' });
   await panel.getByRole('button', { name: 'Show live engine' }).click({ timeout: 180_000 });
   const reads = panel.getByTestId('engine-reads');
-  await expect(reads).toContainText('Reads the current version (all orders)', { timeout: 180_000 });
-  await expect(page.getByRole('note')).toContainText('Plan, diff and run history are recorded.');
-  // The source holds three orders; new ones reach the query while the change is staged.
-  const rows = async () => Number((await reads.textContent()).match(/(\d+) rows/)[1]);
-  const before = await rows();
+  await expect(reads).toContainText('rows', { timeout: 60_000 });
+  const banner = page.getByRole('note');
+  await expect(banner).toContainText('Worked out ahead by sqt');
+  await expect(banner).toContainText('isn’t atomic');
+  const readsNow = async () => (await reads.textContent()).match(/Reads deployment (\S+):/)[1];
+  const published = await readsNow();
+
+  // The Overview counts the engine's orders, and the count moves as new ones arrive.
+  // The source's row count on its Overview card, not the engine panel's counts beside the page.
+  const sourceRows = async () =>
+    Number((await page.locator('div.ml-auto.shrink-0.text-right').getByText(/^\d+ rows$/).first().textContent()).split(' ')[0]);
+  const before = await sourceRows();
   expect(before).toBeGreaterThanOrEqual(3);
-  await expect.poll(rows, { timeout: 20_000 }).toBeGreaterThan(before);
+  await expect.poll(sourceRows, { timeout: 30_000 }).toBeGreaterThan(before);
+  // Its warehouse card shows nothing a browser engine cannot measure.
+  await expect(page.getByTestId('warehouse-health-summary')).not.toContainText('Disk capacity');
+  await expect(page.getByTestId('warehouse-health-summary')).not.toContainText('Inodes');
 
-  // The deployment list reads its sizes from the engine, so the staged version has rows too.
-  await panel.getByRole('link', { name: 'its page' }).click();
-  await expect(page).toHaveURL(new RegExp(`/demo/deployments/${staged}$`));
-  await page.getByRole('button', { name: 'Promote', exact: true }).click();
+  // The engine lives in this tab, so from here on the test moves with the app's own links: a
+  // reload would start the story over.
+  const sidebar = (name) => page.getByRole('link', { name, exact: true }).first().click();
+
+  // Warehouse shows the engine's own version, and no disk, inodes or memory.
+  await sidebar('Warehouse');
+  await expect(page.getByTestId('demo-no-capacity')).toBeVisible();
+  await expect(page.getByText('clickhouse 25.8')).toHaveCount(0);
+
+  // The playground defines no audits or tests, and Quality says so.
+  await sidebar('Quality');
+  await expect(page.getByTestId('demo-no-audits')).toContainText('sqt playground --template streaming');
+
+  // A name the demo has no plan for says so; the pipeline plans and executes on the engine.
+  await sidebar('Plan');
+  const picker = page.getByRole('combobox');
+  await picker.fill('orders_by_day');
+  await expect(page.getByTestId('demo-unprepared-selector')).toContainText('sqt playground');
+  await picker.fill('pipeline:pl__orders');
+  await page.getByRole('option', { name: /pipeline:pl__orders/ }).click();
+  await page.getByRole('button', { name: 'Execute' }).click({ timeout: 60_000 });
   await expect(page).toHaveURL(/\/demo\/runs\//);
-  await expect(reads).toContainText('Reads the new version (completed orders only)', { timeout: 20_000 });
-  const completed = await page.evaluate(() => document.querySelectorAll('[aria-label="Live engine"] tbody tr').length);
-  expect(completed).toBeGreaterThan(0);
-  await expect(panel.locator('tbody')).not.toContainText('pending');
+  await expect(page.getByText('succeeded').first()).toBeVisible({ timeout: 120_000 });
 
-  await page.goto('/demo/deployments');
+  // Promote switches the query to the new deployment; Roll back switches it back.
+  await sidebar('Deployments');
+  const newest = async () =>
+    (await page.locator('a[href^="/demo/deployments/2"]').evaluateAll((links) => links.map((link) => link.pathname.split('/').pop())))
+      .sort()
+      .at(-1);
+  await expect.poll(newest).not.toBe(published);
+  const built = await newest();
+  await page.locator(`a[href="/demo/deployments/${built}"]`).first().click();
+  await page.getByRole('button', { name: 'Promote', exact: true }).click();
+  // The page opens the run once the engine has run the switch's statements.
+  await expect(page).toHaveURL(/\/demo\/runs\//, { timeout: 30_000 });
+  await expect.poll(readsNow, { timeout: 30_000 }).toBe(built);
+  await expect(panel.locator('tbody')).not.toContainText('pending', { timeout: 30_000 });
+
+  await sidebar('Deployments');
+  await page.locator(`a[href="/demo/deployments/${published}"]`).first().click();
+  await page.getByRole('button', { name: 'Roll back', exact: true }).click();
+  await expect(page).toHaveURL(/\/demo\/runs\//, { timeout: 30_000 });
+  await expect.poll(readsNow, { timeout: 30_000 }).toBe(published);
+
+  await sidebar('Runs');
+  await page.getByRole('button', { name: /^Deployments \d+$/ }).click();
+  await expect(page.getByText('deployment rollback').first()).toBeVisible();
   expect(errors).toEqual([]);
 });
 

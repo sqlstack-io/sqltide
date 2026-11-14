@@ -38,7 +38,7 @@
 		};
 	}
 
-	const loading = $derived(demo.mode.kind === 'real' && demo.mode.engine === null ? describe(demo.mode.progress) : null);
+	const loading = $derived(demo.mode.kind === 'real' && demo.mode.live === null ? describe(demo.mode.progress) : null);
 </script>
 
 <div
@@ -72,8 +72,10 @@
 		</span>
 		<button type="button" class="text-primary hover:underline" onclick={useRecording}>Use the recording instead</button>
 	{:else}
-		<span>Real ClickHouse running in this tab: the tables, new orders and the promotion are live.</span>
-		<span class="text-muted-foreground">Plan, diff and run history are recorded.</span>
+		<span>Real ClickHouse running in this tab: Execute, Promote and Roll back run their SQL on it, and every page reads it.</span>
+		<span class="text-muted-foreground">
+			Worked out ahead by sqt: each plan, its SQL diff, and the SQL each action runs. The switch to a new version isn’t atomic in this engine, which renames tables where ClickHouse exchanges them.
+		</span>
 		<button type="button" class="text-primary hover:underline" onclick={useRecording}>Use the recording</button>
 	{/if}
 </div>

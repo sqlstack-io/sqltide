@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { installDemoFetch } from '$lib/demo/_api/demo-fetch';
-import { DEMO_ONE_ACTION_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '$lib/demo/constants';
-import type { DemoEngine, DemoEngineLink, TableSize } from '$lib/demo/types';
+import { DEMO_NOT_IN_BROWSER_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '$lib/demo/constants';
+import type { DemoAnswer, DemoEngineLink, DemoStory, LiveDemo } from '$lib/demo/types';
 import recordings from '$lib/demo/recordings.json';
 
 describe('UI demo fetch', () => {
@@ -50,66 +50,76 @@ describe('UI demo fetch', () => {
 	});
 });
 
-type DeploymentList = { deployments: { deploymentId: string; state: string }[] };
-
 describe('UI demo fetch with the real engine', () => {
-	const staged: string = recordings.promotion.deploymentId;
-	let promoted: boolean;
-	let promote: MockInstance<() => Promise<void>> & (() => Promise<void>);
+	let story: { [Name in 'plan' | 'build' | 'deploymentAction']: ReturnType<typeof vi.fn> };
 
 	beforeEach(() => {
-		promoted = false;
-		promote = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-		// Every table in the engine holds 7 rows and 100 bytes, whatever was recorded.
-		const sizes: Map<string, TableSize> = { get: () => ({ rows: 7, bytes: 100 }) } as unknown as Map<string, TableSize>;
-		const engine: Pick<DemoEngine, 'promote' | 'tableSizes'> = { promote, tableSizes: async () => sizes };
-		const link: DemoEngineLink = {
-			active: () => true,
-			ready: () => engine,
-			whenReady: async () => engine,
-			promoted: () => promoted,
-			markPromoted: () => {
-				promoted = true;
-			}
+		const answer: DemoAnswer = { status: 200, body: { from: 'story' } };
+		story = {
+			plan: vi.fn().mockReturnValue(answer),
+			build: vi.fn().mockResolvedValue(answer),
+			deploymentAction: vi.fn().mockResolvedValue(answer)
 		};
+		const live: LiveDemo = { engine: { database: 'db', rows: vi.fn() }, story: story as unknown as DemoStory } as unknown as LiveDemo;
 		vi.stubGlobal('fetch', vi.fn());
-		vi.stubGlobal('location', new URL('https://sqltide.io/demo/deployments'));
-		installDemoFetch(link);
+		vi.stubGlobal('location', new URL('https://sqltide.io/demo/plan'));
+		installDemoFetch({ active: () => true, whenReady: async () => live });
 	});
 
 	afterEach(() => vi.unstubAllGlobals());
 
-	it('given the staged deployment when promoted then the engine promotes and later GETs answer from after the promotion', async () => {
-		const before: DeploymentList = await (await fetch('/api/deployments')).json();
+	it('given a plan request when fetched then the story answers it with its query', async () => {
+		const response: Response = await fetch('/api/plan?select=order_report&counts=true');
 
-		const response: Response = await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
-		const after: DeploymentList = await (await fetch('/api/deployments')).json();
-
-		expect(promote).toHaveBeenCalledOnce();
-		expect(await response.json()).toEqual(recordings.promotion.response.body);
-		const state: (body: DeploymentList) => string | undefined = (body) =>
-			body.deployments.find((deployment) => deployment.deploymentId === staged)?.state;
-		expect([state(before), state(after)]).toEqual(['staged', 'active']);
+		expect(await response.json()).toEqual({ from: 'story' });
+		expect(String(story.plan.mock.calls[0][0])).toBe('select=order_report&counts=true');
 	});
 
-	it('given a deployment list when fetched then each size is the sum of its tables in the engine', async () => {
-		const { deployments } = await (await fetch('/api/deployments')).json();
+	it('given Execute, Promote and Roll back when posted then the story runs each', async () => {
+		const request: object = { selectors: ['order_report'], startTime: null, confirmations: [] };
 
-		for (const deployment of deployments) {
-			expect(deployment.rows).toBe(7 * deployment.physicalRelationNames.length);
-			expect(deployment.bytes).toBe(100 * deployment.physicalRelationNames.length);
-		}
+		await fetch('/api/build', { method: 'POST', body: JSON.stringify(request) });
+		await fetch('/api/deployments/20261114T082312Z_0a1b2c/promote', { method: 'POST' });
+		await fetch('/api/deployments/20261114T082312Z_0a1b2c/rollback', { method: 'POST' });
+
+		expect(story.build).toHaveBeenCalledWith(request);
+		expect(story.deploymentAction.mock.calls).toEqual([
+			['promote', '20261114T082312Z_0a1b2c'],
+			['rollback', '20261114T082312Z_0a1b2c']
+		]);
 	});
 
-	it('given any other write, or a second promotion, when fetched then it is refused without touching the engine', async () => {
-		await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
-		promote.mockClear();
+	it('given what the engine does not answer, such as auth, when fetched while the engine loads then the recording answers at once', async () => {
+		vi.stubGlobal('location', new URL('https://sqltide.io/demo/'));
+		installDemoFetch({ active: () => true, whenReady: () => new Promise<never>(() => undefined) });
 
-		const again: Response = await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
-		const cleanup: Response = await fetch('/api/deployments/cleanup', { method: 'POST' });
+		const response: Response = await fetch('/api/auth/me');
 
-		expect([again.status, cleanup.status]).toEqual([403, 403]);
-		expect(await cleanup.json()).toEqual({ detail: DEMO_ONE_ACTION_MESSAGE });
-		expect(promote).not.toHaveBeenCalled();
+		expect(await response.json()).toEqual(recordings.responses['/api/auth/me'].body);
+	});
+
+	it('given a write the browser demo does not run when posted then it says so and points to the playground', async () => {
+		const response: Response = await fetch('/api/deployments/cleanup', { method: 'POST' });
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toEqual({ detail: DEMO_NOT_IN_BROWSER_MESSAGE });
+	});
+});
+
+describe('UI demo fetch when the engine cannot start', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('given the visitor chose the recording when a page asks then the recording answers and writes stay read-only', async () => {
+		// The engine failed while the page loaded; its requests waited, then the visitor chose the recording.
+		const link: DemoEngineLink = { active: () => true, whenReady: async () => null };
+		vi.stubGlobal('fetch', vi.fn());
+		vi.stubGlobal('location', new URL('https://sqltide.io/demo/'));
+		installDemoFetch(link);
+
+		const status: Response = await fetch('/api/status');
+		const promote: Response = await fetch('/api/deployments/any/promote', { method: 'POST' });
+
+		expect(await status.json()).toEqual(recordings.responses['/api/status'].body);
+		expect(await promote.json()).toEqual({ detail: DEMO_READ_ONLY_MESSAGE });
 	});
 });

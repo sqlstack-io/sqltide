@@ -41,7 +41,8 @@
 		<div class="flex flex-col gap-5 p-[18px]">
 			<section class="rounded-[4px] border border-border">
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--border-subtle)] px-3.5 py-2.5">
-					<WarehouseHealthStatus status={health.status} />
+					<!-- The status grades disk and inode capacity, which the UI demo's in-browser engine does not have. -->
+					{#if import.meta.env.VITE_SQLTIDE_DEMO !== '1'}<WarehouseHealthStatus status={health.status} />{/if}
 					<span class="font-mono text-[11px]">{health.adapter}{health.version ? ` ${health.version}` : ''}</span>
 					<span class="text-muted-foreground font-mono text-[10.5px]">{health.database}</span>
 					<span class="text-muted-foreground ml-auto font-mono text-[10.5px]">
@@ -62,6 +63,12 @@
 				{/if}
 			</section>
 
+			{#if import.meta.env.VITE_SQLTIDE_DEMO === '1'}
+				<!-- The UI demo's ClickHouse runs in the browser, which has no disk, inodes or server memory to report. -->
+				<p class="text-muted-foreground rounded-[4px] border border-border p-3.5 text-[12px]" data-testid="demo-no-capacity">
+					This ClickHouse runs in your browser, so it has no disk, inodes or server memory to report.
+				</p>
+			{:else}
 			<section>
 				<div class="text-[var(--sb-text-faint)] flex items-center gap-2 pb-2 font-mono text-[10px] uppercase tracking-[0.14em]">
 					<HardDriveIcon size={12} /> Capacity
@@ -100,7 +107,10 @@
 				{/if}
 			</section>
 
+			{/if}
+
 			<section class="grid gap-3" style:grid-template-columns="repeat(auto-fit, minmax(220px, 1fr))">
+				{#if import.meta.env.VITE_SQLTIDE_DEMO !== '1'}
 				<div class="rounded-[4px] border border-border p-3.5">
 					<div class="text-[var(--sb-text-faint)] flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]"><HardDriveIcon size={12} /> Main-path inodes</div>
 					<div class="mt-3 flex items-end gap-2"><span class="font-mono text-[20px]">{health.inodes.free === null ? '—' : formatInteger(health.inodes.free)}</span><span class="text-muted-foreground pb-1 text-[10px]">free</span></div>
@@ -120,6 +130,7 @@
 						<div class="mt-2 font-mono text-[10.5px]">memory context unavailable</div>
 					{/if}
 				</div>
+				{/if}
 
 				<div class="rounded-[4px] border border-border p-3.5">
 					<div class="text-[var(--sb-text-faint)] flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em]"><MergeIcon size={12} /> Current activity</div>

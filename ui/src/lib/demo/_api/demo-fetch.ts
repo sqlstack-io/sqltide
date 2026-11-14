@@ -1,115 +1,79 @@
 import recordings from '../recordings.json';
-import { DEMO_ONE_ACTION_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '../constants';
-import type { DemoEngineLink, TableSize } from '../types';
+import { DEMO_ENGINE_GETS, DEMO_NOT_IN_BROWSER_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '../constants';
+import { answerFromEngine } from './engine-answers';
+import type { BuildRequest, DemoAnswer, DemoEngineLink, LiveDemo } from '../types';
 
-type Recording = { status: number; body: unknown };
-
-function reply(status: number, body: unknown): Response {
+function reply({ status, body }: DemoAnswer): Response {
 	return new Response(JSON.stringify(body), {
 		status,
 		headers: { 'content-type': 'application/json' }
 	});
 }
 
-type Deployment = {
-	deploymentId: string;
-	physicalRelationNames: string[];
-	rows: number;
-	bytes: number;
-	models?: {
-		stagedRelation: string | null;
-		stagedRows: number | null;
-		stagedBytes: number | null;
-		liveRelation: string | null;
-		liveRows: number | null;
-	}[];
-};
+const failure = (error: unknown): DemoAnswer => ({
+	status: 500,
+	body: { detail: `The demo engine failed: ${error instanceof Error ? error.message : String(error)}` }
+});
 
-/** A recorded deployment with its row and byte counts read from the engine now. */
-function withSizes(deployment: Deployment, sizes: Map<string, TableSize>): Deployment {
-	const size: (name: string | null) => TableSize | undefined = (name) => (name === null ? undefined : sizes.get(name));
-	const total: (field: keyof TableSize) => number = (field) =>
-		deployment.physicalRelationNames.reduce((sum, name) => sum + (size(name)?.[field] ?? 0), 0);
-	return {
-		...deployment,
-		rows: total('rows'),
-		bytes: total('bytes'),
-		...(deployment.models === undefined
-			? {}
-			: {
-					models: deployment.models.map((model) => ({
-						...model,
-						stagedRows: size(model.stagedRelation)?.rows ?? model.stagedRows,
-						stagedBytes: size(model.stagedRelation)?.bytes ?? model.stagedBytes,
-						liveRows: size(model.liveRelation)?.rows ?? model.liveRows
-					}))
-				})
-	};
+const DEPLOYMENT_ACTION: RegExp = /^\/api\/deployments\/([^/]+)\/(promote|rollback)$/;
+
+/** A write the real engine runs: Execute, Promote and Roll back, which sqt prepared. */
+async function write(live: LiveDemo, url: URL, body: string): Promise<DemoAnswer> {
+	const deploymentAction: RegExpMatchArray | null = url.pathname.match(DEPLOYMENT_ACTION);
+	if (deploymentAction !== null) {
+		return live.story.deploymentAction(
+			deploymentAction[2] as 'promote' | 'rollback',
+			decodeURIComponent(deploymentAction[1])
+		);
+	}
+	if (url.pathname === '/api/build') return live.story.build(JSON.parse(body) as BuildRequest);
+	// Reloading the project or the warehouse status changes nothing here; both answer the status.
+	if (url.pathname === '/api/reload' || url.pathname === '/api/warehouse/refresh') {
+		return recordings.responses['/api/status'];
+	}
+	return { status: 403, body: { detail: DEMO_NOT_IN_BROWSER_MESSAGE } };
 }
 
 /**
- * Serves the UI's `/api` requests from the recorded responses: GETs return what `sqt dev`
- * returned for the same path and query, and writes return the read-only message. A GET with no
- * recording fails loudly, so a UI change that needs a new endpoint is re-recorded.
+ * Serves the UI's `/api` requests for the UI demo build.
  *
- * With an engine, deployment sizes come from its tables, and promoting the staged deployment runs
- * the promotion on it; from then on the responses recorded after the promotion come first.
+ * With the real engine, sqt's plans and actions come from the story it prepared, and every page
+ * that shows the warehouse reads the engine (see answerFromEngine). Requests made while the
+ * engine loads wait for it; if it cannot start, they wait for the visitor to choose the recording.
+ *
+ * Without it, GETs return what `sqt dev` returned for the same path and query, and writes return
+ * the read-only message. A GET with no recording fails loudly, so a UI change that needs a new
+ * endpoint is re-recorded.
  */
 export function installDemoFetch(engine: DemoEngineLink | null = null): void {
-	const responses: Record<string, Recording> = recordings.responses;
-	const { promotion } = recordings;
-	const promotedResponses: Record<string, Recording> = promotion.responses;
-	const promotePath: string = `/api/deployments/${promotion.deploymentId}/promote`;
+	const responses: Record<string, DemoAnswer> = recordings.responses;
 	const passThrough: typeof fetch = globalThis.fetch.bind(globalThis);
-	// One promotion per page load, even when the visitor clicks again while it runs.
-	let promoting: Promise<void> | null = null;
 	globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-		const url: URL = new URL(
-			input instanceof Request ? input.url : String(input),
-			globalThis.location.href
-		);
+		const url: URL = new URL(input instanceof Request ? input.url : String(input), globalThis.location.href);
 		if (url.origin !== globalThis.location.origin || !url.pathname.startsWith('/api/')) {
 			return passThrough(input, init);
 		}
-		const method: string = init?.method ?? (input instanceof Request ? input.method : 'GET');
-		if (method.toUpperCase() !== 'GET') {
-			if (engine === null || !engine.active()) return reply(403, { detail: DEMO_READ_ONLY_MESSAGE });
-			if (url.pathname !== promotePath || engine.promoted()) return reply(403, { detail: DEMO_ONE_ACTION_MESSAGE });
-			promoting ??= engine.whenReady().then((ready) => ready.promote());
+		const method: string = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+		const forEngine: boolean = method !== 'GET' || DEMO_ENGINE_GETS.test(url.pathname);
+		const live: LiveDemo | null = engine !== null && engine.active() && forEngine ? await engine.whenReady() : null;
+		if (live !== null) {
+			const body: string = method === 'GET' ? '' : typeof init?.body === 'string' ? init.body : '';
 			try {
-				await promoting;
+				const answer: DemoAnswer | null =
+					method === 'GET' ? await answerFromEngine(live, url, responses) : await write(live, url, body);
+				if (answer !== null) return reply(answer);
 			} catch (error) {
-				return reply(500, { detail: `The engine could not promote: ${error instanceof Error ? error.message : String(error)}` });
+				console.error(`The demo engine could not answer ${method} ${url.pathname}:`, error);
+				return reply(failure(error));
 			}
-			engine.markPromoted();
-			return reply(promotion.response.status, promotion.response.body);
+		} else if (method !== 'GET') {
+			return reply({ status: 403, body: { detail: DEMO_READ_ONLY_MESSAGE } });
 		}
-		const path: string = url.pathname + url.search;
-		// Pages only the promotion created, such as its run, answer from after it even on a reload.
-		const recording: Recording | undefined = engine?.promoted()
-			? (promotedResponses[path] ?? responses[path])
-			: (responses[path] ?? promotedResponses[path]);
+		const recording: DemoAnswer | undefined = responses[url.pathname + url.search];
 		if (recording === undefined) {
 			console.error(`UI demo has no recording for GET ${url.pathname}${url.search}`);
-			return reply(404, { detail: `No recording for ${url.pathname}` });
+			return reply({ status: 404, body: { detail: `No recording for ${url.pathname}` } });
 		}
-		const live: ReturnType<DemoEngineLink['ready']> = engine?.ready() ?? null;
-		if (live !== null && recording.status === 200 && /^\/api\/deployments(\/[^/]+)?$/.test(url.pathname)) {
-			let sizes: Map<string, TableSize>;
-			try {
-				sizes = await live.tableSizes();
-			} catch (error) {
-				console.warn('The demo engine could not read table sizes; showing the recorded ones.', error);
-				return reply(recording.status, recording.body);
-			}
-			const body: Deployment & { deployments?: Deployment[] } = recording.body as Deployment & { deployments?: Deployment[] };
-			return reply(
-				200,
-				body.deployments === undefined
-					? withSizes(body, sizes)
-					: { ...body, deployments: body.deployments.map((deployment) => withSizes(deployment, sizes)) }
-			);
-		}
-		return reply(recording.status, recording.body);
+		return reply(recording);
 	};
 }

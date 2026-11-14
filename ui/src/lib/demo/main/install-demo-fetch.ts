@@ -2,7 +2,8 @@ import { startChdbEngine } from '../_helpers/chdb-engine';
 import { installDemoFetch as install } from '../_api/demo-fetch';
 import { getDemoInstance } from '../_helpers/demo-instance.svelte';
 import { engineSupport } from '../_helpers/engine-support';
-import type { DemoController, DemoEngine, DemoEngineLink, EngineScript, EngineSupport } from '../types';
+import { createStoryResource } from '../_resources/story.resource';
+import type { DemoController, DemoEngine, DemoStory, EngineSupport, LiveDemo, PreparedDemo } from '../types';
 
 /**
  * Answers the UI's API for the UI demo build: from a real engine in this tab where the browser can
@@ -18,22 +19,23 @@ export function installDemoFetch(): void {
 		return;
 	}
 	controller.startEngine();
-	const started: Promise<DemoEngine> = (async () => {
-		const { default: script } = (await import('../engine-script.json')) as { default: EngineScript };
-		const engine: DemoEngine = await startChdbEngine(base, script, controller.showProgress);
+	const started: Promise<LiveDemo> = (async () => {
+		const { default: prepared } = (await import('../prepared.json')) as unknown as { default: PreparedDemo };
+		const engine: DemoEngine = await startChdbEngine(base, prepared.database, controller.showProgress);
+		const story: DemoStory = createStoryResource(prepared, engine.run);
+		await story.replaySetup((step: string, done: number, total: number) =>
+			controller.showProgress({ phase: 'replay', step, done, total })
+		);
 		await engine.startOrders();
-		return engine;
+		return { engine, story };
 	})();
 	started.then(controller.engineReady, (error: unknown) => {
 		console.error('The demo engine could not start:', error);
 		controller.engineFailed(error instanceof Error ? error.message : String(error));
 	});
-	const link: DemoEngineLink = {
-		active: () => controller.demo.mode.kind !== 'recorded',
-		ready: () => (controller.demo.mode.kind === 'real' ? controller.demo.mode.engine : null),
-		whenReady: () => started,
-		promoted: () => controller.demo.promoted,
-		markPromoted: controller.markPromoted
-	};
-	install(link);
+	const settled: Promise<LiveDemo | null> = started.catch(async () => {
+		await controller.recordingChosen;
+		return null;
+	});
+	install({ active: () => controller.demo.mode.kind !== 'recorded', whenReady: () => settled });
 }

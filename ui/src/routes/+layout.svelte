@@ -64,12 +64,16 @@
 			<div class="flex min-w-0 flex-1 flex-col">
 				{@render children()}
 			</div>
-			{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && demo.mode.kind === 'real' && demo.mode.engine !== null}
-				<EnginePanel engine={demo.mode.engine} />
+			{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && demo.mode.kind === 'real' && demo.mode.live !== null}
+				<EnginePanel live={demo.mode.live} onrestarted={() => goto(`${base}/`, { invalidateAll: true })} />
 			{/if}
 		</div>
 	</div>
 {:else if app.phase === 'loading'}
+	<!-- The demo's pages wait for its engine, so its progress shows while they load. -->
+	{#if import.meta.env.VITE_SQLTIDE_DEMO === '1'}
+		<DemoBanner />
+	{/if}
 	<div class="text-muted-foreground grid h-screen place-items-center font-mono text-[13px]">
 		loading project…
 	</div>

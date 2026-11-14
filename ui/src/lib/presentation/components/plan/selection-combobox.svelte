@@ -249,6 +249,12 @@
 					class="text-muted-foreground px-2.5 py-2 font-mono text-[11px]"
 				>
 					No matching options
+					{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && query.trim() !== ''}
+						<p class="mt-1" data-testid="demo-unprepared-selector">
+							<code class="code">{query.trim()}</code> isn’t prepared in the demo, which plans the pipeline and models listed here. Run
+							<code class="code">sqt playground</code> to plan your own models with ClickHouse on your machine.
+						</p>
+					{/if}
 				</div>
 			{/if}
 		</div>

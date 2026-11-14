@@ -14,6 +14,8 @@
 	};
 
 	let { health, referenceTime }: Props = $props();
+	/** The UI demo's engine runs in the browser, which has no disk, inodes or server memory to report. */
+	const DEMO: boolean = import.meta.env.VITE_SQLTIDE_DEMO === '1';
 	const primaryDisk = $derived.by(() => {
 		if (!health) return null;
 		return (
@@ -38,7 +40,8 @@
 	<div class="rounded-[4px] border border-border">
 		<div class="flex items-center gap-3 border-b border-[var(--border-subtle)] px-3.5 py-2.5">
 			{#if health}
-				<WarehouseHealthStatus status={health.status} />
+				<!-- The status grades disk and inode capacity, which the UI demo's in-browser engine does not have. -->
+				{#if !DEMO}<WarehouseHealthStatus status={health.status} />{/if}
 				<span class="text-muted-foreground text-[11.5px]">
 					{health.stale ? 'Last usable evidence. ' : ''}{warehouseHealthSummary(health)}
 				</span>
@@ -51,7 +54,8 @@
 		</div>
 
 		{#if health}
-			<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+			<div class={DEMO ? 'grid grid-cols-1' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'}>
+				{#if !DEMO}
 				<div class="border-b border-[var(--border-subtle)] px-3.5 py-2.5 sm:border-r xl:border-b-0">
 					<div class="text-[var(--sb-text-faint)] font-mono text-[10.5px] uppercase">Available</div>
 					<div class="pt-0.5 font-mono text-[13px]">{formatWarehouseBytes(primaryDisk?.unreservedBytes ?? null)}</div>
@@ -67,6 +71,7 @@
 					<div class="pt-0.5 font-mono text-[13px]">{formatWarehouseBytes(health.memory?.residentBytes ?? null)}</div>
 					<div class="text-muted-foreground font-mono text-[10.5px]">{health.memory === null ? 'context unavailable' : health.memory.basis === 'cgroup' ? 'cgroup context' : 'host context'}</div>
 				</div>
+				{/if}
 				<div class="px-3.5 py-2.5">
 					<div class="text-[var(--sb-text-faint)] font-mono text-[10.5px] uppercase">Active now</div>
 					<div class="pt-0.5 font-mono text-[13px]">{health.activity?.activeQueries ?? '—'} queries</div>

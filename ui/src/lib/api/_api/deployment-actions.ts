@@ -9,6 +9,13 @@ export async function requestDeploymentPromotion(deploymentId: string): Promise<
 	return readApiResponse<PromoteResult>(response, 'deployment promote');
 }
 
+export async function requestDeploymentRollback(deploymentId: string): Promise<PromoteResult> {
+	const response: Response = await authenticatedFetch(`/api/deployments/${encodeURIComponent(deploymentId)}/rollback`, {
+		method: 'POST'
+	});
+	return readApiResponse<PromoteResult>(response, 'deployment rollback');
+}
+
 export async function requestDeploymentCleanup(retentionDays: number): Promise<CleanupResult> {
 	const response: Response = await authenticatedFetch('/api/deployments/cleanup', {
 		method: 'POST',

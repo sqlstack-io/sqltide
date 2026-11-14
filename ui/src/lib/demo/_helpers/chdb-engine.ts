@@ -1,11 +1,10 @@
 /**
- * The demo's real ClickHouse: chdb-wasm's multi-threaded build in a worker. It replays the
- * statements sqt wrote for each step of the recorded story, so the tables, materialized views and
- * views behind the UI exist here, then keeps adding orders to the source.
+ * The demo's real ClickHouse: chdb-wasm's multi-threaded build in a worker, which runs the
+ * statements sqt wrote for the story and keeps adding orders to the source.
  */
 import { downloadEngine } from '../_api/download-engine';
 import { createOrderGeneratorResource } from '../_resources/order-generator.resource';
-import type { DemoEngine, EngineProgress, EngineScript, OrderGeneratorResource, TableSize } from '../types';
+import type { DemoEngine, EngineProgress, OrderGeneratorResource, TableSize } from '../types';
 
 /** What chdb-wasm's module exports that the demo uses. */
 type ChdbModule = {
@@ -20,10 +19,10 @@ type ChdbClient = {
 type SizeRow = { name: string; rows: string | number | null; bytes: string | number | null };
 type LatestOrderRow = { id: string | number; offset: string | number };
 
-/** Downloads and starts the engine, then replays the story up to the staged change. */
+/** Downloads and starts the engine, with an empty `database`. */
 export async function startChdbEngine(
 	base: string,
-	script: EngineScript,
+	database: string,
 	onProgress: (progress: EngineProgress) => void
 ): Promise<DemoEngine> {
 	const wasmUrl: string = await downloadEngine(base, onProgress);
@@ -35,7 +34,6 @@ export async function startChdbEngine(
 		URL.revokeObjectURL(wasmUrl);
 	}
 
-	const { database } = script;
 	// The engine deadlocks on overlapping queries, so every caller waits its turn.
 	let queue: Promise<unknown> = Promise.resolve();
 	let nextOrder: { id: number; offset: number } = { id: 0, offset: 0 };
@@ -60,24 +58,35 @@ export async function startChdbEngine(
 			.map((line) => JSON.parse(line) as Row);
 	}
 
-	/** One new order: every third one is still pending, so the completed-orders filter shows. */
+	/**
+	 * One new order: every third one is still pending, so the completed-orders filter shows. While
+	 * an action switches tables a view can be missing for a moment, so a refused order is tried
+	 * again on the next tick with the same ID.
+	 */
 	async function addOrder(): Promise<void> {
 		const { id, offset } = nextOrder;
-		nextOrder = { id: id + 1, offset: offset + 1 };
 		const status: string = id % 3 === 0 ? 'pending' : 'completed';
 		const totalCents: number = 500 + ((id * 1373) % 5500);
-		await run(`INSERT INTO ${database}.playground_orders VALUES (${id}, '${status}', ${totalCents}, 0, ${offset}, now64(3))`);
+		try {
+			await run(`INSERT INTO ${database}.playground_orders VALUES (${id}, '${status}', ${totalCents}, 0, ${offset}, now64(3))`);
+		} catch {
+			return;
+		}
+		if (nextOrder.id === id) nextOrder = { id: id + 1, offset: offset + 1 };
 	}
 
 	const generator: OrderGeneratorResource = createOrderGeneratorResource(addOrder);
+
+	// The browser gives the engine a fixed pool of threads. Its default asynchronous file reads and
+	// one pipeline thread per core can use them all up ("Cannot schedule a task"), and the demo's
+	// tables are small, so it reads synchronously on two threads. Settings last for the connection.
+	await run('SET max_threads = 2');
+	await run(`SET local_filesystem_read_method = 'pread'`);
 
 	const engine: DemoEngine = {
 		database,
 		run,
 		rows,
-		async promote(): Promise<void> {
-			for (const statement of script.promote) await run(statement);
-		},
 		async tableSizes(): Promise<Map<string, TableSize>> {
 			const sizes: SizeRow[] = await rows<SizeRow>(
 				`SELECT name, total_rows AS rows, total_bytes AS bytes FROM system.tables WHERE database = '${database}'`
@@ -97,15 +106,5 @@ export async function startChdbEngine(
 		}
 	};
 
-	const total: number = script.steps.reduce((sum, step) => sum + step.statements.length, 0);
-	let done: number = 0;
-	for (const step of script.steps) {
-		for (const statement of step.statements) {
-			onProgress({ phase: 'replay', step: step.title, done, total });
-			await run(statement);
-			done += 1;
-		}
-	}
-	onProgress({ phase: 'replay', step: 'Ready', done, total });
 	return engine;
 }

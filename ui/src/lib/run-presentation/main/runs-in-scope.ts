@@ -14,7 +14,7 @@ const COMMANDS_BY_SCOPE: Record<Exclude<RunScope, 'all' | 'other'>, Set<string>>
 	builds: new Set(['build']),
 	audits: new Set(['audit']),
 	tests: new Set(['test']),
-	deployments: new Set(['deployment promote']),
+	deployments: new Set(['deployment promote', 'deployment rollback']),
 	destruction: new Set(['destroy pipelines', 'reset target']),
 	maintenance: new Set(['janitor'])
 };
