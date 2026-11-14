@@ -1,5 +1,5 @@
 {
-	"preparedWith": "0.69.1",
+	"preparedWith": "0.70.1",
 	"database": "sqltide_playground",
 	"start": "nothing-staged",
 	"setup": [
