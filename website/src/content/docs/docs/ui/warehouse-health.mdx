@@ -61,7 +61,7 @@ as current evidence.
 
 ## Responding to capacity pressure
 
-Warehouse Health is intentionally read-only. When it reports low disk or inode capacity:
+Warehouse Health only reads; it changes nothing. When it reports low disk or inode capacity:
 
 1. Stop or reduce avoidable writes and rebuilds.
 2. Confirm the affected ClickHouse disk and whether unreserved capacity is lower than free capacity.

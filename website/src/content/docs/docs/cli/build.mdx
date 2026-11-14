@@ -3,8 +3,8 @@ title: "sqt build"
 description: "Build selected pipelines directly or as an isolated deployment."
 ---
 
-`build` plans and executes selected pipelines in their effective modes. It is the only public build
-verb.
+`sqt build` plans the selected pipelines, shows the plan, asks you to confirm, then runs it. Each
+pipeline builds in its own mode, direct or virtual.
 
 ```bash
 sqt build
@@ -23,8 +23,8 @@ ordinary `tbl__*` and `mv__*` names, and replays retained history through the re
 
 With `[defaults] pipeline_mode = "virtual"`, the same command creates an unpublished deployment.
 Deployment-specific tables and materialized views are populated while stable published views remain
-unchanged. Use `sqt deployment audit <deployment-id>` and `sqt deployment promote <deployment-id>`
-afterward.
+unchanged. Then run `sqt deployment audit --latest` and `sqt deployment promote --latest`, or pass
+the deployment ID that the build prints.
 
 Pipelines can override the default with `mode = "direct"` or `mode = "virtual"` in `pipeline.toml`.
 For a mixed selection, SQLTide asks for confirmation once, stages every virtual pipeline first,
@@ -110,8 +110,8 @@ confirmation and are published before the first mutation. Direct workflows resol
 watermarks during execution, then publish the exact resolved SQL and `execution.json` on success or
 a handled failure.
 
-These files are disposable transparency output. SQLTide never reads `target/` as lifecycle
-state. A copied artifact is not recovery state.
+These files are for reading only. SQLTide never reads them back, so deleting them is safe, and
+running a copied file does not recover a failed build.
 
 `sqt plan` uses the same workflow preparation and serialization path under `target/run/plan/`, but
 build never reads or compares that directory. A mixed plan emits one combined text or JSON document
@@ -124,7 +124,8 @@ Builds do not resume a prior workflow. After cancellation or failure, correct th
 apply current preconditions. Direct and virtual builds do not roll back mutations already completed.
 
 A full direct build runs every applicable audit; a selected direct build runs audits whose complete
-model reference set is in execution scope. Virtual deployment readiness is assessed separately.
+model reference set is in execution scope. To check a virtual deployment before you promote it,
+run `sqt deployment audit --latest`.
 
 <Warning>
   Do not execute copied workflow SQL as a recovery procedure. Rerun the SQLTide command so it can

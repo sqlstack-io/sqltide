@@ -1,4 +1,9 @@
-"""Compile the actual quickstart snippets with the installed released sqt command."""
+"""Check the guides' projects against the installed released sqt command, offline.
+
+The quickstart and the staged-workflow example both start from `sqt playground`. This creates the
+playground without starting it, adds the files the staged-workflow page tells the reader to save,
+and compiles each version the guides build. It does not connect to a warehouse.
+"""
 
 import os
 import re
@@ -12,39 +17,43 @@ DOCS = ROOT / "src/content/docs/docs"
 SQT = os.environ.get("SQT", "sqt")
 
 
+def sqt(*arguments: str) -> None:
+    subprocess.run([SQT, *arguments], check=True)
+
+
+def compiled_models(project: Path) -> list[Path]:
+    return sorted((project / "target/compiled/models").rglob("*.sql"))
+
+
 def main() -> None:
-    for document, prefix, count in [
-        ("quickstart.mdx", "quickstart", 3),
-        ("examples/staged-workflow.mdx", "virtual-start", 4),
-    ]:
-        guide = (DOCS / document).read_text()
-        snippets = re.findall(rf"`{prefix}/([^`]+)`:\n\n```\w+\n(.*?)```", guide, re.S)
-        assert len(snippets) == count, f"{document} must contain all {count} authored files"
-        with tempfile.TemporaryDirectory(prefix="sqltide-docs-") as directory:
-            project = Path(directory)
-            for path, source in snippets:
-                file = project / path
-                file.parent.mkdir(parents=True, exist_ok=True)
-                file.write_text(source)
-            for command in ["discover", "compile"]:
-                subprocess.run([SQT, command, "--project-dir", directory], check=True)
-            assert (project / "target/manifest.json").is_file()
-            assert (project / "target/sqltide_dag.json").is_file()
-            compiled = list((project / "target/compiled/models").rglob("*.sql"))
-            assert len(compiled) == count - 2
-            if prefix == "virtual-start":
-                model = project / "pipelines/pl__orders/order_totals.sql"
-                model.write_text(model.read_text().replace(">= 0", ">= 100"))
-                subprocess.run([SQT, "compile", "--project-dir", directory], check=True)
-            print(f"{document}: published CLI discovered and compiled all documented files")
+    guide = (DOCS / "examples/staged-workflow.mdx").read_text()
+    saved = re.findall(r"as `([^`]+)`[^\n]*:\n\n```\w+\n(.*?)```", guide, re.S)
+    assert [path for path, _ in saved] == ["pipelines/pl__orders/large_orders.sql", "large.sql"], (
+        "staged-workflow.mdx must tell the reader to save large_orders.sql and large.sql"
+    )
+    with tempfile.TemporaryDirectory(prefix="sqltide-docs-") as directory:
+        project = Path(directory) / "playground"
+        sqt("playground", str(project), "--no-start")
+        sqt("compile", "--project-dir", str(project))
+        assert len(compiled_models(project)) == 1
+        shutil.copy(
+            project / "revisions/completed_orders.sql",
+            project / "pipelines/pl__orders/order_report.sql",
+        )
+        sqt("compile", "--project-dir", str(project))
+        print("quickstart.mdx: the playground compiles before and after its change")
+        for path, source in saved:
+            (project / path).write_text(source)
+        sqt("compile", "--project-dir", str(project))
+        assert len(compiled_models(project)) == 2
+        print("examples/staged-workflow.mdx: the added model compiles with the playground")
     with tempfile.TemporaryDirectory(prefix="sqltide-hero-") as directory:
         shutil.copytree(ROOT / "examples/hero", directory, dirs_exist_ok=True)
-        subprocess.run([SQT, "compile", "--project-dir", directory], check=True)
-        compiled = list((Path(directory) / "target/compiled/models").rglob("*.sql"))
-        assert len(compiled) == 2
+        sqt("compile", "--project-dir", directory)
+        assert len(compiled_models(Path(directory))) == 2
         config = Path(directory) / "sqltide_project.toml"
         config.write_text(config.read_text() + '\n[defaults]\npipeline_mode = "virtual"\n')
-        subprocess.run([SQT, "compile", "--project-dir", directory], check=True)
+        sqt("compile", "--project-dir", directory)
         print("Hero: published CLI compiled both typed models in direct and virtual modes")
 
 

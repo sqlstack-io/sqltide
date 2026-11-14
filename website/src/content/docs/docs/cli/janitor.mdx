@@ -25,8 +25,8 @@ sqt janitor --retention-days 30 --minimum-rollback-deployments 4 --apply
 Janitor preserves currently active relations, the configured minimum rollback history, deployments
 published inside the retention window, and deployments whose physical mappings do not safely match
 their recorded identity. Immediately before cleanup, it refreshes active state and refuses to remove
-any relation that became active. Set `--minimum-rollback-deployments 0` only when retained rollback
-history is intentionally expendable.
+any relation that became active. Set `--minimum-rollback-deployments 0` only if you will never need
+to roll back to an older deployment.
 
 <Warning>
   `--apply` does not ask for confirmation. Always inspect a dry run first.

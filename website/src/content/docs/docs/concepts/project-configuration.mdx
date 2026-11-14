@@ -110,7 +110,7 @@ No command migrates that history.
 
 Commands that connect to ClickHouse require `host`, `port`, `username`, and `password` after all
 configuration layers are merged. SQLTide supplies no connection defaults. Use `password = ""`
-when the ClickHouse account intentionally has an empty password.
+for an account with no password.
 
 ## Connection settings
 
@@ -294,8 +294,8 @@ minimum_staged_row_ratio = 0.5
 `maximum_lag` accepts an `<int><s|m|h|d>` duration and defaults to `30s`.
 `minimum_staged_row_ratio` accepts a number from `0` to `1` and defaults to `0.5`. These thresholds
 contribute to the overall `ready`, `caution`, or `not_ready` assessment reported by
-`sqt deployment audit`; replay evidence and applicable SQL audits also contribute. The assessment
-remains advisory and does not block promotion.
+`sqt deployment audit`; replay evidence and applicable SQL audits also contribute.
+`sqt deployment promote` does not check the result.
 
 ## Run recovery window
 

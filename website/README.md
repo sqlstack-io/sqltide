@@ -1,12 +1,13 @@
 # SQLTide website
 
 The homepage at `/` and 46 documentation pages at `/docs/` build together as an
-Astro/Starlight static site. The documentation baseline is the published **SQLTide 0.60.0**
-package, not unreleased runtime integration work.
+Astro/Starlight static site. The documentation describes the latest published SQLTide release.
+CI installs that release from PyPI to check the examples.
 
 ## Develop and validate
 
-Requires Node **22.23.4+**, Python 3.12, and an installed `sqltide==0.60.0` for example checks.
+Requires Node **22.23.4+**, Python 3.12, and the latest published `sqltide` installed for example
+checks.
 
 ```sh
 npm ci
@@ -20,8 +21,9 @@ npm test
 ```
 
 `SQT` can select the installed baseline CLI. `CHROME_PATH` can select an existing Chromium binary.
-The example check compiles files extracted from the actual direct quickstart, virtual walkthrough
-and two-model hero fixture in temporary directories. It does not connect to a warehouse.
+The example check creates the playground without starting it, compiles it before and after the
+quickstart's change, adds the files the staged-workflow page saves, and compiles the two-model
+hero fixture in direct and virtual modes. It does not connect to a warehouse.
 
 Browser tests build a separate review copy on port 4174, exercise routes, search, keyboard access,
 copying, theme persistence, motion controls and touch menus, and run accessibility checks across
@@ -60,12 +62,11 @@ production origin is `https://sqltide.io`, including the static homepage canonic
 
 ## Content corrections, not just a rename
 
-- The old quickstart's `pipelines/orders` fails current discovery. The new local quickstart uses
-  `pipelines/pl__orders`, distinct source/model names, loopback-only ClickHouse, and does not delete
-  an existing container or database to make setup succeed.
+- The old quickstart's `pipelines/orders` fails current discovery. The quickstart now walks through
+  `sqt playground`, which creates its project and a loopback-only ClickHouse in Docker.
 - Installation, configuration filenames, Python imports, environment variables, metadata and CLI
   examples use SQLTide. Historical upgrade/state concerns are isolated in the upgrade guide.
-- New Kafka examples explicitly configure `sqltide_` groups. Version 0.60.0's default remains
+- New Kafka examples explicitly configure `sqltide_` groups. The default group remains
   legacy-prefixed; existing groups/offsets must not be renamed or reset. No unfinished default-
   migration behavior is claimed.
 - Added typed retention, constants/enums, PostgreSQL refresh sources, directional dependency
@@ -109,6 +110,8 @@ cutoff overlap is explained from the runtime contract, not presented as a measur
 
 ### Virtual lifecycle evidence
 
+This record is from the 0.60.0 launch review. Its commands predate `--latest` and the playground.
+
 The same fixture is compiled in both modes. For virtual mode, add this project configuration:
 
 ```toml
@@ -146,8 +149,8 @@ fixture's mapped physical `event_*` source columns with unknown `_replay_partiti
 therefore demonstrates the verified full-refresh path and `show`/`diff` plus direct staged queries,
 not a claimed successful deployment audit or an enforced readiness gate.
 
-The staged getting-started guide was also executed from its four authored snippets against the
-published 0.60.0 CLI and ClickHouse 24.8. Initial publication served both orders; a changed filter
+The 0.60.0 staged getting-started guide, since rewritten around `sqt playground`, was also
+executed from its four authored snippets against the published 0.60.0 CLI and ClickHouse 24.8. Initial publication served both orders; a changed filter
 built separately and excluded the small order. After two live inserts, the previous version had
 four rows and the new one had two. Promotion switched the unchanged consumer query to those two
 rows while retaining all four source rows and the previous version. This check caught and removed

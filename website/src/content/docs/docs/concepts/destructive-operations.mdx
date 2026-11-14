@@ -78,17 +78,17 @@ retry it as a fresh plan. Runs retains the actor, reviewed and confirmed timesta
 submitted challenges, fingerprints, estimated bytes, every statement and timing, completed and
 pending sequences, errors, and remaining objects.
 
-An interrupt after plan consumption follows the same terminalization path: SQLTide inspects the
-catalog, recovers an ownership tombstone when a DROP reached its postcondition, records the terminal
-state, and only then propagates the interrupt.
+If you interrupt the command once dropping has started, SQLTide first checks which objects are
+gone and records that in Runs, then stops.
 
-If the residual catalog cannot be read after a partial mutation, Runs records the residual state as
-unavailable rather than claiming that no objects remain.
+If SQLTide cannot read the catalog after a partial failure, Runs shows the remaining objects as
+unknown.
 
 Target mutation locks encode their owner in the atomic ClickHouse namespace claim and use an atomic
-table exchange when releasing. Locks do not expire automatically. After a crashed owner, keep the
-target quiescent and recover the lock explicitly; age-based takeover could overlap a server-side
-ClickHouse query that outlived its client.
+table exchange when releasing. Locks do not expire. If a command crashes while holding the lock,
+make sure nothing else is running against the target before you release the lock. SQLTide never
+takes over an old lock on its own, because a query the crashed command started can still be running
+in ClickHouse.
 
 Resetting warehouse source relations does not call Kafka administration APIs. Consumer-group offsets
 remain broker-managed and are not silently reset.

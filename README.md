@@ -31,7 +31,7 @@ rebuilt from retained Kafka history.
 
 ```bash
 uv tool install sqltide        # or: pip install sqltide
-sqt playground                 # copy a ready-made orders project
+sqt playground                 # create an orders project and start it with Docker
 ```
 
 `sqt playground` creates a small orders project you run on your own machine with Docker: plan a
@@ -95,8 +95,8 @@ sqt audit
 sqt dev         # local UI at 127.0.0.1:8000
 ```
 
-`sqt playground` runs this workflow on a ready-made project locally with Docker. See the
-[quickstart](https://sqltide.io/docs/quickstart/) to start your own project.
+`sqt playground` runs this workflow on a ready-made project locally with Docker; the
+[quickstart](https://sqltide.io/docs/quickstart/) walks through it step by step.
 
 ## Documentation
 

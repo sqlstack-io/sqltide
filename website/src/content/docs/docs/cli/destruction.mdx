@@ -22,10 +22,9 @@ control store used by the development server. The account must be active and hol
 `admin` role. Use `--control-store-url` when the installation does not use the project-local default
 store.
 
-The frozen plan and review lifecycle use the durable relational control store rather than
-process-local memory. Immediately before execution, SQLTide reloads the account, recompiles the
-project, resolves the selected target's physical database again, and rejects account, target, or
-database drift.
+The plan and your review are saved in the control store. Immediately before dropping anything,
+SQLTide reloads your account, recompiles the project and resolves the target database again; if
+any of them changed since the plan, the command stops without dropping anything.
 
 Both commands:
 

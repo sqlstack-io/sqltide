@@ -1,208 +1,126 @@
 ---
 title: Stage a pipeline change
-description: Build a virtual pipeline, compare a changed version, and explicitly promote it.
+description: Add a model to the playground, build a changed version beside the published one, inspect it, promote it and roll it back.
 ---
 
-Build two models in virtual mode, publish the first version, then change a filter without
-immediately changing the views your queries read. Virtual mode is opt-in; direct mode remains
-the default.
-
-## Set up a fresh target
-
-Install `sqltide==0.60.0` and start the local ClickHouse server described in
-[quickstart steps 1–2](/docs/quickstart/#1-install-sqltide). Use a **new database** for this guide,
-not an already-built direct-mode target: automatic mode conversion is not supported.
-
-Create the database and retained input table. These commands fail rather than overwrite existing
-resources. The local server is unauthenticated; keep it bound to loopback as in the quickstart.
+This example takes a change through every step of a staged deployment. You add your own model to
+the playground project, change the model it reads, and inspect, promote and roll back the new
+version while consumers keep running the same query. It needs Python 3.12 or newer and Docker.
 
 ```bash
-curl --fail-with-body 'http://localhost:18123/' --data-binary 'CREATE DATABASE virtual_start' &&
-curl --fail-with-body 'http://localhost:18123/' --data-binary '
-CREATE TABLE virtual_start.orders_input (
-  event_partition Int32,
-  event_offset Int64,
-  event_time DateTime64(3),
-  order_id String,
-  amount_cents UInt64
-) ENGINE = MergeTree ORDER BY (event_partition, event_offset)
-' &&
-curl --fail-with-body 'http://localhost:18123/' --data-binary "
-INSERT INTO virtual_start.orders_input VALUES
-  (0, 1, now64(3), 'order-small', 75),
-  (0, 2, now64(3), 'order-large', 300)
-"
+pip install --upgrade sqltide
+sqt playground orders-stage
+cd orders-stage
 ```
 
-## 1. Write and validate
+The playground runs ClickHouse with three orders and one model, `order_report`. Its project uses
+virtual mode, so a build never changes what consumers read until you promote it.
 
-Create these folders and save the four files below:
+## 1. Add a model
 
-```bash
-mkdir -p virtual-start/sources virtual-start/pipelines/pl__orders
-```
-
-`virtual-start/sqltide_project.toml`:
-
-```toml
-name = "virtual_start"
-default_target = "local"
-
-[connection]
-host = "localhost"
-port = 18123
-username = "default"
-password = ""
-
-[targets.local]
-database = "virtual_start"
-
-[defaults]
-pipeline_mode = "virtual"
-```
-
-`virtual-start/sources/orders.yml`:
-
-```yaml
-sources:
-  - name: orders
-    kind: stream_table
-    table_name: orders_input
-    replay_boundary:
-      mode: offsets
-      columns:
-        _replay_partition: event_partition
-        _replay_offset: event_offset
-        _replay_timestamp: event_time
-```
-
-`virtual-start/pipelines/pl__orders/order_totals.sql`:
+Save this model as `pipelines/pl__orders/large_orders.sql`:
 
 ```sql
-MODEL (order_by [order_id]);
+MODEL (
+  engine "MergeTree()",
+  order_by ["order_id"]
+);
 
 SELECT
-  CAST(order_id AS String) AS order_id,
-  CAST(amount_cents AS UInt64) AS amount_cents,
-  CAST(_replay_partition AS Int32) AS _replay_partition,
-  CAST(_replay_offset AS Int64) AS _replay_offset,
-  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
-FROM __source("orders")
-WHERE amount_cents >= 0
+  order_id::UInt64 AS order_id,
+  total_cents::Int64 AS total_cents,
+  _replay_partition::Int32 AS _replay_partition,
+  _replay_offset::Int64 AS _replay_offset
+FROM __ref("order_report")
+WHERE total_cents >= 1000
 ```
 
-`virtual-start/pipelines/pl__orders/order_report.sql`:
+It reads `order_report` and keeps orders of 10.00 or more.
+
+Save the query consumers run as `large.sql`:
 
 ```sql
-MODEL (order_by [order_id]);
-
-SELECT
-  CAST(order_id AS String) AS order_id,
-  CAST(amount_cents AS UInt64) AS amount_cents,
-  CAST(_replay_partition AS Int32) AS _replay_partition,
-  CAST(_replay_offset AS Int64) AS _replay_offset,
-  CAST(_replay_timestamp AS DateTime64(3)) AS _replay_timestamp
-FROM __ref("order_totals")
+SELECT order_id, total_cents FROM tbl__large_orders ORDER BY order_id;
 ```
 
-Run the remaining `sqt` commands from the `virtual-start` directory. Compilation checks the
-models without connecting to ClickHouse:
+## 2. Publish both models
 
 ```bash
-cd virtual-start
-sqt compile
+sqt build
+sqt deployment promote --latest
+sqt playground query large.sql
 ```
 
-## 2. Plan
+Type `y` when `sqt build` asks. The query returns orders 1, 2 and 3.
+
+## 3. Change the upstream model
 
 ```bash
-sqt plan --select order_totals --full-refresh
+cp revisions/completed_orders.sql pipelines/pl__orders/order_report.sql
+sqt plan
+sqt build
 ```
 
-This command reads warehouse state but does not change it. The selection includes the downstream
-`order_report` model. This walkthrough uses full refresh to rebuild the selected model chain.
+`order_report` now keeps only completed orders. The plan rebuilds it and `large_orders`, which
+reads it, from the source table. The build creates both new tables beside the published ones.
 
-## 3. Build and inspect
+## 4. Inspect the new version
 
 ```bash
-sqt build --select order_totals --full-refresh
+sqt deployment list
+sqt deployment diff --latest
+sqt deployment audit --latest
+sqt playground query large.sql --compare
 ```
 
-Review the proposed work and confirm it. Build prints a deployment ID; copy that exact ID:
+`list` shows the published deployment as `active` and the new one as `staged`. `diff` lists the
+models that changed. `audit` compares the new tables with the published ones and reports `ready`,
+`caution` or `not_ready`. `--compare` runs `large.sql` against both versions: consumers still get
+orders 1, 2 and 3, and the new version returns 1 and 3.
+
+New rows reach both versions while you inspect:
 
 ```bash
-DEPLOYMENT_ID="replace-with-the-printed-id"
-sqt deployment show "$DEPLOYMENT_ID"
+sqt playground query live.sql
+sqt playground query large.sql --compare
 ```
 
-Build creates version-specific tables and materialized views, and replays retained input into
-them. **It does not publish stable consumer views.** On the first build there is no current
-published version yet. Inspect the physical relation names from `show` and query their data
-directly; replace the placeholder with the displayed table name:
+Consumers now get orders 1 to 4; the new version gets 1, 3 and 4.
+
+## 5. Promote
 
 ```bash
-curl --fail-with-body 'http://localhost:18123/' --data-binary '
-SELECT order_id, amount_cents
-FROM virtual_start.REPLACE_WITH_STAGED_REPORT_TABLE
-ORDER BY order_id
-'
+sqt deployment promote --latest
+sqt playground query large.sql
 ```
 
-`show` describes deployment state; it does not replace checking the results your consumers need.
-`diff` requires a published baseline, so use it for the later change, not this first publication.
-This walkthrough compares data directly rather than relying on a deployment audit.
+The same query now returns orders 1, 3 and 4.
 
-## 4. Promote
+## 6. Roll back
 
 ```bash
-sqt deployment promote "$DEPLOYMENT_ID"
+sqt deployment rollback --previous
+sqt playground query large.sql
 ```
 
-Promotion executes explicitly when you run this command; it does not prompt for confirmation.
-Then query the newly created stable view:
+Type `y` to confirm. The stable names point at the first version again, which kept receiving
+rows: the query returns orders 1 to 4.
+
+## 7. Clean up
 
 ```bash
-curl --fail-with-body 'http://localhost:18123/' --data-binary '
-SELECT order_id, amount_cents FROM virtual_start.tbl__order_report ORDER BY order_id
-'
+sqt playground down --volumes
 ```
 
-## Try a change beside the published version
+## What to keep in mind
 
-In `order_totals.sql`, change the filter to `WHERE amount_cents >= 100`. Repeat compile, plan
-and build, then replace `DEPLOYMENT_ID` with the **new** printed ID:
+- Promotion switches the stable names one at a time. While it runs, a query that reads two models
+  can see the new version of one and the old version of the other.
+- A new version is built from the rows the source still holds. Rows near the cutoff can reach the
+  new tables twice, so write models that tolerate a repeated row.
+- Rollback switches names back. It does not remove rows the newer version wrote.
+- `sqt deployment promote` refuses a version built on an upstream model version that is no longer
+  published. Rebuild the model and promote the new build.
 
-```bash
-sqt compile
-sqt plan --select order_totals --full-refresh
-sqt build --select order_totals --full-refresh
-DEPLOYMENT_ID="replace-with-the-new-printed-id"
-sqt deployment show "$DEPLOYMENT_ID"
-sqt deployment diff "$DEPLOYMENT_ID"
-```
-
-Compare the new physical report table with `tbl__order_report`. The new version excludes the
-small order; the stable view still reads the previous version. New inserts reach both versions:
-
-```bash
-curl --fail-with-body 'http://localhost:18123/' --data-binary "
-INSERT INTO virtual_start.orders_input VALUES
-  (0, 3, now64(3), 'order-new-small', 50),
-  (0, 4, now64(3), 'order-new-large', 500)
-"
-```
-
-Query both versions again. When satisfied, explicitly promote the new deployment using the
-same promotion command. Your stable query stays unchanged; it now reads the filtered version.
-
-## Limits to understand
-
-- Promotion replaces one stable view at a time, **not the whole graph atomically**. A multi-model
-  promotion can stop partway through. No zero-downtime guarantee is implied.
-- Replay depends on retained input and is at least once. SQL and storage must handle duplicate
-  delivery. This example uses full refresh, not a requested replay start time.
-- Rollback is explicit; it restores retained bindings, not a historical data snapshot. Retained
-  streaming versions can keep receiving new data.
-
-Read [the deployment lifecycle](/docs/concepts/deployments/) for partial promotion, advisory
-readiness assessments and cleanup, or [compare deployment modes](/docs/concepts/direct-mode/).
+See [staged deployments](/docs/concepts/deployments/) for audits, partial promotion and cleanup,
+and [direct builds](/docs/concepts/direct-mode/) for the default mode without a publish step.

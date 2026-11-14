@@ -51,8 +51,8 @@ mv__order_events      landing materialized view
 ```
 
 Managed sources support `offsets`, `timestamp`, and `landed_at`. `JSONAsString` is currently the
-only supported Kafka format. SQLTide owns these source objects and blocks incompatible source
-drift rather than silently recreating them.
+only supported Kafka format. SQLTide owns these source objects. If a change would require
+recreating them, the build stops instead.
 
 `broker_list` may be declared on the source or inherited from `[defaults].kafka_broker_list` in
 `sqltide_project.toml`. A source-level value takes precedence. One of the two is required for
@@ -102,9 +102,9 @@ FROM __source("inventory_snapshot")
 ```
 
 The source uses a ClickHouse `postgresql()` table function and refreshable materialized views.
-`port` defaults to 5432; `append` defaults to true, so choose snapshot replacement versus appended
-refreshes deliberately. It does not accept streaming replay-boundary fields. The ClickHouse server
-must be able to connect to PostgreSQL and support the generated refreshable-view syntax. Inspect
+`port` defaults to 5432. `append` defaults to true, so each refresh adds rows; set `append: false`
+to replace the table on each refresh. It does not accept streaming replay-boundary fields. The
+ClickHouse server must be able to connect to PostgreSQL and support the generated refreshable-view syntax. Inspect
 compiled DDL and verify permissions before using a connected build.
 
 ## Adopted stream table

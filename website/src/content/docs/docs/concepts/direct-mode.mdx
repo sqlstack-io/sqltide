@@ -31,7 +31,7 @@ sqt plan --select pipeline:order_events
 sqt plan --select orders --start-time 2026-07-01T00:00:00Z
 ```
 
-Direct plans are intentionally conservative:
+A direct plan follows these rules:
 
 - no selector rebuilds every model
 - a selector includes the selected model or pipeline and all downstream models
@@ -72,8 +72,8 @@ after those rebuilt resources are already live. A later failure does not restore
 
 With `--start-time`, the lifecycle stays destructive and unseeded: SQLTide drops and recreates
 the same selected closure, then replays only the lower-and-upper-bounded source window. Managed and
-adopted source definitions and rows are not replaced, truncated, or deleted. Derived rows before
-the effective lower frontier are intentionally absent after success.
+adopted source definitions and rows are not replaced, truncated, or deleted. After the build, the
+model tables have no rows from before the start time.
 
 `--start-time` is interpreted as UTC and remains an explicit UTC instant through planning and
 execution. A non-UTC ClickHouse server does not shift the boundary, including across daylight-saving

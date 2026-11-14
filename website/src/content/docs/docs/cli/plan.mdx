@@ -3,9 +3,9 @@ title: "sqt plan"
 description: "Preview direct rebuilds or virtual-environment deployments without mutating ClickHouse."
 ---
 
-Compare the compiled project with ClickHouse and print a read-only warehouse plan. A successful
-command assembles the complete workflow that a build would execute against the same observed state,
-then atomically publishes its JSON and SQL visibility artifacts without mutating ClickHouse.
+Compare the compiled project with ClickHouse and print what a build would change. `sqt plan`
+changes nothing in ClickHouse; it writes the plan and the SQL a build would run to
+`target/run/plan/`.
 
 ```bash
 sqt plan
@@ -101,10 +101,9 @@ The bytes printed by `sqt plan --json` are exactly the bytes stored in `plan.jso
 the same JSON through the same serializer. In either layout, the combined workflow joins the
 numbered statements in execution order.
 
-Plan and build use the same connected preparation and ordering rules. They remain independent
-invocations: `sqt build` inspects current warehouse state again and never reads, compares, promotes,
-or executes `target/run/plan/`. Warehouse changes between commands can therefore produce a different
-build workflow; build preflight assertions protect the state observed during its own preparation.
+Plan and build use the same rules, but `sqt build` plans again from scratch and never reads
+`target/run/plan/`. If the warehouse changes between the two commands, the build can differ from
+the plan; `sqt build` shows its own plan before you confirm.
 
 All `target/run/` files are disposable visibility output, not local state. Failed compilation,
 connected inspection, workflow assembly, or publication leaves any previous complete plan artifact
