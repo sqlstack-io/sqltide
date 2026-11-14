@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.70.0](https://github.com/sqlstack-io/sqltide/compare/v0.69.1...v0.70.0) (2026-11-14)
+
+
+### Features
+
+* roll back from sqt dev, and run every UI demo action on its engine ([#413](https://github.com/sqlstack-io/sqltide/issues/413)) ([c9d62c6](https://github.com/sqlstack-io/sqltide/commit/c9d62c6904a192d3a3e01b4c0032efce645ac838))
+* **website:** run the UI demo on a real ClickHouse engine in the browser ([#411](https://github.com/sqlstack-io/sqltide/issues/411)) ([978cbbb](https://github.com/sqlstack-io/sqltide/commit/978cbbb7b3924c3653543d61770318b7b11f4ed6))
+
 ## [0.69.1](https://github.com/sqlstack-io/sqltide/compare/v0.69.0...v0.69.1) (2026-11-14)
 
 
