@@ -20,6 +20,11 @@ npx playwright install chromium
 npm test
 ```
 
+`npm run build` also builds the package's UI from `../ui` as the read-only UI demo at `/demo/`. It
+answers every API request from `ui/src/lib/demo/recordings.json`; refresh that file each release
+with `node ui/scripts/record-demo.mjs`, which runs the playground with Docker and the installed
+`sqt`. `tests/ui-demo.test.mjs` opens every recorded page and fails on any unrecorded request.
+
 `SQT` can select the installed baseline CLI. `CHROME_PATH` can select an existing Chromium binary.
 The example check creates the playground without starting it, compiles it before and after the
 quickstart's change, adds the files the staged-workflow page saves, and compiles the two-model

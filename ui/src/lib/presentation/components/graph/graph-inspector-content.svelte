@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import SqlBlock from '$lib/presentation/components/sql-block.svelte';
 	import type { SqlArtifact } from '$lib/presentation/components/sql-block.svelte';
 	import AnchorBadge from '$lib/presentation/components/anchor-badge.svelte';
@@ -44,7 +45,7 @@
 			{/if}
 			<SqlBlock {artifacts} maxHeight="300px" />
 			<div>
-				<FactRow label="Pipeline" value={model.pipeline} href="/pipelines/{model.pipeline}" />
+				<FactRow label="Pipeline" value={model.pipeline} href="{base}/pipelines/{model.pipeline}" />
 				<FactRow label="Relation" value={model.relationName} mono />
 				{#if model.mvRelationName}
 					<FactRow label="Writing MV" value={model.mvRelationName} mono />
@@ -139,7 +140,7 @@
 					tone={source.retentionDays === null ? 'success' : 'default'}
 				/>
 			</div>
-			<a href="/sources/{source.name}" class="text-primary font-mono text-[11px] hover:underline"
+			<a href="{base}/sources/{source.name}" class="text-primary font-mono text-[11px] hover:underline"
 				>Open source detail →</a
 			>
 		{/if}
@@ -203,7 +204,7 @@
 					</div>
 					{#each model.refs as ref (ref.name + ref.type)}
 						<div class="flex items-center gap-3 border-b border-[var(--border-subtle)] py-1.5">
-							<a class="text-primary font-mono text-[11.5px] hover:underline" href={ref.isSource ? `/sources/${ref.name}` : `/catalog/${ref.name}`}>{ref.name}</a>
+							<a class="text-primary font-mono text-[11.5px] hover:underline" href={ref.isSource ? `${base}/sources/${ref.name}` : `${base}/catalog/${ref.name}`}>{ref.name}</a>
 							<span
 								class="ml-auto font-mono text-[10.5px]"
 								style:color={ref.type === 'mutable_reference' ? 'var(--sb-warning)' : 'var(--sb-text-faint)'}
@@ -268,6 +269,6 @@
 				{/each}
 			</div>
 		{/if}
-		<a href="/quality" class="text-primary font-mono text-[11px] hover:underline">Open Quality →</a>
+		<a href="{base}/quality" class="text-primary font-mono text-[11px] hover:underline">Open Quality →</a>
 	{/if}
 </div>

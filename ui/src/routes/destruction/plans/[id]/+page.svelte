@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -37,12 +38,12 @@
 
 	async function execute(): Promise<void> {
 		const result: DestructionExecution | null = await destruction.execute();
-		if (result !== null) await goto(`/runs/${encodeURIComponent(result.invocationId)}?live=1`);
+		if (result !== null) await goto(`${base}/runs/${encodeURIComponent(result.invocationId)}?live=1`);
 	}
 </script>
 
 <AppTopbar {title} breadcrumb={plan === null ? 'Frozen warehouse impact' : `${plan.target} / ${plan.database}`}>
-	<Button variant="outline" size="sm" class="font-mono text-[10.5px]" onclick={() => void goto('/pipelines')}>
+	<Button variant="outline" size="sm" class="font-mono text-[10.5px]" onclick={() => void goto(`${base}/pipelines`)}>
 		<ArrowLeftIcon size={12} /> Pipelines
 	</Button>
 </AppTopbar>
@@ -287,7 +288,7 @@
 				<h2 class="mt-3 font-display text-[14px] font-semibold">This destruction plan is unavailable</h2>
 				<p class="text-muted-foreground mt-2 text-[11.5px]">{loadError}</p>
 				<p class="text-muted-foreground mt-2 text-[11px]">It may have expired, already been consumed, or belong to another actor. A replacement plan must be created explicitly.</p>
-				<Button variant="outline" size="sm" class="mt-4 font-mono text-[11px]" onclick={() => void goto('/pipelines')}>
+				<Button variant="outline" size="sm" class="mt-4 font-mono text-[11px]" onclick={() => void goto(`${base}/pipelines`)}>
 					Return to pipelines
 				</Button>
 			</div>

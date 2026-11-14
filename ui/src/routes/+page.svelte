@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import GitCompareIcon from '@lucide/svelte/icons/git-compare';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import Sparkline from '$lib/presentation/components/sparkline.svelte';
@@ -104,11 +105,11 @@
 						</span>
 					{/if}
 					<a
-						href="/lineage?status=drift"
+						href="{base}/lineage?status=drift"
 						class="text-primary shrink-0 font-mono text-[11px] hover:underline">Review all</a
 					>
 					<a
-						href="/plan?changed=1&include_missing_upstream=1"
+						href="{base}/plan?changed=1&include_missing_upstream=1"
 						class="text-primary ml-auto shrink-0 font-mono text-[11px] hover:underline"
 						>Plan changed + prerequisites</a
 					>
@@ -184,7 +185,7 @@
 					>
 						<div class="w-[168px] shrink-0">
 							<a
-								href="/sources/{source.name}"
+								href="{base}/sources/{source.name}"
 								class="text-primary code block w-full truncate text-[12px] font-medium hover:underline"
 								title={source.name}
 								>{source.name}</a
@@ -305,7 +306,7 @@
 						<div class="text-muted-foreground mt-2 text-[11.5px]">
 							Live Kafka transport health remains measured in Ingest above.
 						</div>
-						<a href="/sources" class="text-primary mt-2 inline-block font-mono text-[11px] hover:underline">Review sources →</a>
+						<a href="{base}/sources" class="text-primary mt-2 inline-block font-mono text-[11px] hover:underline">Review sources →</a>
 					{:else}
 					<div class="flex h-3.5 gap-[3px] overflow-hidden rounded-[2px]">
 						{#each Array(freshness.fresh) as _, index (`f${index}`)}
@@ -345,7 +346,7 @@
 							{#each freshness.offenders as model (model.name)}
 								<div class="flex items-center gap-3 border-b border-[var(--border-subtle)] py-1.5 last:border-b-0">
 									<a
-										href="/catalog/{model.name}"
+										href="{base}/catalog/{model.name}"
 										class="text-primary code w-[190px] shrink-0 truncate text-[11.5px] hover:underline"
 										>{model.name}</a
 									>
@@ -433,7 +434,7 @@
 							</div>
 						</div>
 					{/if}
-					<a href="/quality" class="text-primary mt-2.5 inline-block font-mono text-[11px] hover:underline"
+					<a href="{base}/quality" class="text-primary mt-2.5 inline-block font-mono text-[11px] hover:underline"
 						>Open Quality →</a
 					>
 				</div>

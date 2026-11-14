@@ -276,3 +276,13 @@ ui_kit = "src/ui-kit"
 shadcn = "components.json"
 rule_packs = []
 select = ["FW"]
+
+[[targets.web.rule_exceptions]]
+rule = "FWS105"
+path = "src/routes/plan/+page.svelte"
+reason = "The UI can be served under a base path (the website's UI demo uses /demo), so this page imports SvelteKit's base for its link to the run it starts. That one binding takes the page over the budget; splitting the page for it would scatter its single plan-and-run responsibility."
+
+[[targets.web.rule_exceptions]]
+rule = "FWS105"
+path = "src/routes/quality/+page.svelte"
+reason = "The UI can be served under a base path (the website's UI demo uses /demo), so this page imports SvelteKit's base for its catalog links. That one binding takes the page over the budget; splitting the page for it would scatter its single quality-overview responsibility."

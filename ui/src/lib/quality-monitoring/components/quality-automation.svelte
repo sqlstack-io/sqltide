@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { fetchRuns } from '$lib/api/main/runs/fetch-runs';
 	import type { RunRecord } from '$lib/api/types';
 	import { formatAgo } from '$lib/formatting/main/format-ago';
@@ -76,7 +77,7 @@
 						{#each cycles as cycle (cycle.invocationId)}
 							<tr>
 								<td class="px-3 py-2.5">
-									<a href="/runs/{cycle.invocationId}" class="code text-primary text-[12px] hover:underline">
+									<a href="{base}/runs/{cycle.invocationId}" class="code text-primary text-[12px] hover:underline">
 										{cycle.invocationId.slice(0, 8)}
 									</a>
 									<div class="pt-1 font-mono text-[10px] text-[var(--sb-text-faint)]">{cycle.selectedNodeCount} audits</div>

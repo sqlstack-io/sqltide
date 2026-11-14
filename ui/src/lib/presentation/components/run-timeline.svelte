@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { fetchRunStatement } from '$lib/api/main/build/fetch-run-statement';
 	import type { RunEvent, RunStatement } from '$lib/api/types';
@@ -199,7 +200,7 @@
 							<div class="flex flex-wrap items-center gap-1.5 font-mono text-[10.5px]">
 								<span class="text-[var(--sb-text-faint)]">models</span>
 								{#each audit.referencedModels as model (model)}
-									<a href="/catalog/{model}" class="text-primary hover:underline">{model}</a>
+									<a href="{base}/catalog/{model}" class="text-primary hover:underline">{model}</a>
 								{/each}
 							</div>
 						{/if}

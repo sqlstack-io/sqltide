@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import StatusPill from '$lib/presentation/components/status-pill.svelte';
@@ -141,13 +142,13 @@
 				<tr>
 					<td class="px-[18px]">
 						<a
-							href="/catalog/{model.name}"
+							href="{base}/catalog/{model.name}"
 							class="text-primary code text-[12.5px] font-medium hover:underline">{model.name}</a
 						>
 					</td>
 					<td class="px-3">
 						<a
-							href="/pipelines/{model.pipeline}"
+							href="{base}/pipelines/{model.pipeline}"
 							class="text-muted-foreground hover:text-foreground text-[12px] hover:underline"
 							>{model.pipeline}</a
 						>
@@ -157,7 +158,7 @@
 						{#if backingByRelation.get(model.relationName)}
 							{@const backing = backingByRelation.get(model.relationName)}
 							<a
-								href="/deployments/{backing?.deploymentId}"
+								href="{base}/deployments/{backing?.deploymentId}"
 								class="text-primary hover:underline">{shortDeployment(backing?.deploymentId ?? '')}</a
 							>
 							{#if (backing?.retained ?? 0) > 1}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import XIcon from '@lucide/svelte/icons/x';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import GraphInspectorContent from '$lib/presentation/components/graph/graph-inspector-content.svelte';
@@ -31,7 +32,7 @@
 	let tab = $state<Tab>('overview');
 
 	const detailHref = $derived(
-		source ? `/sources/${node.logicalName}` : `/catalog/${node.logicalName}`
+		source ? `${base}/sources/${node.logicalName}` : `${base}/catalog/${node.logicalName}`
 	);
 </script>
 

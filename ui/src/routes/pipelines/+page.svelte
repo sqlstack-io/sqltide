@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import Button from '$ui-kit/button/button.svelte';
@@ -13,7 +14,7 @@
 	import { auditsForModel } from '$lib/domain/main/quality/audits-for-model';
 	import { formatRate } from '$lib/formatting/main/format-rate';
 	import { filterPipelineRows } from '$lib/pipeline-view/main/filter-pipeline-rows';
-	import type { Audit, Project } from '$lib/domain/types';
+	import type { Project } from '$lib/domain/types';
 	import DestructionDialog from './destruction-dialog.svelte';
 	import DestructiveActionsDrawer from './destructive-actions-drawer.svelte';
 	import { createDestructionState } from './state.svelte';
@@ -38,7 +39,7 @@
 	const rows = $derived(
 		project.pipelines.map((pipeline) => {
 			const models: ReturnType<typeof modelsInPipeline> = modelsInPipeline(project, pipeline.name);
-			const audits: Audit[] = models.flatMap((model) => auditsForModel(project, model.name));
+			const audits: ReturnType<typeof auditsForModel> = models.flatMap((model) => auditsForModel(project, model.name));
 			return {
 				pipeline,
 				models,
@@ -139,7 +140,7 @@
 		for (const name of [...selectedBuildableNames].sort()) {
 			parameters.append('select', `pipeline:${name}`);
 		}
-		void goto(`/plan?${parameters.toString()}`);
+		void goto(`${base}/plan?${parameters.toString()}`);
 	}
 
 	function openDestroyPlan(): void {
@@ -276,7 +277,7 @@
 					</td>
 					<td class="px-3">
 						<a
-							href="/pipelines/{row.pipeline.name}"
+							href="{base}/pipelines/{row.pipeline.name}"
 							class="text-primary code text-[12.5px] font-medium hover:underline"
 							>{row.pipeline.name}</a
 						>
@@ -295,7 +296,7 @@
 					<td class="px-3">
 						{#if row.source}
 							<a
-								href="/sources/{row.source.name}"
+								href="{base}/sources/{row.source.name}"
 								class="text-muted-foreground hover:text-foreground code text-[11.5px] hover:underline"
 								>{row.source.name}</a
 							>

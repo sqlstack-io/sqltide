@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import { goto } from '$app/navigation';
 import {
 	createDestructionPlan
@@ -57,7 +58,7 @@ export function createDestructionState(): DestructionController {
 			if (created.blocked) {
 				return;
 			}
-			await goto(`/destruction/plans/${encodeURIComponent(created.planId)}`);
+			await goto(`${base}/destruction/plans/${encodeURIComponent(created.planId)}`);
 			open = false;
 			resetPlan();
 		} catch (caught) {

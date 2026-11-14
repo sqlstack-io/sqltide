@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -16,16 +17,16 @@
 	import { buildRunPresentation } from '$lib/run-presentation/main/build-run-presentation';
 	import { labelRunStepId } from '$lib/run-presentation/main/label-run-step-id';
 	import { createRunDetail } from '$lib/run-presentation/main/create-run-detail';
-	import type { RunDetailController, RunPresentation } from '$lib/run-presentation/types';
+	import type { RunPresentation } from '$lib/run-presentation/types';
 	import DestructionRecoveryAction from './destruction-recovery-action.svelte';
 
 	const project: Project = getProject();
 	const cancelAllowed = $derived(canAnyPipeline('build.cancel'));
 	const killAllowed = $derived(can('build.kill'));
 	const invocationId = $derived(page.params.id ?? '');
-	const detail: RunDetailController = createRunDetail(
+	const detail: ReturnType<typeof createRunDetail> = createRunDetail(
 		async (nextInvocationId: string): Promise<void> => {
-			await goto(`/runs/${nextInvocationId}?live=1`, { replaceState: true, noScroll: true });
+			await goto(`${base}/runs/${nextInvocationId}?live=1`, { replaceState: true, noScroll: true });
 		}
 	);
 	$effect(() => {
@@ -93,7 +94,7 @@
 	});
 
 	async function openDestructionPlan(planId: string): Promise<void> {
-		await goto(`/destruction/plans/${encodeURIComponent(planId)}`);
+		await goto(`${base}/destruction/plans/${encodeURIComponent(planId)}`);
 	}
 </script>
 
@@ -107,7 +108,7 @@
 				<p class="text-muted-foreground pt-2 font-mono text-[11.5px]">
 					No durable run or active local process matches <code class="code">{invocationId}</code>.
 				</p>
-				<a href="/runs" class="text-primary mt-3 inline-block font-mono text-[11px] hover:underline">
+				<a href="{base}/runs" class="text-primary mt-3 inline-block font-mono text-[11px] hover:underline">
 					Back to runs
 				</a>
 			</div>
@@ -127,7 +128,7 @@
 	{:else}
 	<!-- header -->
 	<div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-[18px] py-3">
-		<a href="/runs" class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-mono text-[11px]">
+		<a href="{base}/runs" class="text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-mono text-[11px]">
 			<ArrowLeftIcon size={12} /> runs
 		</a>
 		<span

@@ -1,5 +1,9 @@
 import adapter from '@sveltejs/adapter-static';
 
+// The UI demo on the website is served under a path, such as /demo; the package serves the UI at
+// the root.
+const base = process.env.SQLTIDE_UI_BASE ?? '';
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	compilerOptions: {
@@ -10,6 +14,7 @@ const config = {
 		alias: {
 			'$ui-kit': './src/ui-kit'
 		},
+		paths: { base },
 		version: {
 			pollInterval: 60_000
 		},

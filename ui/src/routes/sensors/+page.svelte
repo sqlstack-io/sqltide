@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import RadioIcon from '@lucide/svelte/icons/radio';
 	import TimerIcon from '@lucide/svelte/icons/timer';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
@@ -126,7 +127,7 @@
 								</button>
 								<a
 									class="hover:text-primary text-foreground text-[13px] font-medium"
-									href={`/sensors/${sensor.name}`}
+									href={`${base}/sensors/${sensor.name}`}
 								>
 									{sensor.name}
 								</a>

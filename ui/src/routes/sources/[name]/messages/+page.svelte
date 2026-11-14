@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
@@ -41,20 +42,20 @@
 	{#if !source}
 		<div class="px-[18px] py-10 text-center">
 			<p class="text-muted-foreground text-[13px]">No source named <code>{sourceName}</code>.</p>
-			<a href="/sources" class="text-primary mt-2 inline-block font-mono text-[11.5px]">← Back to sources</a>
+			<a href="{base}/sources" class="text-primary mt-2 inline-block font-mono text-[11.5px]">← Back to sources</a>
 		</div>
 	{:else if !messagesAllowed}
 		<div class="px-[18px] py-10 text-center">
 			<p class="text-muted-foreground text-[13px]">
 				Browsing raw source messages requires the <code>source.messages.read</code> permission.
 			</p>
-			<a href="/sources/{sourceName}" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
+			<a href="{base}/sources/{sourceName}" class="text-primary mt-2 inline-block font-mono text-[11.5px]"
 				>← Back to {sourceName}</a
 			>
 		</div>
 	{:else}
 		<div class="flex items-center gap-2.5 border-b border-border px-[18px] py-2.5">
-			<a href="/sources/{sourceName}" class="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"><ArrowLeftIcon size={12} /> {sourceName}</a>
+			<a href="{base}/sources/{sourceName}" class="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"><ArrowLeftIcon size={12} /> {sourceName}</a>
 			{#if source.topic}<span class="sb-tag code">{source.topic}</span>{/if}
 			{#if source.live.kafkaLagMessages !== null && source.live.kafkaLagMessages > 0}
 				<span class="font-mono text-[10.5px]" style:color="var(--sb-warning)">{formatCompact(source.live.kafkaLagMessages)} messages not yet landed</span>

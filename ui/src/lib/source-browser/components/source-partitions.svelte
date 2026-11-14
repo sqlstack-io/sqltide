@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import type { PartitionState, Source } from '$lib/domain/types';
 	import { formatCompact } from '$lib/formatting/main/format-compact';
 	import { formatInteger } from '$lib/formatting/main/format-integer';
@@ -78,7 +79,7 @@
 			timeColumn: 'landed',
 			previewPaths: []
 		};
-		return `/sources/${sourceName}/messages?q=${encodeURIComponent(JSON.stringify(document))}`;
+		return `${base}/sources/${sourceName}/messages?q=${encodeURIComponent(JSON.stringify(document))}`;
 	}
 </script>
 

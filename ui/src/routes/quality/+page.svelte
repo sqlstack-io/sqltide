@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
@@ -328,7 +329,7 @@
 							</span>
 							<span class="hidden w-[170px] shrink-0 truncate font-mono text-[11px] xl:block">
 								{#each audit.referencedModels as model, index (model)}
-									<a href="/catalog/{model}" class="text-primary hover:underline"
+									<a href="{base}/catalog/{model}" class="text-primary hover:underline"
 										>{model}</a
 									>{#if index < audit.referencedModels.length - 1}, {/if}
 								{/each}
@@ -481,7 +482,7 @@
 							<span class="min-w-0 flex-1 truncate text-[12px]">{test.name}</span>
 							<span class="w-[200px] shrink-0 truncate font-mono text-[11px]">
 								{#each test.targets as target, index (target)}
-									<a href="/catalog/{target}" class="text-primary hover:underline"
+									<a href="{base}/catalog/{target}" class="text-primary hover:underline"
 										>{target}</a
 									>{#if index < test.targets.length - 1}, {/if}
 								{/each}

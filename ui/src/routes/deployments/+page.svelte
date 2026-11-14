@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import AppTopbar from '$lib/presentation/components/app-topbar.svelte';
 	import Button from '$ui-kit/button/button.svelte';
@@ -122,7 +123,7 @@
 				{#if deployments.length === 0 || deployments.length === problems.length}
 					<div class="pt-1 leading-relaxed">
 						Virtual builds create deployments here. Direct builds do not create deployments; find
-						them in <a href="/runs" class="text-primary hover:underline">Runs</a>.
+						them in <a href="{base}/runs" class="text-primary hover:underline">Runs</a>.
 					</div>
 				{/if}
 				{#if problems.length > 0 && !showInvalid}
@@ -177,7 +178,7 @@
 							<tr>
 								<td class="py-2 pr-3">
 									<a
-										href="/deployments/{deployment.deploymentId}"
+										href="{base}/deployments/{deployment.deploymentId}"
 										class="text-primary code text-[12.5px] font-medium hover:underline"
 										>{deployment.deploymentId}</a
 									>
@@ -209,7 +210,7 @@
 								<td class="px-3 pr-0 text-right whitespace-nowrap">
 									{#if deployment.state === 'staged'}
 										<a
-											href="/deployments/{deployment.deploymentId}"
+											href="{base}/deployments/{deployment.deploymentId}"
 											class="sb-tag code hover:text-foreground"
 											style:color="var(--sb-warning)">review · {shortId(deployment.deploymentId)}</a
 										>
@@ -242,7 +243,7 @@
 						<tr>
 							<td class="code py-2 pr-3 text-[12.5px]">
 								<a
-									href="/deployments/{deployment.deploymentId}"
+									href="{base}/deployments/{deployment.deploymentId}"
 									class="text-primary hover:underline">{deployment.deploymentId}</a
 								>
 							</td>
