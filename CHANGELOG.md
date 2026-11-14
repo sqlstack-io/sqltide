@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.69.1](https://github.com/sqlstack-io/sqltide/compare/v0.69.0...v0.69.1) (2026-11-14)
+
+
+### Documentation
+
+* **website:** lead with the demo and plain-language guides ([#408](https://github.com/sqlstack-io/sqltide/issues/408)) ([7434af1](https://github.com/sqlstack-io/sqltide/commit/7434af12d5079072f4697345b285d39e70b54847))
+* **website:** plainer hero and illustration wording ([#410](https://github.com/sqlstack-io/sqltide/issues/410)) ([74181d6](https://github.com/sqlstack-io/sqltide/commit/74181d6b57456d7b098cc4c05b863f81edf46792))
+
 ## [0.69.0](https://github.com/sqlstack-io/sqltide/compare/v0.68.3...v0.69.0) (2026-11-14)
 
 
