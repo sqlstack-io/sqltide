@@ -9,16 +9,12 @@
 	import AppVersionNotice from '$lib/presentation/components/app-version-notice.svelte';
 	import CompileErrorScreen from '$lib/presentation/components/compile-error-screen.svelte';
 	import DemoBanner from '$lib/demo/components/demo-banner.svelte';
-	import EnginePanel from '$lib/demo/components/engine-panel.svelte';
-	import { getDemo } from '$lib/demo/main/get-demo';
-	import type { DemoState } from '$lib/demo/types';
 	import { getApp } from '$lib/api/main/project/get-app';
 	import { initializeBootstrap } from '$lib/api/main/project/initialize-bootstrap';
 
 	let { children } = $props();
 	const app = getApp();
 	const auth = getAuth();
-	const demo: DemoState = getDemo().demo;
 
 	$effect(() => {
 		if (auth.phase === 'unauthenticated' && page.route.id !== '/login') {
@@ -64,16 +60,9 @@
 			<div class="flex min-w-0 flex-1 flex-col">
 				{@render children()}
 			</div>
-			{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && demo.mode.kind === 'real' && demo.mode.live !== null}
-				<EnginePanel live={demo.mode.live} onrestarted={() => goto(`${base}/`, { invalidateAll: true })} />
-			{/if}
 		</div>
 	</div>
 {:else if app.phase === 'loading'}
-	<!-- The demo's pages wait for its engine, so its progress shows while they load. -->
-	{#if import.meta.env.VITE_SQLTIDE_DEMO === '1'}
-		<DemoBanner />
-	{/if}
 	<div class="text-muted-foreground grid h-screen place-items-center font-mono text-[13px]">
 		loading project…
 	</div>

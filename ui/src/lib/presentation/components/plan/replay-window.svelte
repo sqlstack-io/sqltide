@@ -245,9 +245,8 @@
 			<!-- The UI demo's orders table, like the basic playground's, records no landing times. -->
 			<p class="text-muted-foreground text-[12px]" data-testid="demo-no-replay-window">
 				This playground's orders table doesn't record when each order landed, so there is no retained
-				window to pick a start time from. Paste a command with <code class="code">--start-time</code> in
-				Preview a command to replay from a time here, or run
-				<code class="code">sqt playground --template streaming</code> to try it with ClickHouse on your machine.
+				window to pick a start time from. Run <code class="code">sqt playground --template streaming</code> to
+				replay from a time with ClickHouse on your machine.
 			</p>
 		{:else if !hasRetentionWindow}
 			<p class="text-muted-foreground text-[12px]">
