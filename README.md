@@ -42,8 +42,9 @@ Redpanda. Each project's `README.md` walks through every command; see the
 [playground reference](https://sqltide.io/docs/cli/playground/).
 
 To look around the development UI before installing anything, open the
-[UI demo](https://sqltide.io/demo/): the same UI in your browser on recorded example data,
-read-only.
+[UI demo](https://sqltide.io/demo/): the same UI in your browser. In desktop Chrome, Edge and
+Firefox it runs a real ClickHouse engine in the page, so you can promote a staged change and watch
+the query switch.
 
 ![SQLTide lineage view showing an orders pipeline](https://raw.githubusercontent.com/sqlstack-io/sqltide/main/.github/sqltide-ui.png)
 

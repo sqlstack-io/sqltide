@@ -15,8 +15,10 @@ ClickHouse target, and combines authored definitions with live warehouse evidenc
 the project and target, connection state, and the time of the current warehouse snapshot. SQLTide
 refreshes live state periodically, and the refresh button requests a new snapshot immediately.
 
-To look around before installing, open the [UI demo](/demo/): this UI in your browser on recorded
-example data. It is read-only, so actions such as promote and build are refused.
+To look around before installing, open the [UI demo](/demo/): this UI in your browser on the
+playground's orders example. In desktop Chrome, Edge and Firefox it runs a real ClickHouse engine in
+the page: new orders arrive, and promoting the staged change switches the query. The plan, diff and
+run history are recorded. Other browsers and phones get a read-only recording.
 
 ## Find the right view
 

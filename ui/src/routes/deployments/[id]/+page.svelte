@@ -209,7 +209,7 @@
 		<div class="flex flex-col gap-4 lg:flex-row">
 			<div class="min-w-0 flex-1 overflow-hidden rounded-[4px] border border-border">
 				<div class="flex items-center gap-3 border-b border-border px-3 py-1.5">
-					<div class="flex overflow-hidden rounded-[3px] border border-border">
+					<div class="flex shrink-0 overflow-hidden rounded-[3px] border border-border">
 						<button
 							aria-pressed={tab === 'graph'}
 							class="px-2.5 py-1 font-mono text-[10.5px] {tab === 'graph'
