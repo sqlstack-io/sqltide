@@ -798,6 +798,7 @@ impl<'py> Compiler<'py> {
                 &mode,
                 &replay_anchor,
                 has_aggregate_semantics,
+                pipeline.getattr("mode")?.eq("virtual")?,
             );
         let contract: transforms::TransformContract = match contract {
             Ok(contract) => contract,

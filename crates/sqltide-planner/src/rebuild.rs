@@ -160,6 +160,37 @@ pub fn rebuild_subtrees(
         };
         let upstream_boundary: usize =
             graph.nearest_replay_anchor(change.key, false, &graph.key(change.key).name)?;
+        // A replay rewrites only its root's own query, so when the replay starts further up than
+        // the table the root reads, the tables between them are rebuilt too: the root moves up
+        // to the table just below the start, and runs a full replay.
+        let mut root: usize = change.key;
+        if graph.key(root).object_type == ObjectType::Table {
+            let mut visited: HashSet<usize> = HashSet::from([root]);
+            while let Some(parent) = graph.driving_parent(root)
+                && parent != upstream_boundary
+                && visited.insert(parent)
+            {
+                root = parent;
+            }
+        }
+        // A lifted root that changed itself keeps its own candidate, with its own policy.
+        if root != change.key && changed.contains(&root) {
+            continue;
+        }
+        let mut affected: Vec<usize> = affected;
+        if root != change.key {
+            change = ObjectChange {
+                key: root,
+                change_type: ChangeType::Rebuild,
+                schema_change_kind: None,
+                seed_compatibility: None,
+                ..change
+            };
+            policy = None;
+            if !acyclic {
+                affected = graph.descendants(root)?;
+            }
+        }
         candidates.push(Candidate {
             change,
             policy,
@@ -364,6 +395,48 @@ mod tests {
         );
         // orders is itself an anchor, but the root may not be its own boundary.
         assert_eq!(subtrees[0].upstream_boundary, 0);
+    }
+
+    #[test]
+    fn a_root_reading_a_non_anchor_table_rebuilds_from_below_the_replay_start() {
+        // source(0) <- report(1), not an anchor <- large(2) <- top(3); only large changed.
+        let key = |name: &str| KeyInfo {
+            object_type: ObjectType::Table,
+            name: name.to_owned(),
+        };
+        let table = |key: usize, deps: Vec<usize>| DesiredObject {
+            key,
+            deps,
+            kind: ObjectKind::Table(None),
+        };
+        let graph: DesiredGraph = DesiredGraph::new(
+            vec![key("source"), key("report"), key("large"), key("top")],
+            vec![
+                table(0, vec![]),
+                table(1, vec![0]),
+                table(2, vec![1]),
+                table(3, vec![2]),
+            ],
+            &[0, 2, 3],
+        );
+        let mut seedable: ObjectChange = change(2, ChangeType::Rebuild);
+        seedable.schema_change_kind = Some(SchemaChangeKind::NonBreaking);
+        seedable.seed_compatibility = Some(SeedCompatibility::Seedable);
+        let subtree: RebuildSubtree = rebuild_subtrees(&graph, &[seedable]).unwrap().remove(0);
+        assert_eq!(
+            (
+                subtree.root,
+                subtree.affected,
+                subtree.upstream_boundary,
+                subtree.execution_mode
+            ),
+            (1, vec![1, 2, 3], 0, ExecutionMode::Full)
+        );
+        // A root that reads an anchor keeps its own policy.
+        let subtree: RebuildSubtree = rebuild_subtrees(&graph, &[change(3, ChangeType::Rebuild)])
+            .unwrap()
+            .remove(0);
+        assert_eq!((subtree.root, subtree.upstream_boundary), (3, 2));
     }
 
     #[test]

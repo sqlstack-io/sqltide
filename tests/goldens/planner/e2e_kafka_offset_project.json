@@ -616,8 +616,8 @@
             "seed_compatibility": null
           },
           {
-            "change_type": "rebuild",
-            "force_full_refresh": true,
+            "change_type": "no_op",
+            "force_full_refresh": false,
             "forced_start_time": null,
             "key": {
               "database": null,
@@ -628,62 +628,8 @@
             "seed_compatibility": null
           }
         ],
-        "prepared_shadow_objects": [
-          {
-            "logical_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "logical_model_name": "orders_enriched",
-            "physical_name": "tbl__orders_enriched__golden"
-          },
-          {
-            "logical_key": {
-              "database": null,
-              "name": "mv__orders_enriched",
-              "object_type": "materialized_view"
-            },
-            "logical_model_name": "orders_enriched",
-            "physical_name": "mv__orders_enriched__golden"
-          }
-        ],
-        "rebuild_subtrees": [
-          {
-            "affected_keys": [
-              {
-                "database": null,
-                "name": "tbl__orders_enriched",
-                "object_type": "table"
-              },
-              {
-                "database": null,
-                "name": "mv__orders_enriched",
-                "object_type": "materialized_view"
-              }
-            ],
-            "configured_backfill_mode": "full",
-            "execution_lookback_seconds": null,
-            "execution_mode": "full_rebuild",
-            "forced_full_refresh": true,
-            "forced_start_time": null,
-            "history_preserving_bounded_supported": true,
-            "replay_required": true,
-            "requested_start_time": null,
-            "resolved_bounded_replay_fallback": null,
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "strategy": "shadow_rebuild",
-            "upstream_boundary_key": {
-              "database": null,
-              "name": "raw__order_events",
-              "object_type": "table"
-            }
-          }
-        ],
+        "prepared_shadow_objects": [],
+        "rebuild_subtrees": [],
         "sql_diffs": [
           {
             "diff_lines": [],
@@ -694,88 +640,9 @@
             },
             "name": "raw__order_events",
             "object_type": "table"
-          },
-          {
-            "diff_lines": [],
-            "key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "name": "tbl__orders_enriched",
-            "object_type": "table"
           }
         ],
-        "steps": [
-          {
-            "action": "plan_shadow_table",
-            "phase": "plan",
-            "physical_name": "tbl__orders_enriched__golden",
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "step_id": "plan-1-table-tbl__orders_enriched",
-            "target_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            }
-          },
-          {
-            "action": "plan_shadow_materialized_view",
-            "phase": "plan",
-            "physical_name": "mv__orders_enriched__golden",
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "step_id": "plan-1-materialized_view-mv__orders_enriched",
-            "target_key": {
-              "database": null,
-              "name": "mv__orders_enriched",
-              "object_type": "materialized_view"
-            }
-          },
-          {
-            "action": "backfill_subtree",
-            "phase": "backfill",
-            "physical_name": "tbl__orders_enriched__golden",
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "step_id": "backfill-1-tbl__orders_enriched",
-            "target_key": null
-          },
-          {
-            "action": "audit_subtree",
-            "phase": "audit",
-            "physical_name": "tbl__orders_enriched__golden",
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "step_id": "audit-1-tbl__orders_enriched",
-            "target_key": null
-          },
-          {
-            "action": "publish_subtree",
-            "phase": "publish",
-            "physical_name": "tbl__orders_enriched__golden",
-            "root_key": {
-              "database": null,
-              "name": "tbl__orders_enriched",
-              "object_type": "table"
-            },
-            "step_id": "publish-1-tbl__orders_enriched",
-            "target_key": null
-          }
-        ],
+        "steps": [],
         "warnings": []
       }
     },
@@ -906,7 +773,7 @@
           {
             "change_type": "create",
             "force_full_refresh": false,
-            "forced_start_time": "2026-01-01 00:00:00.000",
+            "forced_start_time": null,
             "key": {
               "database": null,
               "name": "tbl__orders_enriched",
@@ -952,9 +819,9 @@
             ],
             "configured_backfill_mode": null,
             "execution_lookback_seconds": null,
-            "execution_mode": "seeded_bounded_rebuild",
+            "execution_mode": "full_rebuild",
             "forced_full_refresh": false,
-            "forced_start_time": "2026-01-01 00:00:00.000",
+            "forced_start_time": null,
             "history_preserving_bounded_supported": true,
             "replay_required": true,
             "requested_start_time": null,

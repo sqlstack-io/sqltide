@@ -2357,3 +2357,43 @@ def write_upstream_source_models(
     (models / "order_report.sql").write_text(
         _UPSTREAM_SOURCE_REPORT_SQL.format(minimum=report_minimum), encoding="utf-8"
     )
+
+
+_ARRIVAL_FREE_TOTALS_SQL: str = """
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset
+FROM __source("orders")
+"""
+
+_ARRIVAL_FREE_REPORT_SQL: str = """
+MODEL (order_by [order_id]);
+
+SELECT
+  CAST(order_id AS String) AS order_id,
+  CAST(amount_cents AS UInt64) AS amount_cents,
+  CAST(_replay_partition AS Int32) AS _replay_partition,
+  CAST(_replay_offset AS Int64) AS _replay_offset
+FROM __ref("order_totals")
+WHERE amount_cents >= {minimum}
+"""
+
+
+def write_arrival_free_totals(project: Path) -> None:
+    """An upstream model that keeps offset lineage but not the arrival column, alone."""
+
+    models: Path = project / "pipelines" / "pl__orders"
+    (models / "order_totals.sql").write_text(_ARRIVAL_FREE_TOTALS_SQL, encoding="utf-8")
+    (models / "order_report.sql").unlink(missing_ok=True)
+
+
+def write_arrival_free_report(project: Path, *, minimum: int) -> None:
+    """A downstream report of the arrival-free upstream model."""
+
+    (project / "pipelines" / "pl__orders" / "order_report.sql").write_text(
+        _ARRIVAL_FREE_REPORT_SQL.format(minimum=minimum), encoding="utf-8"
+    )

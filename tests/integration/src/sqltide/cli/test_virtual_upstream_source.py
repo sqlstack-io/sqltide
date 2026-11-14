@@ -5,10 +5,13 @@ from clickhouse_connect.driver.client import Client
 
 from sqltide._native import run_cli
 from tests.integration.src.sqltide.cli._test_types import (
+    VirtualArrivalFreeUpstreamIntegrationTestCase,
     VirtualDownstreamOnlyChangeIntegrationTestCase,
     VirtualStaleUpstreamPromotionIntegrationTestCase,
 )
 from tests.integration.src.sqltide.cli.helpers import (
+    write_arrival_free_report,
+    write_arrival_free_totals,
     write_upstream_source_models,
     write_upstream_source_project,
 )
@@ -168,3 +171,67 @@ def test_given_superseded_upstream_when_promoting_candidate_then_promotion_is_re
         ).result_rows
     )
     assert rows == test_case.expected_after_rebuild
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        VirtualArrivalFreeUpstreamIntegrationTestCase(
+            description="downstream builds replay from the source past an upstream without arrival",
+            expected_after_added_model=("order-large", "order-new-large"),
+            expected_after_changed_model=("order-new-large", "order-newest-large"),
+        )
+    ],
+    ids=lambda case: case.description,
+)
+def test_given_upstream_without_arrival_column_when_downstream_changes_then_build_and_promote(
+    test_case: VirtualArrivalFreeUpstreamIntegrationTestCase,
+    tmp_path: Path,
+    clickhouse_connection_settings: ClickHouseConnectionSettings,
+    clickhouse_client: Client,
+    clickhouse_database: str,
+) -> None:
+    project: Path = tmp_path / "project"
+    options: tuple[str, ...] = ("--project-dir", str(project))
+    write_upstream_source_project(project, clickhouse_connection_settings, clickhouse_database)
+    write_arrival_free_totals(project)
+    clickhouse_client.command(
+        f"CREATE TABLE {clickhouse_database}.orders_input (event_partition Int32, "
+        "event_offset Int64, event_time DateTime64(3), order_id String, amount_cents UInt64) "
+        "ENGINE = MergeTree ORDER BY (event_partition, event_offset)"
+    )
+
+    def insert(offset: int, order_id: str, amount_cents: int) -> None:
+        clickhouse_client.command(
+            f"INSERT INTO {clickhouse_database}.orders_input VALUES "
+            f"(0, {offset}, now64(3), '{order_id}', {amount_cents})"
+        )
+
+    def build_and_promote() -> None:
+        assert run_cli(("sqt", "build", "--auto-approve", *options)) == 0
+        assert run_cli(("sqt", "deployment", "promote", "--latest", *options)) == 0
+
+    def report() -> tuple[str, ...]:
+        return tuple(
+            row[0]
+            for row in clickhouse_client.query(
+                f"SELECT order_id FROM {clickhouse_database}.tbl__order_report ORDER BY order_id"
+            ).result_rows
+        )
+
+    insert(1, "order-small", 75)
+    insert(2, "order-large", 300)
+    build_and_promote()
+
+    # A new downstream model of a published upstream that does not output _replay_landed_at.
+    write_arrival_free_report(project, minimum=100)
+    build_and_promote()
+    insert(3, "order-new-large", 500)
+    assert report() == test_case.expected_after_added_model
+
+    # Only the downstream model changes; its replay still starts at the source.
+    write_arrival_free_report(project, minimum=400)
+    build_and_promote()
+    insert(4, "order-newest-large", 450)
+    assert report() == test_case.expected_after_changed_model

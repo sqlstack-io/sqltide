@@ -293,6 +293,22 @@ impl DesiredGraph {
         self.order(&visited)
     }
 
+    /// The table `key` is filled from: a materialized view's source table, or any other
+    /// object's first table dependency. `None` for a key that is not an object or has no table
+    /// dependency.
+    #[must_use]
+    pub fn driving_parent(&self, key: usize) -> Option<usize> {
+        let object: &DesiredObject = &self.objects[self.last_object[key]?];
+        match object.kind {
+            ObjectKind::MaterializedView { source, .. } => Some(source),
+            _ => object
+                .deps
+                .iter()
+                .copied()
+                .find(|&dep| self.keys[dep].object_type == ObjectType::Table),
+        }
+    }
+
     /// The nearest replay anchor upstream of `root` through driving dependencies: a
     /// materialized view leads to its source table, any other object to its first table
     /// dependency. Stops at a key that is not an object or has no table dependency.

@@ -51,8 +51,12 @@ selected closure. A model can be an anchor when it:
 - is non-aggregate
 - has no mutable side reference
 - does not set `replay_anchor never`
+- in a virtual pipeline with offsets lineage, also outputs `_replay_landed_at`, which bounds the
+  replay
 
 SQLTide derives anchors from typed graph edges. A selected model also includes its descendants.
+When the nearest anchor is further up than the table a changed model reads, the models between
+them are rebuilt too, so the replay runs through their logic.
 
 ## Direct mode
 
