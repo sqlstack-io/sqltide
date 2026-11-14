@@ -9,12 +9,16 @@
 	import AppVersionNotice from '$lib/presentation/components/app-version-notice.svelte';
 	import CompileErrorScreen from '$lib/presentation/components/compile-error-screen.svelte';
 	import DemoBanner from '$lib/demo/components/demo-banner.svelte';
+	import EnginePanel from '$lib/demo/components/engine-panel.svelte';
+	import { getDemo } from '$lib/demo/main/get-demo';
+	import type { DemoState } from '$lib/demo/types';
 	import { getApp } from '$lib/api/main/project/get-app';
 	import { initializeBootstrap } from '$lib/api/main/project/initialize-bootstrap';
 
 	let { children } = $props();
 	const app = getApp();
 	const auth = getAuth();
+	const demo: DemoState = getDemo().demo;
 
 	$effect(() => {
 		if (auth.phase === 'unauthenticated' && page.route.id !== '/login') {
@@ -30,7 +34,6 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href="{base}/favicon.png" />
 	{#if app.phase !== 'ready'}
 		<title>SQLTide</title>
 	{/if}
@@ -61,6 +64,9 @@
 			<div class="flex min-w-0 flex-1 flex-col">
 				{@render children()}
 			</div>
+			{#if import.meta.env.VITE_SQLTIDE_DEMO === '1' && demo.mode.kind === 'real' && demo.mode.engine !== null}
+				<EnginePanel engine={demo.mode.engine} />
+			{/if}
 		</div>
 	</div>
 {:else if app.phase === 'loading'}

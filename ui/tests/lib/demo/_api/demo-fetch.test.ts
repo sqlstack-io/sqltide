@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
-import { DEMO_READ_ONLY_MESSAGE, installDemoFetch } from '$lib/demo/_api/demo-fetch';
+import { installDemoFetch } from '$lib/demo/_api/demo-fetch';
+import { DEMO_ONE_ACTION_MESSAGE, DEMO_READ_ONLY_MESSAGE } from '$lib/demo/constants';
+import type { DemoEngine, DemoEngineLink, TableSize } from '$lib/demo/types';
 import recordings from '$lib/demo/recordings.json';
 
 describe('UI demo fetch', () => {
@@ -45,5 +47,69 @@ describe('UI demo fetch', () => {
 		await fetch('/demo/_app/version.json');
 
 		expect(passThrough).toHaveBeenCalledOnce();
+	});
+});
+
+type DeploymentList = { deployments: { deploymentId: string; state: string }[] };
+
+describe('UI demo fetch with the real engine', () => {
+	const staged: string = recordings.promotion.deploymentId;
+	let promoted: boolean;
+	let promote: MockInstance<() => Promise<void>> & (() => Promise<void>);
+
+	beforeEach(() => {
+		promoted = false;
+		promote = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+		// Every table in the engine holds 7 rows and 100 bytes, whatever was recorded.
+		const sizes: Map<string, TableSize> = { get: () => ({ rows: 7, bytes: 100 }) } as unknown as Map<string, TableSize>;
+		const engine: Pick<DemoEngine, 'promote' | 'tableSizes'> = { promote, tableSizes: async () => sizes };
+		const link: DemoEngineLink = {
+			active: () => true,
+			ready: () => engine,
+			whenReady: async () => engine,
+			promoted: () => promoted,
+			markPromoted: () => {
+				promoted = true;
+			}
+		};
+		vi.stubGlobal('fetch', vi.fn());
+		vi.stubGlobal('location', new URL('https://sqltide.io/demo/deployments'));
+		installDemoFetch(link);
+	});
+
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('given the staged deployment when promoted then the engine promotes and later GETs answer from after the promotion', async () => {
+		const before: DeploymentList = await (await fetch('/api/deployments')).json();
+
+		const response: Response = await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
+		const after: DeploymentList = await (await fetch('/api/deployments')).json();
+
+		expect(promote).toHaveBeenCalledOnce();
+		expect(await response.json()).toEqual(recordings.promotion.response.body);
+		const state: (body: DeploymentList) => string | undefined = (body) =>
+			body.deployments.find((deployment) => deployment.deploymentId === staged)?.state;
+		expect([state(before), state(after)]).toEqual(['staged', 'active']);
+	});
+
+	it('given a deployment list when fetched then each size is the sum of its tables in the engine', async () => {
+		const { deployments } = await (await fetch('/api/deployments')).json();
+
+		for (const deployment of deployments) {
+			expect(deployment.rows).toBe(7 * deployment.physicalRelationNames.length);
+			expect(deployment.bytes).toBe(100 * deployment.physicalRelationNames.length);
+		}
+	});
+
+	it('given any other write, or a second promotion, when fetched then it is refused without touching the engine', async () => {
+		await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
+		promote.mockClear();
+
+		const again: Response = await fetch(`/api/deployments/${staged}/promote`, { method: 'POST' });
+		const cleanup: Response = await fetch('/api/deployments/cleanup', { method: 'POST' });
+
+		expect([again.status, cleanup.status]).toEqual([403, 403]);
+		expect(await cleanup.json()).toEqual({ detail: DEMO_ONE_ACTION_MESSAGE });
+		expect(promote).not.toHaveBeenCalled();
 	});
 });

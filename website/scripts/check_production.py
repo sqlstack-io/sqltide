@@ -1,5 +1,6 @@
 """Check production indexing and ensure unselected hero routes cannot be published."""
 
+import json
 from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree
@@ -54,7 +55,17 @@ home = (ROOT / "index.html").read_text()
 assert 'data-showcase="virtual"' in home, "Selected virtual hero missing from production"
 assert 'class="deployment-status status-b">Getting new events' in home, "Static explanation missing"
 assert home.count("Switching moves one view at a time") == 1
+# The UI demo's engine: Pages serves files of at most 25 MiB, and the engine needs isolation.
+(manifest,) = (ROOT / "demo" / "engine").glob("*/manifest.json")
+for part in json.loads(manifest.read_text())["parts"]:
+    assert (manifest.parent / part["name"]).stat().st_size < 25 * 1024 * 1024, part
+headers = (ROOT / "_headers").read_text()
+assert (
+    "/demo/*\n  Cross-Origin-Opener-Policy: same-origin\n"
+    "  Cross-Origin-Embedder-Policy: require-corp\n" in headers
+), "UI demo isolation headers missing"
 print(
     f"Production: {validated} indexable canonical pages; "
-    "selected virtual hero; sitemap includes homepage/docs; no review concepts"
+    "selected virtual hero; sitemap includes homepage/docs; no review concepts; "
+    "demo engine fits Pages"
 )
