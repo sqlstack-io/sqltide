@@ -52,10 +52,10 @@ assert all(
 assert "Disallow: /\n" not in (ROOT / "robots.txt").read_text()
 home = (ROOT / "index.html").read_text()
 assert 'data-showcase="virtual"' in home, "Selected virtual hero missing from production"
-assert 'class="deployment-status status-b">Receiving live data' in home, (
+assert 'class="deployment-status status-b">Getting new events' in home, (
     "Static explanation missing"
 )
-assert home.count("Promotion switches one view at a time") == 1
+assert home.count("Switching moves one view at a time") == 1
 print(
     f"Production: {validated} indexable canonical pages; "
     "selected virtual hero; sitemap includes homepage/docs; no review concepts"

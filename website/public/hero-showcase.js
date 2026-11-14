@@ -2,10 +2,10 @@ const figure = document.querySelector('[data-showcase]');
 if (figure) {
   const stories = {
     virtual: [
-      ['', 'See what will change without changing the warehouse or the version serving queries.'],
-      ['', 'Build the new version from retained input without switching your queries over.'],
-      ['', 'Compare results before switching: the current version keeps serving queries while the new version receives live data.'],
-      ['', 'Switch the view to the new version; the query stays the same and the previous version remains retained.'],
+      ['', 'See which tables the change rebuilds. Nothing in ClickHouse changes yet.'],
+      ['', 'Build the new version next to the current one and fill it from stored history. Your queries still read the current version.'],
+      ['', 'Compare the two versions. Your queries still read the current one, and both keep getting new events.'],
+      ['', 'Switch the view to the new version. Your query stays the same, and the previous version is kept so you can switch back.'],
     ],
     plan: [
       ['sqt compile', 'A new filter changes order_totals. Compile validates the complete typed model offline; it does not mutate ClickHouse.'],
@@ -33,9 +33,9 @@ if (figure) {
       const candidateBuilt = state.step > 0;
       figure.querySelector('.binding-status').textContent = promoted ? 'Now reads the new version' : 'Reads the current version';
       figure.querySelector('.version-a').textContent = promoted ? 'Previous version' : 'Current version';
-      figure.querySelector('.status-a').textContent = promoted ? 'Retained after promotion' : 'Serving queries';
-      figure.querySelector('.status-b').textContent = promoted ? 'Now serving queries' : candidateBuilt ? 'Receiving live data' : 'Planned · not built';
-      figure.querySelector('.input-status').textContent = candidateBuilt ? 'Retained input + live data feed both versions' : 'Current version keeps receiving live data';
+      figure.querySelector('.status-a').textContent = promoted ? 'Kept, so you can switch back' : 'Serving queries';
+      figure.querySelector('.status-b').textContent = promoted ? 'Now serving queries' : candidateBuilt ? 'Getting new events' : 'Not built yet';
+      figure.querySelector('.input-status').textContent = candidateBuilt ? 'New events reach both versions; stored history fills the new one' : 'The current version keeps getting new events';
     } else {
       figure.querySelector('.stage-command').textContent = command;
     }

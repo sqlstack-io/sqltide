@@ -1,36 +1,41 @@
 ---
-title: "Introduction"
-description: "Declarative streaming data pipelines for ClickHouse."
+title: "Overview"
+description: "What SQLTide does, and where to start."
 ---
 
-SQLTide compiles typed SQL models into ClickHouse tables and materialized views, plans their
-dependencies, and rebuilds them from retained streaming history.
+SQLTide turns SQL files into streaming pipelines in ClickHouse. You write each step of a pipeline
+as a SQL model with typed columns. SQLTide creates the tables and materialized views, shows you a
+plan before it changes anything, and can rebuild a table from the source history it keeps in
+ClickHouse.
 
-New to SQLTide? The [quickstart](/docs/quickstart/) runs [`sqt playground`](/docs/cli/playground/),
-a ready-made orders project that runs locally with Docker, and takes a model change from build to
-promotion in six steps.
+To see it before installing anything, open the [UI demo](/demo/). To try it on your machine,
+[install](/docs/install/) it and follow the [quickstart](/docs/quickstart/), which uses
+[`sqt playground`](/docs/cli/playground/) to start a small orders project with Docker.
 
-Each pipeline has an effective operational mode:
+## Two ways to deploy a change
 
-- **Direct mode** is the default. `sqt build` rebuilds selected models at their ordinary names and
-  replays retained history without a publish step.
-- **Virtual environments** are an explicit opt-in. `sqt build` creates deployment-specific tables,
-  `sqt deployment audit` assesses them, promotion switches stable views, and retained publications
-  can be compared or rolled back as a complete graph.
-- **Mixed builds** stage selected virtual pipelines first, then apply selected direct pipelines in
-  the same CLI invocation. Relationships cannot cross the mode boundary.
+- **Direct mode**, the default: `sqt build` drops the selected tables (all of them unless you
+  select some), recreates them and refills them from stored history. Queries read the tables while
+  they refill, and there is no switching back.
+- **Virtual mode**, which you turn on per project or pipeline: `sqt build` puts the new version in
+  tables of its own, next to the one your queries read. You check it, then promote it, which
+  switches the views your queries read. The previous version is kept, so you can switch back.
+
+One `sqt build` can update pipelines in both modes, but a model can only read from pipelines in
+its own mode.
 
 ## What SQLTide manages
 
-- Strict, explicitly typed `MODEL()` SQL
-- Managed Kafka landing through ClickHouse's Kafka engine
-- Adopted ClickHouse stream tables that SQLTide does not own
-- Materialized-view dependency graphs with driving and side-reference edges
-- Inclusive, at-least-once replay across offset, timestamp, landed-at, and cursor boundaries
-- SQL-native model tests, macro tests, and data-quality audits
-- Single-process scheduled audits using the warehouse clock
-- A local UI for plans, runs, deployments, lineage, Kafka lag, topics, and retained source messages
-- Offline compile artifacts for review and automation
+- SQL models with typed columns, declared with `MODEL()`
+- Reading Kafka topics into ClickHouse through its Kafka engine
+- Stream tables you already have in ClickHouse, which SQLTide reads without taking over
+- The materialized views that connect your models, worked out from your SQL
+- Replay from an offset, a timestamp, the time rows landed, or a cursor. Replay is at least
+  once, so a row can arrive twice.
+- SQL tests for models and macros, and data-quality audits, which can also run on a schedule
+- A local UI for plans, runs, deployments, lineage, Kafka lag, topics and the messages a source
+  still holds
+- Compile output you can review or use in automation
 
 SQLTide currently supports ClickHouse only. It does not provide dbt compatibility, authored
 seeds, UDF management, or a generic multi-warehouse abstraction.
@@ -45,10 +50,10 @@ seeds, UDF management, or a generic multi-warehouse abstraction.
     Both playground templates, including order events streaming from Redpanda.
   </Card>
   <Card title="Direct mode" icon="arrows-rotate" href="/concepts/direct-mode">
-    Understand destructive rebuilds, replay, failure, and rerun behavior.
+    How in-place rebuilds, replay, failures and reruns work.
   </Card>
-  <Card title="Virtual environments" icon="code-branch" href="/concepts/deployments">
-    Stage, inspect, assess, compare, promote, roll back, diagnose, and clean deployments.
+  <Card title="Virtual mode" icon="code-branch" href="/concepts/deployments">
+    Build a new version next to the current one, check it, promote it, and roll it back.
   </Card>
   <Card title="Development UI" icon="display" href="/ui/overview">
     Explore lineage, sources, messages, plans, quality, and durable runs.

@@ -1,0 +1,36 @@
+---
+title: "Install"
+description: "Install the sqt command line tool and check that it works."
+---
+
+SQLTide is a Python package that installs the `sqt` command. You need Python 3.12 or newer.
+
+```bash
+pip install sqltide
+```
+
+If you use uv, `uv tool install sqltide` installs it in an environment of its own.
+
+Check that it worked:
+
+```bash
+sqt --version
+```
+
+To upgrade later, run `pip install --upgrade sqltide`.
+
+## What else you need
+
+- **ClickHouse** to run your pipelines. SQLTide is tested against ClickHouse 25.8. You point a
+  project at your server in its [connection settings](/docs/concepts/project-configuration/#connection-settings).
+- **Docker**, only if you want to run [`sqt playground`](/docs/cli/playground/), which starts
+  ClickHouse for you on your machine.
+- **Kafka**, if your pipelines read from topics. SQLTide reads them through ClickHouse's Kafka
+  engine.
+
+To look around the UI before installing anything, open the [UI demo](/demo/).
+
+## Next
+
+The [quickstart](/docs/quickstart/) starts the playground and takes a change from build to
+promotion in about ten minutes.
