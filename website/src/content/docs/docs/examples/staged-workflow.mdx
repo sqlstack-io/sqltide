@@ -3,9 +3,10 @@ title: Stage a pipeline change
 description: Add a model to the playground, build a changed version beside the published one, inspect it, promote it and roll it back.
 ---
 
-This example takes a change through every step of a staged deployment. You add your own model to
-the playground project, change the model it reads, and inspect, promote and roll back the new
-version while consumers keep running the same query. It needs Python 3.12 or newer and Docker.
+This example walks a change through a staged deployment from start to finish. You add a model to
+the playground project, change the model it reads from, check the new version, promote it, and
+then roll it back. The query that reads the result stays the same the whole time. You need Python
+3.12 or newer and Docker.
 
 ```bash
 pip install --upgrade sqltide
@@ -13,8 +14,9 @@ sqt playground orders-stage
 cd orders-stage
 ```
 
-The playground runs ClickHouse with three orders and one model, `order_report`. Its project uses
-virtual mode, so a build never changes what consumers read until you promote it.
+The playground runs ClickHouse with three orders and one model, `order_report`. The project uses
+virtual mode: a build puts the new version next to the current one, and nothing your queries read
+changes until you promote it.
 
 ## 1. Add a model
 

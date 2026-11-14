@@ -94,7 +94,7 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     if (virtual) {
       await expect(figure.locator('.version-a')).toHaveText('Current version');
       await expect(figure.locator('.status-a')).toHaveText('Serving queries');
-      await expect(figure.locator('.status-b')).toHaveText('Receiving live data');
+      await expect(figure.locator('.status-b')).toHaveText('Getting new events');
       await page.clock.fastForward(10000);
       await expect(figure).toHaveAttribute('data-stage', '2');
     }
@@ -108,13 +108,13 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     await expect(figure).toHaveAttribute('data-stage', '1');
     if (virtual) {
       await expect(figure.locator('.binding-status')).toHaveText('Reads the current version');
-      await expect(figure.locator('.status-b')).toHaveText('Receiving live data');
+      await expect(figure.locator('.status-b')).toHaveText('Getting new events');
     }
     await figure.locator('[data-step="2"]').click();
     await expect(figure).toHaveAttribute('data-stage', '2');
     if (virtual) {
       await expect(figure.locator('.binding-status')).toHaveText('Reads the current version');
-      await expect(figure.locator('.stage-description')).toContainText('Compare results before switching');
+      await expect(figure.locator('.stage-description')).toContainText('Compare the two versions');
     }
     await play.click();
     await page.clock.fastForward(3600);
@@ -124,10 +124,10 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
       await expect(figure.locator('.binding-status')).toHaveText('Now reads the new version');
       await expect(figure.locator('.consumer-binding code')).toHaveText('SELECT * FROM tbl__order_report');
       await expect(figure.locator('figcaption')).toContainText('one view at a time');
-      await expect(page.locator('.steps .step-number')).toHaveText(['01 · Write & validate', '02 · Plan', '03 · Build & inspect', '04 · Promote']);
+      await expect(page.locator('.steps .step-number')).toHaveText(['01 · Write', '02 · Plan', '03 · Build and check', '04 · Promote']);
       await expect(page.locator('#technical-details')).toHaveCount(0);
       await expect(page.locator('main')).not.toContainText('20261101T');
-      await expect(page.getByRole('link', { name: 'Try this workflow →', exact: true })).toHaveAttribute('href', '/docs/examples/staged-workflow/');
+      await expect(page.getByRole('link', { name: 'Try it yourself →', exact: true })).toHaveAttribute('href', '/docs/quickstart/');
     } else {
       await expect(figure.locator('.stage-description')).toContainText(/cutoff|both paths/);
     }
@@ -139,9 +139,8 @@ test('homepage hero and review alternatives can be paused, stepped, replayed, an
     expect(await figure.evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     if (virtual) {
-      await page.getByRole('link', { name: 'Start with virtual mode', exact: true }).first().click();
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Stage a pipeline change');
-      await expect(page.getByRole('heading', { name: '5. Promote', exact: true })).toBeVisible();
+      await page.locator('.hero').getByRole('link', { name: 'Quickstart', exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Quickstart');
     }
   }
 });
@@ -150,14 +149,19 @@ test('homepage explains both versions without JavaScript or playback', async ({ 
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, reducedMotion: 'reduce' });
   const page = await context.newPage();
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Update pipelines.No downtime.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Change live pipelines without downtime.');
+  const hero = page.locator('.hero .actions').getByRole('link');
+  await expect(hero).toHaveText(['Try the demo', 'Quickstart', 'View on GitHub']);
+  await expect(hero.first()).toHaveAttribute('href', '/demo/');
+  await expect(page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Demo', exact: true })).toHaveAttribute('href', '/demo/');
+  await expect(page.locator('.closing').getByRole('link', { name: 'Try the demo', exact: true })).toHaveAttribute('href', '/demo/');
   const figure = page.locator('[data-showcase]');
   await expect(figure.locator('.version-a')).toHaveText('Current version');
   await expect(figure.locator('.status-a')).toHaveText('Serving queries');
   await expect(figure.locator('.deployment-b')).toContainText('New version');
-  await expect(figure.locator('.status-b')).toHaveText('Receiving live data');
+  await expect(figure.locator('.status-b')).toHaveText('Getting new events');
   await expect(figure.locator('.consumer-binding code')).toHaveText('SELECT * FROM tbl__order_report');
-  await expect(figure.locator('.stage-description')).toContainText('Compare results before switching');
+  await expect(figure.locator('.stage-description')).toContainText('Compare the two versions');
   await expect(figure.locator('figcaption')).toContainText('one view at a time');
   await expect(figure.locator('[data-play]')).not.toBeVisible();
   await context.close();

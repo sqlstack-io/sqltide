@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SQLTide · Declarative streaming pipelines for ClickHouse</title>
-    <meta name="description" content="Build a new version of your ClickHouse streaming pipeline alongside the current one. Compare results before switching the views your queries read.">
+    <title>SQLTide · Streaming SQL pipelines for ClickHouse</title>
+    <meta name="description" content="Write streaming pipelines for ClickHouse in SQL. Check a change on real data before your queries switch to it.">
     <meta name="color-scheme" content="light dark">
     <link rel="canonical" href="https://sqltide.io/">
     <link rel="icon" href="/assets/sqltide.png" type="image/png">
@@ -37,6 +37,7 @@
           <a class="hide-sm" href="#how">How it works</a>
           <a href="/docs/">Docs</a>
           <a class="hide-sm" href="/docs/quickstart/">Quickstart</a>
+          <a href="/demo/">Demo</a>
           <a class="nav-icon" href="https://github.com/sqlstack-io/sqltide" aria-label="SQLTide on GitHub">
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           </a>
@@ -51,78 +52,81 @@
       <div class="wrap">
         <section class="hero" aria-labelledby="hero-title">
           <div>
-            <p class="eyebrow">Streaming pipelines for ClickHouse</p>
-            <h1 id="hero-title">Update pipelines.<br>No downtime.</h1>
-            <p class="lede">Build the next version of your pipeline alongside the current one. Check its results before switching the views your queries read.</p>
+            <p class="eyebrow">Streaming SQL pipelines for ClickHouse</p>
+            <h1 id="hero-title">Change live pipelines without downtime.</h1>
+            <p class="lede">Write each step of your pipeline as SQL. When you change one, SQLTide can build the new version next to the running one and fill it from the stream history it keeps in ClickHouse. Check the results, then switch your queries over.</p>
             <div class="actions">
-              <a class="button primary" href="/docs/examples/staged-workflow/">Start with virtual mode</a>
-              <a class="detail-link" href="/docs/">Read the docs →</a>
+              <a class="button primary" href="/demo/">Try the demo</a>
+              <a class="button" href="/docs/quickstart/">Quickstart</a>
+              <a class="button" href="https://github.com/sqlstack-io/sqltide">View on GitHub</a>
             </div>
             <div class="command install"><code><span aria-hidden="true">$ </span>pip install sqltide</code><button type="button" class="copy" data-copy="pip install sqltide" aria-label="Copy install command" hidden>Copy</button></div>
           </div>
           <figure class="showcase virtual-showcase" data-showcase="virtual" data-stage="2" aria-labelledby="showcase-title">
-            <div class="showcase-top"><span>Virtual mode</span><span>Illustration</span></div>
-            <h2 id="showcase-title">Check a change before switching.</h2>
-            <div class="virtual-change"><span>Example: change the order filter</span><code>amount_cents &gt;= 0 → <mark>&gt;= 100</mark></code></div>
+            <div class="showcase-top"><span>Example</span><span>Orders pipeline</span></div>
+            <h2 id="showcase-title">Change a filter, check it, then switch.</h2>
+            <div class="virtual-change"><span>The change: only report orders of $1 or more</span><code>amount_cents &gt;= 0 → <mark>&gt;= 100</mark></code></div>
             <div class="consumer-binding">
-              <span>Your query stays the same</span>
+              <span>Your query doesn’t change</span>
               <code>SELECT * FROM tbl__order_report</code>
               <strong class="binding-status">Reads the current version</strong>
             </div>
             <div class="virtual-bindings" aria-hidden="true">
               <svg viewBox="0 0 400 36" preserveAspectRatio="none"><path class="binding-a" d="M200 0V12H96V32m-5-6 5 6 5-6"/><path class="binding-b" d="M200 12H304V32m-5-6 5 6 5-6"/></svg>
             </div>
-            <div class="deployment-pair" aria-label="Versions behind the consumer view">
+            <div class="deployment-pair" aria-label="The two versions behind your query">
               <div class="deployment-card deployment-a">
                 <strong class="version-a">Current version</strong>
                 <span class="deployment-status status-a">Serving queries</span>
               </div>
               <div class="deployment-card deployment-b">
                 <strong>New version</strong>
-                <span class="deployment-status status-b">Receiving live data</span>
+                <span class="deployment-status status-b">Getting new events</span>
               </div>
             </div>
-            <div class="virtual-input"><span class="input-status">Retained input + live data feed both versions</span></div>
+            <div class="virtual-input"><span class="input-status">New events reach both versions; stored history fills the new one</span></div>
             <div class="showcase-steps" aria-label="Explanation steps" hidden>
-              <button type="button" data-step="0">Plan</button><button type="button" data-step="1">Build</button><button type="button" data-step="2" aria-pressed="true">Inspect</button><button type="button" data-step="3">Promote</button>
+              <button type="button" data-step="0">Plan</button><button type="button" data-step="1">Build</button><button type="button" data-step="2" aria-pressed="true">Check</button><button type="button" data-step="3">Switch</button>
             </div>
             <div class="showcase-summary">
-              <p class="stage-description">Compare results before switching: the current version keeps serving queries while the new version receives live data.</p>
+              <p class="stage-description">Compare the two versions. Your queries still read the current one, and both keep getting new events.</p>
             </div>
-            <div class="showcase-controls" hidden><button type="button" data-play>Play story</button><a href="/docs/examples/staged-workflow/">Try this workflow →</a></div>
-            <figcaption>Promotion switches one view at a time, not the entire pipeline at once. <a href="/docs/concepts/deployments/#promote">Promotion limits.</a></figcaption>
+            <div class="showcase-controls" hidden><button type="button" data-play>Play story</button><a href="/docs/quickstart/">Try it yourself →</a></div>
+            <figcaption>Switching moves one view at a time, not the whole pipeline. <a href="/docs/concepts/deployments/#promote">What promotion switches.</a></figcaption>
           </figure>
         </section>
         <ul class="languages" aria-label="Product requirements"><li>ClickHouse</li><li>Python 3.12+</li><li>Open source · Apache-2.0</li></ul>
         <section class="workflow" id="how" aria-labelledby="workflow-title">
-          <h2 id="workflow-title">From SQL to a new version.</h2>
-          <p class="section-intro">Choose virtual mode to build and check changes before publishing them.</p>
+          <h2 id="workflow-title">How a change goes live</h2>
+          <p class="section-intro">By default <code>sqt build</code> drops the selected tables and refills them in place, while queries keep reading them. In virtual mode it builds next to the current tables instead, so you can check a change before your queries move to it. The steps below follow virtual mode.</p>
           <ol class="steps">
-            <li><span class="step-number">01 · Write &amp; validate</span><h3>Describe the pipeline in SQL</h3><p>Check column types and model references locally, without connecting to ClickHouse.</p><a class="detail-link" href="/docs/cli/compile/">Compile your models →</a></li>
-            <li><span class="step-number">02 · Plan</span><h3>See what will change</h3><p>Review affected models and proposed operations without changing the warehouse.</p><a class="detail-link" href="/docs/cli/plan/">Read the plan →</a></li>
-            <li><span class="step-number">03 · Build &amp; inspect</span><h3>Check the new version</h3><p>Build separately, then compare results. Existing published views keep reading the current version.</p><a class="detail-link" href="/docs/concepts/deployments/#build">Build and inspect →</a></li>
-            <li><span class="step-number">04 · Promote</span><h3>Switch the views your queries read</h3><p>Explicitly publish the version you checked. Build alone does not promote it.</p><a class="detail-link" href="/docs/concepts/deployments/#promote">Promote a version →</a></li>
+            <li><span class="step-number">01 · Write</span><h3>Write the pipeline in SQL</h3><p>Each model is a SQL file with typed columns. <code>sqt compile</code> checks them on your machine, without connecting to ClickHouse.</p><a class="detail-link" href="/docs/cli/compile/">Compile your models →</a></li>
+            <li><span class="step-number">02 · Plan</span><h3>See what will change</h3><p><code>sqt plan</code> lists the tables a change rebuilds and the history it replays. It doesn’t change anything in ClickHouse.</p><a class="detail-link" href="/docs/cli/plan/">Read a plan →</a></li>
+            <li><span class="step-number">03 · Build and check</span><h3>Check the new version</h3><p>In virtual mode, <code>sqt build</code> creates the new tables next to the current ones and fills them. Your queries keep reading the current version while you compare.</p><a class="detail-link" href="/docs/concepts/deployments/#build">Build and check →</a></li>
+            <li><span class="step-number">04 · Promote</span><h3>Switch your queries over</h3><p>Promoting points the views your queries read at the version you checked. A build never does this on its own.</p><a class="detail-link" href="/docs/concepts/deployments/#promote">Promote a version →</a></li>
           </ol>
-          <p class="workflow-limit"><a href="/docs/concepts/deployments/#promote">Read about promotion and its limits →</a></p>
+          <p class="workflow-limit"><a href="/docs/concepts/deployments/#promote">What promotion switches, and what it doesn’t →</a></p>
         </section>
         <section class="more" aria-labelledby="operate-title">
-          <h2 id="operate-title">Replay history. Test changes. See what’s running.</h2>
+          <h2 id="operate-title">Replay, tests and a local UI</h2>
           <div class="more-grid">
-            <article><h3>Replay the input you retain</h3><p>Rebuild results from retained history as part of a build. Replay can deliver duplicates; your SQL and storage must handle them.</p><a class="detail-link" href="/docs/concepts/replay-lineage/">Understand replay →</a></article>
-            <article><h3>Test with example data</h3><p>Run SQL tests with controlled inputs before relying on a model's results.</p><div class="command"><code>sqt test</code></div><a class="detail-link" href="/docs/concepts/testing/">Explore SQL testing →</a></article>
-            <article><h3>Follow what's running</h3><p>Explore model dependencies, source health and deployment history in the local UI.</p><div class="command"><code>sqt dev</code></div><a class="detail-link" href="/docs/ui/overview/">Explore the development UI →</a></article>
+            <article><h3>Replay stored history</h3><p>Rebuild a table from the source history SQLTide keeps in ClickHouse. Replay can deliver a row twice, so your SQL and table engine need to handle duplicates.</p><a class="detail-link" href="/docs/concepts/replay-lineage/">How replay works →</a></article>
+            <article><h3>Test models with example data</h3><p>Write SQL tests with fixed inputs and run them before you deploy.</p><div class="command"><code>sqt test</code></div><a class="detail-link" href="/docs/concepts/testing/">SQL testing →</a></article>
+            <article><h3>See what’s running</h3><p>A local UI shows your models, sources, runs and deployments.</p><div class="command"><code>sqt dev</code></div><a class="detail-link" href="/demo/">Open the UI demo →</a></article>
           </div>
         </section>
         <section class="closing" aria-labelledby="closing-title">
-          <h2 id="closing-title">Build, compare, then promote.</h2>
-          <p class="section-intro">Virtual mode is opt-in. Learn how to configure it and publish your first version.</p>
-          <div class="actions"><a class="button primary" href="/docs/examples/staged-workflow/">Start with virtual mode</a></div>
-          <p>Prefer to rebuild in place? Direct mode updates results without a separate promotion step. <a href="/docs/concepts/direct-mode/">Compare deployment modes →</a></p>
+          <h2 id="closing-title">Try it</h2>
+          <p class="section-intro">Look around the UI in your browser, or run the playground on your machine with Docker.</p>
+          <div class="actions"><a class="button primary" href="/demo/">Try the demo</a><a class="button" href="/docs/quickstart/">Quickstart</a></div>
+          <div class="command try-commands"><code><span aria-hidden="true">$ </span>pip install sqltide
+<span aria-hidden="true">$ </span>sqt playground</code></div>
+          <p><code>sqt playground</code> creates a small orders project and starts ClickHouse for it. <a href="/docs/cli/playground/">How the playground works →</a></p>
         </section>
       </div>
     </main>
     <footer class="wrap">
-      <div class="footer-main"><span>SQLTide · Apache-2.0</span><nav aria-label="Resources"><a href="/docs/">Docs</a><a href="https://github.com/sqlstack-io/sqltide">GitHub</a><a href="https://pypi.org/project/sqltide/">PyPI</a></nav></div>
+      <div class="footer-main"><span>SQLTide · Apache-2.0</span><nav aria-label="Resources"><a href="/docs/">Docs</a><a href="/demo/">Demo</a><a href="https://github.com/sqlstack-io/sqltide">GitHub</a><a href="https://pypi.org/project/sqltide/">PyPI</a></nav></div>
       <div class="sqlstack-family"><a class="sqlstack-brand" href="https://sqlstack.io"><img class="sqlstack-light" src="/assets/sqlstack.png" alt="" width="28" height="23"><img class="sqlstack-dark" src="/assets/sqlstack-dark.png" alt="" width="28" height="23"><span>Part of SQLStack</span></a><nav aria-label="SQLStack tools"><a href="https://sqlbuild.com">SQLBuild</a><a href="https://sqlclean.io">SQLClean</a><a href="/">SQLTide</a><a href="https://fensu.io">Fensu</a></nav></div>
     </footer>
     <div id="copy-status" role="status" aria-live="polite" class="sr-only"></div>

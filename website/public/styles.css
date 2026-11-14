@@ -133,6 +133,8 @@ figcaption { color: var(--muted); font-size: 14px; }
 .closing h2 { font-size: clamp(26px, 2.7vw, 32px); }
 .closing .actions { justify-content: center; margin-top: 20px; }
 .closing p { color: var(--muted); font-size: 12px; margin-top: 18px; }
+.closing .section-intro { font-size: 15px; margin-top: 10px; }
+.closing .try-commands { max-width: 320px; margin: 20px auto 0; text-align: left; }
 footer.wrap { padding-block: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .footer-main, .sqlstack-family { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .sqlstack-family { flex-wrap: wrap; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--faint-line); }
@@ -192,6 +194,7 @@ footer nav { font-size: 13px; }
   .custom-rules { text-align: left; }
   .closing { text-align: left; }
   .closing .actions { justify-content: flex-start; }
+  .closing .try-commands { margin-left: 0; }
   footer nav { gap: 16px; }
 }
 

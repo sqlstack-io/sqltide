@@ -13,6 +13,7 @@
   <strong>Change your SQL, see exactly what will rebuild, and replay it from retained stream history.</strong>
   <br>
   <a href="https://sqltide.io">Website</a> ·
+  <a href="https://sqltide.io/demo/">Demo</a> ·
   <a href="https://sqltide.io/docs/cli/playground/">Playground</a> ·
   <a href="https://sqltide.io/docs/quickstart/">Get started</a> ·
   <a href="https://sqltide.io/docs/">Docs</a>
