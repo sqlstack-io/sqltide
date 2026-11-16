@@ -60,7 +60,7 @@ available in Astro's development server.
   Approved derivative SHA-256: light `eef777dbe106da583c41dd752ac2c860c8cb9b5b13f905eb2652bc1eee935f86`;
   dark `7a46fac47fd46104fc4bfc46027d847446799b516259b2bdabf2803ea6b15786`.
 - The SQLStack symbols and SQLTide favicon are unchanged from
-  [sqlstack-io/sqlstack](https://github.com/sqlstack-io/sqlstack/tree/9b37b9e128d36930e1fe0c5880606525100b228b/assets/icons).
+  [sqlstack-io/sqlstack](https://github.com/sqlstack-io/sqlstack/tree/c62035df57c7ff6d1f4d8f990f857d096fefaeea/assets/icons).
   Font licences live with the fonts. The adapted Starlight search component retains its MIT licence
   in `STARLIGHT-LICENSE.txt`.
 
