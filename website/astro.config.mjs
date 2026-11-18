@@ -16,7 +16,10 @@ export default defineConfig({
     description: 'Declarative SQL streaming pipelines for ClickHouse.',
     logo: { light: './src/assets/logo-light.png', dark: './src/assets/logo-dark.png', replacesTitle: true },
     favicon: '/assets/sqltide.png',
-    social: [{ icon: 'github', label: 'SQLTide on GitHub', href: 'https://github.com/sqlstack-io/sqltide' }],
+    social: [
+      { icon: 'github', label: 'SQLTide on GitHub', href: 'https://github.com/sqlstack-io/sqltide' },
+      { icon: 'discord', label: 'SQLTide on Discord', href: 'https://discord.com/invite/gATNYuBK6' },
+    ],
     components: {
       PageFrame: './src/components/PageFrame.astro',
       TwoColumnContent: './src/components/TwoColumnContent.astro',

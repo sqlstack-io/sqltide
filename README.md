@@ -113,6 +113,10 @@ sqt dev         # local UI at 127.0.0.1:8000
 - [SQL Rules and formatting](https://sqltide.io/docs/concepts/sql-rules/)
 - [Changelog](CHANGELOG.md) and [contributing](CONTRIBUTING.md)
 
+## Community
+
+Ask questions and share feedback on [Discord](https://discord.com/invite/gATNYuBK6).
+
 ## License
 
 Apache-2.0
