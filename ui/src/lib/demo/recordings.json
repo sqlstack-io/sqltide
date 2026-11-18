@@ -102,7 +102,7 @@
 		"/api/status": {
 			"status": 200,
 			"body": {
-				"toolVersion": "0.70.1",
+				"toolVersion": "0.71.0",
 				"compile": {
 					"state": "ok",
 					"versionKey": "5441cad345ae",
