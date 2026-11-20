@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.71.0](https://github.com/sqlstack-io/sqltide/compare/v0.70.1...v0.71.0) (2026-11-18)
+
+
+### Features
+
+* **website:** show the UI demo as a recording only ([#418](https://github.com/sqlstack-io/sqltide/issues/418)) ([c8b02fc](https://github.com/sqlstack-io/sqltide/commit/c8b02fcf216b7d1c250505fa9c974f9940e958e3))
+
+
+### Documentation
+
+* link the Discord community from the README and website ([#421](https://github.com/sqlstack-io/sqltide/issues/421)) ([e423275](https://github.com/sqlstack-io/sqltide/commit/e4232752f8deeea309431acb4548e3ee3afb93b3))
+
+
+### Maintenance
+
+* **website:** use the updated SQLStack mark in the footer credit ([#420](https://github.com/sqlstack-io/sqltide/issues/420)) ([4fe048e](https://github.com/sqlstack-io/sqltide/commit/4fe048e4937255d503fdc2401002a6b25c1893b9))
+
 ## [0.70.1](https://github.com/sqlstack-io/sqltide/compare/v0.70.0...v0.70.1) (2026-11-14)
 
 
